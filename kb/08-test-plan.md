@@ -32,7 +32,7 @@ Legende Priorität: **P1** = Kern-Happy-Path zuerst, **P2** = wichtige Varianten
 | C7 | P2 | Gesperrter Benutzer ✅ | `#userInfo` Style `user-blocked`, kein Login |
 | C8 | P2 | Benutzergruppe am Standort nicht erlaubt ✅ | `#userInfo` Style `location-disallowed`, kein Login |
 | C9 | P2 | Zu wenig Guthaben ✅ | `#confirmationPane` Style `credit-insufficient`, Start-Button disabled |
-| C10 | P2 | Auto-Logout nach `sessionTimeout` Inaktivität | `registeredUser` wird null |
+| C10 | P2 | Auto-Logout nach `sessionTimeout` Inaktivität ✅ | `registeredUser` wird null |
 | C11 | P3 | Auto-Ende: Leistungsabfall via `FhemSimulator` (`powerevent`) | Execution `finished`, Gerät frei |
 | C12 | P3 | Laufende Execution abbrechen (Bestätigung) | Execution gestoppt, fhem AUS, Gerät frei |
 | C13 | P3 | Unterbrochene Execution beim Start fortsetzen (geseedet) | Execution wird als laufend übernommen |
@@ -69,7 +69,7 @@ z. B. zusätzlicher Nicht-Admin-Benutzer mit Passwort, Gruppen, Geräte, Program
 | P9 | P2 | Benutzergruppe anlegen ✅ | erscheint in Gruppenliste |
 | P10 | P2 | Gerät anlegen (Name, Position, Standort, fhem-Namen) ✅ | erscheint in Geräteliste |
 | P11 | P2 | Gerät aktiv/inaktiv schalten, bearbeiten | Zustand geändert |
-| P12 | P2 | Programm anlegen: FIXED und DYNAMIC | erscheinen, korrekte Felder |
+| P12 | P2 | Programm anlegen (FIXED/statisch: Preis + Dauern) ✅ | erscheint in Programmliste |
 | P13 | P2 | Entität löschen (z. B. Programm/Gerät) | verschwindet aus Liste |
 | P14 | P3 | Standort-Verwaltung (LocationWindow) | anlegen/bearbeiten |
 | P15 | P3 | Nicht-Admin-Login → Benutzer-Dashboard | Guthaben + Buchungstabelle sichtbar |

@@ -31,10 +31,9 @@ function fieldByCaption(scope: Locator, caption: string): Locator {
     .first();
 }
 
-/** Select an item in a Vaadin ComboBox located by the field's exact caption. */
-async function selectInCombo(scope: Locator, caption: string, item: string) {
+/** Select an item in the Vaadin ComboBox contained in the given form row. */
+async function pickCombo(scope: Locator, row: Locator, item: string) {
   const page = scope.page();
-  const row = scope.locator('tr').filter({ has: page.getByText(caption, { exact: true }) });
   const input = row.locator('.v-filterselect input');
   const popup = page.locator('.v-filterselect-suggestpopup');
   // Open, filter down to the item, then CLICK it — clicking the suggestion is
@@ -47,6 +46,12 @@ async function selectInCombo(scope: Locator, caption: string, item: string) {
   // The shared suggestion popup lingers and overlays the field below it;
   // clicking the window header dismisses it without changing the selection.
   await scope.locator('.v-window-header').first().click();
+}
+
+/** Select an item in a Vaadin ComboBox located by the field's exact caption. */
+async function selectInCombo(scope: Locator, caption: string, item: string) {
+  const row = scope.locator('tr').filter({ has: scope.page().getByText(caption, { exact: true }) });
+  await pickCombo(scope, row, item);
 }
 
 test('admin can create a user', async ({ page }) => {
@@ -130,4 +135,36 @@ test('admin can create a device', async ({ page }) => {
   await expect(win).toBeHidden();
 
   await expect(page.getByText(deviceName, { exact: true })).toBeVisible();
+});
+
+test('admin can create a fixed-price program', async ({ page }) => {
+  const programName = `E2E-Programm-${Date.now()}`;
+
+  await loginAsAdmin(page);
+  await openSection(page, 'Programme', 'programs');
+
+  await page.locator('.v-menubar-menuitem', { hasText: 'Neu' }).click();
+  const win = page.locator('.v-window', { hasText: 'Programm erstellen' });
+  await expect(win).toBeVisible();
+
+  await fieldByCaption(win, 'Name').fill(programName);
+  // Type "Statisch" (fixed price) — reveals the price field.
+  await win.locator('.v-select-option', { hasText: 'Statisch' }).locator('input').check({ force: true });
+  await fieldByCaption(win, 'Preis').fill('1.50');
+
+  // Maximaldauer: a number + a unit ComboBox (its caption carries a required
+  // asterisk, so match it by substring).
+  const durationRow = win.locator('tr').filter({ has: page.getByText('Maximaldauer') });
+  await durationRow.locator('input.v-textfield').first().fill('60');
+  await pickCombo(win, durationRow, 'min');
+
+  // The other two duration groups keep their default "0" value but their unit
+  // ComboBoxes are required too.
+  await pickCombo(win, win.locator('tr').filter({ has: page.getByText('Freie Zeit') }), 'min');
+  await pickCombo(win, win.locator('tr').filter({ has: page.getByText('Frühester Abbruch') }), 'min');
+
+  await win.locator('.v-button', { hasText: 'Erstellen' }).click();
+  await expect(win).toBeHidden();
+
+  await expect(page.getByText(programName, { exact: true })).toBeVisible();
 });
