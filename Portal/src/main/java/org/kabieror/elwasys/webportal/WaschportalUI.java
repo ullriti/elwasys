@@ -79,7 +79,7 @@ public class WaschportalUI extends UI {
 
     @WebServlet(value = "/*",
             asyncSupported = true)
-    @VaadinServletConfiguration(widgetset = "org.kabieror.elwasys.webportal.MyAppWidgetset",
+    @VaadinServletConfiguration(widgetset = "com.vaadin.DefaultWidgetSet",
             productionMode = false,
             ui = WaschportalUI.class)
     public static class Servlet extends VaadinServlet {

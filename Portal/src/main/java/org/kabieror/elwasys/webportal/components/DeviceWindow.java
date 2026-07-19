@@ -76,6 +76,10 @@ public class DeviceWindow extends Window {
      */
     private TextField tfFhemPowerName;
     /**
+     * Die UUID des Zigbee-Gerätes im deCONZ-Gateway.
+     */
+    private TextField tfDeconzUuid;
+    /**
      * Der Schwellwert für das automatische Beenden von auf diesem Gerät
      * laufenden Programmen.
      */
@@ -115,6 +119,7 @@ public class DeviceWindow extends Window {
         this.tfFhemName.setValue(deviceToEdit.getFhemName());
         this.tfFhemSwitchName.setValue(deviceToEdit.getFhemSwitchName());
         this.tfFhemPowerName.setValue(deviceToEdit.getFhemPowerName());
+        this.tfDeconzUuid.setValue(deviceToEdit.getDeconzUuid());
         this.autoEndPowerThreasholdProperty.setValue(deviceToEdit.getAutoEndPowerThreashold());
         this.autoEndWaitTimeProperty
                 .setValue(new Long(deviceToEdit.getAutoEndWaitTime().getSeconds()).intValue());
@@ -247,6 +252,13 @@ public class DeviceWindow extends Window {
         this.tfFhemPowerName.setRequiredError("Bitte Namen angeben.");
         this.tfFhemPowerName.setValidationVisible(false);
         this.tfFhemPowerName.setWidth("100%");
+
+        // Textfeld: deCONZ UUID (Zigbee-Gateway; alternativ zu Fhem)
+        this.tfDeconzUuid = new TextField("deCONZ UUID");
+        form.addComponent(this.tfDeconzUuid);
+        this.tfDeconzUuid.setDescription("Die UUID des Zigbee-Gerätes im deCONZ-Gateway.");
+        this.tfDeconzUuid.setValidationVisible(false);
+        this.tfDeconzUuid.setWidth("100%");
 
         // Textfeld: Auto-End Leistungs-Schwellwert
         this.tfAutoEndPowerThreashold = new TextField("Auto-Ende Schwellwert (W)");
@@ -447,6 +459,7 @@ public class DeviceWindow extends Window {
             device = new Device(WashportalManager.instance.getDataManager(), this.tfName.getValue(),
                     position, location, this.tfFhemName.getValue(),
                     this.tfFhemSwitchName.getValue(), this.tfFhemPowerName.getValue(),
+                    this.tfDeconzUuid.getValue(),
                     this.autoEndPowerThreasholdProperty.getValue(),
                     Duration.ofSeconds(this.autoEndWaitTimeProperty.getValue()), this.cbEnabled.getValue(), programs,
                     validUserGroups);
@@ -455,6 +468,7 @@ public class DeviceWindow extends Window {
             device = this.deviceToEdit;
             device.modify(this.tfName.getValue(), position, location, this.tfFhemName.getValue(),
                     this.tfFhemSwitchName.getValue(), this.tfFhemPowerName.getValue(),
+                    this.tfDeconzUuid.getValue(),
                     this.autoEndPowerThreasholdProperty.getValue(),
                     Duration.ofSeconds(this.autoEndWaitTimeProperty.getValue()), this.cbEnabled.getValue(), programs,
                     validUserGroups);

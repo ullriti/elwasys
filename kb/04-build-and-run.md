@@ -19,10 +19,49 @@ cd ../Portal && mvn package        # → target/*.war
 mvn jetty:run                      # http://localhost:8080
 ```
 
-> ⚠️ Versions-Stolperfalle: Portal referenziert `common:0.3.4-SNAPSHOT`, Common trägt aber
-> `0.0.0-local-development`. Für lokalen Portal-Build muss die Common-Version passend gesetzt
-> oder das Portal-POM angepasst werden. Die CI umgeht das, indem sie beim Release
-> `0.0.0-local-development` → Tag-Name ersetzt (nur Common + Client).
+> ✅ Portal-Build in der Remote-Umgebung repariert (2026-07-19), siehe unten.
+
+### Portal-Build: durchgeführte Reparaturen (2026-07-19)
+
+Der Portal-Build war mehrfach kaputt. Behoben in `Portal/pom.xml` +
+`WaschportalUI.java` + `DeviceWindow.java`:
+
+1. **Versionskonflikt**: `common`-Dependency `0.3.4-SNAPSHOT` → `0.0.0-local-development`
+   (wie von Common/Client/CI verwendet).
+2. **Tote HTTP-Repos entfernt**: `vaadin-addons` (http, von Maven 3.9 geblockt),
+   `vaadin-snapshots` (403), `codehaus-snapshots` (http, tot). Alle benötigten Vaadin-7-
+   Artefakte liegen auf Maven Central.
+3. **Widgetset-Kompilation entfernt**: `vaadin-maven-plugin` + `gwt-maven-plugin`-Blöcke
+   raus. Die App nutzt nur `com.vaadin.DefaultWidgetSet` (vorkompiliert in
+   `vaadin-client-compiled`); `MyAppWidgetset` erbt nur davon, keine Add-ons. Servlet in
+   `WaschportalUI` auf `com.vaadin.DefaultWidgetSet` gestellt. → kein langsamer GWT-Compile.
+4. **`maven-war-plugin` 2.3 → 3.4.0**: 2.3 ist mit JDK 21 inkompatibel
+   (`module java.base does not "opens java.util"`).
+5. **PostgreSQL-Treiber `9.3-1103` → `42.6.0`**: der alte Treiber kann kein
+   SCRAM-SHA-256 (Default-Auth bei PostgreSQL ≥ 14).
+6. **API-Drift behoben**: `DeviceWindow` gegen die aktuelle `Common.Device`-API
+   aktualisiert (deCONZ-UUID-Feld ergänzt: Formularfeld + create/modify/edit).
+7. **Jetty-Plugin `9.2.3` → `9.4.53`**: JDK-21-tauglich, weiterhin `javax.servlet`
+   (passt zu Vaadin 7).
+
+**Verifiziert**: `mvn package` erzeugt das WAR; `mvn jetty:run` liefert die Vaadin-Login-
+Seite (HTTP 200, Titel „Waschportal", DefaultWidgetSet, DB-Verbindung ok).
+
+### Portal lokal starten (Remote-Umgebung)
+
+```bash
+# 1. PostgreSQL starten & DB initialisieren
+sudo pg_ctlcluster 16 main start
+sudo -u postgres psql -f Common/resources/database-init.sql
+sudo -u postgres psql -c "ALTER USER elwaportal WITH PASSWORD 'elwaportal';"
+
+# 2. Config bereitstellen (/etc/elwaportal/elwaportal.properties)
+#    database.user=elwaportal, database.password=elwaportal, database.name=elwasys
+
+# 3. Common installieren, Portal starten
+mvn -f Common/pom.xml install -DskipTests
+mvn -f Portal/pom.xml jetty:run        # http://localhost:8080  (Login: admin/admin)
+```
 
 ## Umgebung (dieser Remote-Container)
 
