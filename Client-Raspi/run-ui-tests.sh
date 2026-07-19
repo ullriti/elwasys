@@ -13,6 +13,12 @@ cd "$(dirname "$0")"
 # Ensure the Common library is available in the local Maven repo.
 mvn -q -B -f ../Common/pom.xml install -DskipTests
 
+# The usage/login-variant E2E tests seed fixtures via JDBC as the elwaportal
+# role, which database-init.sql creates without a password. Give it one so the
+# driver can authenticate over TCP. Best-effort: skipped when there is no local
+# PostgreSQL / sudo (e.g. a pure unit-test run).
+sudo -u postgres psql -q -c "ALTER USER elwaportal WITH PASSWORD 'elwaportal';" 2>/dev/null || true
+
 TEST_ARG=()
 if [ "$#" -gt 0 ]; then
   TEST_ARG=(-Dtest="$1")
