@@ -1,0 +1,134 @@
+name: CI
+
+# Run the test suites on every pull request (and on pushes to master, so the
+# default branch stays green). The three modules are built/tested in parallel
+# jobs that mirror the documented local runner scripts (see kb/06-ui-tests.md).
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+# Cancel superseded runs on the same ref (e.g. new push to a PR branch).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Common library – build + unit tests. It has no external dependencies and is
+  # the base every other module resolves, so this is the fast fail-first signal.
+  # ---------------------------------------------------------------------------
+  common:
+    name: Common (build & tests)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'liberica'
+          cache: maven
+
+      - name: Build & test Common
+        run: mvn -B -f Common/pom.xml install
+
+  # ---------------------------------------------------------------------------
+  # Raspi-Client – JavaFX TestFX characterization tests + a headless end-to-end
+  # test that boots the whole app against a seeded PostgreSQL and the in-project
+  # fhem simulator. Runs under Xvfb (see kb/06-ui-tests.md).
+  # ---------------------------------------------------------------------------
+  client:
+    name: Client-Raspi (headless UI + E2E)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'liberica'
+          cache: maven
+
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Start & seed PostgreSQL
+        run: |
+          set -euo pipefail
+          sudo pg_ctlcluster 16 main start 2>/dev/null || true
+          for i in $(seq 1 30); do pg_isready -q && break; sleep 1; done
+          pg_isready || { echo "PostgreSQL not ready"; exit 1; }
+          if ! sudo -u postgres psql -lqt | cut -d'|' -f1 | grep -qw elwasys; then
+            echo "Seeding elwasys database"
+            # Pipe via stdin so the file is read as the runner user; the
+            # postgres OS user cannot read the checkout under /home/runner.
+            sudo -u postgres psql -q < Common/resources/database-init.sql
+          fi
+
+      - name: Run Client tests (headless via Xvfb)
+        run: bash Client-Raspi/run-ui-tests.sh
+
+      - name: Upload Surefire reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-surefire-reports
+          path: Client-Raspi/target/surefire-reports/
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Portal – Vaadin 7 web app. Playwright E2E boots PostgreSQL + Jetty (via
+  # Portal/e2e/scripts/start-portal.sh) and drives the login flow in Chromium.
+  # ---------------------------------------------------------------------------
+  portal:
+    name: Portal (Playwright E2E)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'liberica'
+          cache: maven
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: Portal/e2e/package-lock.json
+
+      - name: Install E2E dependencies
+        working-directory: Portal/e2e
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: Portal/e2e
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          # The playwright config points executablePath at PLAYWRIGHT_CHROMIUM_PATH
+          # (falling back to the container's /opt/pw-browsers/chromium). On the
+          # runner, use the browser Playwright just downloaded.
+          CHROMIUM_PATH="$(node -e "console.log(require('@playwright/test').chromium.executablePath())")"
+          echo "PLAYWRIGHT_CHROMIUM_PATH=$CHROMIUM_PATH" >> "$GITHUB_ENV"
+
+      - name: Run Portal E2E tests
+        working-directory: Portal/e2e
+        run: npm test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portal-playwright-report
+          path: Portal/e2e/playwright-report/
+          if-no-files-found: ignore

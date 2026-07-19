@@ -18,7 +18,10 @@ pg_isready || { echo "[start-portal] PostgreSQL not ready"; exit 1; }
 # 2. Seed the database once (database-init.sql creates DB, schema, roles, seeds)
 if ! sudo -u postgres psql -lqt | cut -d'|' -f1 | grep -qw elwasys; then
   echo "[start-portal] initializing elwasys database"
-  sudo -u postgres psql -q -f "$REPO_ROOT/Common/resources/database-init.sql"
+  # Feed the SQL via stdin: the postgres OS user may not have read access to
+  # the repo checkout (e.g. under /home/runner in CI), so read it as the
+  # invoking user and pipe it in.
+  sudo -u postgres psql -q < "$REPO_ROOT/Common/resources/database-init.sql"
 fi
 # Ensure the portal DB user has a password the JDBC driver can use (SCRAM)
 sudo -u postgres psql -q -c "ALTER USER elwaportal WITH PASSWORD 'elwaportal';"
