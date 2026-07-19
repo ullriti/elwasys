@@ -26,3 +26,4 @@ Teststrategie und die Remote-/Cloud-Init-Umgebung dokumentiert und fortlaufend g
 | 2026-07-19 | KB angelegt, Projekt-Recherche & Übersicht erstellt |
 | 2026-07-19 | Build in Remote-Umgebung verifiziert (Common install, Client compile/test-compile) |
 | 2026-07-19 | SessionStart-Hook + portable cloud-config für Remote-Build/Tests erstellt & validiert |
+| 2026-07-19 | Client-UI-Test-Harness (TestFX/Xvfb + JUnit5) aufgebaut; 2 headless Tests grün |

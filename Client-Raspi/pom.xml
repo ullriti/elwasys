@@ -24,6 +24,25 @@
 			<version>4.13.1</version>
 			<scope>test</scope>
 		</dependency>
+		<!-- UI test harness: JUnit 5 + TestFX (headless via Xvfb, see kb/06-ui-tests.md) -->
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>5.10.2</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testfx</groupId>
+			<artifactId>testfx-core</artifactId>
+			<version>4.0.18</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testfx</groupId>
+			<artifactId>testfx-junit5</artifactId>
+			<version>4.0.18</version>
+			<scope>test</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-api</artifactId>
@@ -127,6 +146,21 @@
 				<configuration>
 					<source>16</source>
 					<target>16</target>
+				</configuration>
+			</plugin>
+			<!-- Modern Surefire so JUnit 5 (Jupiter) tests are discovered/run -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>3.2.5</version>
+				<configuration>
+					<!-- Headless JavaFX: run under Xvfb; force software pipeline -->
+					<systemPropertyVariables>
+						<testfx.robot>glass</testfx.robot>
+						<testfx.headless>false</testfx.headless>
+						<prism.order>sw</prism.order>
+						<java.awt.headless>false</java.awt.headless>
+					</systemPropertyVariables>
 				</configuration>
 			</plugin>
 			<plugin>

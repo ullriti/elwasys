@@ -49,8 +49,34 @@ Maintenance-Server. Für UI-Tests brauchen wir **Isolation**:
 - Falls doch ein Display gebraucht wird: **Xvfb** (virtuelles Framebuffer-Display) als
   Fallback (siehe Cloud-Init).
 
+## Umsetzung (Ist-Stand)
+
+**Harness steht (headless via Xvfb, nicht Monocle).** Entscheidung: Xvfb statt Monocle,
+weil Monocle-Versionen fragil zur JavaFX-Version passen müssen; Xvfb ist robust und in der
+Umgebung vorhanden.
+
+- `Client-Raspi/pom.xml`: Test-Deps `junit-jupiter 5.10.2`, `testfx-core`/`testfx-junit5`
+  `4.0.18`; `maven-surefire-plugin 3.2.5` mit System-Properties
+  (`testfx.robot=glass`, `prism.order=sw`, …).
+- Tests laufen headless via `xvfb-run mvn test`.
+- Convenience-Skript: `Client-Raspi/run-ui-tests.sh [TestKlasse]`.
+
+**Tests (grün, 2/2):**
+- `HeadlessFxSmokeTest` – reines FX (keine elwasys-Klassen); beweist die headless-Pipeline.
+- `ProgramListEntryFxmlTest` – lädt echtes App-FXML (`ProgramListEntry`, eine der wenigen
+  ElwaManager-freien Views) und prüft Controller-Wiring, `#detailBox`, Default-Preisformat.
+
+**Wichtige Erkenntnis (Testbarkeits-Blocker):** `ElwaManager.instance` ist ein eager
+Singleton, dessen Konstruktor eine Konfigurationsdatei lädt und bei Fehlen `System.exit(1)`
+aufruft (+ startet Maintenance-Server). Jede View, die `ElwaManager` (direkt/transitiv)
+berührt, ist daher aktuell **nicht** isoliert testbar. → In Phase 1 sollte diese Kopplung
+über Dependency-Injection/Interfaces aufgebrochen werden (bereits vorhandene Interfaces
+nutzen). Bis dahin: ElwaManager-freie Views zuerst testen.
+
 ## Fortschritt
-- [ ] TestFX + Monocle + JUnit5 als Test-Dependencies (Client) ergänzen
-- [ ] Ersten headless-Smoke-Test (FX-Startup) zum Laufen bringen
-- [ ] Charakterisierungstests für State-Machine & Kern-Views
-- [ ] (später) Portal-E2E mit Playwright + Test-DB
+- [x] TestFX + JUnit5 als Test-Dependencies (Client) ergänzen (Xvfb statt Monocle)
+- [x] Ersten headless-Smoke-Test (FX-Startup) zum Laufen bringen
+- [x] Erster Charakterisierungstest für echtes App-FXML (ProgramListEntry)
+- [ ] Weitere Charakterisierungstests (State-Machine, Toolbar-Zustände) – benötigt
+      Entkopplung von ElwaManager
+- [ ] Portal-E2E mit Playwright + Test-DB

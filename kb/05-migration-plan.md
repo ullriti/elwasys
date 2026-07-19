@@ -52,8 +52,12 @@
 
 > Reihenfolge/Scope sind mit dem Auftraggeber abzustimmen, bevor Phase 1+ beginnt.
 
+## Entscheidungen (Auftraggeber)
+- **2026-07-19**: UI-Tests **parallel** für Client (TestFX/Monocle) **und** Portal (E2E) aufbauen.
+- **2026-07-19**: Java-Ziellevel **vorerst offen** – Fokus zunächst auf Tests.
+
 ## Offene Fragen / mit Auftraggeber klären
-- Zielsprachlevel: Java 17 oder 21?
+- Zielsprachlevel: Java 17 oder 21? *(vorerst offen gelassen)*
 - Portal: Vaadin-Upgrade vs. Neuaufbau des Frontends – gewünschter Aufwand?
 - Ist die mobile App (`elwaapi`) noch relevant / im Scope?
 - Soll produktives Verhalten 1:1 erhalten bleiben oder sind Funktionsänderungen erwünscht?
