@@ -21,8 +21,11 @@ if ! sudo -u postgres psql -lqt | cut -d'|' -f1 | grep -qw elwasys; then
   echo "[run-client-e2e] initializing elwasys database"
   sudo -u postgres psql -q -f "$REPO_ROOT/Common/resources/database-init.sql"
 fi
+# The usage E2E test seeds fixtures (devices, programs, users) via JDBC as the
+# elwaportal role, which needs a password the driver can use.
+sudo -u postgres psql -q -c "ALTER USER elwaportal WITH PASSWORD 'elwaportal';"
 
-# 3. Ensure Common is installed, then run the E2E test headlessly
+# 3. Ensure Common is installed, then run the E2E tests headlessly
 mvn -q -B -f "$REPO_ROOT/Common/pom.xml" install -DskipTests
 exec xvfb-run -a --server-args="-screen 0 1024x768x24" \
-  mvn -B test -Dtest=ClientAppE2ETest
+  mvn -B test -Dtest='*E2ETest'

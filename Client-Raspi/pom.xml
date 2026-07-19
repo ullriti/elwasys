@@ -154,6 +154,10 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>3.2.5</version>
 				<configuration>
+					<!-- Each test class gets a fresh JVM. The E2E tests boot the
+					     real application via the ElwaManager singleton, which can
+					     only be initialised once per JVM. -->
+					<reuseForks>false</reuseForks>
 					<!-- Headless JavaFX: run under Xvfb; force software pipeline -->
 					<systemPropertyVariables>
 						<testfx.robot>glass</testfx.robot>
