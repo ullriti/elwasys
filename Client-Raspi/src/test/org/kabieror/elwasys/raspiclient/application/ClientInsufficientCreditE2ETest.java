@@ -108,10 +108,9 @@ public class ClientInsufficientCreditE2ETest {
                 "The card holder should be logged in");
 
         // Book the device -> confirmation screen.
-        assertTrue(waitUntil(ClientInsufficientCreditE2ETest::selectButtonEnabled, Duration.ofSeconds(10)),
+        assertTrue(waitUntil(() -> isSelectButtonEnabled(DEVICE_NAME), Duration.ofSeconds(10)),
                 "The 'book device' button should be enabled");
-        final Node selectButton = robot.lookup(".select-button").query();
-        robot.clickOn(selectButton);
+        robot.clickOn(selectButtonFor(DEVICE_NAME));
         waitForState(MainFormState.CONFIRMATION, Duration.ofSeconds(10));
 
         // The confirmation screen flags insufficient credit and hides Start.
@@ -130,10 +129,13 @@ public class ClientInsufficientCreditE2ETest {
             final int locationId = queryInt(s, "SELECT id FROM locations WHERE name='Default'");
             final int groupId = queryInt(s, "SELECT id FROM user_groups ORDER BY id LIMIT 1");
 
+            // Remove ALL leftover E2E devices/programs (from other test classes
+            // and prior runs) so the device list contains only our device and
+            // its tile stays on-screen for the robot to click.
             s.executeUpdate("DELETE FROM executions WHERE device_id IN " +
-                    "(SELECT id FROM devices WHERE name='" + DEVICE_NAME + "')");
-            s.executeUpdate("DELETE FROM devices WHERE name='" + DEVICE_NAME + "'");
-            s.executeUpdate("DELETE FROM programs WHERE name='" + PROGRAM_NAME + "'");
+                    "(SELECT id FROM devices WHERE name LIKE 'E2E-%')");
+            s.executeUpdate("DELETE FROM devices WHERE name LIKE 'E2E-%'");
+            s.executeUpdate("DELETE FROM programs WHERE name LIKE 'E2E-%'");
 
             final int programId = insertReturningId(s,
                     "INSERT INTO programs (name, type, max_duration, free_duration, flagfall, rate, " +
@@ -174,9 +176,32 @@ public class ClientInsufficientCreditE2ETest {
         }
     }
 
-    private static boolean selectButtonEnabled() {
-        final var node = robot.lookup(".select-button").tryQuery();
-        return node.isPresent() && !node.get().isDisabled();
+    private static Node selectButtonFor(String deviceName) {
+        for (Node tile : primaryStage.getScene().getRoot().lookupAll(".device-list-item")) {
+            if (containsText(tile, deviceName)) {
+                return tile.lookup(".select-button");
+            }
+        }
+        return null;
+    }
+
+    private static boolean isSelectButtonEnabled(String deviceName) {
+        final Node b = selectButtonFor(deviceName);
+        return b != null && !b.isDisabled();
+    }
+
+    private static boolean containsText(Node node, String text) {
+        if (node instanceof javafx.scene.control.Labeled labeled && text.equals(labeled.getText())) {
+            return true;
+        }
+        if (node instanceof javafx.scene.Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                if (containsText(child, text)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean hasStyle(String selector, String styleClass) {

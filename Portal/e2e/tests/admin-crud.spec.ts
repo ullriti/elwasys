@@ -33,14 +33,18 @@ function fieldByCaption(scope: Locator, caption: string): Locator {
 
 /** Select an item in a Vaadin ComboBox located by the field's exact caption. */
 async function selectInCombo(scope: Locator, caption: string, item: string) {
-  const row = scope.locator('tr').filter({ has: scope.page().getByText(caption, { exact: true }) });
+  const page = scope.page();
+  const row = scope.locator('tr').filter({ has: page.getByText(caption, { exact: true }) });
   const input = row.locator('.v-filterselect input');
-  // Type into the filter and confirm with Enter — more reliable than clicking
-  // the lingering Vaadin suggestion popup.
+  const popup = page.locator('.v-filterselect-suggestpopup');
+  // Open, filter down to the item, then CLICK it — clicking the suggestion is
+  // the reliable way to commit a Vaadin 7 filterselect (Enter is racy in CI).
   await input.click();
-  await input.pressSequentially(item, { delay: 30 });
-  await input.press('Enter');
-  // The shared Vaadin suggestion popup lingers and overlays the field below it;
+  await input.pressSequentially(item, { delay: 20 });
+  await popup.locator('td.gwt-MenuItem').filter({ hasText: new RegExp('^' + item + '$') }).click();
+  // Verify the value committed before moving on.
+  await expect(input).toHaveValue(item);
+  // The shared suggestion popup lingers and overlays the field below it;
   // clicking the window header dismisses it without changing the selection.
   await scope.locator('.v-window-header').first().click();
 }

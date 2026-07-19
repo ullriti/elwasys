@@ -143,9 +143,9 @@ public class ClientUsageE2ETest {
     void selecting_the_device_opens_confirmation_with_its_program() throws InterruptedException {
         // The logged-in user (from the previous test) may use this device, so
         // the "book device" button becomes enabled.
-        assertTrue(waitUntil(ClientUsageE2ETest::selectButtonEnabled, Duration.ofSeconds(10)),
+        assertTrue(waitUntil(() -> isSelectButtonEnabled(DEVICE_NAME), Duration.ofSeconds(10)),
                 "The 'book device' button should be enabled for the logged-in user");
-        clickBySelector(".select-button");
+        clickNode(selectButtonFor(DEVICE_NAME));
 
         waitForState(MainFormState.CONFIRMATION, Duration.ofSeconds(10));
         assertTrue(waitUntil(() -> sceneContainsText(PROGRAM_NAME), Duration.ofSeconds(10)),
@@ -168,9 +168,41 @@ public class ClientUsageE2ETest {
 
     // --- helpers ------------------------------------------------------------
 
-    private static boolean selectButtonEnabled() {
-        final var node = robot.lookup(".select-button").tryQuery();
-        return node.isPresent() && !node.get().isDisabled();
+    /**
+     * The ".select-button" of the specific device tile identified by its name.
+     * Other devices may be present at the location (seeded by other tests), so
+     * we must target this device's tile rather than the first select button.
+     */
+    private static Node selectButtonFor(String deviceName) {
+        for (Node tile : primaryStage.getScene().getRoot().lookupAll(".device-list-item")) {
+            if (containsText(tile, deviceName)) {
+                return tile.lookup(".select-button");
+            }
+        }
+        return null;
+    }
+
+    private static boolean isSelectButtonEnabled(String deviceName) {
+        final Node b = selectButtonFor(deviceName);
+        return b != null && !b.isDisabled();
+    }
+
+    private static boolean containsText(Node node, String text) {
+        if (node instanceof Labeled labeled && text.equals(labeled.getText())) {
+            return true;
+        }
+        if (node instanceof Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                if (containsText(child, text)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static void clickNode(Node node) {
+        robot.clickOn(node);
     }
 
     private static void clickBySelector(String selector) {
@@ -203,10 +235,13 @@ public class ClientUsageE2ETest {
             // ON DELETE SET DEFAULT (-1), which would violate the FK because no
             // device with id -1 exists. (These executions carry no
             // credit_accounting reference, so elwaportal may delete them.)
+            // Remove ALL leftover E2E devices/programs (from other test classes
+            // and prior runs) so the device list contains only our device and
+            // its tile stays on-screen for the robot to click.
             s.executeUpdate("DELETE FROM executions WHERE device_id IN " +
-                    "(SELECT id FROM devices WHERE name='" + DEVICE_NAME + "')");
-            s.executeUpdate("DELETE FROM devices WHERE name='" + DEVICE_NAME + "'");
-            s.executeUpdate("DELETE FROM programs WHERE name='" + PROGRAM_NAME + "'");
+                    "(SELECT id FROM devices WHERE name LIKE 'E2E-%')");
+            s.executeUpdate("DELETE FROM devices WHERE name LIKE 'E2E-%'");
+            s.executeUpdate("DELETE FROM programs WHERE name LIKE 'E2E-%'");
 
             final int programId = insertReturningId(s,
                     "INSERT INTO programs (name, type, max_duration, free_duration, flagfall, rate, " +
