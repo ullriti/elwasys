@@ -28,9 +28,9 @@ Legende Priorität: **P1** = Kern-Happy-Path zuerst, **P2** = wichtige Varianten
 | C3 | P1 | Karten-Login gültiger Benutzer (Ziffern + Enter tippen) ✅ | `registeredUser` gesetzt (Name passt) |
 | C4 | P1 | Gerät wählen → Programmliste des Geräts ✅ | State `CONFIRMATION`, Programm sichtbar |
 | C5 | P1 | FIXED-Programm bestätigen (Start) ✅ | laufende Execution in DB (fhem geschaltet) |
-| C6 | P2 | Unbekannte Karte | „unbekannte ID"-Visualisierung, kein Login |
-| C7 | P2 | Gesperrter Benutzer | blocked-Visualisierung, kein Login |
-| C8 | P2 | Benutzergruppe am Standort nicht erlaubt | „nicht erlaubt"-Visualisierung |
+| C6 | P2 | Unbekannte Karte ✅ | `#userInfo` Style `card-unknown`, kein Login |
+| C7 | P2 | Gesperrter Benutzer ✅ | `#userInfo` Style `user-blocked`, kein Login |
+| C8 | P2 | Benutzergruppe am Standort nicht erlaubt ✅ | `#userInfo` Style `location-disallowed`, kein Login |
 | C9 | P2 | Zu wenig Guthaben | State `CONFIRMATION_CREDIT_INSUFFICENT`, kein Start |
 | C10 | P2 | Auto-Logout nach `sessionTimeout` Inaktivität | `registeredUser` wird null |
 | C11 | P3 | Auto-Ende: Leistungsabfall via `FhemSimulator` (`powerevent`) | Execution `finished`, Gerät frei |
