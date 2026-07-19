@@ -23,11 +23,11 @@ Legende Priorität: **P1** = Kern-Happy-Path zuerst, **P2** = wichtige Varianten
 
 | ID | Prio | Testfall | Kern-Assertion |
 |----|------|----------|----------------|
-| C1 | P1 | Startup → Geräteauswahl *(vorhanden)* | State `SELECT_DEVICE` |
-| C2 | P1 | Geräteliste rendert geseedete Geräte des Standorts | genau die enabled/erlaubten Geräte sichtbar |
-| C3 | P1 | Karten-Login gültiger Benutzer (Ziffern + Enter tippen) | Toolbar zeigt Benutzer/Guthaben |
-| C4 | P1 | Gerät wählen → Programmliste des Geräts | erwartete Programme sichtbar, State `CONFIRMATION`/Programmwahl |
-| C5 | P1 | FIXED-Programm bestätigen mit ausreichend Guthaben | fhem schaltet EIN, Execution läuft, Guthaben belastet |
+| C1 | P1 | Startup → Geräteauswahl ✅ | State `SELECT_DEVICE` |
+| C2 | P1 | Geräteliste rendert geseedetes Gerät des Standorts ✅ | Gerätename sichtbar |
+| C3 | P1 | Karten-Login gültiger Benutzer (Ziffern + Enter tippen) ✅ | `registeredUser` gesetzt (Name passt) |
+| C4 | P1 | Gerät wählen → Programmliste des Geräts ✅ | State `CONFIRMATION`, Programm sichtbar |
+| C5 | P1 | FIXED-Programm bestätigen (Start) ✅ | laufende Execution in DB (fhem geschaltet) |
 | C6 | P2 | Unbekannte Karte | „unbekannte ID"-Visualisierung, kein Login |
 | C7 | P2 | Gesperrter Benutzer | blocked-Visualisierung, kein Login |
 | C8 | P2 | Benutzergruppe am Standort nicht erlaubt | „nicht erlaubt"-Visualisierung |

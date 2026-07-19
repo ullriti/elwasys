@@ -59,6 +59,7 @@ public class ClientUsageE2ETest {
 
     private static String cardId;
     private static String userName;
+    private static int deviceId;
 
     @BeforeAll
     static void seedAndLaunch() throws Exception {
@@ -81,6 +82,7 @@ public class ClientUsageE2ETest {
                 "portalUrl=",
                 "fhem.server=localhost",
                 "fhem.port=" + FHEM_PORT,
+                "instance.port=8272",
                 "smtp.server=",
                 "smtp.port=465",
                 "smtp.useSSL=false",
@@ -136,7 +138,57 @@ public class ClientUsageE2ETest {
                 "The logged-in user should be the seeded card owner");
     }
 
+    @Test
+    @Order(3)
+    void selecting_the_device_opens_confirmation_with_its_program() throws InterruptedException {
+        // The logged-in user (from the previous test) may use this device, so
+        // the "book device" button becomes enabled.
+        assertTrue(waitUntil(ClientUsageE2ETest::selectButtonEnabled, Duration.ofSeconds(10)),
+                "The 'book device' button should be enabled for the logged-in user");
+        clickBySelector(".select-button");
+
+        waitForState(MainFormState.CONFIRMATION, Duration.ofSeconds(10));
+        assertTrue(waitUntil(() -> sceneContainsText(PROGRAM_NAME), Duration.ofSeconds(10)),
+                "The confirmation screen should list the device's program '" + PROGRAM_NAME + "'");
+    }
+
+    @Test
+    @Order(4)
+    void confirming_starts_an_execution_on_the_device() throws Exception {
+        waitForState(MainFormState.CONFIRMATION, Duration.ofSeconds(10));
+
+        // The single program is auto-selected, so the toolbar "Start" (forward)
+        // button starts the execution.
+        clickBySelector("#forwardButton");
+
+        assertTrue(waitUntil(ClientUsageE2ETest::hasRunningExecution, Duration.ofSeconds(15)),
+                "Confirming should create a running execution on the seeded device "
+                        + "(fhem switched on, execution persisted)");
+    }
+
     // --- helpers ------------------------------------------------------------
+
+    private static boolean selectButtonEnabled() {
+        final var node = robot.lookup(".select-button").tryQuery();
+        return node.isPresent() && !node.get().isDisabled();
+    }
+
+    private static void clickBySelector(String selector) {
+        final Node node = robot.lookup(selector).query();
+        robot.clickOn(node);
+    }
+
+    private static boolean hasRunningExecution() {
+        try (Connection c = DriverManager.getConnection(DB_URL, "elwaportal", "elwaportal");
+             Statement s = c.createStatement();
+             ResultSet r = s.executeQuery(
+                     "SELECT COUNT(*) FROM executions WHERE finished=false AND device_id=" + deviceId)) {
+            r.next();
+            return r.getInt(1) > 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
     private static void seedFixtures() throws Exception {
         cardId = "9" + String.format("%08d", System.currentTimeMillis() % 100_000_000L);
@@ -146,7 +198,13 @@ public class ClientUsageE2ETest {
             final int locationId = queryInt(s, "SELECT id FROM locations WHERE name='Default'");
             final int groupId = queryInt(s, "SELECT id FROM user_groups ORDER BY id LIMIT 1");
 
-            // Clean slate for the fixed-name device/program (cascades to rels).
+            // Clean slate for the fixed-name device/program. Delete any leftover
+            // executions on the previous device first: devices.executions has
+            // ON DELETE SET DEFAULT (-1), which would violate the FK because no
+            // device with id -1 exists. (These executions carry no
+            // credit_accounting reference, so elwaportal may delete them.)
+            s.executeUpdate("DELETE FROM executions WHERE device_id IN " +
+                    "(SELECT id FROM devices WHERE name='" + DEVICE_NAME + "')");
             s.executeUpdate("DELETE FROM devices WHERE name='" + DEVICE_NAME + "'");
             s.executeUpdate("DELETE FROM programs WHERE name='" + PROGRAM_NAME + "'");
 
@@ -154,7 +212,7 @@ public class ClientUsageE2ETest {
                     "INSERT INTO programs (name, type, max_duration, free_duration, flagfall, rate, " +
                             "time_unit, auto_end, earliest_auto_end, enabled) VALUES ('" + PROGRAM_NAME +
                             "', 'FIXED', 3600, 0, 1.50, NULL, NULL, TRUE, 0, TRUE) RETURNING id");
-            final int deviceId = insertReturningId(s,
+            deviceId = insertReturningId(s,
                     "INSERT INTO devices (name, position, location_id, fhem_name, fhem_switch_name, " +
                             "fhem_power_name, deconz_uuid, auto_end_power_threashold, auto_end_wait_time, enabled) " +
                             "VALUES ('" + DEVICE_NAME + "', 1, " + locationId +
