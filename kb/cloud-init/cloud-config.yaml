@@ -1,0 +1,55 @@
+#cloud-config
+# elwasys – Build- & (headless) Test-Umgebung auf einer frischen Ubuntu-VM.
+# Provisioniert JDK, Maven, PostgreSQL, Xvfb und die JavaFX/GTK-Laufzeitbibliotheken,
+# klont das Repo und initialisiert die Datenbank.
+#
+# Verwendung (Beispiel, cloud-fähiger Hypervisor / Multipass / Cloud-Provider):
+#   multipass launch --name elwasys --cloud-init kb/cloud-init/cloud-config.yaml
+# oder als user-data bei EC2/GCE/Hetzner etc.
+
+package_update: true
+package_upgrade: false
+
+packages:
+  # Build-Toolchain
+  - openjdk-21-jdk
+  - maven
+  - git
+  # Datenbank (für Integrations-/Portal-Tests)
+  - postgresql
+  - postgresql-client
+  # Headless UI-Tests (JavaFX/TestFX) – Xvfb + GTK/Grafik-Laufzeit
+  - xvfb
+  - libgtk-3-0
+  - libgl1
+  - libxtst6
+  - fontconfig
+  - curl
+
+write_files:
+  # Bequemer Wrapper, um UI-Tests headless auszuführen (Xvfb-Fallback zu Monocle)
+  - path: /opt/elwasys/run-ui-tests.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # Führt die Client-UI-Tests headless aus.
+      # Bevorzugt Monocle (voll headless); Xvfb dient als Fallback.
+      set -euo pipefail
+      cd /opt/elwasys/src
+      mvn -q -B -f Common/pom.xml install -DskipTests
+      xvfb-run -a --server-args="-screen 0 1024x768x24" \
+        mvn -B -f Client-Raspi/pom.xml test \
+          -Dtestfx.headless=true -Dglass.platform=Monocle -Dmonocle.platform=Headless \
+          -Dprism.order=sw -Djava.awt.headless=true
+
+runcmd:
+  # Repo klonen
+  - [ bash, -lc, "mkdir -p /opt/elwasys && chown -R ubuntu:ubuntu /opt/elwasys" ]
+  - [ bash, -lc, "sudo -u ubuntu git clone https://github.com/ullriti/elwasys.git /opt/elwasys/src || true" ]
+  # Datenbank initialisieren (Schema + Rollen + Seed-Daten)
+  - [ bash, -lc, "sudo -u postgres psql -f /opt/elwasys/src/Common/resources/database-init.sql || true" ]
+  # Maven-Cache vorwärmen: Common installieren, Client-Deps auflösen
+  - [ bash, -lc, "cd /opt/elwasys/src && sudo -u ubuntu mvn -q -B -f Common/pom.xml install -DskipTests || true" ]
+  - [ bash, -lc, "cd /opt/elwasys/src && sudo -u ubuntu mvn -q -B -f Client-Raspi/pom.xml dependency:go-offline || true" ]
+
+final_message: "elwasys build/test environment ready after $UPTIME seconds."
