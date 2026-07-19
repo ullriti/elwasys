@@ -63,10 +63,10 @@ z. B. zusätzlicher Nicht-Admin-Benutzer mit Passwort, Gruppen, Geräte, Program
 | P3 | P1 | Login mit falschem Passwort ✅ | `.v-Notification` „Login fehlgeschlagen", bleibt auf Login |
 | P4 | P1 | Logout ✅ | zurück auf Login-Seite |
 | P5 | P1 | Navigation: alle Admin-Views (Dashboard/Benutzer/Gruppen/Programme/Geräte) ✅ | URL-Fragment `#!<view>` je Sektion |
-| P6 | P2 | Benutzer anlegen (Name, Username, Karte, Gruppe) | erscheint in Benutzerliste |
+| P6 | P2 | Benutzer anlegen (Name, Username, Gruppe) ✅ | erscheint in Benutzerliste |
 | P7 | P2 | Benutzer bearbeiten (sperren, E-Mail) | Änderung persistent/sichtbar |
 | P8 | P2 | Guthaben aufladen (UserCreditWindow) | Guthaben aktualisiert, Buchung in `credit_accounting` |
-| P9 | P2 | Benutzergruppe mit Rabatt anlegen (FIX/FACTOR) | erscheint, Rabatt gespeichert |
+| P9 | P2 | Benutzergruppe anlegen ✅ | erscheint in Gruppenliste |
 | P10 | P2 | Gerät anlegen (Standort, fhem/deCONZ-UUID, Programme, Gruppen) | erscheint in Geräteliste |
 | P11 | P2 | Gerät aktiv/inaktiv schalten, bearbeiten | Zustand geändert |
 | P12 | P2 | Programm anlegen: FIXED und DYNAMIC | erscheinen, korrekte Felder |

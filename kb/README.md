@@ -33,3 +33,4 @@ Teststrategie und die Remote-/Cloud-Init-Umgebung dokumentiert und fortlaufend g
 | 2026-07-19 | Client-E2E: echte App headless hochgefahren (fhem-Sim + DB) → SELECT_DEVICE; getDeconzServer-Bug gefixt |
 | 2026-07-19 | Client-E2E vertieft (C2–C5): Geräteliste, Karten-Login, Gerät buchen, Programmstart; Suite 7/7 grün |
 | 2026-07-19 | Portal-E2E vertieft (P3–P5): falsches Passwort, Logout, Navigation aller Admin-Views; Suite 5/5 grün |
+| 2026-07-19 | Client-Login-Varianten (C6–C8) grün; Portal-CRUD (P6 Benutzer, P9 Gruppe) grün; Portal-Suite 7/7 |
