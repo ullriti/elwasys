@@ -31,6 +31,20 @@ function fieldByCaption(scope: Locator, caption: string): Locator {
     .first();
 }
 
+/** Select an item in a Vaadin ComboBox located by the field's exact caption. */
+async function selectInCombo(scope: Locator, caption: string, item: string) {
+  const row = scope.locator('tr').filter({ has: scope.page().getByText(caption, { exact: true }) });
+  const input = row.locator('.v-filterselect input');
+  // Type into the filter and confirm with Enter — more reliable than clicking
+  // the lingering Vaadin suggestion popup.
+  await input.click();
+  await input.pressSequentially(item, { delay: 30 });
+  await input.press('Enter');
+  // The shared Vaadin suggestion popup lingers and overlays the field below it;
+  // clicking the window header dismisses it without changing the selection.
+  await scope.locator('.v-window-header').first().click();
+}
+
 test('admin can create a user', async ({ page }) => {
   const stamp = Date.now();
   const username = `e2e_ui_${stamp}`;
@@ -87,4 +101,29 @@ test('admin can create a user group', async ({ page }) => {
   await expect(win).toBeHidden();
 
   await expect(page.getByText(groupName, { exact: true })).toBeVisible();
+});
+
+test('admin can create a device', async ({ page }) => {
+  const deviceName = `E2E-Geraet-${Date.now()}`;
+
+  await loginAsAdmin(page);
+  await openSection(page, 'Geräte', 'devices');
+
+  await page.locator('.v-menubar-menuitem', { hasText: 'Neu' }).click();
+  const win = page.locator('.v-window', { hasText: 'Gerät erstellen' });
+  await expect(win).toBeVisible();
+
+  await fieldByCaption(win, 'Name').fill(deviceName);
+  await selectInCombo(win, 'Position', '1');
+  await selectInCombo(win, 'Standort', 'Default');
+  // fhem gateway fields (required)
+  await fieldByCaption(win, 'Fhem Name').fill('e2e-wm');
+  await fieldByCaption(win, 'Fhem Switch Name').fill('e2e-wm-sw');
+  await fieldByCaption(win, 'Fhem Power Name').fill('e2e-wm-pw');
+  // Auto-end threshold/wait keep their defaults.
+
+  await win.locator('.v-button', { hasText: 'Erstellen' }).click();
+  await expect(win).toBeHidden();
+
+  await expect(page.getByText(deviceName, { exact: true })).toBeVisible();
 });
