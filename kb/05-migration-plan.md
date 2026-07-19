@@ -32,9 +32,12 @@
 
 ### Phase 0 – Verständnis & Absicherung *(aktuell)*
 - [x] KB anlegen, Projekt erforschen, Übersicht dokumentieren
-- [ ] Cloud-Init/Remote-Umgebung für Build & (headless) UI-Tests
-- [ ] UI-Tests für bestehende Software (Client zuerst) → Verhalten festhalten
-- [ ] Reproduzierbarer Build aller Module in der Remote-Umgebung
+- [x] Cloud-Init/Remote-Umgebung für Build & (headless) UI-Tests (Hook + cloud-config)
+- [x] UI-Tests Client (TestFX/Xvfb) – 2 Tests grün
+- [x] UI-Tests Portal (Playwright E2E) – Login-Smoke-Test grün
+- [x] Reproduzierbarer Build: Common ✅, Client ✅, Portal ✅ (repariert)
+- [ ] Weitere Charakterisierungstests (Client-State-Machine) – blockiert durch
+      ElwaManager-Kopplung → Phase 1
 
 ### Phase 1 – Build & Konsolidierung
 - [ ] Aggregator-Parent-POM, einheitliche Versionen/Properties
