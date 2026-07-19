@@ -41,6 +41,30 @@ public class FhemSimulator {
         devices.put("wm4sw", new SwitchDevice());
     }
 
+    /**
+     * Starts the simulator programmatically on the given port. Intended for use
+     * from tests (E2E) that need a fake fhem gateway. Returns once the server
+     * socket is listening.
+     */
+    public void start(int port) throws IOException {
+        this.serverSocket = new ServerSocket(port);
+        this.startListen();
+    }
+
+    /**
+     * Stops the simulator and releases the server socket.
+     */
+    public void stop() {
+        this.shutdown = true;
+        if (this.serverSocket != null) {
+            try {
+                this.serverSocket.close();
+            } catch (IOException e) {
+                this.logger.warn("Could not close the fhem simulator server socket.", e);
+            }
+        }
+    }
+
     public static void main(String[] args) {
         instance = new FhemSimulator();
         try {
@@ -160,7 +184,9 @@ public class FhemSimulator {
                     Socket clientSocker = serverSocket.accept();
                     this.startHandleConnection(clientSocker);
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    if (!this.shutdown) {
+                        e.printStackTrace();
+                    }
                     break;
                 }
             }

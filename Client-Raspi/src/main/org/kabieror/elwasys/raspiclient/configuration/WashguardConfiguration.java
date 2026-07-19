@@ -51,7 +51,15 @@ public class WashguardConfiguration extends ConfigurationManager {
      * If this value is not specified, then a fhem connection will be opened.
      */
     public String getDeconzServer() {
-        var server = this.props.getProperty("deconz.server").trim();
+        final var raw = this.props.getProperty("deconz.server");
+        // When no deConz server is configured, return a blank value so that
+        // callers fall back to fhem (see the javadoc above). Previously an empty
+        // value was turned into "http://", which is not blank and therefore
+        // always selected the deConz gateway (and a missing key threw an NPE).
+        if (raw == null || raw.isBlank()) {
+            return "";
+        }
+        var server = raw.trim();
         if (!Pattern.matches("^https?://.*", server)) {
             server = "http://" + server;
         }

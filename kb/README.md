@@ -29,3 +29,4 @@ Teststrategie und die Remote-/Cloud-Init-Umgebung dokumentiert und fortlaufend g
 | 2026-07-19 | Client-UI-Test-Harness (TestFX/Xvfb + JUnit5) aufgebaut; 2 headless Tests grün |
 | 2026-07-19 | Portal-Build repariert (Vaadin/GWT/War/JDBC/API-Drift); `jetty:run` liefert Login-Seite |
 | 2026-07-19 | Portal-E2E (Playwright, Node/TS) aufgebaut; Login-Smoke-Test grün (2/2) |
+| 2026-07-19 | Client-E2E: echte App headless hochgefahren (fhem-Sim + DB) → SELECT_DEVICE; getDeconzServer-Bug gefixt |

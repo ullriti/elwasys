@@ -35,6 +35,28 @@ Maintenance-Server. Für UI-Tests brauchen wir **Isolation**:
 4. **InactivityScheduler**: Auto-Logout/Backlight (es gibt bereits `InactivitySchedulerTest`).
 5. **Toolbar-Zustände**: Unknown card / blocked user / location-not-allowed Visualisierung.
 
+## Client (JavaFX) – echtes E2E ✅ (umgesetzt)
+
+Zusätzlich zu den isolierten FXML-Charakterisierungstests gibt es jetzt einen **echten
+End-to-End-Test**, der die **komplette Anwendung** (`Main`) headless hochfährt und ihren
+realen Startup-Pfad durchläuft: Config-Laden → DB-Verbindung → Gateway-Verbindung →
+JavaFX-State-Machine bis `SELECT_DEVICE`.
+
+- **Test**: `ClientAppE2ETest` (`src/test/.../application/`), grün.
+- **Gateway**: der projekteigene **`FhemSimulator`** (fake fhem über Telnet) — start-/
+  stoppbar gemacht (`start(port)`/`stop()`). Der Client nutzt den fhem-Pfad, weil kein
+  deCONZ-Server konfiguriert ist.
+- **DB**: lokale PostgreSQL, geseedet aus `database-init.sql` (Location „Default").
+- **Config**: temporäres `elwasys.properties` (via `user.dir`-Property); stabile Client-UID
+  (`.client-uid`) + Reset der Standort-Registrierung im Setup → idempotent, reihenfolge-
+  unabhängig.
+- **Runner**: `Client-Raspi/run-client-e2e.sh` (startet PG, seedet DB, `xvfb-run mvn test`).
+
+**Behobener Blocker (Produktions-Bugfix):** `WashguardConfiguration.getDeconzServer()`
+machte aus einem leeren Wert `"http://"` (nicht blank) → `ElwaManager.initiate()` wählte
+**immer** deCONZ, der dokumentierte fhem-Fallback war toter Code (zudem NPE bei fehlendem
+Key). Fix: leer bleibt leer. Damit ist der fhem-Pfad wieder erreichbar und testbar.
+
 ## Portal (Vaadin 7) – Playwright E2E ✅ (umgesetzt)
 
 Entscheidung (Auftraggeber): **Playwright (Node/TypeScript)**. Projekt unter `Portal/e2e/`.
@@ -93,7 +115,9 @@ nutzen). Bis dahin: ElwaManager-freie Views zuerst testen.
 - [x] TestFX + JUnit5 als Test-Dependencies (Client) ergänzen (Xvfb statt Monocle)
 - [x] Ersten headless-Smoke-Test (FX-Startup) zum Laufen bringen
 - [x] Erster Charakterisierungstest für echtes App-FXML (ProgramListEntry)
-- [ ] Weitere Charakterisierungstests (State-Machine, Toolbar-Zustände) – benötigt
+- [x] Echtes Client-E2E (`Main` headless → SELECT_DEVICE, fhem-Simulator + Test-DB)
+- [ ] Weitere Client-E2E-Flows (Karten-Login simulieren, Geräteliste, Programmstart)
+- [ ] Weitere isolierte Charakterisierungstests (Toolbar-Zustände) – benötigt
       Entkopplung von ElwaManager
 - [x] Portal-E2E mit Playwright + Test-DB (Login-Smoke-Test grün)
 - [ ] Weitere Portal-E2E-Flows (CRUD: Benutzer/Geräte/Programme anlegen)
