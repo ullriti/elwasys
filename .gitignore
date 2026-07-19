@@ -30,3 +30,6 @@ target/
 elwasys.properties
 
 .client-uid
+# Vaadin on-the-fly theme compilation artifact
+Portal/src/main/webapp/VAADIN/themes/**/styles.scss.cache
+Portal/jetty-run.log

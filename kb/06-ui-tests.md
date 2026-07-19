@@ -35,14 +35,30 @@ Maintenance-Server. Für UI-Tests brauchen wir **Isolation**:
 4. **InactivityScheduler**: Auto-Logout/Backlight (es gibt bereits `InactivitySchedulerTest`).
 5. **Toolbar-Zustände**: Unknown card / blocked user / location-not-allowed Visualisierung.
 
-## Portal (Vaadin 7) – später
+## Portal (Vaadin 7) – Playwright E2E ✅ (umgesetzt)
 
-- Option A: **Vaadin TestBench** (kommerziell/lizenzabhängig) – eher nicht.
-- Option B: **Playwright/Selenium** End-to-End gegen laufende Jetty-Instanz + Test-DB
-  (PostgreSQL via Docker/Testcontainers). Realistischer, aber schwergewichtig (GWT-
-  Widgetset-Build nötig).
-- Empfehlung: Portal-UI-Tests **nach** dem Client angehen, sobald ein reproduzierbarer
-  Portal-Build in der Remote-Umgebung steht.
+Entscheidung (Auftraggeber): **Playwright (Node/TypeScript)**. Projekt unter `Portal/e2e/`.
+
+- **Browser**: vorinstalliertes Chromium (`/opt/pw-browsers/chromium`) via
+  `executablePath` – kein `playwright install` nötig.
+- **Orchestrierung**: `scripts/start-portal.sh` (idempotent) startet PostgreSQL, seedet die
+  `elwasys`-DB aus `database-init.sql`, schreibt `/etc/elwaportal/elwaportal.properties`,
+  installiert Common und startet `mvn jetty:run`. Playwright `webServer` wartet auf
+  `:8080`, führt die Tests aus und fährt Jetty wieder herunter. Mit `E2E_NO_WEBSERVER=1`
+  gegen einen bereits laufenden Server testbar.
+- **Vaadin-7-Selektoren**: keine stabilen IDs → Lokatoren über Vaadin-CSS-Klassen
+  (`input.v-textfield`, `.v-button`) und sichtbare Captions.
+
+**Tests (grün, 2/2):** `tests/login.spec.ts`
+- Login-Seite rendert (Titel „Waschportal", Benutzer-/Passwortfeld, Login-Button).
+- Seed-Admin (`admin`/`admin`) meldet sich an und erreicht das Admin-Dashboard
+  (Menüpunkte „Benutzergruppen", „Geräte").
+
+Verifiziert kompletter Stack: PostgreSQL → DB-Seed → Jetty/Vaadin → DB-Verbindung
+(DataManager) → Login → Dashboard.
+
+### Nicht weiter verfolgt
+- **Vaadin TestBench** (kommerziell/lizenzabhängig) – verworfen.
 
 ## Ausführung headless (Remote/CI)
 - Client-TestFX mit Monocle → **kein** X-Server nötig.
@@ -79,4 +95,5 @@ nutzen). Bis dahin: ElwaManager-freie Views zuerst testen.
 - [x] Erster Charakterisierungstest für echtes App-FXML (ProgramListEntry)
 - [ ] Weitere Charakterisierungstests (State-Machine, Toolbar-Zustände) – benötigt
       Entkopplung von ElwaManager
-- [ ] Portal-E2E mit Playwright + Test-DB
+- [x] Portal-E2E mit Playwright + Test-DB (Login-Smoke-Test grün)
+- [ ] Weitere Portal-E2E-Flows (CRUD: Benutzer/Geräte/Programme anlegen)
