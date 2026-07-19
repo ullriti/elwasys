@@ -58,11 +58,11 @@ z. B. zusätzlicher Nicht-Admin-Benutzer mit Passwort, Gruppen, Geräte, Program
 
 | ID | Prio | Testfall | Kern-Assertion |
 |----|------|----------|----------------|
-| P1 | P1 | Login-Seite rendert *(vorhanden)* | Titel/Felder/Button |
-| P2 | P1 | Admin-Login → Dashboard *(vorhanden)* | Admin-Menü sichtbar |
-| P3 | P1 | Login mit falschem Passwort | Fehlermeldung, bleibt auf Login |
-| P4 | P1 | Logout | zurück auf Login-Seite |
-| P5 | P1 | Navigation: alle Admin-Views laden (Dashboard/Benutzer/Gruppen/Programme/Geräte) | jeweilige View/Überschrift sichtbar |
+| P1 | P1 | Login-Seite rendert ✅ | Titel/Felder/Button |
+| P2 | P1 | Admin-Login → Dashboard ✅ | Admin-Menü sichtbar |
+| P3 | P1 | Login mit falschem Passwort ✅ | `.v-Notification` „Login fehlgeschlagen", bleibt auf Login |
+| P4 | P1 | Logout ✅ | zurück auf Login-Seite |
+| P5 | P1 | Navigation: alle Admin-Views (Dashboard/Benutzer/Gruppen/Programme/Geräte) ✅ | URL-Fragment `#!<view>` je Sektion |
 | P6 | P2 | Benutzer anlegen (Name, Username, Karte, Gruppe) | erscheint in Benutzerliste |
 | P7 | P2 | Benutzer bearbeiten (sperren, E-Mail) | Änderung persistent/sichtbar |
 | P8 | P2 | Guthaben aufladen (UserCreditWindow) | Guthaben aktualisiert, Buchung in `credit_accounting` |
