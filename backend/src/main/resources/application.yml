@@ -40,6 +40,24 @@ spring:
     baseline-version: 1
     baseline-description: "Bestandsschema 0.4.0 (Alt-Weg: database-init.sql + database-upgrade/*.sql)"
 
+  # Mail-Transport für den Benachrichtigungsdienst (AP5, siehe kb/05-migration-plan.md und
+  # elwasys.notifications unten). Aktiviert die JavaMailSender-Autokonfiguration von Spring
+  # Boot (spring.mail.host muss als Property vorhanden sein, sonst wird kein JavaMailSender-
+  # Bean erzeugt - leerer String genügt dafür, siehe NotificationsProperties-Javadoc). Bildet
+  # dieselben Stellschrauben wie der Alt-Code (Common.ConfigurationManager) ab:
+  # smtp.server->host, smtp.port->port, smtp.user->username, smtp.password->password,
+  # smtp.useSSL->mail.smtp.ssl.enable (SSLOnConnect wie SimpleEmail#setSSLOnConnect im
+  # Alt-Code, kein STARTTLS - der Alt-Code kennt nur diese eine Variante).
+  mail:
+    host: ${ELWASYS_SMTP_HOST:}
+    port: ${ELWASYS_SMTP_PORT:465}
+    username: ${ELWASYS_SMTP_USER:}
+    password: ${ELWASYS_SMTP_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail.smtp.auth: ${ELWASYS_SMTP_AUTH:true}
+      mail.smtp.ssl.enable: ${ELWASYS_SMTP_USE_SSL:true}
+
 management:
   endpoints:
     web:
@@ -48,6 +66,16 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  health:
+    # Der Actuator registriert automatisch einen Mail-Health-Indikator, sobald
+    # spring-boot-starter-mail auf dem Klassenpfad liegt (AP5) - der würde per SMTP-NOOP
+    # gegen spring.mail.host verbinden und den Health-Endpoint auf DOWN ziehen, solange kein
+    # echter SMTP-Server konfiguriert ist (Default: leerer Host, siehe oben). Da der
+    # Benachrichtigungsdienst per Default deaktiviert ist (elwasys.notifications.enabled:
+    # false) und noch von keinem produktiven Ablauf abhängt, wäre ein SMTP-Ausfall hier kein
+    # aussagekräftiges "Backend ist nicht betriebsbereit" - deaktiviert.
+    mail:
+      enabled: false
 
 # Auth (AP3, siehe kb/05-migration-plan.md).
 elwasys:
@@ -57,6 +85,17 @@ elwasys:
     # noch läuft und SHA1 direkt in dieselbe Spalte schreibt/liest (Parallelbetrieb) - wird
     # erst beim Portal-Cutover (Phase 3) aktiviert.
     rehash-on-login: ${ELWASYS_AUTH_REHASH_ON_LOGIN:false}
+
+  # Benachrichtigungsdienst (AP5, siehe kb/05-migration-plan.md und NotificationsProperties-
+  # Javadoc). KRITISCH: enabled bleibt AUS, solange Client-Raspi im Parallelbetrieb weiterhin
+  # selbst Benachrichtigungen verschickt (Doppelversand-Risiko) - wird erst verdrahtet/
+  # aktiviert, wenn Phase 4 die Terminals auf "meldet nur Ereignisse" umstellt.
+  notifications:
+    enabled: ${ELWASYS_NOTIFICATIONS_ENABLED:false}
+    smtp:
+      sender-address: ${ELWASYS_SMTP_SENDER_ADDRESS:}
+    pushover:
+      api-token: ${ELWASYS_PUSHOVER_API_TOKEN:}
 
 logging:
   level:
