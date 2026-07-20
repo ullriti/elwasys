@@ -116,6 +116,37 @@ test('admin can top up a user credit', async ({ page }) => {
   await expect(row()).toContainText('5.00');
 });
 
+test('admin can block a user', async ({ page }) => {
+  const stamp = Date.now();
+  const name = `E2E Sperre ${stamp}`;
+
+  await loginAsAdmin(page);
+  await createUser(page, name, `e2e_block_${stamp}`);
+
+  const rowRe = new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const row = () => page.getByRole('row', { name: rowRe });
+  const openEdit = async () => {
+    // First enabled action button in the row is "edit".
+    await row().locator('.v-button:not(.v-disabled)').nth(0).click();
+    const win = page.locator('.v-window', { hasText: 'Benutzer bearbeiten' });
+    await expect(win).toBeVisible();
+    return win;
+  };
+  const blockedBox = (win: Locator) =>
+    win.locator('tr').filter({ has: page.getByText('Gesperrt', { exact: true }) })
+      .locator('input[type="checkbox"]');
+
+  // Block the user.
+  let win = await openEdit();
+  await blockedBox(win).check({ force: true });
+  await win.locator('.v-button', { hasText: 'Speichern' }).click();
+  await expect(win).toBeHidden();
+
+  // Re-open the editor and confirm the "blocked" flag persisted.
+  win = await openEdit();
+  await expect(blockedBox(win)).toBeChecked();
+});
+
 test('admin can create a user group', async ({ page }) => {
   const groupName = `E2E-Gruppe-${Date.now()}`;
 
