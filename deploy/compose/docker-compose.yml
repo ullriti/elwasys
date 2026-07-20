@@ -1,0 +1,87 @@
+# elwasys backend – docker-compose-Stack (Phase 2 AP6, siehe kb/05-migration-plan.md,
+# Technologie-Entscheidung "Deployment Backend: Container-Image; Betrieb per docker-compose
+# ... oder Kubernetes"). Betriebsanleitung: kb/04-build-and-run.md, Abschnitt "Deployment".
+#
+# Enthält: Backend-Container (aus backend/Dockerfile gebaut) + eine mitgelieferte PostgreSQL-
+# 16-Instanz für Neuinstallationen. Für die Variante "Anbindung an eine Bestands-DB" siehe
+# den Kommentar bei ELWASYS_DB_URL unten und deploy/compose/.env.example - der "postgres"-
+# Service wird dann einfach nicht gestartet (z.B. "docker compose up backend").
+#
+# Nutzung:
+#   cd deploy/compose
+#   cp .env.example .env   # Platzhalter durch echte Werte ersetzen (siehe .env.example)
+#   docker compose up -d --build
+#   curl http://localhost:8080/actuator/health
+#
+# TLS: dieses Compose-File terminiert selbst kein TLS (reiner HTTP-Zugriff auf Port 8080,
+# gedacht für den Betrieb hinter einem bereits vorhandenen Reverse Proxy/Load Balancer, oder
+# für lokale Entwicklung/Tests). Für einen eigenständigen TLS-Terminierungspunkt siehe das
+# optionale Overlay docker-compose.proxy.yml (Caddy, automatisches Let's-Encrypt-TLS):
+#   docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d --build
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-elwasys}
+      POSTGRES_USER: ${POSTGRES_USER:-elwasys}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD muss in .env gesetzt sein}
+    volumes:
+      # Benannter Volume statt Bind-Mount: Datenpersistenz unabhängig vom Host-Pfad, siehe
+      # "volumes:" unten. Kein gemountetes database-init.sql (siehe .env.example-Kommentar
+      # oben) - eine leere Datenbank wird beim ersten Backend-Start per Flyway-Baseline-
+      # Migration (V1__baseline_schema_0_4_0.sql) vollständig angelegt.
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-elwasys} -d ${POSTGRES_DB:-elwasys}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      # Kontext = Repo-Wurzel (zwei Ebenen über diesem Verzeichnis), siehe Begründung im
+      # Kopf-Kommentar von backend/Dockerfile (Root-Reactor/Parent-POM/Common-Fallstrick).
+      context: ../..
+      dockerfile: backend/Dockerfile
+    image: elwasys-backend:local
+    environment:
+      # Standard: gegen den mitgelieferten "postgres"-Service oben. Für die Variante
+      # "Bestands-DB" hier stattdessen auf die externe DB zeigen (siehe .env.example) und den
+      # "postgres"-Service nicht mitstarten - Flyways baselineOnMigrate übernimmt eine bereits
+      # über den Alt-Weg (database-init.sql) angelegte Datenbank unverändert (siehe
+      # kb/02-data-model.md, kb/04-build-and-run.md).
+      ELWASYS_DB_URL: ${ELWASYS_DB_URL:-jdbc:postgresql://postgres:5432/${POSTGRES_DB:-elwasys}}
+      ELWASYS_DB_USER: ${ELWASYS_DB_USER:-${POSTGRES_USER:-elwasys}}
+      ELWASYS_DB_PASSWORD: ${ELWASYS_DB_PASSWORD:-${POSTGRES_PASSWORD:?POSTGRES_PASSWORD muss in .env gesetzt sein}}
+
+      ELWASYS_NOTIFICATIONS_ENABLED: ${ELWASYS_NOTIFICATIONS_ENABLED:-false}
+      ELWASYS_SMTP_HOST: ${ELWASYS_SMTP_HOST:-}
+      ELWASYS_SMTP_PORT: ${ELWASYS_SMTP_PORT:-465}
+      ELWASYS_SMTP_USER: ${ELWASYS_SMTP_USER:-}
+      ELWASYS_SMTP_PASSWORD: ${ELWASYS_SMTP_PASSWORD:-}
+      ELWASYS_SMTP_SENDER_ADDRESS: ${ELWASYS_SMTP_SENDER_ADDRESS:-}
+      ELWASYS_SMTP_AUTH: ${ELWASYS_SMTP_AUTH:-true}
+      ELWASYS_SMTP_USE_SSL: ${ELWASYS_SMTP_USE_SSL:-true}
+      ELWASYS_PUSHOVER_API_TOKEN: ${ELWASYS_PUSHOVER_API_TOKEN:-}
+
+      ELWASYS_AUTH_REHASH_ON_LOGIN: ${ELWASYS_AUTH_REHASH_ON_LOGIN:-false}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Healthcheck dupliziert den HEALTHCHECK aus backend/Dockerfile nicht (der greift
+    # ohnehin), stellt aber sicher, dass "depends_on: condition: service_healthy" in anderen
+    # Compose-Overlays (z.B. docker-compose.proxy.yml) darauf warten kann.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -1,0 +1,193 @@
+# Default-Werte für den elwasys-backend-Chart (Phase 2 AP6, siehe kb/05-migration-plan.md).
+# Diese Datei ist zugleich die Values-Dokumentation (jeder Abschnitt ist kommentiert) - siehe
+# Chart.yaml/kb/04-build-and-run.md für den größeren Kontext.
+
+# -- Anzahl Backend-Replicas. Das Backend ist zustandslos gegenüber Kubernetes (aller Zustand
+# lebt in PostgreSQL bzw. in-memory pro Pod für die Terminal-WebSocket-Registry, siehe
+# kb/03-modules.md) - mehr als 1 Replica ist möglich, aber Terminals mit offener WS-Verbindung
+# zu Pod A würden bei einer Fernwartungsanfrage über Pod B nicht gefunden (kein geteilter
+# Verbindungsstatus zwischen Pods). Für den produktiven Start (kleine Installation, ein
+# Standort) ist replicaCount 1 die pragmatische Wahl; Mehrfach-Replica-Unterstützung für die
+# WS-Registry ist kein Teil dieses Arbeitspakets (siehe Phase 3/4-Roadmap für die volle
+# Fernwartungs-Portierung).
+replicaCount: 1
+
+image:
+  # Platzhalter-Repository - an die tatsächliche Registry anpassen (siehe
+  # .github/workflows/ci.yml/maven-publish.yml für den Image-Build; Veröffentlichung nach GHCR
+  # ist als offener Punkt in kb/05-migration-plan.md dokumentiert).
+  repository: ghcr.io/kabieror/elwasys-backend
+  # Leer = Chart.appVersion (siehe Chart.yaml). Explizit setzen, um von der Chart-Version
+  # unabhängig ein bestimmtes Image zu pinnen (empfohlen für Produktion statt "latest").
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+# Pod-weite SecurityContext-Defaults - passend zum non-root-User (UID/GID 10001), der im
+# Runtime-Image von backend/Dockerfile fest angelegt ist (10001 statt 1000, weil einige
+# Ubuntu-basierte Images bereits eine UID 1000 vordefinieren - siehe Dockerfile-Kommentar).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+
+# Container-weite SecurityContext-Härtung (Defense-in-Depth, unabhängig vom bereits non-root
+# laufenden Image).
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop: ["ALL"]
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# Ingress: TLS-Konzept für Kubernetes (siehe kb/05-migration-plan.md Zielarchitektur Punkt 5
+# "TLS über Reverse Proxy oder Ingress"). Standardmäßig deaktiviert, weil ein Ingress-
+# Controller + (optional) cert-manager als Cluster-Voraussetzung nicht Teil dieses Charts
+# ist. Zwei dokumentierte Wege, TLS zu bekommen:
+#   1. cert-manager (empfohlen): die Annotation "cert-manager.io/cluster-issuer" unten setzt
+#      einen bereits im Cluster vorhandenen ClusterIssuer; cert-manager stellt das Zertifikat
+#      automatisch aus und legt es im "tls[].secretName" ab (Secret wird von cert-manager
+#      verwaltet, NICHT von diesem Chart).
+#   2. Selbst verwaltetes Zertifikat: cert-manager-Annotation weglassen, stattdessen ein
+#      TLS-Secret mit demselben "secretName" außerhalb dieses Charts anlegen (z.B.
+#      "kubectl create secret tls ...") - der Ingress-Controller terminiert TLS damit genauso.
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: elwasys.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: elwasys-backend-tls
+      hosts:
+        - elwasys.example.com
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    memory: 768Mi
+
+# Liveness/Readiness gegen den kombinierten Actuator-Health-Endpoint (nicht die
+# Kubernetes-spezifischen Untergruppen /actuator/health/liveness|readiness - Spring Boot
+# aktiviert diese zwar automatisch, sobald es eine Kubernetes-Umgebung erkennt, aber der
+# einfache, immer verfügbare /actuator/health-Endpoint (siehe application.yml,
+# management.endpoints.web.exposure.include) braucht keine Annahme über dieses Verhalten und
+# ist öffentlich erreichbar, siehe SecurityConfig aus AP3).
+probes:
+  liveness:
+    path: /actuator/health
+    initialDelaySeconds: 30
+    periodSeconds: 15
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    path: /actuator/health
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# -- Datenbankverbindung. Dieser Chart bringt bewusst KEIN PostgreSQL-Sub-Chart mit
+# (Begründung, siehe auch kb/05-migration-plan.md "Entscheidungen"):
+#   1. Das Backend ist der EINZIGE DB-Client der Zielarchitektur (siehe kb/05, Punkt 1 der
+#      "Wesentlichen Änderungen") - eine im selben Helm-Release mitgelieferte, an den Pod-
+#      Lifecycle gekoppelte Postgres-Instanz würde genau die Frage aufwerfen, die die
+#      Migration eigentlich lösen soll ("wer ist Owner der Datenbank, wann läuft sie, wie
+#      wird sie gesichert") noch einmal auf Kubernetes-Ebene, statt sie dem Betreiber als
+#      bewusste separate Entscheidung zu überlassen.
+#   2. Bestandsinstallationen (siehe Rahmenbedingungen) haben schon eine laufende Postgres-DB
+#      mit echten Nutzerdaten - genau die Variante "externe/vorhandene DB" ist für den
+#      produktiven Einsatz der Regelfall, nicht die Ausnahme.
+#   3. Ein optionales Sub-Chart (z.B. "bitnami/postgresql" mit "condition: postgresql.enabled")
+#      hätte in dieser Umgebung nicht gegen echtes Helm verifiziert werden können (siehe
+#      Abschlussbericht - kein Netzwerkzugriff auf Chart-Repositories) und hätte eine
+#      Abhängigkeit auf eine dritte Chart-Version gepinnt, deren Kompatibilität hier nicht
+#      geprüft werden konnte - das wäre unbegründetes Risiko für einen Nice-to-have gewesen.
+#
+# Empfehlung für Neuinstallationen ohne vorhandene DB: PostgreSQL separat betreiben, z.B.
+#   helm install elwasys-db bitnami/postgresql -n elwasys \
+#     --set auth.database=elwasys --set auth.username=elwaportal
+# und danach den erzeugten Service/Secret unten eintragen (host = Service-DNS-Name,
+# existingSecret = von diesem Chart erzeugtes Secret). Für Bestands-DBs: host/port/name direkt
+# auf die vorhandene Instanz setzen - Flywaus baselineOnMigrate übernimmt sie unverändert
+# (siehe kb/02-data-model.md, kb/04-build-and-run.md).
+database:
+  host: postgres.example.svc.cluster.local
+  port: 5432
+  name: elwasys
+  # Voll qualifizierte JDBC-URL statt host/port/name zusammenzusetzen - leer lassen, um die
+  # Standard-Zusammensetzung "jdbc:postgresql://<host>:<port>/<name>" zu verwenden.
+  jdbcUrlOverride: ""
+  # Name eines bereits existierenden Secrets mit den Schlüsseln usernameKey/passwordKey.
+  # Wenn leer, erzeugt der Chart selbst ein Secret aus secret.username/secret.password unten
+  # (siehe templates/secret.yaml) - praktisch für Entwicklung/Tests, für Produktion wird ein
+  # extern verwaltetes Secret (z.B. über einen Secret-Manager/External-Secrets-Operator)
+  # empfohlen.
+  existingSecret: ""
+  usernameKey: username
+  passwordKey: password
+
+# Nur wirksam, wenn database.existingSecret leer ist (siehe oben).
+secret:
+  create: true
+  username: elwaportal
+  # Kein Default - MUSS beim Installieren gesetzt werden (--set secret.password=... oder
+  # eigene values-Datei), sonst rendert das Secret mit einem leeren Passwort. Absichtlich kein
+  # Platzhalter-Passwort hier, damit ein "helm install" ohne expliziten Wert eher aufälllt
+  # (leeres DB-Passwort) als mit einem unsicheren, aber unauffälligen Default durchzurutschen.
+  password: ""
+
+# Benachrichtigungsdienst (SMTP/Pushover, siehe AP5) - Default AUS, wie im Backend selbst
+# (application.yml). SMTP-Passwort und Pushover-Token liegen im selben Secret wie die DB-
+# Zugangsdaten (siehe templates/secret.yaml) - non-secret-Werte (Host/Port/Sender/Nutzer) im
+# ConfigMap.
+notifications:
+  enabled: false
+
+smtp:
+  host: ""
+  port: 465
+  user: ""
+  senderAddress: ""
+  auth: true
+  useSsl: true
+  # Secret-Wert (kein Default, wie secret.password oben) - leer bedeutet "keine SMTP-
+  # Zugangsdaten hinterlegt", passend zu notifications.enabled=false.
+  password: ""
+
+pushover:
+  # Secret-Wert, siehe smtp.password.
+  apiToken: ""
+
+# Auth (siehe AP3) - bleibt aus, bis das Alt-Portal beim Cutover abgeschaltet wird (siehe
+# kb/05-migration-plan.md "Entscheidungen", AP3).
+auth:
+  rehashOnLogin: false
+
+# Zusätzliche Umgebungsvariablen (Liste im Kubernetes-"env"-Format), für Fälle, die die
+# obigen strukturierten Values nicht abdecken.
+extraEnv: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

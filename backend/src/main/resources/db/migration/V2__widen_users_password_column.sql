@@ -1,0 +1,20 @@
+-- AP3 (Auth: Argon2id-Hashing + SHA1-Migrationspfad, siehe kb/05-migration-plan.md).
+--
+-- Befund: die Bestandsspalte "users.password" ist VARCHAR(50) - ausreichend fuer die
+-- bisherigen SHA1-Hex-Hashes (konstant 40 Zeichen), aber zu klein fuer Argon2id-kodierte
+-- Strings. Empirisch gemessen (Spring Securitys
+-- Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8(), die hier verwendeten Parameter):
+-- Format "$argon2id$v=19$m=16384,t=2,p=1$<22-Zeichen-Salt>$<43-Zeichen-Hash>" ist konstant
+-- 97 Zeichen lang - mehr als das Doppelte der bisherigen Spaltenbreite. Ein INSERT/UPDATE
+-- eines Argon2id-Hashes wuerde ohne diese Migration mit "value too long for type character
+-- varying(50)" fehlschlagen.
+--
+-- Diese additive, abwaertskompatible Erweiterung auf VARCHAR(255) (Konvention mit Puffer
+-- statt exakt 97, falls Parameter/Format sich spaeter aendern) aendert weder bestehende
+-- Werte noch das Verhalten des Alt-Codes: Portal/Client lesen/schreiben die Spalte nur als
+-- String ohne eigene Laengenpruefung (Common.User#checkPassword/#changePassword,
+-- Utilities#sha1 - siehe kb/05), ein 40-Zeichen-SHA1-Hash passt weiterhin klaglos in die
+-- breitere Spalte. Damit bleibt der Parallelbetrieb (Alt-Portal schreibt/liest SHA1 direkt
+-- in/aus dieser Spalte) unangetastet - siehe kb/05-migration-plan.md, "Entscheidungen" fuer
+-- die vollstaendige Abwaegung dieses Befunds.
+ALTER TABLE users ALTER COLUMN password TYPE VARCHAR(255);

@@ -1,0 +1,26 @@
+apiVersion: v2
+name: elwasys-backend
+description: >-
+  elwasys-Backend (Spring Boot) – Geschäftslogik, REST-API/WebSocket für Terminals,
+  Admin-Portal (ab Phase 3). Siehe kb/05-migration-plan.md (Modernisierungsplan) und
+  kb/01-architecture.md im elwasys-Repo. Dieser Chart deployt AUSSCHLIESSLICH das Backend
+  (Deployment/Service/Ingress/ConfigMap/Secret) - PostgreSQL wird bewusst nicht als
+  Sub-Chart mitgeliefert, siehe die Begründung in values.yaml unter "database:" und in
+  kb/05-migration-plan.md ("Entscheidungen").
+type: application
+# Chart-Version: eigene, vom Anwendungs-Release unabhängige Versionierung dieses Helm-Charts
+# (SemVer, hochzählen bei Chart-Änderungen wie neuen Values/Templates).
+version: 0.1.0
+# appVersion: Version des Backend-Images, das standardmäßig referenziert wird (siehe
+# values.yaml image.tag - überschreibt bei Bedarf appVersion). Folgt dem Projektstand, siehe
+# root pom.xml <version> (aktuell "0.0.0-local-development", vor dem ersten echten Release).
+appVersion: "0.0.0-local-development"
+home: https://elwasys.de
+sources:
+  - https://github.com/kabieror/elwasys
+keywords:
+  - elwasys
+  - laundry
+  - spring-boot
+maintainers:
+  - name: elwasys

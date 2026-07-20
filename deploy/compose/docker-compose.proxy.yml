@@ -1,0 +1,49 @@
+# Optionales TLS-Overlay: Reverse Proxy (Caddy) vor dem Backend (Phase 2 AP6, TLS-Konzept
+# siehe kb/05-migration-plan.md Zielarchitektur Punkt 5 "TLS über Reverse Proxy oder Ingress").
+#
+# Caddy übernimmt hier automatisches TLS via Let's-Encrypt/ZeroSSL (HTTP-01-Challenge über
+# Port 80, danach HTTPS auf Port 443) - keine manuelle Zertifikatsverwaltung nötig, solange
+# ELWASYS_PUBLIC_HOSTNAME per DNS auf diesen Host zeigt und Port 80/443 von außen erreichbar
+# sind. Bewusst schlank gehalten (ein Service, eine Konfigdatei) statt eines vollständigen
+# Ingress-artigen Gateways - das Konzept (Backend bleibt reines HTTP, TLS-Terminierung
+# davor), nicht die Werkzeugwahl, ist der eigentliche Punkt (dieselbe Rolle übernimmt in
+# Kubernetes der Ingress-Controller, siehe deploy/helm/elwasys-backend/values.yaml).
+#
+# Nutzung (zusätzlich zum Basis-Stack, siehe docker-compose.yml):
+#   docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d --build
+#
+# Lokales Testen ohne echten öffentlichen DNS-Namen/Internetzugriff: Caddy fällt ohne
+# erreichbare ACME-Challenge auf ein selbstsigniertes Zertifikat für internal/unbekannte
+# Hostnamen zurück ("on_demand_tls" ist hier NICHT aktiviert, siehe Caddyfile) - für
+# reproduzierbare lokale Tests stattdessen den lokalen Hostnamen "localhost" verwenden
+# (Caddy stellt dafür automatisch ein lokal vertrauenswürdiges Zertifikat aus).
+
+services:
+  proxy:
+    image: caddy:2-alpine
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      ELWASYS_PUBLIC_HOSTNAME: ${ELWASYS_PUBLIC_HOSTNAME:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+
+  # Das Backend muss von außen nicht mehr direkt erreichbar sein, sobald der Proxy vorne
+  # steht - Port-Publizierung des Basis-Stacks hier aufheben (nur noch intern über das
+  # Compose-Netzwerk für "proxy" erreichbar). "!reset" ist nötig, weil Compose Listen wie
+  # "ports" standardmäßig zusammenführt (anhängt) statt zu ersetzen - eine einfache "ports: []"
+  # würde die 8080-Veröffentlichung aus docker-compose.yml NICHT aufheben (mit "docker compose
+  # -f docker-compose.yml -f docker-compose.proxy.yml config" nachvollziehbar).
+  backend:
+    ports: !reset []
+
+volumes:
+  caddy_data:
+  caddy_config:

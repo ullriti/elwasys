@@ -1,0 +1,29 @@
+elwasys-backend wurde installiert (Release "{{ .Release.Name }}" im Namespace "{{ .Release.Namespace }}").
+
+Health prüfen:
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+  curl https://{{ .host }}/actuator/health
+{{- end }}
+{{- else }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "elwasys-backend.fullname" . }} 8080:{{ .Values.service.port }}
+  curl http://localhost:8080/actuator/health
+{{- end }}
+
+Standort-Token erzeugen/widerrufen (Terminal-Registrierung, siehe kb/04-build-and-run.md
+"Standort-Tokens erzeugen/widerrufen" und kb/05-migration-plan.md AP4). Läuft als
+Einmal-Befehl im bereits gebauten Image gegen dieselbe Datenbank wie das Deployment - über
+"kubectl run" mit demselben Image, statt in einen laufenden Pod zu exec'en (der
+Haupt-Prozess dort läuft bereits als Webserver, kein zusätzlicher Java-Prozess im selben
+Container gewünscht):
+
+  kubectl run elwasys-token-cli --rm -it --restart=Never \
+    --namespace {{ .Release.Namespace }} \
+    --image="{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}" \
+    --env="ELWASYS_DB_URL={{ include "elwasys-backend.jdbcUrl" . }}" \
+    --env="ELWASYS_DB_USER=<Benutzer aus dem DB-Secret>" \
+    --env="ELWASYS_DB_PASSWORD=<Passwort aus dem DB-Secret>" \
+    -- --spring.profiles.active=token-cli --location=Default --label=terminal-kueche
+
+Das Klartext-Token erscheint in der Ausgabe GENAU EINMAL - sofort in die
+Terminal-Konfiguration übernehmen.

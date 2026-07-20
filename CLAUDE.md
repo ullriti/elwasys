@@ -18,9 +18,11 @@ Modernisierungsprojekts. Vor jeder Arbeit lesen:
 
 **Aktueller Stand (2026-07-20):** Phase 0 (Sicherheitsnetz: Build + E2E-Tests) und
 Phase 1 (Fundament: Parent-POM, Java 21, JUnit 5, ElwaManager-DI) sind abgeschlossen,
-alle Grundsatzentscheidungen sind gefallen.
-**Nächster Schritt: Phase 2** (Backend-Gerüst: Spring-Boot-Modul `backend` parallel
-zum Bestand) – siehe Roadmap in kb/05.
+alle Grundsatzentscheidungen sind gefallen. **Phase 2 (Backend-Gerüst: AP1–AP6 – Flyway-
+Baseline, JPA-Entities/Geschäftslogik, Auth, REST-API/Standort-Token/WebSocket,
+Benachrichtigungsdienst hinter Konfig-Flag, Deployment mit Docker/Helm) ist abgeschlossen**
+(QA-Review ohne Befunde). **Nächster Schritt: Phase 3** (Portal-Neubau: Vaadin-Flow-UI im
+Backend) – siehe Roadmap in kb/05.
 
 ## Arbeitsregeln
 

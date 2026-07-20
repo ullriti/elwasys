@@ -1,0 +1,8 @@
+# Reverse-Proxy-Konfiguration für das optionale TLS-Overlay (siehe docker-compose.proxy.yml).
+# {$ELWASYS_PUBLIC_HOSTNAME} wird aus der gleichnamigen Umgebungsvariable befüllt (Default
+# "localhost" für lokale Tests, siehe .env.example). Caddy holt/erneuert Let's-Encrypt-
+# Zertifikate für echte öffentliche Hostnamen vollautomatisch; für "localhost" nutzt Caddy
+# stattdessen automatisch sein eingebautes, lokal vertrauenswürdiges Entwicklungszertifikat.
+{$ELWASYS_PUBLIC_HOSTNAME:localhost} {
+	reverse_proxy backend:8080
+}

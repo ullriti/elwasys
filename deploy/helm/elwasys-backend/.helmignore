@@ -1,0 +1,9 @@
+# Standard-Helm-Ignore-Muster (siehe "helm create"-Vorlage).
+.git/
+.gitignore
+.vscode/
+.idea/
+*.tmp
+*.bak
+*.swp
+*.orig

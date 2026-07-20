@@ -141,3 +141,58 @@ jobs:
           name: portal-playwright-report
           path: Portal/e2e/playwright-report/
           if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Backend – new Spring Boot module (Phase 2, parallel to the legacy stack, see
+  # kb/05-migration-plan.md).
+  #
+  # Since AP2 (JPA entities/services) the module has a test-scope dependency on "common"
+  # (Alt-vs-Neu-Äquivalenztests für Preis-/Guthabenberechnung, see kb/05-migration-plan.md) -
+  # this job now builds Common first via the root reactor (-pl Common -am), same pattern as
+  # the "common"/"client" jobs above, so backend's test classpath can resolve it.
+  #
+  # Tests use Testcontainers by default (see backend/src/test/.../TestPostgres.java) - unlike
+  # the Client-Raspi/Portal jobs above, which seed a local PostgreSQL cluster because the
+  # sandboxed dev container this project is normally developed in (see kb/07-cloud-init.md)
+  # has no Docker daemon. GitHub-hosted ubuntu-24.04 runners *do* have a Docker daemon, so
+  # here Testcontainers can run unmodified and doesn't need the local-PG workaround
+  # backend/run-backend-tests.sh provides for that daemon-less environment.
+  # ---------------------------------------------------------------------------
+  backend:
+    name: Backend (Spring Boot, Testcontainers)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'liberica'
+          cache: maven
+
+      - name: Build Common (test-scope dependency of backend)
+        run: mvn -B -f pom.xml install -pl Common -am -DskipTests
+
+      - name: Build & test backend
+        run: mvn -B -f pom.xml test -pl backend
+
+      - name: Upload Surefire reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-surefire-reports
+          path: backend/target/surefire-reports/
+          if-no-files-found: ignore
+
+      # Deployment (Phase 2 AP6, siehe kb/05-migration-plan.md, backend/Dockerfile): baut nur
+      # das Container-Image, ohne es zu veröffentlichen - beweist, dass das Dockerfile
+      # tatsächlich baubar ist (kann in der sandboxed Entwicklungsumgebung dieses Projekts
+      # nicht verifiziert werden, siehe kb/07-cloud-init.md: kein Docker-Daemon dort).
+      # GitHub-Actions-ubuntu-24.04-Runner bringen Docker+BuildKit bereits mit. Kontext ist die
+      # Repo-Wurzel (siehe Kopf-Kommentar von backend/Dockerfile), unabhängig vom
+      # obigen Maven-Build dieses Jobs (baut den Jar-Build im eigenen Container noch einmal,
+      # ohne Layer-Cache aus den vorigen Schritten - das ist hier gewollt: es validiert
+      # denselben Weg, den ein frischer Image-Build in Produktion nähme).
+      - name: Build backend container image (build only, no push)
+        run: docker build -f backend/Dockerfile -t elwasys-backend:ci .

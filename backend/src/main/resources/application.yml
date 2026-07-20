@@ -1,0 +1,115 @@
+spring:
+  application:
+    name: elwasys-backend
+
+  # Datenbank: dieselbe PostgreSQL-DB wie Client-Raspi/Portal (Parallelbetrieb, siehe
+  # kb/05-migration-plan.md). Alle drei Werte sind per Umgebungsvariable überschreibbar;
+  # die Defaults passen zur lokalen Entwicklungsumgebung (siehe kb/04-build-and-run.md).
+  datasource:
+    url: ${ELWASYS_DB_URL:jdbc:postgresql://localhost:5432/elwasys}
+    username: ${ELWASYS_DB_USER:elwaportal}
+    password: ${ELWASYS_DB_PASSWORD:elwaportal}
+
+  # JPA/Hibernate (AP2): das Schema kommt AUSSCHLIESSLICH von Flyway (siehe unten) - Hibernate
+  # darf es weder generieren noch verändern. ddl-auto=none ist zwar bereits Spring Boots
+  # Default für eine "echte" (nicht-eingebettete) Datenbank wie PostgreSQL, wird hier aber
+  # trotzdem explizit gesetzt (siehe kb/05-migration-plan.md, Rahmenbedingungen: "Hibernate
+  # ddl-auto bleibt aus/none"). open-in-view=false, weil dieses Arbeitspaket keine Web-Schicht
+  # einführt, die davon profitieren würde (die REST-API folgt erst in AP4) - vermeidet
+  # außerdem Spring Boots Startup-Warnung.
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+
+  mvc:
+    # RFC-7807-ProblemDetail-Antworten auch für Spring-MVC-Standardfehler (z.B.
+    # @Valid-Validierungsfehler, fehlende Pflichtparameter) - ergänzt
+    # ApiExceptionHandler, der die fachlichen Terminal-API-Fehler abdeckt (AP4, siehe
+    # kb/05-migration-plan.md).
+    problemdetails:
+      enabled: true
+
+  flyway:
+    # baselineOnMigrate: eine bereits über den Alt-Weg (database-init.sql +
+    # database-upgrade/*.sql) angelegte Bestands-DB hat keine flyway_schema_history-Tabelle,
+    # aber bereits alle Tabellen. Flyway markiert sie dann als "auf baselineVersion migriert",
+    # ohne V1 (== der Alt-Weg-Endstand 0.4.0) erneut auszuführen. Eine leere/frische DB
+    # durchläuft V1 stattdessen ganz normal. Siehe kb/02-data-model.md.
+    baseline-on-migrate: true
+    baseline-version: 1
+    baseline-description: "Bestandsschema 0.4.0 (Alt-Weg: database-init.sql + database-upgrade/*.sql)"
+
+  # Mail-Transport für den Benachrichtigungsdienst (AP5, siehe kb/05-migration-plan.md und
+  # elwasys.notifications unten). Aktiviert die JavaMailSender-Autokonfiguration von Spring
+  # Boot (spring.mail.host muss als Property vorhanden sein, sonst wird kein JavaMailSender-
+  # Bean erzeugt - leerer String genügt dafür, siehe NotificationsProperties-Javadoc). Bildet
+  # dieselben Stellschrauben wie der Alt-Code (Common.ConfigurationManager) ab:
+  # smtp.server->host, smtp.port->port, smtp.user->username, smtp.password->password,
+  # smtp.useSSL->mail.smtp.ssl.enable (SSLOnConnect wie SimpleEmail#setSSLOnConnect im
+  # Alt-Code, kein STARTTLS - der Alt-Code kennt nur diese eine Variante).
+  mail:
+    host: ${ELWASYS_SMTP_HOST:}
+    port: ${ELWASYS_SMTP_PORT:465}
+    username: ${ELWASYS_SMTP_USER:}
+    password: ${ELWASYS_SMTP_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail.smtp.auth: ${ELWASYS_SMTP_AUTH:true}
+      mail.smtp.ssl.enable: ${ELWASYS_SMTP_USE_SSL:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    # Der Actuator registriert automatisch einen Mail-Health-Indikator, sobald
+    # spring-boot-starter-mail auf dem Klassenpfad liegt (AP5) - der würde per SMTP-NOOP
+    # gegen spring.mail.host verbinden und den Health-Endpoint auf DOWN ziehen, solange kein
+    # echter SMTP-Server konfiguriert ist (Default: leerer Host, siehe oben). Da der
+    # Benachrichtigungsdienst per Default deaktiviert ist (elwasys.notifications.enabled:
+    # false) und noch von keinem produktiven Ablauf abhängt, wäre ein SMTP-Ausfall hier kein
+    # aussagekräftiges "Backend ist nicht betriebsbereit" - deaktiviert.
+    mail:
+      enabled: false
+
+# Auth (AP3, siehe kb/05-migration-plan.md).
+elwasys:
+  auth:
+    # SHA1->Argon2id-Migration beim Login: siehe AuthProperties-Javadoc/kb/05-migration-plan.md
+    # ("Entscheidungen") für die vollständige Begründung. Default AUS, solange das Alt-Portal
+    # noch läuft und SHA1 direkt in dieselbe Spalte schreibt/liest (Parallelbetrieb) - wird
+    # erst beim Portal-Cutover (Phase 3) aktiviert.
+    rehash-on-login: ${ELWASYS_AUTH_REHASH_ON_LOGIN:false}
+
+  # Benachrichtigungsdienst (AP5, siehe kb/05-migration-plan.md und NotificationsProperties-
+  # Javadoc). KRITISCH: enabled bleibt AUS, solange Client-Raspi im Parallelbetrieb weiterhin
+  # selbst Benachrichtigungen verschickt (Doppelversand-Risiko) - wird erst verdrahtet/
+  # aktiviert, wenn Phase 4 die Terminals auf "meldet nur Ereignisse" umstellt.
+  notifications:
+    enabled: ${ELWASYS_NOTIFICATIONS_ENABLED:false}
+    smtp:
+      sender-address: ${ELWASYS_SMTP_SENDER_ADDRESS:}
+    pushover:
+      api-token: ${ELWASYS_PUSHOVER_API_TOKEN:}
+
+logging:
+  level:
+    root: INFO
+    org.kabieror.elwasys: INFO
+    org.flywaydb: INFO
+
+# API-Dokumentation (AP4, siehe kb/05-migration-plan.md): beschränkt springdoc auf die
+# Terminal-API unter /api/v1/** (kein Katalog interner/künftiger Vaadin-Endpunkte). Erreichbar
+# unter /v3/api-docs (JSON) bzw. /swagger-ui.html - beides läuft über die catch-all
+# SecurityFilterChain aus SecurityConfig (AP3, alles außer /actuator/health erfordert eine
+# Anmeldung), NICHT über die zustandslose Terminal-Token-Kette (die ist auf /api/v1/**
+# begrenzt, siehe TerminalApiSecurityConfig) - die Dokumentation selbst liegt bewusst nicht
+# unter /api/v1/**.
+springdoc:
+  packages-to-scan: org.kabieror.elwasys.backend.api
+  paths-to-match: /api/v1/**

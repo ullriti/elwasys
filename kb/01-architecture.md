@@ -7,6 +7,7 @@
 | Common | `common` | `0.0.0-local-development` (Client-Kontext) / `0.3.4-SNAPSHOT` (Portal-Kontext) | jar | 1.8 | Datenmodell, DB-Zugriff, Maintenance-Protokoll |
 | Client-Raspi | `raspi-client` | `0.0.0-local-development` | jar (mit `jar-with-dependencies`) | 16 | Terminal-UI (JavaFX), Gerätesteuerung |
 | Portal | `webportal` | `0.3.4-SNAPSHOT` | war | 1.8 | Admin-Weboberfläche (Vaadin) |
+| Backend *(neu, seit Phase 2 AP1)* | `backend` | `0.0.0-local-development` | jar (Spring-Boot-Repackage) | 21 | Neues zentrales Backend (Spring Boot); AP1 liefert Gerüst + Flyway-Baseline, läuft parallel zum Bestand auf derselben DB |
 
 > ⚠️ Inkonsistenz: Common wird von Client mit Version `0.0.0-local-development` referenziert,
 > vom Portal aber mit `0.3.4-SNAPSHOT`. Die CI ersetzt `0.0.0-local-development` beim Release
@@ -21,6 +22,7 @@
   Client/Server, Handler)
 - `org.kabieror.elwasys.raspiclient.*` – Raspberry-Pi-Client
 - `org.kabieror.elwasys.webportal.*` – Web-Portal
+- `org.kabieror.elwasys.backend.*` – neues Spring-Boot-Backend (seit Phase 2 AP1)
 
 ## Technologie-Stack (Ist-Zustand)
 
@@ -51,6 +53,21 @@
 - Servlet-API 3.0.1 (provided)
 - Build: WAR, Jetty-Plugin `9.2.3` (`mvn jetty:run`, Port 8080), Vaadin-/GWT-Widgetset-
   Compilation
+
+### Backend *(neu, seit Phase 2 AP1, zuletzt erweitert AP4)*
+- **Spring Boot 3.5.16** (BOM-Import, siehe kb/03-modules.md), Java 21
+- `spring-boot-starter-web`/`-actuator`/`-jdbc`/`-validation`/`-data-jpa`/`-security`/
+  `-websocket` (letzteres seit AP4: Terminal-WebSocket-Endpunkt)
+- **Flyway** (`flyway-core` + `flyway-database-postgresql`) für Migrationen
+- **springdoc-openapi-starter-webmvc-ui `2.8.6`** (seit AP4) – generiert die OpenAPI-
+  Beschreibung + Swagger-UI für `/api/v1/**` aus den Controllern (`/v3/api-docs`,
+  `/swagger-ui.html`)
+- PostgreSQL-Treiber `42.7.11`, Logback `1.5.34` (mitgeliefert von Spring Boot)
+- Test: JUnit 5, Testcontainers (Default) mit lokalem PostgreSQL-Override für Docker-lose
+  Umgebungen (siehe kb/04-build-and-run.md)
+- Build: `spring-boot-maven-plugin` (repackage) → lauffähiges Jar; Modul-Property
+  `maven.compiler.parameters=true` (seit AP4, nötig für `@RequestParam`/`@PathVariable`
+  ohne expliziten Namen)
 
 ## Client-Architektur (Raspberry Pi)
 
@@ -135,3 +152,20 @@ Portal weiß, wie es ihn erreicht.
 7. **elwaapi**-DB-User (in DB-Schema angelegt) – vermutlich für eine mobile App
    (`app_id`/`access_key`/`auth_key` in `users`, Tabelle `reservations`), App-Code nicht in
    diesem Repo.
+
+## Neues Backend: Terminal-API/WebSocket (seit Phase 2 AP4)
+
+Zusätzlich zu den obigen (Alt-Code-)Kommunikationswegen, die bis zum jeweiligen Cutover
+(Phase 3 Portal, Phase 4 Terminal) unverändert weiterlaufen, bietet das neue Backend seit AP4
+zwei neue, parallele Wege an (noch von niemandem produktiv genutzt, siehe kb/05-migration-
+plan.md, Rahmenbedingungen):
+
+8. **Terminal ⇄ Backend REST** (`/api/v1/**`, Standort-Token im `Authorization: Bearer`-
+   Header) – Kartenlogin, Geräte-/Programmliste, Execution-Lebenszyklus, Guthaben. Ersetzt
+   künftig (Phase 4) den Direkt-DB-Zugriff des Client-Raspi.
+9. **Terminal ⇄ Backend WebSocket** (`/api/v1/terminal-ws`, dasselbe Standort-Token beim
+   Handshake) – Kanal-Fundament für Ereignis-Push und die künftige Fernwartung (Status/Logs/
+   Restart, fachliche Referenz `Common.maintenance.*`); ersetzt langfristig Weg 3
+   (`Portal ⇄ Client`-Maintenance-WebSocket) durch eine vom Terminal ausgehende Verbindung.
+
+Vollständige Endpunkt-/Nachrichtenreferenz: kb/03-modules.md (Abschnitt Backend, AP4).

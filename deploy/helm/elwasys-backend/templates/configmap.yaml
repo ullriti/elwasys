@@ -1,0 +1,19 @@
+# Nicht-geheime Konfiguration (siehe deployment.yaml "envFrom" - Secrets für DB-/SMTP-
+# Passwort und Pushover-Token liegen getrennt in templates/secret.yaml, siehe values.yaml
+# "database:"/"smtp:"-Kommentare für die Begründung dieser Trennung).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "elwasys-backend.fullname" . }}
+  labels:
+    {{- include "elwasys-backend.labels" . | nindent 4 }}
+data:
+  ELWASYS_DB_URL: {{ include "elwasys-backend.jdbcUrl" . | quote }}
+  ELWASYS_NOTIFICATIONS_ENABLED: {{ .Values.notifications.enabled | quote }}
+  ELWASYS_SMTP_HOST: {{ .Values.smtp.host | quote }}
+  ELWASYS_SMTP_PORT: {{ .Values.smtp.port | quote }}
+  ELWASYS_SMTP_USER: {{ .Values.smtp.user | quote }}
+  ELWASYS_SMTP_SENDER_ADDRESS: {{ .Values.smtp.senderAddress | quote }}
+  ELWASYS_SMTP_AUTH: {{ .Values.smtp.auth | quote }}
+  ELWASYS_SMTP_USE_SSL: {{ .Values.smtp.useSsl | quote }}
+  ELWASYS_AUTH_REHASH_ON_LOGIN: {{ .Values.auth.rehashOnLogin | quote }}

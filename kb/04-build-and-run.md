@@ -27,7 +27,14 @@ mvn -f Portal/pom.xml package      # → target/*.war
 #   oder Entwicklungsserver:
 mvn -f Portal/pom.xml jetty:run    # http://localhost:8080
 
-# Alternative: kompletter Reactor-Build aller drei Module in einem Aufruf
+# 2c. Backend bauen (Spring-Boot-Jar, seit Phase 2 AP1) – der main-Code hat keinen
+#     Common-Bezug, daher reicht für "package"/"package -DskipTests" ein direkter
+#     Aufruf ohne -am. Für "mvn test -pl backend" wird Common vorher benötigt (seit AP2
+#     test-scope-Dependency für Alt-vs-Neu-Vergleichstests, siehe unten).
+mvn -f pom.xml package -pl backend
+#   → target/elwasys-backend.jar (ausführbar: java -jar backend/target/elwasys-backend.jar)
+
+# Alternative: kompletter Reactor-Build aller vier Module in einem Aufruf
 mvn install   # von der Repo-Wurzel aus
 ```
 
@@ -80,6 +87,98 @@ mvn -f pom.xml install -pl Common -am -DskipTests
 mvn -f Portal/pom.xml jetty:run        # http://localhost:8080  (Login: admin/admin)
 ```
 
+### Backend bauen, testen, lokal starten (seit Phase 2 AP1, JPA/Services seit AP2, REST-API/WS seit AP4)
+
+Neues Modul `backend/` (Spring Boot 3.x, siehe kb/01-architecture.md, kb/03-modules.md).
+Läuft zur Laufzeit weiterhin unabhängig von Common/Client-Raspi/Portal (eigenes
+Datenmodell, keine Laufzeit-Abhängigkeit) – seit AP2 hat es aber eine **test-scope**-
+Abhängigkeit auf `common` (Alt-vs-Neu-Vergleichstests, siehe kb/05-migration-plan.md), die
+für den Testklassenpfad in der lokalen Maven-Repo verfügbar sein muss:
+
+```bash
+# Common (+ Parent-POM) erst installieren, sonst schlägt "mvn test -pl backend" beim
+# Auflösen der test-scope-Abhängigkeit auf common fehl (Muster wie bei Client-Raspi/Portal):
+mvn -f pom.xml install -pl Common -am -DskipTests
+
+# Bauen (nur kompilieren/packen, ohne Tests) - reicht ohne obigen Schritt, da main-Code
+# keinen common-Bezug hat:
+mvn -f pom.xml package -pl backend -DskipTests
+
+# Tests: siehe unten – Testcontainers (Default) braucht einen Docker-Daemon.
+```
+
+**Tests – zwei Wege, je nachdem ob ein Docker-Daemon verfügbar ist:**
+
+- **Mit Docker (z. B. lokaler Rechner, GitHub-Actions-CI)**: Testcontainers startet die
+  PostgreSQL-Instanz automatisch, kein Setup nötig (Common muss trotzdem vorher installiert
+  sein, s. o.):
+  ```bash
+  mvn -f pom.xml test -pl backend
+  ```
+- **Ohne Docker (diese Remote-Sandbox – verifiziert: `docker ps` scheitert mit „no such file
+  or directory“, kein laufender Daemon)**: Override auf das lokale PostgreSQL 16 über die
+  Umgebungsvariable `ELWASYS_TEST_JDBC_URL` (+ `ELWASYS_TEST_DB_USER`/`_DB_PASSWORD`, siehe
+  `backend/src/test/.../support/TestPostgres.java`). Das mitgelieferte Skript übernimmt das
+  (Muster: `Client-Raspi/run-ui-tests.sh`, inkl. des Common-Installationsschritts oben):
+  ```bash
+  backend/run-backend-tests.sh
+  ```
+  Legt eine frische Testdatenbank (`elwasys_backend_it`) auf dem lokalen Cluster an und führt
+  `mvn test -pl backend` mit dem Override aus. **In dieser Umgebung so verifiziert: 27/27
+  Tests grün** (2 aus AP1 + 25 aus AP2: JPA-Entities/Repositories, Services
+  `PricingService`/`CreditService`/`PermissionService`/`ExecutionService`, siehe
+  kb/05-migration-plan.md Änderungslog AP2).
+
+**Flyway-Baseline-Verifikation** (Schema-Äquivalenz Alt-Weg ↔ Flyway, `baselineOnMigrate`
+gegen eine Bestands-DB) – dokumentiertes, reproduzierbares Skript, kein Dauertest:
+```bash
+backend/verify-schema-baseline.sh
+```
+Details/Ergebnis siehe kb/02-data-model.md und kb/05-migration-plan.md (Änderungslog, Phase 2
+AP1).
+
+**Lokal starten** (Konfiguration siehe `backend/src/main/resources/application.yml`, per
+Umgebungsvariable überschreibbar):
+```bash
+sudo pg_ctlcluster 16 main start
+ELWASYS_DB_URL=jdbc:postgresql://localhost:5432/elwasys \
+ELWASYS_DB_USER=elwaportal ELWASYS_DB_PASSWORD=elwaportal \
+java -jar backend/target/elwasys-backend.jar
+# Health-Check:
+curl http://localhost:8080/actuator/health
+```
+Gegen eine über `database-init.sql` angelegte Bestands-DB migriert Flyway beim ersten Start
+per `baselineOnMigrate` (kein DDL, keine Datenänderung); gegen eine leere DB durchläuft Flyway
+die Baseline-Migration `V1__baseline_schema_0_4_0.sql` normal.
+
+**Backend-Tests seit AP4**: `backend/run-backend-tests.sh` führt jetzt **96/96** Tests aus (52
+aus AP1–AP3 + 44 neu aus AP4: Standort-Token-Auth, REST-API v1, WebSocket-Endpunkt – siehe
+kb/05-migration-plan.md Änderungslog).
+
+**Standort-Tokens erzeugen/widerrufen (AP4, kein Admin-UI vor Phase 3)** – über das Profil
+`token-cli` (`application-token-cli.yml` setzt `spring.main.web-application-type: none`, der
+Prozess führt nur den `TerminalTokenCliRunner` aus und beendet sich danach von selbst):
+```bash
+# Neues Token für einen Standort erzeugen (Standortname muss existieren, z.B. "Default"):
+ELWASYS_DB_URL=jdbc:postgresql://localhost:5432/elwasys \
+ELWASYS_DB_USER=elwaportal ELWASYS_DB_PASSWORD=elwaportal \
+java -jar backend/target/elwasys-backend.jar \
+    --spring.profiles.active=token-cli \
+    --location=Default \
+    --label=terminal-kueche   # optional, rein informativ
+
+# Ausgabe zeigt das Klartext-Token GENAU EINMAL - sofort in die Terminal-Konfiguration
+# übernehmen, es wird nirgends gespeichert und kann nicht erneut angezeigt werden.
+
+# Altes Token widerrufen (z.B. nach Rotation auf ein neues Token):
+java -jar backend/target/elwasys-backend.jar \
+    --spring.profiles.active=token-cli \
+    --revoke-token-id=<Id aus der Erzeuge-Ausgabe>
+```
+Details/Design (Hash statt Klartext, mehrere aktive Tokens pro Standort für
+ausfallfreie Rotation, `Authorization: Bearer <token>`-Header) siehe kb/03-modules.md und
+kb/05-migration-plan.md.
+
 ## Umgebung (dieser Remote-Container)
 
 - **OS**: Ubuntu 24.04.4 LTS
@@ -122,21 +221,122 @@ Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).
   Release-JAR, schreibt `elwasys.properties`/`logback.xml`/`run.sh`, richtet Autostart über
   `~/.xsession` ein.
 - **Portal**: WAR auf Servlet-Container/Jetty deployen; `elwaportal.properties` bereitstellen.
+- **Backend** (seit Phase 2 AP6, siehe kb/05-migration-plan.md): Container-Image
+  (`backend/Dockerfile`), Betrieb per docker-compose oder Kubernetes/Helm - siehe unten.
+
+### Backend: Container-Image bauen
+
+`backend/Dockerfile` (Build-Kontext ist die **Repo-Wurzel**, nicht `backend/` - der Build
+braucht die Parent-POM und `Common`, siehe den bekannten Root-Reactor-Fallstrick oben):
+```bash
+docker build -f backend/Dockerfile -t elwasys-backend:local .
+```
+Multi-Stage: Maven-Build (Root-Reactor, zwei Aufrufe wie oben dokumentiert: erst
+`install -pl Common -am -DskipTests`, dann `package -pl backend -DskipTests`) → schlankes
+`eclipse-temurin:21-jre-jammy`-Runtime-Image, non-root User (UID/GID 1000), `HEALTHCHECK`
+gegen `/actuator/health`. `.dockerignore` an der Repo-Wurzel hält den Build-Kontext klein
+(Client-Raspi/Portal-Quellcode wird für den Backend-Build nicht gebraucht, nur deren
+`pom.xml`, damit Maven den Reactor parsen kann).
+
+### Backend: docker-compose
+
+`deploy/compose/` (Backend + eine mitgelieferte PostgreSQL-16-Instanz für Neuinstallationen):
+```bash
+cd deploy/compose
+cp .env.example .env   # Platzhalter durch echte Werte ersetzen
+docker compose up -d --build
+curl http://localhost:8080/actuator/health
+```
+Eine leere Datenbank wird beim ersten Start vollständig per Flyway-Baseline-Migration
+angelegt (kein gemountetes `database-init.sql` - würde sich mit dem bereits per
+`POSTGRES_DB`/`_USER` angelegten Datenbanknamen beißen und wäre doppelte Schemaverwaltung
+neben Flyway). Variante **„Anbindung an eine Bestands-DB"**: `ELWASYS_DB_URL`/`_USER`/
+`_PASSWORD` in `.env` auf die externe Instanz setzen und nur den `backend`-Service starten
+(`docker compose up backend`, ohne den mitgelieferten `postgres`-Service) -
+`baselineOnMigrate` übernimmt eine bestehende Alt-Weg-DB unverändert (siehe
+kb/02-data-model.md).
+
+TLS-Konzept Compose: das Basis-File terminiert selbst kein TLS (reiner HTTP-Zugriff, gedacht
+für lokale Tests oder Betrieb hinter einem bereits vorhandenen externen Reverse Proxy).
+Optionales TLS-Overlay mit Caddy (automatisches Let's-Encrypt-Zertifikat):
+```bash
+docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d --build
+```
+
+### Backend: Kubernetes / Helm Chart
+
+`deploy/helm/elwasys-backend/` (Deployment, Service, Ingress, ConfigMap/Secret getrennt,
+Liveness/Readiness gegen `/actuator/health`). `values.yaml` ist zugleich die
+Values-Dokumentation (jeder Abschnitt kommentiert). Der Chart bringt bewusst **kein**
+PostgreSQL-Sub-Chart mit - externe/bereits vorhandene DB ist der dokumentierte Regelfall
+(Begründung in `values.yaml` unter `database:` und in kb/05-migration-plan.md
+„Entscheidungen"); für Neuinstallationen ohne vorhandene DB wird empfohlen, z. B. das
+Bitnami-`postgresql`-Chart separat zu installieren und Service/Secret in `values.yaml`
+einzutragen:
+```bash
+helm install elwasys-db bitnami/postgresql -n elwasys \
+  --set auth.database=elwasys --set auth.username=elwaportal
+
+helm install elwasys deploy/helm/elwasys-backend -n elwasys \
+  --set secret.password=<DB-Passwort> \
+  --set database.host=elwasys-db-postgresql.elwasys.svc.cluster.local
+```
+TLS über einen bereits im Cluster vorhandenen Ingress-Controller + entweder eine
+cert-manager-`ClusterIssuer`-Annotation (automatisch) oder ein selbst verwaltetes
+TLS-Secret (siehe `values.yaml` unter `ingress:`):
+```bash
+helm install elwasys deploy/helm/elwasys-backend -n elwasys \
+  --set secret.password=<DB-Passwort> \
+  --set ingress.enabled=true \
+  --set ingress.hosts[0].host=elwasys.example.com
+```
+Validierung: `helm lint`/`helm template` (kein `helm` in dieser Sandbox-Umgebung
+vorinstalliert - über `go install helm.sh/helm/v3/cmd/helm@v3.15.4` beschafft, siehe
+kb/05-migration-plan.md AP6).
+
+### Backend: Standort-Tokens im Container erzeugen/widerrufen
+
+Dasselbe Image, Profil `token-cli` (siehe oben, „Standort-Tokens erzeugen/widerrufen"),
+gegen dieselbe Datenbank wie das laufende Deployment - als Einmal-Container, nicht per
+`exec` in den laufenden Webserver-Container:
+```bash
+# docker-compose:
+docker compose -f deploy/compose/docker-compose.yml run --rm backend \
+    --spring.profiles.active=token-cli --location=Default --label=terminal-kueche
+
+# Kubernetes (siehe auch "helm install ... " NOTES.txt):
+kubectl run elwasys-token-cli --rm -it --restart=Never -n elwasys \
+    --image=<dasselbe Image wie im Deployment> \
+    --env="ELWASYS_DB_URL=..." --env="ELWASYS_DB_USER=..." --env="ELWASYS_DB_PASSWORD=..." \
+    -- --spring.profiles.active=token-cli --location=Default --label=terminal-kueche
+```
+Das Klartext-Token erscheint GENAU EINMAL in der Ausgabe.
 
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` *(seit 2026-07-20, JDK-Version am 2026-07-20 im
-Phase-1-QA-Review korrigiert)*:
+Phase-1-QA-Review korrigiert; Backend-Job seit Phase 2 AP1, 2026-07-20)*:
 - Trigger: jeder Pull Request + Pushes auf `master`
-- 3 parallele Jobs (Common / Client / Portal): Build + Tests, spiegeln die lokalen
-  Runner-Skripte (`run-ui-tests.sh` etc., siehe kb/06)
-- **JDK 21** (Liberica) in **allen drei** Jobs – nicht mehr JDK 17: Seit Phase 1
+- 4 parallele Jobs (Common / Client / Portal / Backend): Build + Tests, spiegeln die lokalen
+  Runner-Skripte (`run-ui-tests.sh` etc., siehe kb/06) bzw. für Backend
+  `backend/run-backend-tests.sh` als lokales Analogon
+- **JDK 21** (Liberica) in **allen vier** Jobs – nicht mehr JDK 17: Seit Phase 1
   verlangt der Parent-POM-Default `maven.compiler.release=21` für Common/
   Client-Raspi; ein JDK 17 kann `--release 21` nicht bedienen
-  (`invalid target release: 21`). Da alle drei Jobs Common zuerst bauen
-  (`mvn -f pom.xml install -pl Common -am`), brauchen auch Client- und
-  Portal-Job ein >= 21-JDK, obwohl Portal selbst weiterhin mit Sprachlevel 1.8
-  kompiliert.
+  (`invalid target release: 21`). Da Common/Client/Portal-Jobs Common zuerst bauen
+  (`mvn -f pom.xml install -pl Common -am`), brauchen sie ein >= 21-JDK, obwohl Portal selbst
+  weiterhin mit Sprachlevel 1.8 kompiliert. Der Backend-Job braucht JDK 21 unabhängig davon,
+  da `backend` selbst Java 21 nutzt.
+- **Backend-Job**: nutzt **Testcontainers** (nicht den Local-PG-Ansatz des Client-Jobs), weil
+  GitHub-Actions-`ubuntu-24.04`-Runner einen Docker-Daemon mitbringen (anders als diese
+  Sandbox-Entwicklungsumgebung, siehe kb/07-cloud-init.md) – das ist der von Spring Boot
+  standardmäßig vorgesehene Testweg und braucht dort kein manuelles DB-Setup. `backend` hat
+  keine Reactor-Abhängigkeit auf `common`, der Job baut daher nur `-pl backend` ohne `-am`.
+- **Backend-Job, Image-Build** (seit Phase 2 AP6, 2026-07-20): zusätzlicher Schritt
+  `docker build -f backend/Dockerfile -t elwasys-backend:ci .` - baut nur (kein Push),
+  beweist aber, dass `backend/Dockerfile` in einer echten Docker-Umgebung tatsächlich baubar
+  ist (kann in dieser daemonlosen Sandbox nicht direkt verifiziert werden, siehe
+  kb/07-cloud-init.md).
 
 `.github/workflows/maven-publish.yml` (Release) *(seit 2026-07-20: Parent-POM-Versionierung;
 JDK-Version am 2026-07-20 im Phase-1-QA-Review korrigiert)*:
@@ -149,6 +349,13 @@ JDK-Version am 2026-07-20 im Phase-1-QA-Review korrigiert)*:
   `sed -i -E` gesetzt
 - Reactor-Build `mvn install -pl Common,Client-Raspi -am` (installiert dabei
   auch die neu versionierte Parent-POM), lädt das fat-jar als Release-Asset hoch
+- **Backend-Image-Veröffentlichung** (seit Phase 2 AP6, 2026-07-20): baut zusätzlich
+  `backend/Dockerfile` (derselbe, bereits per `versions:set` versionierte Arbeitsbaum als
+  Build-Kontext) und pusht es nach GHCR (`ghcr.io/<owner>/elwasys-backend:<tag>` +
+  `:latest`) - Anmeldung über den eingebauten `GITHUB_TOKEN` (`packages: write` war bereits
+  gesetzt, kein zusätzliches Secret nötig). Andere Registries (z. B. Docker Hub) würden ein
+  separates, hier bewusst nicht angelegtes Secret brauchen - offener Punkt für eine spätere
+  Phase, falls gewünscht.
 
 ## Bekannte Build-Risiken
 
