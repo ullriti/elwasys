@@ -184,3 +184,15 @@ jobs:
           name: backend-surefire-reports
           path: backend/target/surefire-reports/
           if-no-files-found: ignore
+
+      # Deployment (Phase 2 AP6, siehe kb/05-migration-plan.md, backend/Dockerfile): baut nur
+      # das Container-Image, ohne es zu veröffentlichen - beweist, dass das Dockerfile
+      # tatsächlich baubar ist (kann in der sandboxed Entwicklungsumgebung dieses Projekts
+      # nicht verifiziert werden, siehe kb/07-cloud-init.md: kein Docker-Daemon dort).
+      # GitHub-Actions-ubuntu-24.04-Runner bringen Docker+BuildKit bereits mit. Kontext ist die
+      # Repo-Wurzel (siehe Kopf-Kommentar von backend/Dockerfile), unabhängig vom
+      # obigen Maven-Build dieses Jobs (baut den Jar-Build im eigenen Container noch einmal,
+      # ohne Layer-Cache aus den vorigen Schritten - das ist hier gewollt: es validiert
+      # denselben Weg, den ein frischer Image-Build in Produktion nähme).
+      - name: Build backend container image (build only, no push)
+        run: docker build -f backend/Dockerfile -t elwasys-backend:ci .
