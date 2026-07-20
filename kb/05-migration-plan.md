@@ -64,7 +64,7 @@ Entscheidung des Auftraggebers offen.
 | `ui/scheduler/` (Auto-Logout, `BacklightManager`) | Timer + sysfs-Backlight | **Bleibt** (Verhalten fixiert durch Tests) |
 | `executions/` (`ExecutionManager`, `ExecutionFinisher`, Auto-Ende) | Geschäftslogik im Client, schreibt direkt in DB | **Modern.** – Ablauf bleibt im Client (Nähe zur Hardware/Leistungsmessung), Persistenz/Abrechnung über Backend-API |
 | `devices/deconz/` (REST + WebSocket zu deCONZ, Leistungsmessung, Registrierung) | unirest 1.x + HttpComponents | **Modern.** – bleibt lokal auf dem Raspi (ConBee2 steckt dort); HTTP-Client auf `java.net.http` |
-| `devices/FhemDevicePowerManager` (fhem-Altpfad) | Legacy-Alternative zu deCONZ (`ElwaManager` wählt beim Start: `deconz.server` gesetzt → deCONZ, sonst `fhem.server`); dazu `fhem_*`-Spalten in `devices` + Felder im Portal-DeviceWindow | **?** – Empfehlung: entfernen, falls kein fhem-Standort mehr existiert. Achtung: die E2E-Testharness simuliert derzeit fhem (`fhemsimulator/`) – bei Entfernung braucht die Testsuite einen deCONZ-Simulator (ohnehin sinnvoll, da Produktion deCONZ nutzt) |
+| `devices/FhemDevicePowerManager` (fhem-Gateway) | Alternative zu deCONZ (`ElwaManager` wählt beim Start: `deconz.server` gesetzt → deCONZ, sonst `fhem.server`); dazu `fhem_*`-Spalten in `devices` + Felder im Portal-DeviceWindow | **Modern.** – beide Gateways sind laut Auftraggeber im Einsatz (2026-07-20) und bleiben unterstützt; HTTP-Umstellung auf `java.net.http` betrifft beide Pfade; E2E-Tests künftig mit **beiden** Simulatoren (fhem-Sim existiert, deCONZ-Sim wird ergänzt) |
 | `io/` (`CardReader` über `TelnetClient`, RFID-Events) | Telnet-basierte Leseranbindung | **Bleibt** (Hardware-Anbindung unverändert) |
 | Benachrichtigungen (Commons Email/SMTP, Pushover-Client im Client) | Terminal verschickt E-Mail/Push selbst, braucht SMTP-Credentials | **Neu** – wandert ins Backend (zentral; Terminal meldet nur Ereignisse) |
 | `configuration/` (`elwasys.properties`, `LocationManager`) | DB-Zugangsdaten auf jedem Terminal | **Modern.** – statt DB-Credentials: Backend-URL + Terminal-Token |
@@ -213,6 +213,8 @@ Ziel: Admin-Portal als Teil des Backends, Feature-Parität, altes Portal abgesch
       Buchungen), UsersDashboard
 - [ ] Dialoge/Funktionen: Passwort ändern/zurücksetzen (E-Mail-Flow), UserSettings,
       ExpiredExecutions, Log-Viewer, Fernwartung (Status/Logs/Restart über Backend-Kanal)
+      – Admin-Ansichten zuerst; Nutzer-Selbstbedienungsbereich zuletzt (wird laut
+      Auftraggeber kaum genutzt, bleibt aber funktional)
 - [ ] Live-Updates zwischen Sessions (ersetzt `events/`-Listener + Vaadin-Push)
 - [ ] Playwright-E2E-Suite (P1–P20) auf das neue Portal portieren → Abnahmekriterium
 - [ ] Altes Portal-Modul stilllegen (Code bleibt bis Phase 5 im Repo)
@@ -225,7 +227,10 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
 - [ ] Maintenance umdrehen: ausgehende WS-Verbindung zum Backend ersetzt
       `MaintenanceServerManager` + IP-Registrierung in `locations`
 - [ ] Benachrichtigungen aus dem Client entfernen (macht jetzt das Backend)
-- [ ] deCONZ-Anbindung auf `java.net.http` umstellen (unirest/HttpComponents raus)
+- [ ] Gateway-Anbindungen (deCONZ **und** fhem) auf `java.net.http` umstellen
+      (unirest/HttpComponents raus); beide Gateways bleiben unterstützt
+- [ ] deCONZ-Simulator für die Testharness bauen; E2E-Kernszenarien mit **beiden**
+      Gateway-Simulatoren fahren (fhem-Sim existiert bereits)
 - [ ] Robustheit: Verhalten bei Backend-Nichterreichbarkeit definieren und testen
       (laufende Executions lokal zu Ende führen, Ereignisse nachmelden)
 - [ ] `ui/small` (320×240) mit modernisieren (bleibt im Einsatz) und mind. per Smoke-Test
@@ -243,8 +248,6 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
 - [ ] App-Reste (`elwaapi`) entfernen: DB-User, Spalten `app_id`/`access_key`/`auth_key`
       inkl. Trigger, Tabellen `reservations` + `foreign_authkeys`, Auth-Key-Anzeige im
       Terminal-UI (UserSettings-/Confirmation-View)
-- [ ] Entscheidung umsetzen: fhem-Pfad entfernen (falls bestätigt; Testharness vorher auf
-      deCONZ-Simulator umstellen)
 - [ ] Release-Pipeline final: Terminal-fat-jar + Backend-Image je Release
 - [ ] Doku-Endstand: READMEs, kb/, setup-Anleitungen auf Zielarchitektur
 
@@ -267,14 +270,18 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
 - **2026-07-20**: **Vaadin Flow** als Portal-Stack bestätigt.
 - **2026-07-20**: **Kleines Display (320×240) ist noch im Einsatz** → `ui/small` bleibt
   und wird mit modernisiert.
-- **2026-07-20**: **Mobile App (`elwaapi`) ist nicht relevant** → alle App-Reste werden
-  in Phase 5 entfernt.
+- **2026-07-20**: **Mobile App (`elwaapi`) ist nicht relevant** (Idee wurde verworfen, von
+  Nutzern nie verwendet) → alle App-Reste werden in Phase 5 entfernt.
+- **2026-07-20**: **fhem UND deCONZ sind beide im Einsatz** → beide Gateways bleiben
+  unterstützt; E2E-Tests künftig mit beiden Simulatoren (deCONZ-Simulator wird ergänzt).
+- **2026-07-20**: **Nutzungsprofil Portal**: Im Wesentlichen loggen sich nur
+  Verwalter/Admins ins Portal ein; normale Nutzer verwenden ausschließlich die Terminals.
+  → Beim Portal-Neubau liegt der Fokus auf den Admin-Ansichten; der
+  Nutzer-Selbstbedienungsbereich (Login, eigene Einstellungen, Passwort ändern) bleibt
+  funktional, hat aber niedrigere Parity-Priorität.
 
 ## Offene Fragen / mit Auftraggeber klären
-1. **fhem-Unterstützung**: Wird an einem Standort noch fhem (statt deCONZ/ConBee2) als
-   Gateway genutzt? Falls nein → Entfernen in Phase 5 (Testharness vorher auf
-   deCONZ-Simulator umstellen).
-2. **Betriebsmodell Backend**: Docker/Compose auf eigenem Server ok, oder Bare-Metal
+1. **Betriebsmodell Backend**: Docker/Compose auf eigenem Server ok, oder Bare-Metal
    (systemd) gewünscht?
 
 ## Änderungslog
@@ -284,3 +291,4 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
 | 2026-07-20 | **Phase 0 abgeschlossen** (Build + UI/E2E-Sicherheitsnetz steht: Client 21, Portal 18, Cross-Component grün); PR-CI (vorgezogen) grün |
 | 2026-07-20 | **Plan überarbeitet zur Zielarchitektur-Fassung**: Rahmenbedingungen des Auftraggebers aufgenommen (Java-Backend, Postgres, Raspi-Terminals fix; Nutzerverhalten unverändert); vollständige Komponenten-Inventur mit Entscheidung je Komponente; Zielarchitektur „zentrales Spring-Boot-Backend, Portal integriert, Terminal über API“; Roadmap neu geschnitten (Phasen 1–5) |
 | 2026-07-20 | **Entscheidungen eingearbeitet**: Vaadin Flow bestätigt; `ui/small` bleibt (Display im Einsatz); App-Reste (`elwaapi`) werden entfernt; fhem-Frage präzisiert (inkl. Abhängigkeit der Testharness vom fhem-Simulator) |
+| 2026-07-20 | **Restentscheidungen eingearbeitet**: fhem UND deCONZ bleiben beide unterstützt (E2E künftig mit beiden Simulatoren, deCONZ-Sim in Phase 4); App-Entfernung bestätigt; Nutzungsprofil Portal dokumentiert (nur Admins → Admin-Views priorisiert). Einzige offene Frage: Betriebsmodell Backend |
