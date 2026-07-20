@@ -27,7 +27,12 @@ mvn -f Portal/pom.xml package      # → target/*.war
 #   oder Entwicklungsserver:
 mvn -f Portal/pom.xml jetty:run    # http://localhost:8080
 
-# Alternative: kompletter Reactor-Build aller drei Module in einem Aufruf
+# 2c. Backend bauen (Spring-Boot-Jar, seit Phase 2 AP1) – kein Common-Bezug, daher
+#     reicht ein direkter Aufruf ohne -am
+mvn -f pom.xml package -pl backend
+#   → target/elwasys-backend.jar (ausführbar: java -jar backend/target/elwasys-backend.jar)
+
+# Alternative: kompletter Reactor-Build aller vier Module in einem Aufruf
 mvn install   # von der Repo-Wurzel aus
 ```
 
@@ -80,6 +85,59 @@ mvn -f pom.xml install -pl Common -am -DskipTests
 mvn -f Portal/pom.xml jetty:run        # http://localhost:8080  (Login: admin/admin)
 ```
 
+### Backend bauen, testen, lokal starten (seit Phase 2 AP1)
+
+Neues Modul `backend/` (Spring Boot 3.x, siehe kb/01-architecture.md, kb/03-modules.md). Baut
+unabhängig von Common/Client-Raspi/Portal (keine Reactor-Abhängigkeit).
+
+```bash
+# Bauen (nur kompilieren/packen, ohne Tests)
+mvn -f pom.xml package -pl backend -DskipTests
+
+# Tests: siehe unten – Testcontainers (Default) braucht einen Docker-Daemon.
+```
+
+**Tests – zwei Wege, je nachdem ob ein Docker-Daemon verfügbar ist:**
+
+- **Mit Docker (z. B. lokaler Rechner, GitHub-Actions-CI)**: Testcontainers startet die
+  PostgreSQL-Instanz automatisch, kein Setup nötig:
+  ```bash
+  mvn -f pom.xml test -pl backend
+  ```
+- **Ohne Docker (diese Remote-Sandbox – verifiziert: `docker ps` scheitert mit „no such file
+  or directory“, kein laufender Daemon)**: Override auf das lokale PostgreSQL 16 über die
+  Umgebungsvariable `ELWASYS_TEST_JDBC_URL` (+ `ELWASYS_TEST_DB_USER`/`_DB_PASSWORD`, siehe
+  `backend/src/test/.../support/TestPostgres.java`). Das mitgelieferte Skript übernimmt das
+  (Muster: `Client-Raspi/run-ui-tests.sh`):
+  ```bash
+  backend/run-backend-tests.sh
+  ```
+  Legt eine frische Testdatenbank (`elwasys_backend_it`) auf dem lokalen Cluster an und führt
+  `mvn test -pl backend` mit dem Override aus. **In dieser Umgebung so verifiziert: 2/2 Tests
+  grün.**
+
+**Flyway-Baseline-Verifikation** (Schema-Äquivalenz Alt-Weg ↔ Flyway, `baselineOnMigrate`
+gegen eine Bestands-DB) – dokumentiertes, reproduzierbares Skript, kein Dauertest:
+```bash
+backend/verify-schema-baseline.sh
+```
+Details/Ergebnis siehe kb/02-data-model.md und kb/05-migration-plan.md (Änderungslog, Phase 2
+AP1).
+
+**Lokal starten** (Konfiguration siehe `backend/src/main/resources/application.yml`, per
+Umgebungsvariable überschreibbar):
+```bash
+sudo pg_ctlcluster 16 main start
+ELWASYS_DB_URL=jdbc:postgresql://localhost:5432/elwasys \
+ELWASYS_DB_USER=elwaportal ELWASYS_DB_PASSWORD=elwaportal \
+java -jar backend/target/elwasys-backend.jar
+# Health-Check:
+curl http://localhost:8080/actuator/health
+```
+Gegen eine über `database-init.sql` angelegte Bestands-DB migriert Flyway beim ersten Start
+per `baselineOnMigrate` (kein DDL, keine Datenänderung); gegen eine leere DB durchläuft Flyway
+die Baseline-Migration `V1__baseline_schema_0_4_0.sql` normal.
+
 ## Umgebung (dieser Remote-Container)
 
 - **OS**: Ubuntu 24.04.4 LTS
@@ -126,17 +184,23 @@ Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` *(seit 2026-07-20, JDK-Version am 2026-07-20 im
-Phase-1-QA-Review korrigiert)*:
+Phase-1-QA-Review korrigiert; Backend-Job seit Phase 2 AP1, 2026-07-20)*:
 - Trigger: jeder Pull Request + Pushes auf `master`
-- 3 parallele Jobs (Common / Client / Portal): Build + Tests, spiegeln die lokalen
-  Runner-Skripte (`run-ui-tests.sh` etc., siehe kb/06)
-- **JDK 21** (Liberica) in **allen drei** Jobs – nicht mehr JDK 17: Seit Phase 1
+- 4 parallele Jobs (Common / Client / Portal / Backend): Build + Tests, spiegeln die lokalen
+  Runner-Skripte (`run-ui-tests.sh` etc., siehe kb/06) bzw. für Backend
+  `backend/run-backend-tests.sh` als lokales Analogon
+- **JDK 21** (Liberica) in **allen vier** Jobs – nicht mehr JDK 17: Seit Phase 1
   verlangt der Parent-POM-Default `maven.compiler.release=21` für Common/
   Client-Raspi; ein JDK 17 kann `--release 21` nicht bedienen
-  (`invalid target release: 21`). Da alle drei Jobs Common zuerst bauen
-  (`mvn -f pom.xml install -pl Common -am`), brauchen auch Client- und
-  Portal-Job ein >= 21-JDK, obwohl Portal selbst weiterhin mit Sprachlevel 1.8
-  kompiliert.
+  (`invalid target release: 21`). Da Common/Client/Portal-Jobs Common zuerst bauen
+  (`mvn -f pom.xml install -pl Common -am`), brauchen sie ein >= 21-JDK, obwohl Portal selbst
+  weiterhin mit Sprachlevel 1.8 kompiliert. Der Backend-Job braucht JDK 21 unabhängig davon,
+  da `backend` selbst Java 21 nutzt.
+- **Backend-Job**: nutzt **Testcontainers** (nicht den Local-PG-Ansatz des Client-Jobs), weil
+  GitHub-Actions-`ubuntu-24.04`-Runner einen Docker-Daemon mitbringen (anders als diese
+  Sandbox-Entwicklungsumgebung, siehe kb/07-cloud-init.md) – das ist der von Spring Boot
+  standardmäßig vorgesehene Testweg und braucht dort kein manuelles DB-Setup. `backend` hat
+  keine Reactor-Abhängigkeit auf `common`, der Job baut daher nur `-pl backend` ohne `-am`.
 
 `.github/workflows/maven-publish.yml` (Release) *(seit 2026-07-20: Parent-POM-Versionierung;
 JDK-Version am 2026-07-20 im Phase-1-QA-Review korrigiert)*:

@@ -7,6 +7,7 @@
 | Common | `common` | `0.0.0-local-development` (Client-Kontext) / `0.3.4-SNAPSHOT` (Portal-Kontext) | jar | 1.8 | Datenmodell, DB-Zugriff, Maintenance-Protokoll |
 | Client-Raspi | `raspi-client` | `0.0.0-local-development` | jar (mit `jar-with-dependencies`) | 16 | Terminal-UI (JavaFX), Gerätesteuerung |
 | Portal | `webportal` | `0.3.4-SNAPSHOT` | war | 1.8 | Admin-Weboberfläche (Vaadin) |
+| Backend *(neu, seit Phase 2 AP1)* | `backend` | `0.0.0-local-development` | jar (Spring-Boot-Repackage) | 21 | Neues zentrales Backend (Spring Boot); AP1 liefert Gerüst + Flyway-Baseline, läuft parallel zum Bestand auf derselben DB |
 
 > ⚠️ Inkonsistenz: Common wird von Client mit Version `0.0.0-local-development` referenziert,
 > vom Portal aber mit `0.3.4-SNAPSHOT`. Die CI ersetzt `0.0.0-local-development` beim Release
@@ -21,6 +22,7 @@
   Client/Server, Handler)
 - `org.kabieror.elwasys.raspiclient.*` – Raspberry-Pi-Client
 - `org.kabieror.elwasys.webportal.*` – Web-Portal
+- `org.kabieror.elwasys.backend.*` – neues Spring-Boot-Backend (seit Phase 2 AP1)
 
 ## Technologie-Stack (Ist-Zustand)
 
@@ -51,6 +53,16 @@
 - Servlet-API 3.0.1 (provided)
 - Build: WAR, Jetty-Plugin `9.2.3` (`mvn jetty:run`, Port 8080), Vaadin-/GWT-Widgetset-
   Compilation
+
+### Backend *(neu, seit Phase 2 AP1)*
+- **Spring Boot 3.5.16** (BOM-Import, siehe kb/03-modules.md), Java 21
+- `spring-boot-starter-web`/`-actuator`/`-jdbc`/`-validation`
+- **Flyway** (`flyway-core` + `flyway-database-postgresql`) für Migrationen; JPA folgt erst
+  im nächsten Arbeitspaket
+- PostgreSQL-Treiber `42.7.11`, Logback `1.5.34` (mitgeliefert von Spring Boot)
+- Test: JUnit 5, Testcontainers (Default) mit lokalem PostgreSQL-Override für Docker-lose
+  Umgebungen (siehe kb/04-build-and-run.md)
+- Build: `spring-boot-maven-plugin` (repackage) → lauffähiges Jar
 
 ## Client-Architektur (Raspberry Pi)
 

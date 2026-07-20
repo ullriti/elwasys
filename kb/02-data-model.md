@@ -1,8 +1,8 @@
 # 02 – Datenmodell (PostgreSQL)
 
 Quelle: `Common/resources/database-init.sql` (DB-Version `0.4.0`).
-Upgrades: `Common/resources/database-upgrade/upgrade_0.3.1_0.3.2.sql`,
-`upgrade_0.4.0.sql`.
+Upgrades (historisch, seit Phase 2 AP1 nicht mehr fortgeschrieben – siehe „Flyway-Baseline“
+unten): `Common/resources/database-upgrade/upgrade_0.3.1_0.3.2.sql`, `upgrade_0.4.0.sql`.
 
 ## ER-Überblick
 
@@ -112,10 +112,60 @@ Gerätereservierungen.
 
 ## Migrations-relevante Beobachtungen
 
-- Schema-Version wird in `config.db.version` gehalten; Upgrade-Skripte manuell/über
-  DataManager (prüfen, wie Upgrades angewandt werden).
 - Passwörter als **SHA1** gespeichert → bei Modernisierung sicherheitskritisch
   (Wechsel auf bcrypt/argon2 einplanen, Migrationspfad nötig).
 - Klartext-/schwache Default-Passwörter (`elwaclient1`, `api1234`) → härten.
 - Tippfehler in Spaltenname `auto_end_power_threashold` (statt *threshold*) – bei
   Schema-Refactor berücksichtigen (Kompatibilität!).
+
+## Flyway-Baseline (seit Phase 2 AP1, 2026-07-20)
+
+Neues Backend-Modul (`backend/`, siehe kb/03-modules.md) übernimmt die Schemapflege künftig
+über **Flyway** statt der handgepflegten SQL-Skripte. Details/Entscheidungen siehe
+kb/05-migration-plan.md (Änderungslog, Phase 2 AP1); hier die für das Datenmodell relevante
+Zusammenfassung:
+
+- **Baseline-Migration**: `backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql`.
+  Inhaltlich eine 1:1-Übernahme von `Common/resources/database-init.sql` (ohne die
+  psql-only `CREATE DATABASE`/`\connect`-Zeilen, die für eine bereits per JDBC-URL gewählte
+  Ziel-DB nicht gebraucht werden). **Nicht** separat aus den beiden
+  `database-upgrade/*.sql`-Skripten rekonstruiert: `database-init.sql` enthält bereits deren
+  Endzustand (0.4.0), ein frischer Lauf beider Wege ergibt also per Konstruktion dasselbe
+  Schema – siehe Verifikation unten. Einzige technische Anpassung: die Rollenanlage
+  (`CREATE GROUP`/`CREATE USER` für `elwaclients`/`elwaclient1`/`elwaportal`/`elwaapi`) ist in
+  einen `DO`-Block mit Existenzprüfung (`pg_roles`) gefasst, weil PostgreSQL-Rollen
+  Cluster-weit sind (nicht pro Datenbank) und ein zweiter Lauf gegen denselben Cluster sonst
+  mit „role already exists“ fehlschlagen würde. Der Spaltentypo
+  `auto_end_power_threashold` bleibt bewusst erhalten (Umbenennung erst Phase 5, siehe
+  Roadmap).
+- **Zwei Betriebsszenarien**, beide mit `backend/verify-schema-baseline.sh` verifiziert:
+  1. **Frische, leere DB**: Flyway führt `V1` normal aus → schema-äquivalent zu einer frischen
+     `database-init.sql`-DB (verifiziert per `pg_dump --schema-only`-Diff; einzige Abweichung
+     ist Flywayss eigene Buchführungstabelle `flyway_schema_history` + deren PK/Index, die
+     bewusst nicht Teil des Anwendungsschemas ist).
+  2. **Bestehende Alt-Weg-DB** (über `database-init.sql` + ggf. `database-upgrade/*.sql`
+     angelegt, mit Daten): `spring.flyway.baseline-on-migrate=true` (siehe
+     `backend/src/main/resources/application.yml`) markiert sie beim ersten Start als bereits
+     auf `baselineVersion=1` migriert, ohne `V1` erneut auszuführen oder Daten zu verändern.
+     Verifiziert: Backend startet sauber (Health-Endpoint UP), `flyway_schema_history` enthält
+     genau eine `BASELINE`-Zeile bei Version 1, Bestandsdaten (z. B. der `admin`-Nutzer)
+     bleiben unverändert.
+- **`config.db.version` stillgelegt**: Untersuchung von Common/Client-Raspi/Portal (Grep über
+  alle drei Module) zeigt, dass **kein** Java-Code (`DataManager`, `ConfigurationManager` o.
+  ä.) den Wert von `config.db.version` je liest – es gab nie einen automatischen
+  Upgrade-Mechanismus im Code; die `database-upgrade/*.sql`-Skripte wurden offenbar manuell
+  vom Betreiber per `psql -f` ausgeführt, `db.version` diente rein als von Hand gepflegte
+  Notiz in den SQL-Skripten selbst. Verhalten bewahren heißt hier: der Seed-Wert
+  `db.version = '0.4.0'` bleibt in der Flyway-Baseline erhalten (für den Fall, dass ihn
+  doch irgendein Alt-Code oder externes Werkzeug liest), wird aber **ab sofort nicht mehr
+  fortgeschrieben** – zukünftige Schemaänderungen laufen ausschließlich über weitere
+  Flyway-Migrationen (`V2__...`, `V3__...`, …). `Common/resources/database-upgrade/*.sql`
+  wird nicht mehr gepflegt; die vorhandenen Dateien (`upgrade_0.3.1_0.3.2.sql`,
+  `upgrade_0.4.0.sql`) bleiben unverändert als historisches Artefakt im Repo (Bestands-DBs,
+  die noch über sie hochgezogen werden, landen ohnehin beim Endstand 0.4.0, den die Baseline
+  abbildet).
+- **Rollen/Grants**: Die DB-Rollen `elwaclient1`/`elwaportal`/`elwaapi` (siehe „DB-Rollen &
+  Rechte“ oben) werden von der Baseline unverändert mit angelegt/gegrantet – das Backend
+  selbst nutzt sie in AP1 noch nicht (es hat noch keine fachlichen Endpunkte); die
+  Ablösung durch einen einzelnen technischen Backend-User ist laut Roadmap erst Phase 5
+  vorgesehen.
