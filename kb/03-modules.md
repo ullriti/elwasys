@@ -408,6 +408,73 @@ Properties-/Plugin-Konfigurationsänderung nicht immer als Grund für eine Neuko
 sonst bleiben alte, ohne `-parameters` kompilierte Klassen im `target`-Verzeichnis liegen
 (in AP4 tatsächlich aufgetreten, siehe kb/05-migration-plan.md).
 
+### Benachrichtigungsdienst (AP5, 2026-07-20, Package `backend/.../notification/`)
+
+1:1-Portierung der Benachrichtigungslogik aus `ExecutionFinisher#executeAction()` im
+Client-Alt-Code (`Client-Raspi/.../executions/ExecutionFinisher.java`): dort löst das
+Ende einer Programmausführung (regulär oder Abbruch) bis zu drei Benachrichtigungskanäle
+aus. Vollständiges Alt-Inventar und Portierungsstand:
+
+| Auslöser (Alt-Code) | Kanal | Empfängerregel (Alt-Code) | Portiert? |
+|---|---|---|---|
+| `ExecutionFinisher`: Programm regulär beendet | E-Mail (`Utilities#sendEmail`, commons-mail `SimpleEmail`) | `user.getEmailNotification()` (Spalte `email_notification`) | **Ja** – `NotificationService#notifyExecutionFinished` |
+| `ExecutionFinisher`: Programm regulär beendet | Pushover (`net.pushover.client`) | `user.getPushoverUserKey()` nicht leer (Spalte `pushover_user_key`) | **Ja** |
+| `ExecutionFinisher`: Ausführung abgebrochen | E-Mail | wie oben | **Ja** – `NotificationService#notifyExecutionAborted` |
+| `ExecutionFinisher`: Ausführung abgebrochen | Pushover | wie oben | **Ja** |
+| `ExecutionFinisher`: beide obigen Fälle | elwaApp-Push (`https://api.ionic.io/push/notifications`) | `user.isPushEnabled()` (Spalte `push_notification`, **nicht** `pushover_user_key`!) und `pushIonicId` gesetzt | **Nein** – mobile App laut Auftraggeber nicht relevant, Reste (`app_id`) fallen in Phase 5 weg; Auftrag ist zudem explizit auf „SMTP + Pushover" begrenzt |
+| Portal `PasswordForgotWindow`: „Passwort vergessen" | E-Mail (dieselbe `Utilities#sendEmail`) | Nutzer per E-Mail-Adresse gefunden | **Nein** – hängt am neuen Portal-Login-Flow (Reset-Key/-URL), laut Roadmap Phase 3 |
+| Portal `UserWindow`: Admin setzt neues Passwort | E-Mail | Admin-Aktion im Nutzer-Fenster | **Nein** – ebenfalls Phase 3 |
+
+**Wichtiger Fallstrick** (im Code dokumentiert, siehe `NotificationService`-Javadoc):
+`users.push_notification` (Entity-Feld `UserEntity#isPushNotification()`) ist im Alt-Code
+das Opt-in für den **nicht** portierten elwaApp/Ionic-Kanal, nicht für Pushover. Das
+Pushover-Opt-in ergibt sich ausschließlich daraus, ob `pushover_user_key` gesetzt ist.
+
+**Komponenten**:
+- `NotificationsProperties` (`@ConfigurationProperties(prefix = "elwasys.notifications")`):
+  `enabled` (Default **`false`**, kritisch – siehe unten), `smtp.sender-address`,
+  `pushover.api-token`, `pushover.base-url` (für Tests überschreibbar).
+- `NotificationService`: `notifyExecutionFinished`/`notifyExecutionAborted` bauen Betreff/
+  Kurztext/Langtext wortgleich zum Alt-Code (deutsch, inkl. eines Alt-Code-Tippfehlers/
+  Leerzeichens, das bewusst 1:1 übernommen wurde) und lösen darauf basierend E-Mail/
+  Pushover aus. Versandfehler werden geloggt, brechen aber nie den Aufruf ab (wie im
+  Alt-Code, dort `catch (EmailException/PushoverException)`, hier bewusst breiter
+  `catch (Exception)`, siehe Klassen-Javadoc).
+- E-Mail-Transport: `spring-boot-starter-mail`/`JavaMailSender`, Konfiguration über die
+  Standard-Properties `spring.mail.*` (Mapping zu den Alt-`ConfigurationManager`-Feldern
+  `smtp.server`/`-port`/`-user`/`-password`/`-useSSL` in `application.yml` dokumentiert).
+- Pushover-Transport: `PushoverClient` (`java.net.http`, kein Fremd-Client) – Formular-
+  Request 1:1 aus dem Bytecode der Alt-Bibliothek `com.github.sps.pushover.net:
+  pushover-client:1.0.0` hergeleitet (Felder `token/user/message/title/url/url_title/
+  priority`, `url`/`url_title` sind wie im Alt-Aufruf fest verdrahtet, nicht konfigurierbar).
+
+**Scharfschaltung (kritisch, Doppelversand-Risiko)**: `elwasys.notifications.enabled`
+(Env `ELWASYS_NOTIFICATIONS_ENABLED`) ist per Default **aus** und wird von **keinem**
+produktiven Ablauf aufgerufen – Client-Raspi verschickt im Parallelbetrieb (Phase 2–4)
+weiterhin selbst. Verdrahtung mit echten Ereignissen (Terminal meldet „Programm beendet"/
+„abgebrochen" über die API) sowie das Abschalten des Alt-Versands kommen in Phase 4,
+danach kann das Flag scharfgeschaltet werden. Analog zu `elwasys.auth.rehash-on-login`
+(AP3).
+
+**Actuator-Nebenwirkung**: `spring-boot-starter-mail` auf dem Klassenpfad aktiviert
+automatisch einen Mail-Health-Indikator, der ohne konfigurierten SMTP-Server den
+Health-Endpoint auf `DOWN` zieht – `management.health.mail.enabled: false` in
+`application.yml` deaktiviert ihn (kein aussagekräftiges Signal, solange der Dienst
+per Default aus ist).
+
+**Tests** (11 neu, Package `backend/.../notification/`):
+- `NotificationServiceEmailTest`: echter lokaler Test-SMTP (GreenMail, `greenmail-junit5`
+  Testabhängigkeit) – Betreff/Body/Empfänger/Absender byte-genau geprüft (Betreff/Body als
+  wörtliches Zitat aus dem Alt-Code kommentiert, da `Utilities#sendEmail` sich ohne echte
+  `DataManager`/DB-Anbindung nicht isoliert mit einer echten E-Mail-Adresse aufrufen lässt –
+  anders als die SHA1-Parität in AP3). Deckt auch Opt-in aus und Versandfehler ab.
+- `NotificationServicePushoverTest`: eingebetteter JDK-`HttpServer` als Mock – prüft
+  Methode/Pfad/Content-Type/alle Formularfelder inkl. der fest verdrahteten `url`/
+  `url_title`/`priority`-Werte; eigener Regressionstest für den `push_notification`-
+  Fallstrick oben.
+- `NotificationsPropertiesDefaultTest`: voller Spring-Kontext, beweist `enabled=false` ohne
+  gesetzte Umgebungsvariable.
+
 **Build/Test/Run**: siehe kb/04-build-and-run.md (Abschnitt „Backend bauen, testen, lokal
 starten“). `backend/run-backend-tests.sh` für den Docker-losen lokalen Testweg,
 `backend/verify-schema-baseline.sh` für den dokumentierten Schema-Äquivalenz-/

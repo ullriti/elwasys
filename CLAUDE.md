@@ -21,10 +21,12 @@ Phase 1 (Fundament: Parent-POM, Java 21, JUnit 5, ElwaManager-DI) sind abgeschlo
 alle Grundsatzentscheidungen sind gefallen. Phase 2 ist gestartet: AP1 (Backend-Gerüst +
 Flyway-Baseline), AP2 (JPA-Entities/Repositories + Geschäftslogik-Portierung:
 Abrechnung, Berechtigungen, Preisberechnung, Execution-Lebenszyklus), AP3 (Auth:
-Argon2id-Hashing + SHA1-Migrationspfad, Login-/Session-Handling) und AP4 (REST-API v1 +
-Standort-Token-Auth + WebSocket-Endpunkt für Terminals) sind abgeschlossen.
-**Nächster Schritt: Phase 2 AP5** (Benachrichtigungsdienst SMTP/Pushover im Backend) –
-siehe Roadmap in kb/05.
+Argon2id-Hashing + SHA1-Migrationspfad, Login-/Session-Handling), AP4 (REST-API v1 +
+Standort-Token-Auth + WebSocket-Endpunkt für Terminals) und AP5 (Benachrichtigungsdienst
+SMTP/Pushover, implementiert/getestet hinter Konfig-Flag, Default AUS – Scharfschaltung
+mit echten Ereignissen folgt Phase 4) sind abgeschlossen.
+**Nächster Schritt: Phase 2 „Deployment“** (Dockerfile + docker-compose, Helm Chart für
+Kubernetes) – siehe Roadmap in kb/05.
 
 ## Arbeitsregeln
 
