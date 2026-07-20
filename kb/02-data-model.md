@@ -169,3 +169,25 @@ Zusammenfassung:
   selbst nutzt sie in AP1 noch nicht (es hat noch keine fachlichen Endpunkte); die
   Ablösung durch einen einzelnen technischen Backend-User ist laut Roadmap erst Phase 5
   vorgesehen.
+
+## JPA-Entities (seit Phase 2 AP2, 2026-07-20)
+
+Details zu den Entities/Repositories/Services siehe kb/03-modules.md (Abschnitt Backend)
+und kb/05-migration-plan.md (Änderungslog, AP2). Für das Datenmodell relevante Erkenntnisse:
+
+- **Postgres-native Enums** (`DISCOUNT_TYPE`, `PROGRAM_TYPE`, `TIME_UNIT_TYPE`) lassen sich
+  nicht per einfachem `@Enumerated(STRING)` gegen eine Postgres-ENUM-Spalte binden (Fehler
+  „column is of type … but expression is of type character varying“) – die Entities nutzen
+  dafür Hibernates `@JdbcTypeCode(SqlTypes.NAMED_ENUM)`.
+- **`auth_key`-Trigger bleibt wirksam**: die Spalte ist zwar bewusst nicht in `UserEntity`
+  gemappt (siehe Rahmenbedingungen zu den App-Relikt-Spalten), der DB-Trigger
+  `user_authkey_trigger` (`BEFORE INSERT ON users`) befüllt sie bei jedem per JPA
+  ausgeführten INSERT trotzdem automatisch – verifiziert (keine NOT-NULL-/Constraint-
+  Verletzung beim Anlegen eines `UserEntity` über den Backend-Testlauf).
+- **`credit_accounting.date`**: die Spalte hat einen `CURRENT_TIMESTAMP`-DB-Default, den
+  der Alt-Code nie explizit überschreibt. `CreditAccountingEntryEntity` setzt den Wert
+  stattdessen bewusst per Anwendungs-Uhr – siehe kb/05-migration-plan.md (Änderungslog,
+  AP2) für die Begründung.
+- **Alle fachlich genutzten Assoziationen sind `FetchType.EAGER`** (kein `LAZY`), um den
+  Alt-`DataManager` nachzubilden, der beim Laden eines Objekts immer sofort alle
+  referenzierten Objekte mitlädt – siehe kb/05-migration-plan.md (Änderungslog, AP2).

@@ -27,8 +27,10 @@ mvn -f Portal/pom.xml package      # → target/*.war
 #   oder Entwicklungsserver:
 mvn -f Portal/pom.xml jetty:run    # http://localhost:8080
 
-# 2c. Backend bauen (Spring-Boot-Jar, seit Phase 2 AP1) – kein Common-Bezug, daher
-#     reicht ein direkter Aufruf ohne -am
+# 2c. Backend bauen (Spring-Boot-Jar, seit Phase 2 AP1) – der main-Code hat keinen
+#     Common-Bezug, daher reicht für "package"/"package -DskipTests" ein direkter
+#     Aufruf ohne -am. Für "mvn test -pl backend" wird Common vorher benötigt (seit AP2
+#     test-scope-Dependency für Alt-vs-Neu-Vergleichstests, siehe unten).
 mvn -f pom.xml package -pl backend
 #   → target/elwasys-backend.jar (ausführbar: java -jar backend/target/elwasys-backend.jar)
 
@@ -85,13 +87,21 @@ mvn -f pom.xml install -pl Common -am -DskipTests
 mvn -f Portal/pom.xml jetty:run        # http://localhost:8080  (Login: admin/admin)
 ```
 
-### Backend bauen, testen, lokal starten (seit Phase 2 AP1)
+### Backend bauen, testen, lokal starten (seit Phase 2 AP1, JPA/Services seit AP2)
 
-Neues Modul `backend/` (Spring Boot 3.x, siehe kb/01-architecture.md, kb/03-modules.md). Baut
-unabhängig von Common/Client-Raspi/Portal (keine Reactor-Abhängigkeit).
+Neues Modul `backend/` (Spring Boot 3.x, siehe kb/01-architecture.md, kb/03-modules.md).
+Läuft zur Laufzeit weiterhin unabhängig von Common/Client-Raspi/Portal (eigenes
+Datenmodell, keine Laufzeit-Abhängigkeit) – seit AP2 hat es aber eine **test-scope**-
+Abhängigkeit auf `common` (Alt-vs-Neu-Vergleichstests, siehe kb/05-migration-plan.md), die
+für den Testklassenpfad in der lokalen Maven-Repo verfügbar sein muss:
 
 ```bash
-# Bauen (nur kompilieren/packen, ohne Tests)
+# Common (+ Parent-POM) erst installieren, sonst schlägt "mvn test -pl backend" beim
+# Auflösen der test-scope-Abhängigkeit auf common fehl (Muster wie bei Client-Raspi/Portal):
+mvn -f pom.xml install -pl Common -am -DskipTests
+
+# Bauen (nur kompilieren/packen, ohne Tests) - reicht ohne obigen Schritt, da main-Code
+# keinen common-Bezug hat:
 mvn -f pom.xml package -pl backend -DskipTests
 
 # Tests: siehe unten – Testcontainers (Default) braucht einen Docker-Daemon.
@@ -100,7 +110,8 @@ mvn -f pom.xml package -pl backend -DskipTests
 **Tests – zwei Wege, je nachdem ob ein Docker-Daemon verfügbar ist:**
 
 - **Mit Docker (z. B. lokaler Rechner, GitHub-Actions-CI)**: Testcontainers startet die
-  PostgreSQL-Instanz automatisch, kein Setup nötig:
+  PostgreSQL-Instanz automatisch, kein Setup nötig (Common muss trotzdem vorher installiert
+  sein, s. o.):
   ```bash
   mvn -f pom.xml test -pl backend
   ```
@@ -108,13 +119,15 @@ mvn -f pom.xml package -pl backend -DskipTests
   or directory“, kein laufender Daemon)**: Override auf das lokale PostgreSQL 16 über die
   Umgebungsvariable `ELWASYS_TEST_JDBC_URL` (+ `ELWASYS_TEST_DB_USER`/`_DB_PASSWORD`, siehe
   `backend/src/test/.../support/TestPostgres.java`). Das mitgelieferte Skript übernimmt das
-  (Muster: `Client-Raspi/run-ui-tests.sh`):
+  (Muster: `Client-Raspi/run-ui-tests.sh`, inkl. des Common-Installationsschritts oben):
   ```bash
   backend/run-backend-tests.sh
   ```
   Legt eine frische Testdatenbank (`elwasys_backend_it`) auf dem lokalen Cluster an und führt
-  `mvn test -pl backend` mit dem Override aus. **In dieser Umgebung so verifiziert: 2/2 Tests
-  grün.**
+  `mvn test -pl backend` mit dem Override aus. **In dieser Umgebung so verifiziert: 27/27
+  Tests grün** (2 aus AP1 + 25 aus AP2: JPA-Entities/Repositories, Services
+  `PricingService`/`CreditService`/`PermissionService`/`ExecutionService`, siehe
+  kb/05-migration-plan.md Änderungslog AP2).
 
 **Flyway-Baseline-Verifikation** (Schema-Äquivalenz Alt-Weg ↔ Flyway, `baselineOnMigrate`
 gegen eine Bestands-DB) – dokumentiertes, reproduzierbares Skript, kein Dauertest:

@@ -83,16 +83,70 @@ Zielarchitektur). Kein Reactor-Bezug zu `common` – das Backend bekommt sein ei
 Datenmodell (Entities folgen im nächsten Arbeitspaket), keine Wiederverwendung der alten
 `Common`-POJOs/`DataManager`.
 
-**Aktueller Stand (AP1, 2026-07-20)**: reines Gerüst – Actuator-Health, Flyway-Baseline gegen
-das Bestandsschema. Noch **keine** fachlichen Endpunkte/Entities/Auth (folgt in späteren
-Arbeitspaketen laut Roadmap).
+**Aktueller Stand (AP2, 2026-07-20)**: Actuator-Health, Flyway-Baseline gegen das
+Bestandsschema (AP1) sowie JPA-Entities/Repositories und die Kern-Geschäftslogik
+(Abrechnung, Berechtigungen, Preisberechnung, Execution-Lebenszyklus) als Services (AP2).
+Noch **keine** REST-Endpunkte/Auth (folgt in späteren Arbeitspaketen laut Roadmap) – die
+Services in diesem Stand werden ausschließlich von Tests konsumiert, das Backend schreibt
+produktiv noch nichts.
+
+### Datenmodell & Geschäftslogik (AP2)
+
+**Entities** (`backend/.../domain/`, siehe kb/02-data-model.md für die Tabellenherkunft):
+`UserGroupEntity`, `UserEntity`, `LocationEntity`, `DeviceEntity`, `ProgramEntity`,
+`ExecutionEntity`, `CreditAccountingEntryEntity`, `ConfigEntity` (Vollständigkeit, aktuell
+ungenutzt). Die vier n:m-Tabellen (`locations_valid_user_groups`,
+`devices_valid_user_groups`, `programs_valid_user_groups`, `device_program_rel`) sind als
+`@ManyToMany`+`@JoinTable` modelliert (keine eigenen Entity-Klassen, Standard-JPA-Praxis
+für reine Verknüpfungstabellen). Postgres-native Enums (`DISCOUNT_TYPE`, `PROGRAM_TYPE`,
+`TIME_UNIT_TYPE`) werden über `@JdbcTypeCode(SqlTypes.NAMED_ENUM)` gebunden. Alle fachlich
+genutzten Assoziationen sind bewusst `FetchType.EAGER` (analog zum durchgängig eager
+ladenden Alt-`DataManager`; AP2 hat noch keine Web-/Transaktionsgrenze, die `LAZY` sauber
+absichern würde) – siehe kb/05-migration-plan.md (Änderungslog, AP2) für die vollständige
+Begründung. `spring.jpa.hibernate.ddl-auto=none` ist explizit gesetzt: das Schema kommt
+ausschließlich von Flyway.
+
+App-Relikt-Spalten (`app_id`/`access_key`/`auth_key` auf `users`; Tabellen
+`reservations`/`foreign_authkeys`) sind bewusst NICHT gemappt (Rahmenbedingung, siehe
+kb/05-migration-plan.md – werden in Phase 5 entfernt). Der DB-Trigger
+`user_authkey_trigger` befüllt `auth_key` unabhängig davon bei jedem INSERT automatisch.
+
+**Repositories** (`backend/.../repository/`): `UserGroupRepository`, `LocationRepository`,
+`DeviceRepository`, `ProgramRepository`, `UserRepository` (inkl. `findByCardId` –
+parametrisierte Nachbildung der Alt-Code-Regex-Kartennummernsuche), `ExecutionRepository`,
+`CreditAccountingEntryRepository`.
+
+**Services** (`backend/.../service/`), jeweils 1:1-Portierung der entsprechenden
+Alt-Code-Logik (siehe Javadoc der Klassen für exakte Quellenverweise):
+- `PricingService` – Programmpreisberechnung (FIXED/DYNAMIC, Freiminuten, Gruppenrabatt),
+  aus `Common.Program#getPrice`/`#getDynamicPrice`.
+- `CreditService` – Guthabenberechnung und -buchung (Einzahlung, Auszahlung,
+  Ausführungs-Bezahlung; Buchungen sind unveränderlich), aus `Common.User#loadCredit`/
+  `#payExecution`/`#inpayment`/`#payout`.
+- `PermissionService` – Berechtigungs-Matrix (Standort/Gerät/Programm × Benutzergruppe,
+  gesperrte Benutzer, deaktivierte Geräte), aus den inline UI-Prüfungen in
+  `Client-Raspi/.../MainFormController`/`DeviceListEntry` sowie `Common.Device#getPrograms`.
+- `ExecutionService` – Execution-Lebenszyklus auf Persistenzebene (Anlegen/Start/Ende/
+  Abbruch/Reset, Preis, Ablauf-Erkennung), aus `Common.Execution` sowie den DB-Anteilen von
+  `Common.DataManager`/`Client-Raspi/.../ExecutionManager`/`ExecutionFinisher`
+  (hardwarenahe Teile – Leistungsmessung, Steckdose schalten, Benachrichtigungen – bleiben
+  bewusst im Terminal, siehe Zielarchitektur in kb/05).
+
+**Alt-vs-Neu-Vergleichstests**: `common` ist als **test-scope**-Dependency in
+`backend/pom.xml` eingebunden (nur Testklassenpfad, keine Laufzeit-Abhängigkeit).
+`backend/.../support/LegacyDataManagerFactory` baut eine echte Alt-Code-`DataManager`
+gegen dieselbe Test-Datenbank auf; `PricingServiceParityTest`/`CreditServiceParityTest`
+lesen dieselbe committete Datenzeile einmal über den Alt-Code und einmal über den neuen
+Service und vergleichen bitgenau (Wert **und** `BigDecimal`-Skala). Details/gefundene
+Alt-Code-Eigenheiten siehe kb/05-migration-plan.md (Änderungslog, AP2, „Beobachtungen").
 
 **Abhängigkeiten** (Spring Boot **3.5.16**, per BOM-Import in `dependencyManagement`
 eingebunden – nicht über `spring-boot-starter-parent`, da das Modul bereits `elwasys-parent`
 erbt und ein zweiter Parent in Maven nicht möglich ist):
-- `spring-boot-starter-web`, `-actuator`, `-jdbc`, `-validation`
+- `spring-boot-starter-web`, `-actuator`, `-jdbc`, `-validation`, `-data-jpa` (AP2)
 - `flyway-core` + `flyway-database-postgresql`, PostgreSQL-Treiber
-- Tests: `spring-boot-starter-test`, `testcontainers` (`junit-jupiter`, `postgresql`)
+- Tests: `spring-boot-starter-test`, `testcontainers` (`junit-jupiter`, `postgresql`),
+  `common` (**test-scope**, AP2: Alt-vs-Neu-Vergleichstests, keine Laufzeit-Abhängigkeit)
 - **Wichtig**: `elwasys-parent`s eigene `dependencyManagement` pinnt `logback-classic`/
   `-core` (1.2.9) und `slf4j-api` (1.7.12) für Common/Client-Raspi fest – zu alt für Spring
   Boot 3.5 (braucht Logback ≥ 1.5). Ein BOM-Import überschreibt nie eine bereits explizit
@@ -107,10 +161,20 @@ erbt und ein zweiter Parent in Maven nicht möglich ist):
   (`baselineOnMigrate`), Actuator- und Logging-Einstellungen
 - `src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql` – Flyway-Baseline, siehe
   kb/02-data-model.md
+- `src/main/java/.../backend/domain/` – JPA-Entities (AP2, siehe oben)
+- `src/main/java/.../backend/repository/` – Spring-Data-Repositories (AP2)
+- `src/main/java/.../backend/service/` – Geschäftslogik-Services (AP2)
+- `src/main/java/.../backend/exception/` – `NotEnoughCreditException` (AP2)
 - `src/test/java/.../backend/BackendApplicationTest.java` – Integrationstest (Spring-Kontext +
   Flyway-Migration gegen echtes PostgreSQL, prüft Health-Endpoint + Baseline-Schema/Seeds)
 - `src/test/java/.../backend/support/TestPostgres.java` – DB-Bereitstellung für Tests:
   Testcontainers (Default) oder lokaler Override via `ELWASYS_TEST_JDBC_URL`
+- `src/test/java/.../backend/support/AbstractBackendIT.java`,
+  `LegacyDataManagerFactory.java`, `Fixtures.java` – Test-Support (AP2): Basisklasse für
+  DB-Integrationstests, Alt-Code-`DataManager`-Fabrik für Vergleichstests, eindeutige
+  Testdatennamen
+- `src/test/java/.../backend/service/`, `.../repository/` – Service-/Repository-Tests
+  (AP2, siehe oben)
 
 **Build/Test/Run**: siehe kb/04-build-and-run.md (Abschnitt „Backend bauen, testen, lokal
 starten“). `backend/run-backend-tests.sh` für den Docker-losen lokalen Testweg,

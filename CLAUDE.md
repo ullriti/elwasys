@@ -18,9 +18,11 @@ Modernisierungsprojekts. Vor jeder Arbeit lesen:
 
 **Aktueller Stand (2026-07-20):** Phase 0 (Sicherheitsnetz: Build + E2E-Tests) und
 Phase 1 (Fundament: Parent-POM, Java 21, JUnit 5, ElwaManager-DI) sind abgeschlossen,
-alle Grundsatzentscheidungen sind gefallen.
-**Nächster Schritt: Phase 2** (Backend-Gerüst: Spring-Boot-Modul `backend` parallel
-zum Bestand) – siehe Roadmap in kb/05.
+alle Grundsatzentscheidungen sind gefallen. Phase 2 ist gestartet: AP1 (Backend-Gerüst +
+Flyway-Baseline) und AP2 (JPA-Entities/Repositories + Geschäftslogik-Portierung:
+Abrechnung, Berechtigungen, Preisberechnung, Execution-Lebenszyklus) sind abgeschlossen.
+**Nächster Schritt: Phase 2 AP3** (Auth: Argon2id-Hashing + SHA1-Migrationspfad,
+Login-/Session-Handling) – siehe Roadmap in kb/05.
 
 ## Arbeitsregeln
 
