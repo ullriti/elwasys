@@ -19,8 +19,23 @@ import org.springframework.test.context.DynamicPropertySource;
  * {@code @Transactional} pro Methode) - Testdaten bekommen daher pro Testklasse
  * eindeutige Namen (siehe Testklassen), damit parallele/wiederholte Läufe nicht
  * kollidieren.
+ *
+ * <p><b>Phase 3 AP1 (Vaadin-Integration, siehe kb/05-migration-plan.md)</b>: Vaadins eigene
+ * Spring-Boot-Autokonfigurationsklassen (siehe {@code vaadin-spring}s
+ * {@code META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports}:
+ * {@code SpringBootAutoConfiguration}, {@code SpringSecurityAutoConfiguration},
+ * {@code VaadinScopesConfig}) sind NICHT auf {@code @ConditionalOnWebApplication}
+ * eingeschränkt und versuchen daher auch in diesem Nicht-Web-Kontext
+ * ({@code webEnvironment=NONE}) u.a. einen {@code WebApplicationContext} bzw. eine
+ * {@code ServletRegistrationBean<SpringServlet>} zu autowiren - das schlägt hier
+ * zwangsläufig fehl, weil es in einem reinen {@code AnnotationConfigApplicationContext}
+ * keine solchen Beans gibt. Da diese Tests ohnehin keine Web-/Vaadin-Schicht brauchen (reine
+ * Service-/Repository-/Auth-Tests), werden alle drei hier explizit ausgeschlossen statt sie
+ * funktionsuntüchtig mitzuladen.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = "spring.autoconfigure.exclude=com.vaadin.flow.spring.SpringBootAutoConfiguration,"
+                + "com.vaadin.flow.spring.SpringSecurityAutoConfiguration,com.vaadin.flow.spring.VaadinScopesConfig")
 public abstract class AbstractBackendIT {
 
     @DynamicPropertySource
