@@ -10,6 +10,18 @@ spring:
     username: ${ELWASYS_DB_USER:elwaportal}
     password: ${ELWASYS_DB_PASSWORD:elwaportal}
 
+  # JPA/Hibernate (AP2): das Schema kommt AUSSCHLIESSLICH von Flyway (siehe unten) - Hibernate
+  # darf es weder generieren noch verändern. ddl-auto=none ist zwar bereits Spring Boots
+  # Default für eine "echte" (nicht-eingebettete) Datenbank wie PostgreSQL, wird hier aber
+  # trotzdem explizit gesetzt (siehe kb/05-migration-plan.md, Rahmenbedingungen: "Hibernate
+  # ddl-auto bleibt aus/none"). open-in-view=false, weil dieses Arbeitspaket keine Web-Schicht
+  # einführt, die davon profitieren würde (die REST-API folgt erst in AP4) - vermeidet
+  # außerdem Spring Boots Startup-Warnung.
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+
   flyway:
     # baselineOnMigrate: eine bereits über den Alt-Weg (database-init.sql +
     # database-upgrade/*.sql) angelegte Bestands-DB hat keine flyway_schema_history-Tabelle,

@@ -90,7 +90,7 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
-		<!-- JDBC + Flyway. JPA folgt erst im nächsten Arbeitspaket (Entities/Repositories). -->
+		<!-- JDBC + Flyway (Schema-Migration, siehe AP1). -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-jdbc</artifactId>
@@ -107,6 +107,12 @@
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
 			<scope>runtime</scope>
+		</dependency>
+
+		<!-- JPA (AP2: Entities + Repositories fürs Bestandsschema, siehe kb/05). -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa</artifactId>
 		</dependency>
 
 		<!-- Bean Validation -->
@@ -129,6 +135,23 @@
 		<dependency>
 			<groupId>org.testcontainers</groupId>
 			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- AP2-Äquivalenztests: Alt-Code (Common.Program/User-Preis-/Guthabenberechnung)
+		     UND der neue Service rechnen dieselben Szenarien, die Ergebnisse müssen
+		     übereinstimmen (siehe kb/05-migration-plan.md, "Entscheidungen"). Nur
+		     test-scope - Common ist zur Laufzeit keine Backend-Abhängigkeit, das
+		     Backend bekommt sein eigenes Datenmodell (siehe kb/03-modules.md). Common
+		     zieht die alte postgresql-Treiber-Version (42.6.0, siehe Parent-POM) und
+		     eine alte slf4j-api (1.7.12) mit; beide werden für den Testklassenpfad
+		     durch die oben stehenden, neueren Overrides ersetzt (Maven nimmt für eine
+		     Koordinate projektweit eine Version), sodass keine Versionskonflikte mit
+		     Spring Boot 3.5 im Testklassenpfad entstehen.
+		-->
+		<dependency>
+			<groupId>org.kabieror.elwasys</groupId>
+			<artifactId>common</artifactId>
+			<version>${project.version}</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
