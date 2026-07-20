@@ -13,6 +13,12 @@ cd "$(dirname "$0")"
 # Ensure the Common library is available in the local Maven repo.
 mvn -q -B -f ../Common/pom.xml install -DskipTests
 
+# The E2E tests seed fixtures via JDBC as the postgres superuser (they need to
+# clean up credit_accounting, which the elwaportal role may not delete). Give
+# postgres a password the driver can use over TCP. Best-effort: skipped when
+# there is no local PostgreSQL / sudo (e.g. a pure unit-test run).
+sudo -u postgres psql -q -c "ALTER USER postgres WITH PASSWORD 'postgres';" 2>/dev/null || true
+
 TEST_ARG=()
 if [ "$#" -gt 0 ]; then
   TEST_ARG=(-Dtest="$1")

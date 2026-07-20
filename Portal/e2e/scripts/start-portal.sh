@@ -26,6 +26,33 @@ fi
 # Ensure the portal DB user has a password the JDBC driver can use (SCRAM)
 sudo -u postgres psql -q -c "ALTER USER elwaportal WITH PASSWORD 'elwaportal';"
 
+# Remove leftover E2E fixtures so the (virtualized) Vaadin tables stay small and
+# freshly created rows are rendered. Done as postgres to satisfy the FK chain.
+sudo -u postgres psql -q -d elwasys <<'SQL' || true
+DELETE FROM credit_accounting WHERE user_id IN (SELECT id FROM users WHERE username LIKE 'e2e\_%' ESCAPE '\')
+   OR execution_id IN (SELECT id FROM executions WHERE device_id IN (SELECT id FROM devices WHERE name LIKE 'E2E-%'));
+DELETE FROM executions WHERE device_id IN (SELECT id FROM devices WHERE name LIKE 'E2E-%')
+   OR user_id IN (SELECT id FROM users WHERE username LIKE 'e2e\_%' ESCAPE '\');
+DELETE FROM reservations WHERE device_id IN (SELECT id FROM devices WHERE name LIKE 'E2E-%')
+   OR user_id IN (SELECT id FROM users WHERE username LIKE 'e2e\_%' ESCAPE '\');
+DELETE FROM devices WHERE name LIKE 'E2E-%';
+DELETE FROM programs WHERE name LIKE 'E2E-%';
+DELETE FROM users WHERE username LIKE 'e2e\_%' ESCAPE '\';
+DELETE FROM user_groups WHERE name LIKE 'E2E-%';
+SQL
+
+# Seed a known non-admin user for the user-frontend / permission tests
+# (password "test" -> SHA1 a94a8fe5ccb19ba61c4c0873d391e987982fbbd3).
+sudo -u postgres psql -q -d elwasys -c \
+  "INSERT INTO users (name, username, password, is_admin, blocked, deleted) \
+   SELECT 'E2E Portal User', 'e2e_portal_user', 'a94a8fe5ccb19ba61c4c0873d391e987982fbbd3', FALSE, FALSE, FALSE \
+   WHERE NOT EXISTS (SELECT 1 FROM users WHERE username='e2e_portal_user');" || true
+# A separate non-admin user for the change-password test (also password "test").
+sudo -u postgres psql -q -d elwasys -c \
+  "INSERT INTO users (name, username, password, is_admin, blocked, deleted) \
+   SELECT 'E2E PwChange User', 'e2e_pwchange_user', 'a94a8fe5ccb19ba61c4c0873d391e987982fbbd3', FALSE, FALSE, FALSE \
+   WHERE NOT EXISTS (SELECT 1 FROM users WHERE username='e2e_pwchange_user');" || true
+
 # 3. Portal configuration
 sudo mkdir -p /etc/elwaportal
 sudo tee /etc/elwaportal/elwaportal.properties >/dev/null <<'EOF'

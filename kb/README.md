@@ -18,6 +18,7 @@ Teststrategie und die Remote-/Cloud-Init-Umgebung dokumentiert und fortlaufend g
 | [05-migration-plan.md](05-migration-plan.md) | Migrations-/Modernisierungsplan (lebendes Dokument) |
 | [06-ui-tests.md](06-ui-tests.md) | UI-Test-Strategie für Client (JavaFX) und Portal (Vaadin) |
 | [07-cloud-init.md](07-cloud-init.md) | Remote-/Cloud-Init-Umgebung zum Ausführen von Build & Tests |
+| [08-test-plan.md](08-test-plan.md) | Testplan: Vertiefung der Frontend-Tests (Client & Portal) |
 
 ## Status-Log
 
@@ -30,3 +31,17 @@ Teststrategie und die Remote-/Cloud-Init-Umgebung dokumentiert und fortlaufend g
 | 2026-07-19 | Portal-Build repariert (Vaadin/GWT/War/JDBC/API-Drift); `jetty:run` liefert Login-Seite |
 | 2026-07-19 | Portal-E2E (Playwright, Node/TS) aufgebaut; Login-Smoke-Test grün (2/2) |
 | 2026-07-19 | Client-E2E: echte App headless hochgefahren (fhem-Sim + DB) → SELECT_DEVICE; getDeconzServer-Bug gefixt |
+| 2026-07-19 | Client-E2E vertieft (C2–C5): Geräteliste, Karten-Login, Gerät buchen, Programmstart; Suite 7/7 grün |
+| 2026-07-19 | Portal-E2E vertieft (P3–P5): falsches Passwort, Logout, Navigation aller Admin-Views; Suite 5/5 grün |
+| 2026-07-19 | Client-Login-Varianten (C6–C8) grün; Portal-CRUD (P6 Benutzer, P9 Gruppe) grün; Portal-Suite 7/7 |
+| 2026-07-19 | Client C9 (zu wenig Guthaben) grün; Portal P10 (Gerät anlegen) grün; Portal-Suite 8/8 |
+| 2026-07-19 | CI-Flakiness behoben (geteilte DB); Client C10 (Auto-Logout) + Portal P12 (Programm) grün; Client 12 / Portal 9 |
+| 2026-07-20 | Client C12 (Abbruch) + Portal P8 (Guthaben) grün; Seeding auf postgres (FK-Cleanup inkl. credit_accounting); Client 13 / Portal 10 |
+| 2026-07-20 | Client C11 (Auto-Ende) + Portal P7 (Benutzer sperren) grün; Client 14 / Portal 11 |
+| 2026-07-20 | Client C16 (standortfremdes Gerät) + Portal P13 (Gruppe löschen) grün; Client 15 / Portal 12 |
+| 2026-07-20 | Portal P15+P18 (Nicht-Admin-Frontend & Berechtigungen) grün; Portal 13 |
+| 2026-07-20 | Client C14 (DYNAMIC-Preisanzeige) grün; Client 16. Verbleibende Fälle in 08-test-plan.md dokumentiert |
+| 2026-07-20 | Client C13 (Resume) + C15 (DB-Ausfall→ERROR) grün; Client 18/18 |
+| 2026-07-20 | Portal P14 (Standort), P16 (Passwort ändern), P17 (Einstellungen), P19 (Passwort vergessen), P20 (Gerätestatus) grün; Portal 18/18. Nur P21 (Cross-Component) offen |
+| 2026-07-20 | Cross-Component P21/P22 (Wartungsverbindung Portal⇄Client: Log holen, Neustart, Status) grün; Client 21/21. Alle geplanten Tests umgesetzt |
+| 2026-07-20 | **Phase 0 abgeschlossen** (Sicherheitsnetz steht); isolierte State-Machine-Charakterisierung + ElwaManager-DI nach Phase 1 verschoben (05-migration-plan.md) |

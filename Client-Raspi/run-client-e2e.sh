@@ -24,8 +24,12 @@ if ! sudo -u postgres psql -lqt | cut -d'|' -f1 | grep -qw elwasys; then
   # invoking user and pipe it in.
   sudo -u postgres psql -q < "$REPO_ROOT/Common/resources/database-init.sql"
 fi
+# The E2E tests seed/clean fixtures (devices, programs, users, executions,
+# credit_accounting) via JDBC as the postgres superuser, which needs a password
+# the driver can use over TCP.
+sudo -u postgres psql -q -c "ALTER USER postgres WITH PASSWORD 'postgres';"
 
-# 3. Ensure Common is installed, then run the E2E test headlessly
+# 3. Ensure Common is installed, then run the E2E tests headlessly
 mvn -q -B -f "$REPO_ROOT/Common/pom.xml" install -DskipTests
 exec xvfb-run -a --server-args="-screen 0 1024x768x24" \
-  mvn -B test -Dtest=ClientAppE2ETest
+  mvn -B test -Dtest='*E2ETest'
