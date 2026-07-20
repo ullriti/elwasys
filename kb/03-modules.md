@@ -487,14 +487,16 @@ per Default aus ist).
 - `NotificationsPropertiesDefaultTest`: voller Spring-Kontext, beweist `enabled=false` ohne
   gesetzte Umgebungsvariable.
 
-### Portal-UI (Vaadin Flow, Phase 3 AP1+AP2, 2026-07-20, Package `backend/.../ui/`)
+### Portal-UI (Vaadin Flow, Phase 3 AP1–AP3, 2026-07-20, Package `backend/.../ui/`)
 
 Admin-Portal als Vaadin-Flow-UI im Backend (siehe kb/05-migration-plan.md, Zielarchitektur
 „Portal ist Teil des Backends“) – AP1 lieferte das Grundgerüst (Login/Layout/Navigation/
-Rollen-Guard, siehe unten), **AP2 füllt die 5 Stammdaten-Views (Benutzer, Benutzergruppen,
-Geräte, Programme, Standorte) mit echten Listen + CRUD-Dialogen** (siehe Abschnitt
-„Stammdaten-Views (AP2)“ am Ende dieses Kapitels). Dashboard/UsersDashboard/Guthaben-
-Aufladen folgen in AP3.
+Rollen-Guard, siehe unten), AP2 füllte die 5 Stammdaten-Views (Benutzer, Benutzergruppen,
+Geräte, Programme, Standorte) mit echten Listen + CRUD-Dialogen (siehe Abschnitt
+„Stammdaten-Views (AP2)“). **AP3 füllt Admin-Dashboard, Guthaben-Aufladen/-Historie und
+UsersDashboard** (siehe Abschnitt „Dashboard, Guthaben, UsersDashboard (AP3)“ am Ende dieses
+Kapitels) – Passwort-Flows/UserSettings/ExpiredExecutions/Log-Viewer/Fernwartung folgen in
+AP4.
 
 **Abhängigkeiten**: `vaadin-bom`/`vaadin-spring-boot-starter` (Version **24.10.8**) per
 BOM-Import, analog zum Spring-Boot-BOM (siehe AP1 oben). Zwei Ausschlüsse aus
@@ -555,14 +557,16 @@ rechtliche Frage, ob das so betrieben werden darf, bleibt trotzdem offen – sie
   (im Alt-Portal nur über einen Dashboard-Dialog erreichbar, `components/LocationWindow`,
   vgl. P14) – bewusste, vom Auftraggeber ausdrücklich gewünschte UX-Verbesserung (siehe
   kb/05-migration-plan.md, „Entscheidungen“, Gestaltungsrahmen Portal-Neubau), keine
-  Funktionsänderung. 6 Platzhalter-Views (`AdminDashboardView`, `AdminUsersView`,
-  `AdminUserGroupsView`, `AdminProgramsView`, `AdminDevicesView`, `AdminLocationsView`), alle
-  `@RolesAllowed("ADMIN")` – Inhalte folgen in AP2/AP3.
+  Funktionsänderung. 6 Views (`AdminDashboardView`, `AdminUsersView`, `AdminUserGroupsView`,
+  `AdminProgramsView`, `AdminDevicesView`, `AdminLocationsView`), alle `@RolesAllowed("ADMIN")`
+  – seit AP3 haben auch `AdminDashboardView` und die Guthaben-Dialoge in `AdminUsersView`
+  echte Inhalte (siehe Abschnitt „Dashboard, Guthaben, UsersDashboard (AP3)“ unten).
 - `user/UserLayout` (`AppLayout` + `SideNav`, ein Menüpunkt „Übersicht") – fachlicher
   Nachfolger des schlanken `Portal/.../UserLayout`; laut Auftraggeber loggen sich im
   Wesentlichen nur Admins ein (kb/05-migration-plan.md, „Entscheidungen“), entsprechend
-  niedrigere Parity-Priorität. `UserDashboardView` (`@RolesAllowed("USER")`) ist ein
-  Platzhalter – Guthaben-/Übersichtsinhalte (vgl. P15) folgen in AP3.
+  niedrigere Parity-Priorität. `UserDashboardView` (`@RolesAllowed("USER")`) zeigt seit AP3
+  Guthaben/Übersicht (vgl. P15, siehe Abschnitt „Dashboard, Guthaben, UsersDashboard (AP3)“
+  unten).
 - `component/UserMenuBar` – gemeinsame Kopfzeilenkomponente (Name des angemeldeten Benutzers +
   Logout-Knopf, `AuthenticationContext#logout()`) für Admin-/Benutzer-Layout; fachlicher
   Nachfolger des Benutzermenüs in `Portal/.../components/MainMenu`. „Einstellungen"/„Passwort
@@ -691,11 +695,11 @@ identisch, moderneres Bedienelement (UX-Verbesserung im erlaubten Rahmen, siehe
 kb/05-migration-plan.md, „Entscheidungen“).
 
 **Bewusst NICHT Teil dieses Arbeitspakets** (bewusste Abweichungen, keine stillen Lücken):
-Admin-Passwort-Reset im Benutzer-Dialog (AP4); Guthaben-AUFLADEN (`UserCreditWindow`, AP3 –
-die Benutzerliste zeigt Guthaben nur an, über `CreditService#getCredit`); „Nicht abgerechnete
-Programmausführungen“-Warnicon (`ExpiredExecutionsWindow`, eigener Roadmap-Punkt „Dialoge/
-Funktionen“); `DeviceWindow`s Inline-Standort-Anlage entfällt ersatzlos (durch die
-eigenständige Standort-Verwaltung überflüssig).
+Admin-Passwort-Reset im Benutzer-Dialog (AP4); „Nicht abgerechnete Programmausführungen“-
+Warnicon (`ExpiredExecutionsWindow`, eigener Roadmap-Punkt „Dialoge/Funktionen“, AP4);
+`DeviceWindow`s Inline-Standort-Anlage entfällt ersatzlos (durch die eigenständige
+Standort-Verwaltung überflüssig). Guthaben-AUFLADEN (`UserCreditWindow`) folgte in AP3, siehe
+unten.
 
 **Tests** (19 neu, Package `backend/.../service/`, Muster wie Phase 2 AP2 –
 `AbstractBackendIT`/`Fixtures`): `UserServiceTest`, `UserGroupServiceTest` +
@@ -705,3 +709,72 @@ vorhanden“), `DeviceServiceTest`, `ProgramServiceTest`, `LocationServiceTest`.
 insgesamt **135/135** grün. Bewusst KEIN Test, der über einen echten eingebetteten
 Servlet-Container eine Vaadin-Route rendert (unverändertes Risiko aus AP1) – siehe
 „Wichtiger Befund“ oben für den De-Risking-Nachweis über den Produktionsmodus-Build.
+
+#### Dashboard, Guthaben, UsersDashboard (AP3, 2026-07-20)
+
+**Admin-Dashboard** (`AdminDashboardView`, fachlicher Nachfolger von
+`Portal/.../views/AdminDashboardView`): zeigt je Standort dessen Geräte mit „Frei“/„Besetzt“
+(Testfall P20 – direkt aus der laufenden `ExecutionEntity` in der DB abgeleitet, kein
+Client-Kontakt), bei einer laufenden Ausführung zusätzlich Programm, Benutzer und Restzeit
+(Restzeit ist eine bewusste ZUSÄTZLICHE Information, im Alt-Dashboard nicht vorhanden – reine
+Ergänzung, keine Verhaltensänderung), sowie je Gerät die vollständige Ausführungshistorie
+(Datum/Benutzer/Dauer/Preis, mit hervorgehobener laufender/abgelaufener Zeile über
+`Grid#setPartNameGenerator`) – analog zur Tabelle im Alt-`AdminDashboardLocationPanel`. Die
+Wartungsverbindungs-Toolbar des Alt-Dashboards (Log-Datei ansehen, Client neu starten,
+Verbindungsstatus/IP) ist bewusst NICHT Teil dieses Arbeitspakets, siehe Roadmap-Punkt
+„Fernwartung“ (AP4). Aktualisierung erfolgt beim Seitenaufruf; kein Live-Push (laut Auftrag
+nicht nötig, folgt als eigener Roadmap-Punkt „Live-Updates zwischen Sessions“, AP5).
+
+Neuer Service `DashboardService` (`backend/.../service/`) kapselt die gesamte
+Datenbeschaffung (Standorte → Geräte → Status, `LocationStatus`/`DeviceStatus`-Records) OHNE
+Vaadin-Abhängigkeit – bewusst so geschnitten, damit AP5 (Live-Updates) dieselbe Abfrage
+wiederverwenden kann statt einer zweiten Implementierung. Neue Repository-unabhängige Methode
+`DeviceService#findByLocation` (Nachfolger von `DataManager#getDevicesToDisplay`).
+
+**Guthaben aufladen/Historie** (Testfall P8, in `AdminUsersView` über zwei neue
+Zeilen-Aktionen erreichbar, wie im Alt-`UsersView`):
+- `CreditTopUpDialog` – fachlicher Nachfolger von `Portal/.../components/UserCreditWindow`:
+  Einzahlung/Auszahlung (Radiobuttons, Default „Einzahlung“), Betrag, Buchungstext (vorbelegt
+  mit „Einzahlung/Auszahlung vom Waschportal von &lt;angemeldeter Admin&gt;“, 1:1 wie im
+  Alt-Fenster). Ruft AUSSCHLIESSLICH die bestehenden Phase-2-Methoden
+  `CreditService#inpayment`/`#payout` auf – erzeugt damit strukturell immer nur einen NEUEN
+  Buchungssatz, ändert/löscht nie einen bestehenden. Eine Auszahlung über das verfügbare
+  Guthaben hinaus zeigt dieselbe Fehlermeldung wie im Alt-Portal
+  („Das Guthaben des Benutzers reicht nicht aus für diese Operation.“,
+  `NotEnoughCreditException`).
+- `CreditHistoryDialog` – fachlicher Nachfolger von
+  `Portal/.../components/CreditAccountingWindow` („Umsätze ansehen“): rein lesende Liste
+  (Datum/Betrag/Buchungstext, neueste zuerst) über die neue Methode
+  `CreditService#getAccountingEntries` – bietet bewusst KEINE Bearbeitungs-/Löschfunktion.
+
+Zwei neue `CreditService`-Methoden (beide reine Lese-Delegationen an bestehende
+Repository-Queries, siehe `CreditAccountingEntryRepository`): `getAccountingEntries` (=
+`DataManager#getAccountingEntries`) und `getLastInpayment` (=
+`DataManager#getLastInpayment`) – letztere auch vom UsersDashboard genutzt (siehe unten).
+
+**UsersDashboard** (`UserDashboardView`, fachlicher Nachfolger von
+`Portal/.../views/UsersDashboardView`, Testfall P15: „Guthaben“/„Übersicht“ sichtbar –
+„Übersicht“ ist bereits seit AP1 der Menüpunkt in `UserLayout`, „Guthaben“ die Kachel in
+dieser View): zeigt eigenes Guthaben (`CreditService#getCredit`) und letzte Einzahnung
+(`CreditService#getLastInpayment`) als Kacheln sowie die vollständige eigene Buchungshistorie
+(`CreditService#getAccountingEntries`) in einer Tabelle „Buchungen“ – 1:1 wie im Alt-Portal.
+**Datenisolation**: der angezeigte Benutzer kommt ausschließlich aus dem
+`ElwasysUserPrincipal` der Session (`AuthenticationContext#getAuthenticatedUser`), nicht aus
+einem Pfad-/Query-Parameter – ein Nicht-Administrator kann über diese View strukturell nur
+eigene Daten sehen.
+
+**Unveränderlichkeit der Buchungen**: strukturell sichergestellt, nicht nur durch Konvention –
+`CreditAccountingEntryEntity` (seit Phase 2 AP2) bietet keine Setter für gespeicherte
+Buchungen, nur den Konstruktor; alle drei neuen/wiederverwendeten UI-Bausteine
+(`CreditTopUpDialog`, `CreditHistoryDialog`, `UserDashboardView`) rufen ausschließlich
+lesende Methoden oder die anfügenden `CreditService#inpayment`/`#payout` auf, nie ein
+Update/Delete auf `credit_accounting`.
+
+**Tests** (9 neu, Package `backend/.../service/`): `DashboardServiceTest` (5 – freies/
+besetztes/abgelaufenes Gerät, Standort-Gruppierung, Historie), `CreditServiceAccountingHistoryTest`
+(3 – Sortierung neueste zuerst, unveränderte Werte bei wiederholtem Abruf,
+`getLastInpayment` ignoriert Auszahlungen), plus ein neuer Test in `DeviceServiceTest`
+(`findByLocation`). Backend-Suite insgesamt **144/144** grün. Bewusst KEIN Test, der über
+einen echten eingebetteten Servlet-Container eine Vaadin-Route rendert (unverändertes Risiko
+aus AP1); `RouteAccessAnnotationsTest` brauchte keine Anpassung (keine neuen Routen, nur
+Inhalte bestehender Views/neue Dialoge).
