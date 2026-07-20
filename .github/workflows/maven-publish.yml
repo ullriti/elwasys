@@ -23,15 +23,23 @@ jobs:
         settings-path: ${{ github.workspace }}
 
     - name: Apply version number
-      run: sed -iE "s/0.0.0-local-development/${{ github.event.release.tag_name }}/g" Common/pom.xml Client-Raspi/pom.xml Common/src/main/java/org/kabieror/elwasys/common/Utilities.java
+      # Sets the version in the root (parent) POM and propagates it to all
+      # modules that inherit it (Common, Client-Raspi, Portal), including the
+      # <parent><version> and ${project.version} references — no more sed
+      # hack across multiple POM files.
+      run: mvn -B versions:set -DnewVersion=${{ github.event.release.tag_name }} -DgenerateBackupPoms=false
 
-    - name: Build Common
-      run: mvn install
-      working-directory: Common
+    - name: Apply version number to Utilities.APP_VERSION
+      # APP_VERSION is a plain compile-time constant (not read from the POM),
+      # so it still needs this simple substitution.
+      run: sed -i -E "s/0.0.0-local-development/${{ github.event.release.tag_name }}/g" Common/src/main/java/org/kabieror/elwasys/common/Utilities.java
 
-    - name: Build Raspi-Client
-      run: mvn install
-      working-directory: Client-Raspi
+    - name: Build Common + Raspi-Client
+      # Reactor build from the root so the (now re-versioned) parent POM is
+      # also installed into the local repo — a plain "mvn install" inside
+      # Common/ alone would not install it, and Client-Raspi needs it there
+      # to resolve the common dependency.
+      run: mvn -B install -pl Common,Client-Raspi -am
 
     - name: Publish runnable JAR
       uses: svenstaro/upload-release-action@v2
