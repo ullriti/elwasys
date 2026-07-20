@@ -3,9 +3,14 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
-    <groupId>org.kabieror.elwasys</groupId>
+	<parent>
+		<groupId>org.kabieror.elwasys</groupId>
+		<artifactId>elwasys-parent</artifactId>
+		<version>0.0.0-local-development</version>
+		<relativePath>../pom.xml</relativePath>
+	</parent>
+
     <artifactId>webportal</artifactId>
-	<version>0.3.4-SNAPSHOT</version>
 	<packaging>war</packaging>
     <name>elwasys portal</name>
     <description>Managing the database of elwasys clients.</description>
@@ -14,6 +19,11 @@
 		<vaadin.version>7.6.8</vaadin.version>
 		<vaadin.plugin.version>${vaadin.version}</vaadin.plugin.version>
 		<jetty.plugin.version>9.4.53.v20231009</jetty.plugin.version>
+		<!-- Vaadin 7/GWT 2.7 is not verified against newer javac source/target
+		     levels, so this is deliberately frozen at 1.8 and overrides the
+		     parent's maven.compiler.release=21 default for this module only.
+		     The build JDK itself is 21 (see kb/04); only the language level
+		     compiled to stays at 8. -->
 		<project.source.version>1.8</project.source.version>
 		<project.target.version>1.8</project.target.version>
 		<project.encoding>UTF-8</project.encoding>
@@ -40,7 +50,7 @@
 		<dependency>
             <groupId>org.kabieror.elwasys</groupId>
 			<artifactId>common</artifactId>
-			<version>0.0.0-local-development</version>
+			<version>${project.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>javax.servlet</groupId>

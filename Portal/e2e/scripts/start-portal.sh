@@ -71,8 +71,11 @@ maintenance.server.port=3591
 admin.password=admin
 EOF
 
-# 4. Make sure Common is available to the Portal build
-mvn -q -B -f "$REPO_ROOT/Common/pom.xml" install -DskipTests
+# 4. Make sure Common (and its parent POM) are available to the Portal build.
+#    Building via the root reactor (-pl Common -am) also installs the
+#    aggregator parent POM into the local repo, which a plain
+#    "mvn -f Common/pom.xml install" does not.
+mvn -q -B -f "$REPO_ROOT/pom.xml" install -pl Common -am -DskipTests
 
 # 5. Run the portal (foreground; Playwright tears this down after the run)
 echo "[start-portal] starting Jetty on :8080"

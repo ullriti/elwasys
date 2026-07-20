@@ -1,9 +1,15 @@
 <project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
 		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-	<groupId>org.kabieror.elwasys</groupId>
+
+	<parent>
+		<groupId>org.kabieror.elwasys</groupId>
+		<artifactId>elwasys-parent</artifactId>
+		<version>0.0.0-local-development</version>
+		<relativePath>../pom.xml</relativePath>
+	</parent>
+
 	<artifactId>raspi-client</artifactId>
-	<version>0.0.0-local-development</version>
 	<name>elwasys client</name>
 	<description>The elwasys client for Raspberry Pi</description>
 
@@ -11,7 +17,7 @@
 		<dependency>
 			<groupId>org.kabieror.elwasys</groupId>
 			<artifactId>common</artifactId>
-			<version>0.0.0-local-development</version>
+			<version>${project.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>com.pi4j</groupId>

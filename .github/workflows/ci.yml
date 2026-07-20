@@ -35,7 +35,11 @@ jobs:
           cache: maven
 
       - name: Build & test Common
-        run: mvn -B -f Common/pom.xml install
+        # Build via the root reactor (-pl Common -am) so the aggregator
+        # parent POM is installed into the local repo too — a plain
+        # "mvn -f Common/pom.xml install" would not install it, and the
+        # Client-Raspi/Portal jobs need it on the runner to resolve Common.
+        run: mvn -B -f pom.xml install -pl Common -am
 
   # ---------------------------------------------------------------------------
   # Raspi-Client – JavaFX TestFX characterization tests + a headless end-to-end
