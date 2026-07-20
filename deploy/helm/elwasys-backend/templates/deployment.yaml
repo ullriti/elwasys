@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "elwasys-backend.fullname" . }}
+  labels:
+    {{- include "elwasys-backend.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "elwasys-backend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "elwasys-backend.selectorLabels" . | nindent 8 }}
+      annotations:
+        # Erzwingt einen Pod-Restart, wenn sich nicht-geheime Konfiguration ändert (ConfigMap
+        # wird nicht automatisch neu eingelesen, siehe Standard-Helm-Muster).
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "elwasys-backend.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: backend
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "elwasys-backend.fullname" . }}
+          env:
+            - name: ELWASYS_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "elwasys-backend.dbSecretName" . }}
+                  key: {{ .Values.database.usernameKey }}
+            - name: ELWASYS_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "elwasys-backend.dbSecretName" . }}
+                  key: {{ .Values.database.passwordKey }}
+            # SMTP-Passwort/Pushover-Token als "optional" markiert: beide Kanäle sind per
+            # Default deaktiviert (notifications.enabled=false) bzw. leer - ein extern
+            # verwaltetes database.existingSecret muss diese Schlüssel deshalb NICHT
+            # zwingend enthalten (siehe templates/secret.yaml-Kommentar).
+            - name: ELWASYS_SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "elwasys-backend.dbSecretName" . }}
+                  key: smtp-password
+                  optional: true
+            - name: ELWASYS_PUSHOVER_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "elwasys-backend.dbSecretName" . }}
+                  key: pushover-api-token
+                  optional: true
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
