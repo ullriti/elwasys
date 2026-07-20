@@ -35,7 +35,10 @@ Benutzergruppen mit Rabattregel.
 
 ### users
 - `id`, `name`, `username` (unique), `email`, `card_ids` (Text, mehrere RFID-IDs)
-- `blocked`, `password` (SHA1-Hash, 40 hex), `is_admin`
+- `blocked`, `password` – ursprünglich `VARCHAR(50)` für den SHA1-Hash (40 hex); seit
+  Phase 2 AP3 per Flyway-Migration `V2` auf `VARCHAR(255)` erweitert (trägt jetzt sowohl
+  SHA1- als auch Argon2id-kodierte Hashes, siehe „Flyway-Baseline“ unten und
+  kb/05-migration-plan.md), `is_admin`
 - `email_notification`, `push_notification`, `pushover_user_key`
 - `password_reset_key`, `password_reset_timeout`
 - `deleted`, `last_login`, `group_id` → user_groups (Default 1)
@@ -164,6 +167,16 @@ Zusammenfassung:
   `upgrade_0.4.0.sql`) bleiben unverändert als historisches Artefakt im Repo (Bestands-DBs,
   die noch über sie hochgezogen werden, landen ohnehin beim Endstand 0.4.0, den die Baseline
   abbildet).
+- **`V2__widen_users_password_column.sql`** (Phase 2 AP3, 2026-07-20): `ALTER TABLE users
+  ALTER COLUMN password TYPE VARCHAR(255)` (war `VARCHAR(50)`). Befund: Argon2id-kodierte
+  Passwort-Hashes (neues Format, siehe kb/03-modules.md „Auth“) sind mit Spring Securitys
+  empfohlenen Parametern empirisch gemessen konstant 97 Zeichen lang – mehr als das
+  Doppelte der bisherigen, exakt auf 40-Zeichen-SHA1-Hex zugeschnittenen Spaltenbreite.
+  Additiv/abwärtskompatibel: der Alt-Code prüft die Spaltenlänge nirgends selbst, ein
+  SHA1-Hash passt weiterhin klaglos in die breitere Spalte – Parallelbetrieb bleibt
+  unangetastet. Wird bei jedem Flyway-Lauf gegen eine Bestands-DB automatisch nach dem
+  `baselineOnMigrate`-Baseline-Schritt mit angewendet. Details/Abwägung siehe
+  kb/05-migration-plan.md („Entscheidungen“, AP3).
 - **Rollen/Grants**: Die DB-Rollen `elwaclient1`/`elwaportal`/`elwaapi` (siehe „DB-Rollen &
   Rechte“ oben) werden von der Baseline unverändert mit angelegt/gegrantet – das Backend
   selbst nutzt sie in AP1 noch nicht (es hat noch keine fachlichen Endpunkte); die
