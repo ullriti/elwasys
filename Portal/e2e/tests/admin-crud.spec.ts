@@ -54,20 +54,13 @@ async function selectInCombo(scope: Locator, caption: string, item: string) {
   await pickCombo(scope, row, item);
 }
 
-test('admin can create a user', async ({ page }) => {
-  const stamp = Date.now();
-  const username = `e2e_ui_${stamp}`;
-  const name = `E2E UI User ${stamp}`;
-
-  await loginAsAdmin(page);
+/** Create a user (group "Default", no password mail) via the Vaadin UI. */
+async function createUser(page: Page, name: string, username: string) {
   await openSection(page, 'Benutzer', 'users');
-
-  // Open the "create user" window.
   await page.locator('.v-menubar-menuitem', { hasText: 'Neu' }).click();
   const win = page.locator('.v-window', { hasText: 'Benutzer erstellen' });
   await expect(win).toBeVisible();
 
-  // Fill the required fields.
   await fieldByCaption(win, 'Name').fill(name);
   await fieldByCaption(win, 'Username').fill(username);
 
@@ -75,21 +68,52 @@ test('admin can create a user', async ({ page }) => {
   // mail is sent (SMTP is not configured in the test environment).
   const sendPw = win.locator('.v-checkbox', { hasText: 'Sende dem Benutzer' }).locator('input');
   if (await sendPw.isChecked()) {
-    // The associated <label> overlays the input, so click it via force.
     await sendPw.uncheck({ force: true });
   }
 
-  // Select a user group in the Vaadin ComboBox (open via the dropdown button).
+  // Select the "Default" user group.
   const groupRow = win.locator('tr').filter({ has: page.getByText('Benutzergruppe', { exact: true }) });
   await groupRow.locator('.v-filterselect-button').click();
   await page.locator('.v-filterselect-suggestpopup').getByText('Default', { exact: true }).click();
 
-  // Save.
   await win.locator('.v-button', { hasText: 'Erstellen' }).click();
   await expect(win).toBeHidden();
+}
 
-  // The new user appears in the users table.
+test('admin can create a user', async ({ page }) => {
+  const stamp = Date.now();
+  const name = `E2E UI User ${stamp}`;
+
+  await loginAsAdmin(page);
+  await createUser(page, name, `e2e_ui_${stamp}`);
+
   await expect(page.getByText(name, { exact: true })).toBeVisible();
+});
+
+test('admin can top up a user credit', async ({ page }) => {
+  const stamp = Date.now();
+  const name = `E2E Guthaben ${stamp}`;
+
+  await loginAsAdmin(page);
+  await createUser(page, name, `e2e_credit_${stamp}`);
+
+  // Open the credit window for that user. The enabled action buttons are, in
+  // order: edit, credit (money), transactions, delete — so credit is index 1.
+  const rowRe = new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const row = () => page.getByRole('row', { name: rowRe });
+  await row().locator('.v-button:not(.v-disabled)').nth(1).click();
+
+  const win = page.locator('.v-window', { hasText: 'Guthaben von ' + name });
+  await expect(win).toBeVisible();
+
+  // Default action is a deposit ("Einzahlung"); just enter the amount and book.
+  await fieldByCaption(win, 'Betrag').fill('5');
+  await win.locator('.v-button', { hasText: 'Buchen' }).click();
+  await expect(win).toBeHidden();
+
+  // The user's row now shows the credited amount (currency renders with the
+  // container's default locale, e.g. "$5.00").
+  await expect(row()).toContainText('5.00');
 });
 
 test('admin can create a user group', async ({ page }) => {

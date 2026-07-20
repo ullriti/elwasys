@@ -116,7 +116,7 @@ public class ClientAutoLogoutE2ETest {
 
     private static void seedFixtures() throws Exception {
         cardId = "4" + String.format("%08d", System.currentTimeMillis() % 100_000_000L);
-        try (Connection c = DriverManager.getConnection(DB_URL, "elwaportal", "elwaportal");
+        try (Connection c = DriverManager.getConnection(DB_URL, "postgres", "postgres");
              Statement s = c.createStatement()) {
             final int locationId = queryInt(s, "SELECT id FROM locations WHERE name='Default'");
             final int groupId = queryInt(s, "SELECT id FROM user_groups ORDER BY id LIMIT 1");

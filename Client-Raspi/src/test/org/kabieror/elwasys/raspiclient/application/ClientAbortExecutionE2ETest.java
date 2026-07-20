@@ -24,18 +24,18 @@ import java.time.Duration;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Client E2E (test plan C9): a logged-in user with insufficient credit can open
- * the confirmation screen for a device, but the terminal marks it as
- * "credit-insufficient" and offers no Start button — so no execution can begin.
+ * Client E2E (test plan C12): after starting a program on a device, the user
+ * can abort the running execution. The terminal asks for confirmation and,
+ * once confirmed, stops the execution and frees the device.
  *
- * Run: ./run-client-e2e.sh   (or xvfb-run mvn test -Dtest=ClientInsufficientCreditE2ETest)
+ * Run: ./run-client-e2e.sh   (or xvfb-run mvn test -Dtest=ClientAbortExecutionE2ETest)
  * See kb/08-test-plan.md.
  */
-public class ClientInsufficientCreditE2ETest {
+public class ClientAbortExecutionE2ETest {
 
-    private static final int FHEM_PORT = 7075;
-    private static final String DEVICE_NAME = "E2E-WM-Credit";
-    private static final String PROGRAM_NAME = "E2E-Waschen-Credit";
+    private static final int FHEM_PORT = 7077;
+    private static final String DEVICE_NAME = "E2E-WM-Abort";
+    private static final String PROGRAM_NAME = "E2E-Waschen-Abort";
     private static final String DB_URL = "jdbc:postgresql://localhost:5432/elwasys";
 
     private static FhemSimulator fhem;
@@ -44,6 +44,7 @@ public class ClientInsufficientCreditE2ETest {
     private static FxRobot robot;
 
     private static String cardId;
+    private static int deviceId;
 
     @BeforeAll
     static void seedAndLaunch() throws Exception {
@@ -52,7 +53,7 @@ public class ClientInsufficientCreditE2ETest {
         fhem = new FhemSimulator();
         fhem.start(FHEM_PORT);
 
-        workDir = Files.createTempDirectory("elwasys-credit-e2e");
+        workDir = Files.createTempDirectory("elwasys-abort-e2e");
         Files.writeString(workDir.resolve("elwasys.properties"), String.join("\n",
                 "database.server=localhost:5432",
                 "database.name=elwasys",
@@ -66,15 +67,15 @@ public class ClientInsufficientCreditE2ETest {
                 "portalUrl=",
                 "fhem.server=localhost",
                 "fhem.port=" + FHEM_PORT,
-                "instance.port=8274",
+                "instance.port=8276",
                 "smtp.server=",
                 "smtp.port=465",
                 "smtp.useSSL=false",
                 "smtp.senderAddress=noreply@example.com",
                 "maintenance.server=localhost",
-                "maintenance.port=3594",
+                "maintenance.port=3596",
                 ""));
-        Files.writeString(workDir.resolve(".client-uid"), "e2e-credit-client");
+        Files.writeString(workDir.resolve(".client-uid"), "e2e-abort-client");
         System.setProperty("user.dir", workDir.toString());
 
         primaryStage = FxToolkit.registerPrimaryStage();
@@ -96,42 +97,47 @@ public class ClientInsufficientCreditE2ETest {
     }
 
     @Test
-    void device_cannot_be_started_without_enough_credit() throws InterruptedException {
+    void a_running_execution_can_be_aborted() throws Exception {
         final MainFormController controller =
                 (MainFormController) ElwaManager.instance.getMainFormController();
 
-        // Log in the seeded card holder (who has no credit).
+        // Log in and start a program on the device.
         robot.clickOn(primaryStage.getScene().getRoot());
         robot.write(cardId);
         robot.push(KeyCode.ENTER);
         assertTrue(waitUntil(() -> controller.getRegisteredUser() != null, Duration.ofSeconds(10)),
                 "The card holder should be logged in");
 
-        // Book the device -> confirmation screen.
-        assertTrue(waitUntil(() -> isSelectButtonEnabled(DEVICE_NAME), Duration.ofSeconds(10)),
+        assertTrue(waitUntil(() -> isEnabled(buttonFor(DEVICE_NAME, ".select-button")), Duration.ofSeconds(10)),
                 "The 'book device' button should be enabled");
-        robot.clickOn(selectButtonFor(DEVICE_NAME));
+        robot.clickOn(buttonFor(DEVICE_NAME, ".select-button"));
         waitForState(MainFormState.CONFIRMATION, Duration.ofSeconds(10));
 
-        // The confirmation screen flags insufficient credit and hides Start.
-        assertTrue(waitUntil(() -> hasStyle("#confirmationPane", "credit-insufficient"), Duration.ofSeconds(10)),
-                "The confirmation screen should be marked 'credit-insufficient'");
-        assertTrue(waitUntil(() -> nodeDisabled("#forwardButton"), Duration.ofSeconds(5)),
-                "The Start button must be disabled when the user cannot afford the program");
+        clickById("#forwardButton"); // Start
+        assertTrue(waitUntil(ClientAbortExecutionE2ETest::hasRunningExecution, Duration.ofSeconds(15)),
+                "The execution should be running before we abort it");
+
+        // The device tile now offers an abort button; use it and confirm.
+        assertTrue(waitUntil(() -> isVisible(buttonFor(DEVICE_NAME, ".abort-button")), Duration.ofSeconds(10)),
+                "The abort button should be shown while the device is occupied");
+        robot.clickOn(buttonFor(DEVICE_NAME, ".abort-button"));
+        waitForState(MainFormState.CONFIRM_PROGRAM_ABORTION, Duration.ofSeconds(10));
+
+        clickById("#forwardButton"); // Bestätigen
+
+        assertTrue(waitUntil(() -> !hasRunningExecution(), Duration.ofSeconds(15)),
+                "After confirming, the execution should no longer be running");
     }
 
     // --- helpers ------------------------------------------------------------
 
     private static void seedFixtures() throws Exception {
-        cardId = "5" + String.format("%08d", System.currentTimeMillis() % 100_000_000L);
+        cardId = "3" + String.format("%08d", System.currentTimeMillis() % 100_000_000L);
         try (Connection c = DriverManager.getConnection(DB_URL, "postgres", "postgres");
              Statement s = c.createStatement()) {
             final int locationId = queryInt(s, "SELECT id FROM locations WHERE name='Default'");
             final int groupId = queryInt(s, "SELECT id FROM user_groups ORDER BY id LIMIT 1");
 
-            // Remove ALL leftover E2E devices/programs (from other test classes
-            // and prior runs) so the device list contains only our device and
-            // its tile stays on-screen for the robot to click.
             s.executeUpdate("DELETE FROM credit_accounting WHERE execution_id IN " +
                     "(SELECT id FROM executions WHERE device_id IN " +
                     "(SELECT id FROM devices WHERE name LIKE 'E2E-%'))");
@@ -144,7 +150,7 @@ public class ClientInsufficientCreditE2ETest {
                     "INSERT INTO programs (name, type, max_duration, free_duration, flagfall, rate, " +
                             "time_unit, auto_end, earliest_auto_end, enabled) VALUES ('" + PROGRAM_NAME +
                             "', 'FIXED', 3600, 0, 1.50, NULL, NULL, TRUE, 0, TRUE) RETURNING id");
-            final int deviceId = insertReturningId(s,
+            deviceId = insertReturningId(s,
                     "INSERT INTO devices (name, position, location_id, fhem_name, fhem_switch_name, " +
                             "fhem_power_name, deconz_uuid, auto_end_power_threashold, auto_end_wait_time, enabled) " +
                             "VALUES ('" + DEVICE_NAME + "', 1, " + locationId +
@@ -156,41 +162,45 @@ public class ClientInsufficientCreditE2ETest {
             s.executeUpdate("INSERT INTO devices_valid_user_groups (device_id, group_id) VALUES ("
                     + deviceId + ", " + groupId + ")");
 
-            // A user WITHOUT any credit (no credit_accounting entry -> credit 0).
-            s.executeUpdate("INSERT INTO users (name, username, card_ids, group_id, is_admin, blocked, deleted) VALUES ("
-                    + "'E2E Pleite', 'e2e_broke_" + System.currentTimeMillis() + "', '" + cardId + "', "
-                    + groupId + ", FALSE, FALSE, FALSE)");
+            final int userId = insertReturningId(s,
+                    "INSERT INTO users (name, username, card_ids, group_id, is_admin, blocked, deleted) VALUES ("
+                            + "'E2E Abbruch', 'e2e_abort_" + System.currentTimeMillis() + "', '" + cardId + "', "
+                            + groupId + ", FALSE, FALSE, FALSE) RETURNING id");
+            s.executeUpdate("INSERT INTO credit_accounting (user_id, amount, description) VALUES ("
+                    + userId + ", 100, 'E2E seed')");
 
             s.executeUpdate("UPDATE locations SET client_uid=NULL, client_last_seen=NULL WHERE id=" + locationId);
         }
     }
 
-    private static int queryInt(Statement s, String sql) throws Exception {
-        try (ResultSet r = s.executeQuery(sql)) {
+    private static boolean hasRunningExecution() {
+        try (Connection c = DriverManager.getConnection(DB_URL, "postgres", "postgres");
+             Statement s = c.createStatement();
+             ResultSet r = s.executeQuery(
+                     "SELECT COUNT(*) FROM executions WHERE finished=false AND device_id=" + deviceId)) {
             r.next();
-            return r.getInt(1);
+            return r.getInt(1) > 0;
+        } catch (Exception e) {
+            return false;
         }
     }
 
-    private static int insertReturningId(Statement s, String sql) throws Exception {
-        try (ResultSet r = s.executeQuery(sql)) {
-            r.next();
-            return r.getInt(1);
-        }
-    }
-
-    private static Node selectButtonFor(String deviceName) {
+    /** The button node with the given style class inside the named device tile. */
+    private static Node buttonFor(String deviceName, String styleClass) {
         for (Node tile : primaryStage.getScene().getRoot().lookupAll(".device-list-item")) {
             if (containsText(tile, deviceName)) {
-                return tile.lookup(".select-button");
+                return tile.lookup(styleClass);
             }
         }
         return null;
     }
 
-    private static boolean isSelectButtonEnabled(String deviceName) {
-        final Node b = selectButtonFor(deviceName);
-        return b != null && !b.isDisabled();
+    private static boolean isEnabled(Node n) {
+        return n != null && !n.isDisabled();
+    }
+
+    private static boolean isVisible(Node n) {
+        return n != null && n.isVisible();
     }
 
     private static boolean containsText(Node node, String text) {
@@ -207,14 +217,23 @@ public class ClientInsufficientCreditE2ETest {
         return false;
     }
 
-    private static boolean hasStyle(String selector, String styleClass) {
-        final Node node = primaryStage.getScene().lookup(selector);
-        return node != null && node.getStyleClass().contains(styleClass);
+    private static void clickById(String selector) {
+        final Node node = robot.lookup(selector).query();
+        robot.clickOn(node);
     }
 
-    private static boolean nodeDisabled(String selector) {
-        final Node node = primaryStage.getScene().lookup(selector);
-        return node != null && node.isDisabled();
+    private static int queryInt(Statement s, String sql) throws Exception {
+        try (ResultSet r = s.executeQuery(sql)) {
+            r.next();
+            return r.getInt(1);
+        }
+    }
+
+    private static int insertReturningId(Statement s, String sql) throws Exception {
+        try (ResultSet r = s.executeQuery(sql)) {
+            r.next();
+            return r.getInt(1);
+        }
     }
 
     private static void waitForState(MainFormState target, Duration timeout) throws InterruptedException {

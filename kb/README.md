@@ -36,3 +36,4 @@ Teststrategie und die Remote-/Cloud-Init-Umgebung dokumentiert und fortlaufend g
 | 2026-07-19 | Client-Login-Varianten (C6–C8) grün; Portal-CRUD (P6 Benutzer, P9 Gruppe) grün; Portal-Suite 7/7 |
 | 2026-07-19 | Client C9 (zu wenig Guthaben) grün; Portal P10 (Gerät anlegen) grün; Portal-Suite 8/8 |
 | 2026-07-19 | CI-Flakiness behoben (geteilte DB); Client C10 (Auto-Logout) + Portal P12 (Programm) grün; Client 12 / Portal 9 |
+| 2026-07-20 | Client C12 (Abbruch) + Portal P8 (Guthaben) grün; Seeding auf postgres (FK-Cleanup inkl. credit_accounting); Client 13 / Portal 10 |

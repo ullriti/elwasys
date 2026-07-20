@@ -142,7 +142,7 @@ public class ClientLoginVariantsE2ETest {
         final long id = System.currentTimeMillis();
         blockedCard = "7" + String.format("%08d", id % 100_000_000L);
         foreignCard = "6" + String.format("%08d", (id + 1) % 100_000_000L);
-        try (Connection c = DriverManager.getConnection(DB_URL, "elwaportal", "elwaportal");
+        try (Connection c = DriverManager.getConnection(DB_URL, "postgres", "postgres");
              Statement s = c.createStatement()) {
             final int locationId = queryInt(s, "SELECT id FROM locations WHERE name='Default'");
             final int allowedGroup = queryInt(s, "SELECT id FROM user_groups ORDER BY id LIMIT 1");

@@ -211,7 +211,7 @@ public class ClientUsageE2ETest {
     }
 
     private static boolean hasRunningExecution() {
-        try (Connection c = DriverManager.getConnection(DB_URL, "elwaportal", "elwaportal");
+        try (Connection c = DriverManager.getConnection(DB_URL, "postgres", "postgres");
              Statement s = c.createStatement();
              ResultSet r = s.executeQuery(
                      "SELECT COUNT(*) FROM executions WHERE finished=false AND device_id=" + deviceId)) {
@@ -225,7 +225,7 @@ public class ClientUsageE2ETest {
     private static void seedFixtures() throws Exception {
         cardId = "9" + String.format("%08d", System.currentTimeMillis() % 100_000_000L);
         userName = "E2E Nutzer";
-        try (Connection c = DriverManager.getConnection(DB_URL, "elwaportal", "elwaportal");
+        try (Connection c = DriverManager.getConnection(DB_URL, "postgres", "postgres");
              Statement s = c.createStatement()) {
             final int locationId = queryInt(s, "SELECT id FROM locations WHERE name='Default'");
             final int groupId = queryInt(s, "SELECT id FROM user_groups ORDER BY id LIMIT 1");
@@ -238,6 +238,9 @@ public class ClientUsageE2ETest {
             // Remove ALL leftover E2E devices/programs (from other test classes
             // and prior runs) so the device list contains only our device and
             // its tile stays on-screen for the robot to click.
+            s.executeUpdate("DELETE FROM credit_accounting WHERE execution_id IN " +
+                    "(SELECT id FROM executions WHERE device_id IN " +
+                    "(SELECT id FROM devices WHERE name LIKE 'E2E-%'))");
             s.executeUpdate("DELETE FROM executions WHERE device_id IN " +
                     "(SELECT id FROM devices WHERE name LIKE 'E2E-%')");
             s.executeUpdate("DELETE FROM devices WHERE name LIKE 'E2E-%'");
