@@ -18,17 +18,11 @@ Modernisierungsprojekts. Vor jeder Arbeit lesen:
 
 **Aktueller Stand (2026-07-20):** Phase 0 (Sicherheitsnetz: Build + E2E-Tests) und
 Phase 1 (Fundament: Parent-POM, Java 21, JUnit 5, ElwaManager-DI) sind abgeschlossen,
-alle Grundsatzentscheidungen sind gefallen. Phase 2 ist gestartet: AP1 (Backend-Gerüst +
-Flyway-Baseline), AP2 (JPA-Entities/Repositories + Geschäftslogik-Portierung:
-Abrechnung, Berechtigungen, Preisberechnung, Execution-Lebenszyklus), AP3 (Auth:
-Argon2id-Hashing + SHA1-Migrationspfad, Login-/Session-Handling), AP4 (REST-API v1 +
-Standort-Token-Auth + WebSocket-Endpunkt für Terminals), AP5 (Benachrichtigungsdienst
-SMTP/Pushover, implementiert/getestet hinter Konfig-Flag, Default AUS – Scharfschaltung
-mit echten Ereignissen folgt Phase 4) und AP6 (Deployment: Dockerfile + docker-compose,
-Helm Chart für Kubernetes, TLS-Konzept) sind abgeschlossen – die Phase-2-Roadmap ist damit
-vollständig abgearbeitet. Phase 2 selbst gilt erst nach einer abschließenden QA-Review als
-abgeschlossen; **nächster Schritt: QA-Review von AP6, danach Entscheidung über Phase 3**
-(Portal-Neubau) – siehe Roadmap in kb/05.
+alle Grundsatzentscheidungen sind gefallen. **Phase 2 (Backend-Gerüst: AP1–AP6 – Flyway-
+Baseline, JPA-Entities/Geschäftslogik, Auth, REST-API/Standort-Token/WebSocket,
+Benachrichtigungsdienst hinter Konfig-Flag, Deployment mit Docker/Helm) ist abgeschlossen**
+(QA-Review ohne Befunde). **Nächster Schritt: Phase 3** (Portal-Neubau: Vaadin-Flow-UI im
+Backend) – siehe Roadmap in kb/05.
 
 ## Arbeitsregeln
 
