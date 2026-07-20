@@ -241,3 +241,33 @@ test('admin can create a fixed-price program', async ({ page }) => {
 
   await expect(page.getByText(programName, { exact: true })).toBeVisible();
 });
+
+test('admin can open and save a location from the dashboard (P14)', async ({ page }) => {
+  await loginAsAdmin(page);
+  await openSection(page, 'Dashboard', 'dashboard');
+
+  // Each location tile has a toolbar; the last (gear) menu holds "Bearbeiten".
+  const toolbar = page.locator('.location-pane .toolbar').first();
+  await expect(toolbar).toBeVisible();
+  await toolbar.locator('.v-menubar-menuitem').last().click();
+  await page.locator('.v-menubar-popup .v-menubar-menuitem', { hasText: 'Bearbeiten' }).click();
+
+  const win = page.locator('.v-window', { hasText: 'Standort bearbeiten' });
+  await expect(win).toBeVisible();
+  // The name field is prefilled with the existing location name.
+  const nameField = win.locator('input.v-textfield').first();
+  await expect(nameField).toHaveValue('Default');
+
+  // Save unchanged (round-trip through Location.modify) — keeps global state
+  // stable for the other tests that rely on the "Default" location.
+  await win.locator('.v-button', { hasText: 'OK' }).click();
+  await expect(win).toBeHidden();
+
+  // Re-open to confirm the location still edits and persists correctly.
+  await toolbar.locator('.v-menubar-menuitem').last().click();
+  await page.locator('.v-menubar-popup .v-menubar-menuitem', { hasText: 'Bearbeiten' }).click();
+  const win2 = page.locator('.v-window', { hasText: 'Standort bearbeiten' });
+  await expect(win2).toBeVisible();
+  await expect(win2.locator('input.v-textfield').first()).toHaveValue('Default');
+  await win2.locator('.v-button', { hasText: 'Abbrechen' }).click();
+});

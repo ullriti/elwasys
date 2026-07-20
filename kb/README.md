@@ -41,3 +41,5 @@ Teststrategie und die Remote-/Cloud-Init-Umgebung dokumentiert und fortlaufend g
 | 2026-07-20 | Client C16 (standortfremdes Gerät) + Portal P13 (Gruppe löschen) grün; Client 15 / Portal 12 |
 | 2026-07-20 | Portal P15+P18 (Nicht-Admin-Frontend & Berechtigungen) grün; Portal 13 |
 | 2026-07-20 | Client C14 (DYNAMIC-Preisanzeige) grün; Client 16. Verbleibende Fälle in 08-test-plan.md dokumentiert |
+| 2026-07-20 | Client C13 (Resume) + C15 (DB-Ausfall→ERROR) grün; Client 18/18 |
+| 2026-07-20 | Portal P14 (Standort), P16 (Passwort ändern), P17 (Einstellungen), P19 (Passwort vergessen), P20 (Gerätestatus) grün; Portal 18/18. Nur P21 (Cross-Component) offen |

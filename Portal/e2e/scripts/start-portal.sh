@@ -44,6 +44,11 @@ sudo -u postgres psql -q -d elwasys -c \
   "INSERT INTO users (name, username, password, is_admin, blocked, deleted) \
    SELECT 'E2E Portal User', 'e2e_portal_user', 'a94a8fe5ccb19ba61c4c0873d391e987982fbbd3', FALSE, FALSE, FALSE \
    WHERE NOT EXISTS (SELECT 1 FROM users WHERE username='e2e_portal_user');" || true
+# A separate non-admin user for the change-password test (also password "test").
+sudo -u postgres psql -q -d elwasys -c \
+  "INSERT INTO users (name, username, password, is_admin, blocked, deleted) \
+   SELECT 'E2E PwChange User', 'e2e_pwchange_user', 'a94a8fe5ccb19ba61c4c0873d391e987982fbbd3', FALSE, FALSE, FALSE \
+   WHERE NOT EXISTS (SELECT 1 FROM users WHERE username='e2e_pwchange_user');" || true
 
 # 3. Portal configuration
 sudo mkdir -p /etc/elwaportal

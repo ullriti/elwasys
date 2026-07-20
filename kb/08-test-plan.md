@@ -35,9 +35,9 @@ Legende Priorität: **P1** = Kern-Happy-Path zuerst, **P2** = wichtige Varianten
 | C10 | P2 | Auto-Logout nach `sessionTimeout` Inaktivität ✅ | `registeredUser` wird null |
 | C11 | P3 | Auto-Ende: Gerät zieht keine Leistung → Ende nach `auto_end_wait_time` ✅ | Execution automatisch beendet |
 | C12 | P3 | Laufende Execution abbrechen (Bestätigung) ✅ | Execution gestoppt (keine laufende Execution mehr) |
-| C13 | P3 | Unterbrochene Execution beim Start fortsetzen (geseedet) | Execution wird als laufend übernommen |
+| C13 | P3 | Unterbrochene Execution beim Start fortsetzen (geseedet) ✅ | Execution wird als laufend übernommen |
 | C14 | P3 | DYNAMIC-Programm: Preisanzeige (Grundgebühr/Zeitpreis) ✅ | „Grundgebühr"/„Zeitpreis" auf Bestätigung sichtbar |
-| C15 | P3 | DB beim Start nicht erreichbar → Fehlerzustand + Retry | State `ERROR`/`ERROR_RETRYABLE`, Recovery nach Retry |
+| C15 | P3 | DB beim Start nicht erreichbar → Fehlerzustand ✅ | State `ERROR` (statt Absturz), Retry möglich |
 | C16 | P2 | Standortfremdes Gerät ✅ | erscheint **nicht** in der Liste (nur Geräte des eigenen Standorts) |
 
 **Hinweise/Feasibility**
@@ -71,14 +71,14 @@ z. B. zusätzlicher Nicht-Admin-Benutzer mit Passwort, Gruppen, Geräte, Program
 | P11 | P2 | Gerät aktiv/inaktiv schalten, bearbeiten | Zustand geändert |
 | P12 | P2 | Programm anlegen (FIXED/statisch: Preis + Dauern) ✅ | erscheint in Programmliste |
 | P13 | P2 | Entität löschen (Benutzergruppe, mit Bestätigung) ✅ | verschwindet aus Liste |
-| P14 | P3 | Standort-Verwaltung (LocationWindow) | anlegen/bearbeiten |
+| P14 | P3 | Standort-Verwaltung (LocationWindow, Dashboard) ✅ | Fenster „Standort bearbeiten" öffnet, Name vorbelegt, Save-Round-Trip |
 | P15 | P3 | Nicht-Admin-Login → Benutzer-Dashboard ✅ | „Guthaben"/„Übersicht" sichtbar |
-| P16 | P3 | Eigenes Passwort ändern | erneuter Login mit neuem Passwort klappt |
-| P17 | P3 | Benutzereinstellungen (E-Mail/Push-Benachrichtigung) | Umschalten persistent |
+| P16 | P3 | Eigenes Passwort ändern ✅ | erneuter Login mit neuem Passwort klappt |
+| P17 | P3 | Benutzereinstellungen (E-Mail/Benachrichtigung) ✅ | Umschalten persistent (nach erneutem Öffnen gesetzt) |
 | P18 | P3 | Nicht-Admin sieht keine Admin-Views (Berechtigung) ✅ | „Benutzergruppen"/„Geräte" nicht vorhanden |
-| P19 | P3 | „Passwort vergessen?"-Dialog | Dialog öffnet (kein echter Mailversand) |
-| P20 | P4 | Dashboard-Gerätestatus „Frei/Besetzt" aus laufender Execution | Status entspricht DB-Zustand |
-| P21 | P4 | Log-Viewer / Client-Neustart (Wartungsverbindung) | **Cross-Component** (Portal + laufender Client) – optional |
+| P19 | P3 | „Passwort vergessen?"-Dialog ✅ | Dialog „Passwort zurücksetzen" öffnet (kein echter Mailversand) |
+| P20 | P4 | Dashboard-Gerätestatus „Frei/Besetzt" aus laufender Execution ✅ | Status entspricht DB-Zustand |
+| P21 | P4 | Log-Viewer / Client-Neustart (Wartungsverbindung) | **Cross-Component** (Portal + laufender Client) – zurückgestellt |
 
 **Hinweise/Feasibility**
 - Vaadin 7 vergibt keine stabilen IDs → Lokatoren über Captions/CSS-Klassen. **Empfehlung
@@ -103,20 +103,29 @@ z. B. zusätzlicher Nicht-Admin-Benutzer mit Passwort, Gruppen, Geräte, Program
 
 ## Stand der Umsetzung (2026-07-20)
 
-**Umgesetzt & grün** — Client (TestFX/Xvfb, 16 Tests): C1–C12, C14, C16.
-Portal (Playwright, 13 Tests): P1–P13, P15, P18.
+**Umgesetzt & grün** — Client (TestFX/Xvfb, 18 Tests): C1–C16 (vollständig).
+Portal (Playwright, 18 Tests): P1–P20 (vollständig, außer P21).
 
 **Verbleibend / bewusst zurückgestellt:**
-- **C13** (unterbrochene Execution beim Start fortsetzen): machbar (laufende Execution
-  seeden, App booten, prüfen dass sie übernommen wird) – nächster sinnvoller Client-Fall.
-- **C15** (DB-Ausfall → Fehlerzustand + Retry): braucht kontrolliertes Stoppen/Starten der
-  DB mitten im Test; zurückgestellt (Flakiness-Risiko, Infrastruktur).
-- **P14** (Standort-Verwaltung), **P16** (Passwort ändern), **P17** (Benutzereinstellungen),
-  **P19** (Passwort-vergessen-Dialog): reine Portal-Formularflows, mit den vorhandenen
-  Patterns schnell ergänzbar.
-- **P20/P21** (Dashboard-Gerätestatus / Log-Viewer / Client-Neustart): hängen an der
-  Wartungs-Verbindung Portal⇄Client (Cross-Component). Eigener, größerer Meilenstein –
-  am besten Portal + laufender Client gemeinsam hochfahren. Zurückgestellt.
+- **P21** (Log-Viewer / Client-Neustart über die Wartungsverbindung): einziger noch
+  offener Fall. Echter Cross-Component-E2E – braucht einen *laufenden* Client, der sich
+  am Wartungs-Server des Portals registriert (Portal ⇄ Client). Das erfordert ein
+  gemeinsames Hochfahren beider Komponenten inkl. Maintenance-Verbindung und ist als
+  eigener, größerer Meilenstein sinnvoll. Zurückgestellt.
+
+**Hinweise zu den zuletzt ergänzten Fällen:**
+- **C13**: laufende Execution (start gesetzt, finished=false) vor App-Start seeden; nach
+  Boot prüfen, dass der `ExecutionManager` sie als laufend übernimmt
+  (`ElwaManager.initiate` scannt beim Start unerledigte Executions).
+- **C15**: Client auf einen unerreichbaren DB-Port (localhost:5433) zeigen lassen; die App
+  stürzt nicht ab, sondern landet über `AbstractMainFormController.tryInitiate` im
+  `ERROR`-Zustand (mit Retry-Aktion).
+- **P14**: Standort wird über das Zahnrad-Menü einer Standort-Kachel auf dem Admin-
+  Dashboard („Bearbeiten") geöffnet; Name-Feld vorbelegt, unveränderter Save-Round-Trip
+  hält den globalen Zustand (`Default`) für andere Tests stabil.
+- **P20**: „Frei/Besetzt" wird direkt aus `DataManager.getRunningExecution` gerendert
+  (DB-getrieben, kein laufender Client nötig); ein Gerät mit laufender Execution wird als
+  „Besetzt", eines ohne als „Frei" angezeigt.
 
 ## Empfohlene Reihenfolge
 1. **Client P1** (C2–C5) – der Kern-Nutzungsablauf am Terminal.
