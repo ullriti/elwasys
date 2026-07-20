@@ -4,7 +4,9 @@ Diese Knowledge Base ist der zentrale Ablageort für die Überarbeitung / Modern
 des elwasys-Projekts. Hier werden Recherche, Architektur, Datenmodell, Migrationsplan,
 Teststrategie und die Remote-/Cloud-Init-Umgebung dokumentiert und fortlaufend gepflegt.
 
-> Arbeitsbranch: `claude/software-projekt-ueberarbeitung-8z9nyk`
+> Jede Arbeits-Session nutzt ihren eigenen Branch (`claude/...`); die KB auf dem
+> jeweils aktuellsten Stand (master + gemergte PRs) ist die zentrale Wahrheit.
+> Einstieg für neue Sessions: [/CLAUDE.md](../CLAUDE.md) → [05-migration-plan.md](05-migration-plan.md).
 
 ## Inhalt
 
