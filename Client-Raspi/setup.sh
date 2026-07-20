@@ -84,7 +84,7 @@ function install_java() {
     wget -q -O - https://download.bell-sw.com/pki/GPG-KEY-bellsoft | sudo apt-key add -
     echo "deb [arch=armhf] https://apt.bell-sw.com/ stable main" | sudo tee /etc/apt/sources.list.d/bellsoft.list
     sudo apt-get update
-    sudo apt-get install -y bellsoft-java17-runtime-full
+    sudo apt-get install -y bellsoft-java21-runtime-full
 }
 
 
