@@ -108,11 +108,16 @@ Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).
 
 ## CI (GitHub Actions)
 
-`.github/workflows/maven-publish.yml`:
+`.github/workflows/ci.yml` *(seit 2026-07-20)*:
+- Trigger: jeder Pull Request + Pushes auf `master`
+- 3 parallele Jobs (Common / Client / Portal): Build + Tests, spiegeln die lokalen
+  Runner-Skripte (`run-ui-tests.sh` etc., siehe kb/06)
+
+`.github/workflows/maven-publish.yml` (Release):
 - Trigger: **nur** bei `release: created`
 - JDK 17 (Liberica), ersetzt Version im POM/Utilities durch Tag-Namen
 - Baut Common → Client-Raspi, lädt das fat-jar als Release-Asset hoch
-- **Kein** Test-/Lint-/PR-CI vorhanden → Ansatzpunkt für die Modernisierung.
+- Umstellung auf Parent-POM-Versionierung ist Phase-1-Aufgabe (siehe kb/05)
 
 ## Bekannte Build-Risiken
 

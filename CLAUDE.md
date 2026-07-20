@@ -1,0 +1,54 @@
+# elwasys – Hinweise für Claude-Sessions
+
+elwasys verwaltet und rechnet Waschmaschinen in Gemeinschafts-Waschküchen ab:
+Raspberry-Pi-Terminals (JavaFX, Touch, RFID) + Vaadin-Admin-Portal + gemeinsame
+PostgreSQL-DB. Details: [kb/00-overview.md](kb/00-overview.md).
+
+## Zuerst lesen
+
+Die **Knowledge Base [`kb/`](kb/README.md) ist die zentrale Wahrheit** dieses
+Modernisierungsprojekts. Vor jeder Arbeit lesen:
+
+1. [kb/05-migration-plan.md](kb/05-migration-plan.md) – **der Modernisierungsplan**
+   (Rahmenbedingungen, Zielarchitektur, Roadmap, Fortschritt, Entscheidungen des
+   Auftraggebers). Hier steht, welche Phase als Nächstes dran ist.
+2. [kb/README.md](kb/README.md) – Inhaltsverzeichnis + Status-Log.
+3. Je nach Aufgabe: 01 (Architektur), 02 (Datenmodell), 03 (Module),
+   04 (Build/Run), 06 (UI-Tests), 07 (Remote-Umgebung), 08 (Testplan).
+
+**Aktueller Stand (2026-07-20):** Phase 0 (Sicherheitsnetz: Build + E2E-Tests) ist
+abgeschlossen, alle Grundsatzentscheidungen sind gefallen.
+**Nächster Schritt: Phase 1** (Parent-POM, Java 21, JUnit 5, ElwaManager-DI) –
+siehe Roadmap in kb/05.
+
+## Arbeitsregeln
+
+- **Verhalten bewahren**: Nutzer-sichtbares Verhalten darf sich nicht ändern
+  (Rahmenbedingung des Auftraggebers). Die E2E-Suiten sind der Maßstab.
+- **Tests vor und nach jedem Umbau grün** (Kommandos unten). Kleine, einzeln
+  baubare Commits.
+- **KB fortschreiben**: Nach jedem Arbeitspaket Fortschritt/Änderungslog in
+  kb/05 und Status-Log in kb/README.md aktualisieren; betroffene KB-Dokumente
+  (01–04, 06–08) mitpflegen. Entscheidungen des Auftraggebers in kb/05 unter
+  „Entscheidungen“ dokumentieren.
+
+## Build & Tests (Remote-Umgebung ist vorbereitet, siehe kb/07)
+
+```bash
+# Build (Reihenfolge wichtig, noch kein Parent-POM – Phase-1-Aufgabe)
+mvn -f Common/pom.xml install
+mvn -f Client-Raspi/pom.xml package
+mvn -f Portal/pom.xml package
+
+# Client: UI-/E2E-Tests headless (startet PG, seedet DB, Xvfb)
+Client-Raspi/run-ui-tests.sh              # alle
+Client-Raspi/run-ui-tests.sh <TestClass>  # einzelne Klasse
+Client-Raspi/run-client-e2e.sh
+Client-Raspi/run-cross-component-e2e.sh   # Wartungsverbindung Portal⇄Client
+
+# Portal: Playwright-E2E (Setup/DB/Jetty siehe Portal/e2e/README.md u. kb/06)
+cd Portal/e2e && npm test
+```
+
+Der SessionStart-Hook installiert Common und wärmt die Client-Dependencies vor.
+CI: `.github/workflows/ci.yml` baut/testet alle drei Module bei jedem PR.
