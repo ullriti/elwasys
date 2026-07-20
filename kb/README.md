@@ -44,3 +44,4 @@ Teststrategie und die Remote-/Cloud-Init-Umgebung dokumentiert und fortlaufend g
 | 2026-07-20 | Client C13 (Resume) + C15 (DB-Ausfall→ERROR) grün; Client 18/18 |
 | 2026-07-20 | Portal P14 (Standort), P16 (Passwort ändern), P17 (Einstellungen), P19 (Passwort vergessen), P20 (Gerätestatus) grün; Portal 18/18. Nur P21 (Cross-Component) offen |
 | 2026-07-20 | Cross-Component P21/P22 (Wartungsverbindung Portal⇄Client: Log holen, Neustart, Status) grün; Client 21/21. Alle geplanten Tests umgesetzt |
+| 2026-07-20 | **Phase 0 abgeschlossen** (Sicherheitsnetz steht); isolierte State-Machine-Charakterisierung + ElwaManager-DI nach Phase 1 verschoben (05-migration-plan.md) |

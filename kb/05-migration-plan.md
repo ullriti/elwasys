@@ -30,20 +30,28 @@
 
 ## Reihenfolge (Roadmap)
 
-### Phase 0 – Verständnis & Absicherung *(aktuell)*
+### Phase 0 – Verständnis & Absicherung *(abgeschlossen 2026-07-20)*
 - [x] KB anlegen, Projekt erforschen, Übersicht dokumentieren
 - [x] Cloud-Init/Remote-Umgebung für Build & (headless) UI-Tests (Hook + cloud-config)
-- [x] UI-Tests Client (TestFX/Xvfb) – 2 Tests grün
-- [x] UI-Tests Portal (Playwright E2E) – Login-Smoke-Test grün
+- [x] UI-Tests Client (TestFX/Xvfb) – **21 Tests grün** (C1–C16 + Cross-Component P21/P22)
+- [x] UI-Tests Portal (Playwright E2E) – **18 Tests grün** (P1–P20)
 - [x] Reproduzierbarer Build: Common ✅, Client ✅, Portal ✅ (repariert)
-- [ ] Weitere Charakterisierungstests (Client-State-Machine) – blockiert durch
-      ElwaManager-Kopplung → Phase 1
+- [x] Zustandsübergänge der Client-State-Machine über die E2E-Suite abgesichert
+      (SELECT_DEVICE→CONFIRMATION, Auto-Logout, Abbruch, Auto-Ende, Resume, ERROR)
+
+> **Fazit Phase 0:** Das Sicherheitsnetz (reproduzierbarer Build + verhaltensfixierende
+> UI-/E2E-Tests beider Frontends inkl. Wartungsverbindung) steht. Die *isolierte*
+> Unit-Charakterisierung der State-Machine (`MainFormStateManager`) wird bewusst nach
+> Phase 1 verschoben, da sie die Entkopplung der harten `ElwaManager`-Kopplung (DI)
+> voraussetzt – und dieser Umbau verändert Produktivcode und gehört damit in Phase 1.
 
 ### Phase 1 – Build & Konsolidierung
 - [ ] Aggregator-Parent-POM, einheitliche Versionen/Properties
 - [ ] Java-Level vereinheitlichen
 - [ ] Test-Frameworks vereinheitlichen (JUnit 5), bestehende Tests lauffähig
-- [ ] PR-CI (Build + Tests) einrichten
+- [x] PR-CI (Build + Tests) einrichten *(vorgezogen: ci.yml, 3 Jobs Common/Client/Portal grün)*
+- [ ] `ElwaManager`-Kopplung per DI entkoppeln → ermöglicht isolierte
+      State-Machine-Charakterisierung (aus Phase 0 übernommen)
 
 ### Phase 2 – Abhängigkeiten & Security
 - [ ] DB-Treiber/HTTP-Clients modernisieren
@@ -69,3 +77,4 @@
 | Datum | Änderung |
 |-------|----------|
 | 2026-07-19 | Erstfassung des Plans erstellt |
+| 2026-07-20 | **Phase 0 abgeschlossen** (Build + UI/E2E-Sicherheitsnetz steht: Client 21, Portal 18, Cross-Component grün); isolierte State-Machine-Charakterisierung + ElwaManager-DI nach Phase 1 verschoben; PR-CI (vorgezogen) grün |
