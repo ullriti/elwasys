@@ -38,6 +38,13 @@ DELETE FROM users WHERE username LIKE 'e2e\_%' ESCAPE '\';
 DELETE FROM user_groups WHERE name LIKE 'E2E-%';
 SQL
 
+# Seed a known non-admin user for the user-frontend / permission tests
+# (password "test" -> SHA1 a94a8fe5ccb19ba61c4c0873d391e987982fbbd3).
+sudo -u postgres psql -q -d elwasys -c \
+  "INSERT INTO users (name, username, password, is_admin, blocked, deleted) \
+   SELECT 'E2E Portal User', 'e2e_portal_user', 'a94a8fe5ccb19ba61c4c0873d391e987982fbbd3', FALSE, FALSE, FALSE \
+   WHERE NOT EXISTS (SELECT 1 FROM users WHERE username='e2e_portal_user');" || true
+
 # 3. Portal configuration
 sudo mkdir -p /etc/elwaportal
 sudo tee /etc/elwaportal/elwaportal.properties >/dev/null <<'EOF'

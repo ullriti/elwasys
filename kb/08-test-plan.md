@@ -72,10 +72,10 @@ z. B. zusätzlicher Nicht-Admin-Benutzer mit Passwort, Gruppen, Geräte, Program
 | P12 | P2 | Programm anlegen (FIXED/statisch: Preis + Dauern) ✅ | erscheint in Programmliste |
 | P13 | P2 | Entität löschen (Benutzergruppe, mit Bestätigung) ✅ | verschwindet aus Liste |
 | P14 | P3 | Standort-Verwaltung (LocationWindow) | anlegen/bearbeiten |
-| P15 | P3 | Nicht-Admin-Login → Benutzer-Dashboard | Guthaben + Buchungstabelle sichtbar |
+| P15 | P3 | Nicht-Admin-Login → Benutzer-Dashboard ✅ | „Guthaben"/„Übersicht" sichtbar |
 | P16 | P3 | Eigenes Passwort ändern | erneuter Login mit neuem Passwort klappt |
 | P17 | P3 | Benutzereinstellungen (E-Mail/Push-Benachrichtigung) | Umschalten persistent |
-| P18 | P3 | Nicht-Admin sieht keine Admin-Views (Berechtigung) | Admin-Menü/Views nicht erreichbar |
+| P18 | P3 | Nicht-Admin sieht keine Admin-Views (Berechtigung) ✅ | „Benutzergruppen"/„Geräte" nicht vorhanden |
 | P19 | P3 | „Passwort vergessen?"-Dialog | Dialog öffnet (kein echter Mailversand) |
 | P20 | P4 | Dashboard-Gerätestatus „Frei/Besetzt" aus laufender Execution | Status entspricht DB-Zustand |
 | P21 | P4 | Log-Viewer / Client-Neustart (Wartungsverbindung) | **Cross-Component** (Portal + laufender Client) – optional |
