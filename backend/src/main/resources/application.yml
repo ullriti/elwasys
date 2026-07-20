@@ -22,6 +22,14 @@ spring:
       ddl-auto: none
     open-in-view: false
 
+  mvc:
+    # RFC-7807-ProblemDetail-Antworten auch für Spring-MVC-Standardfehler (z.B.
+    # @Valid-Validierungsfehler, fehlende Pflichtparameter) - ergänzt
+    # ApiExceptionHandler, der die fachlichen Terminal-API-Fehler abdeckt (AP4, siehe
+    # kb/05-migration-plan.md).
+    problemdetails:
+      enabled: true
+
   flyway:
     # baselineOnMigrate: eine bereits über den Alt-Weg (database-init.sql +
     # database-upgrade/*.sql) angelegte Bestands-DB hat keine flyway_schema_history-Tabelle,
@@ -55,3 +63,14 @@ logging:
     root: INFO
     org.kabieror.elwasys: INFO
     org.flywaydb: INFO
+
+# API-Dokumentation (AP4, siehe kb/05-migration-plan.md): beschränkt springdoc auf die
+# Terminal-API unter /api/v1/** (kein Katalog interner/künftiger Vaadin-Endpunkte). Erreichbar
+# unter /v3/api-docs (JSON) bzw. /swagger-ui.html - beides läuft über die catch-all
+# SecurityFilterChain aus SecurityConfig (AP3, alles außer /actuator/health erfordert eine
+# Anmeldung), NICHT über die zustandslose Terminal-Token-Kette (die ist auf /api/v1/**
+# begrenzt, siehe TerminalApiSecurityConfig) - die Dokumentation selbst liegt bewusst nicht
+# unter /api/v1/**.
+springdoc:
+  packages-to-scan: org.kabieror.elwasys.backend.api
+  paths-to-match: /api/v1/**
