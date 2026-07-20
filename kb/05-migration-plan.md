@@ -165,7 +165,7 @@ Wesentliche Änderungen gegenüber heute:
 | Passwort-Hashing | **Argon2id** (Spring Security) | SHA1-Ablösung; transparente Migration: beim ersten erfolgreichen Login re-hashen, Rest per Admin-Reset |
 | API-Auth | Terminal: statisches Token pro Standort (rotierbar); Admins: Session-Login | einfach, offline-fähig konfigurierbar; OAuth/OIDC bewusst vermieden (Overkill) |
 | Tests | JUnit 5, Testcontainers (Postgres) im Backend; TestFX (Client) und Playwright (Portal) weiterführen | E2E-Suiten aus Phase 0 sind das Abnahme-Sicherheitsnetz |
-| Deployment Backend | Container-Image (+ docker-compose mit Postgres) **und** ausführbares Jar | flexibel für den Betreiber; Raspi-Terminal weiterhin fat-jar + systemd via `setup.sh` |
+| Deployment Backend | Container-Image; Betrieb per **docker-compose** (Backend + Postgres) oder **Kubernetes** (Helm Chart wird mitgeliefert) – ✅ vom Auftraggeber festgelegt (2026-07-20) | Raspi-Terminal weiterhin fat-jar + systemd via `setup.sh` |
 
 ## Roadmap
 
@@ -203,7 +203,8 @@ Ziel: neues Modul `backend` läuft produktionsnah **neben** Client & Portal auf 
       Execution starten/beenden/abbrechen, Guthaben) + Standort-Token-Auth
 - [ ] WebSocket-Endpunkt für Terminals (Ereignisse, Fernwartungskanal)
 - [ ] Benachrichtigungsdienst (SMTP, Pushover) im Backend
-- [ ] Deployment: Dockerfile + docker-compose (Backend + Postgres), TLS-Konzept
+- [ ] Deployment: Dockerfile + docker-compose (Backend + Postgres) **und** Helm Chart
+      für Kubernetes; TLS-Konzept (Compose: Reverse Proxy; K8s: Ingress)
 
 ### Phase 3 – Portal-Neubau
 Ziel: Admin-Portal als Teil des Backends, Feature-Parität, altes Portal abgeschaltet.
@@ -279,10 +280,16 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
   → Beim Portal-Neubau liegt der Fokus auf den Admin-Ansichten; der
   Nutzer-Selbstbedienungsbereich (Login, eigene Einstellungen, Passwort ändern) bleibt
   funktional, hat aber niedrigere Parity-Priorität.
+- **2026-07-20**: **Gestaltungsrahmen Portal-Neubau**: Die **Struktur** (Aufbau der
+  Ansichten, Arbeitsabläufe) bleibt im Wesentlichen erhalten – auch Admins sind Nutzer,
+  die sich nicht umstellen sollen. **UX-Verbesserungen sind aber ausdrücklich erwünscht**
+  (Bedienung nutzerfreundlicher machen, umständliche Abläufe vereinfachen), solange die
+  gewohnte Struktur wiedererkennbar bleibt.
+- **2026-07-20**: **Betriebsmodell Backend**: Betrieb als **Docker-Compose-Stack oder
+  Kubernetes**; neben Compose ist ein **Helm Chart vorzubereiten**.
 
 ## Offene Fragen / mit Auftraggeber klären
-1. **Betriebsmodell Backend**: Docker/Compose auf eigenem Server ok, oder Bare-Metal
-   (systemd) gewünscht?
+*Derzeit keine – alle Grundsatzfragen sind entschieden (siehe „Entscheidungen“).*
 
 ## Änderungslog
 | Datum | Änderung |
@@ -292,3 +299,4 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
 | 2026-07-20 | **Plan überarbeitet zur Zielarchitektur-Fassung**: Rahmenbedingungen des Auftraggebers aufgenommen (Java-Backend, Postgres, Raspi-Terminals fix; Nutzerverhalten unverändert); vollständige Komponenten-Inventur mit Entscheidung je Komponente; Zielarchitektur „zentrales Spring-Boot-Backend, Portal integriert, Terminal über API“; Roadmap neu geschnitten (Phasen 1–5) |
 | 2026-07-20 | **Entscheidungen eingearbeitet**: Vaadin Flow bestätigt; `ui/small` bleibt (Display im Einsatz); App-Reste (`elwaapi`) werden entfernt; fhem-Frage präzisiert (inkl. Abhängigkeit der Testharness vom fhem-Simulator) |
 | 2026-07-20 | **Restentscheidungen eingearbeitet**: fhem UND deCONZ bleiben beide unterstützt (E2E künftig mit beiden Simulatoren, deCONZ-Sim in Phase 4); App-Entfernung bestätigt; Nutzungsprofil Portal dokumentiert (nur Admins → Admin-Views priorisiert). Einzige offene Frage: Betriebsmodell Backend |
+| 2026-07-20 | **Letzte Grundsatzfragen entschieden**: Portal-Struktur bleibt erhalten, UX-Verbesserungen erwünscht; Betrieb als Docker-Compose-Stack oder Kubernetes (Helm Chart vorbereiten). Keine offenen Grundsatzfragen mehr – Phase 1 kann starten |
