@@ -60,11 +60,11 @@ Entscheidung des Auftraggebers offen.
 |---|---|---|
 | `application/` (`Main`, `ElwaManager`-Singleton, `SingleInstanceManager`) | Singleton-zentriert, harte Kopplung | **Modern.** – DI einführen (Voraussetzung für isolierte Tests), Ablauf unverändert |
 | `ui/medium/` (800×480, Haupt-UI: FXML, State-Machine, Views) | JavaFX 20, FXML | **Bleibt** (JavaFX/Java aktualisieren; Layout & Bedienfluss unverändert – Nutzer-Vorgabe) |
-| `ui/small/` (320×240-Variante) | zweite UI-Größe, doppelter Pflegeaufwand | **?** – entfernen, falls keine Kleindisplays mehr im Einsatz (Empfehlung: entfernen) |
+| `ui/small/` (320×240-Variante) | zweite UI-Größe | **Bleibt** – laut Auftraggeber noch im Einsatz (2026-07-20); wird in Phase 4 mit modernisiert und bekommt mind. Smoke-Test-Abdeckung |
 | `ui/scheduler/` (Auto-Logout, `BacklightManager`) | Timer + sysfs-Backlight | **Bleibt** (Verhalten fixiert durch Tests) |
 | `executions/` (`ExecutionManager`, `ExecutionFinisher`, Auto-Ende) | Geschäftslogik im Client, schreibt direkt in DB | **Modern.** – Ablauf bleibt im Client (Nähe zur Hardware/Leistungsmessung), Persistenz/Abrechnung über Backend-API |
 | `devices/deconz/` (REST + WebSocket zu deCONZ, Leistungsmessung, Registrierung) | unirest 1.x + HttpComponents | **Modern.** – bleibt lokal auf dem Raspi (ConBee2 steckt dort); HTTP-Client auf `java.net.http` |
-| `devices/FhemDevicePowerManager` (fhem-Altpfad) | Legacy-Alternative zu deCONZ | **?** – Empfehlung: entfernen, falls kein fhem-Standort mehr existiert |
+| `devices/FhemDevicePowerManager` (fhem-Altpfad) | Legacy-Alternative zu deCONZ (`ElwaManager` wählt beim Start: `deconz.server` gesetzt → deCONZ, sonst `fhem.server`); dazu `fhem_*`-Spalten in `devices` + Felder im Portal-DeviceWindow | **?** – Empfehlung: entfernen, falls kein fhem-Standort mehr existiert. Achtung: die E2E-Testharness simuliert derzeit fhem (`fhemsimulator/`) – bei Entfernung braucht die Testsuite einen deCONZ-Simulator (ohnehin sinnvoll, da Produktion deCONZ nutzt) |
 | `io/` (`CardReader` über `TelnetClient`, RFID-Events) | Telnet-basierte Leseranbindung | **Bleibt** (Hardware-Anbindung unverändert) |
 | Benachrichtigungen (Commons Email/SMTP, Pushover-Client im Client) | Terminal verschickt E-Mail/Push selbst, braucht SMTP-Credentials | **Neu** – wandert ins Backend (zentral; Terminal meldet nur Ereignisse) |
 | `configuration/` (`elwasys.properties`, `LocationManager`) | DB-Zugangsdaten auf jedem Terminal | **Modern.** – statt DB-Credentials: Backend-URL + Terminal-Token |
@@ -90,7 +90,7 @@ Entscheidung des Auftraggebers offen.
 | DB-Rollen `elwaclient1`/`elwaportal`/`elwaapi` mit Default-Passwörtern im Init-SQL | Sicherheitsrisiko; Rechtemodell auf DB-Ebene | **Neu** – nur noch das Backend spricht mit der DB (ein technischer User); Terminal-Rechte werden API-seitig durchgesetzt; Default-Secrets entfallen |
 | Spaltentypo `auto_end_power_threashold` | kosmetisch | **Modern.** – per Flyway-Migration umbenennen, sobald kein Alt-Code mehr direkt liest |
 | `client_ip`/`client_port`/`client_uid` in `locations` | Registry für Maintenance-Anwahl | **Weg** – obsolet durch ausgehende Client-Verbindung |
-| `foreign_authkeys` (Server-Föderation), `app_id`/`auth_key` (elwaapi, mobile App außerhalb des Repos) | vermutlich ungenutzt | **?** – klären, ob App/Föderation noch relevant; sonst API bereitstellen bzw. entfernen |
+| `foreign_authkeys` (Server-Föderation), `app_id`/`access_key`/`auth_key` + Trigger, `reservations`, DB-User `elwaapi` (mobile App, Code außerhalb des Repos) | App laut Auftraggeber nicht (mehr) relevant (2026-07-20); im Repo existieren nur DB-Reste + Auth-Key-Anzeige im Terminal-UI (UserSettings/Confirmation) | **Weg** – in Phase 5 entfernen (DB-User, Spalten, Tabellen, Trigger, UI-Anzeige) |
 
 ### Infrastruktur / Repo
 | Komponente | Ist | Entscheidung |
@@ -159,7 +159,7 @@ Wesentliche Änderungen gegenüber heute:
 | Java | **21 LTS** (Toolchain im Parent-POM) | aktuelles LTS, von JavaFX & Spring Boot 3 getragen; 25 LTS später als Drop-in |
 | Backend-Framework | **Spring Boot 3.x** | De-facto-Standard, WebSocket/Security/Scheduling/Mail an Bord; Spring-WebSocket ist im Client heute schon Dependency. Alternative: Quarkus (kein Team-Vorteil erkennbar) |
 | Persistenz | **Spring Data JPA + Flyway** | Bestandsschema als Baseline-Migration; Entities ersetzen das handgeschriebene Mapping des `DataManager` |
-| Portal-UI | **Vaadin Flow 24** (im Backend eingebettet) | bleibt reines Java (Vorgabe „Java Backend“, kein separater Frontend-Stack zu pflegen), ideal für CRUD-Admin-UIs, Push eingebaut; konzeptuelle Nähe zum Bestand erleichtert Feature-Parität. Alternative: Thymeleaf+HTMX (leichter, aber mehr Handarbeit bei Grids/Dialogen) oder React-SPA (zweiter Stack, für 1 Admin-UI überdimensioniert) |
+| Portal-UI | **Vaadin Flow 24** (im Backend eingebettet) – ✅ vom Auftraggeber bestätigt (2026-07-20) | bleibt reines Java (Vorgabe „Java Backend“, kein separater Frontend-Stack zu pflegen), ideal für CRUD-Admin-UIs, Push eingebaut; konzeptuelle Nähe zum Bestand erleichtert Feature-Parität |
 | Terminal-UI | **JavaFX beibehalten** (aktuelles JavaFX, Java 21) | UI/FXML und Bedienfluss bleiben unverändert → Nutzer merken nichts; TestFX-Suite bleibt gültig. Alternative „Chromium-Kiosk + Web-UI“ verworfen: neuer Stack, Touch-/Offline-Verhalten riskanter, kein Nutzer-Mehrwert |
 | HTTP im Terminal | `java.net.http` (JDK) | ersetzt HttpComponents 4.x + unirest 1.x (deCONZ **und** Backend-API) |
 | Passwort-Hashing | **Argon2id** (Spring Security) | SHA1-Ablösung; transparente Migration: beim ersten erfolgreichen Login re-hashen, Rest per Admin-Reset |
@@ -228,6 +228,8 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
 - [ ] deCONZ-Anbindung auf `java.net.http` umstellen (unirest/HttpComponents raus)
 - [ ] Robustheit: Verhalten bei Backend-Nichterreichbarkeit definieren und testen
       (laufende Executions lokal zu Ende führen, Ereignisse nachmelden)
+- [ ] `ui/small` (320×240) mit modernisieren (bleibt im Einsatz) und mind. per Smoke-Test
+      absichern (bisher deckt die E2E-Suite nur die Medium-UI ab)
 - [ ] TestFX-/E2E-Suite (C1–C16, P21/P22) gegen den neuen Unterbau grün → Abnahmekriterium
 - [ ] `setup.sh` aktualisieren (fragt Backend-URL/Token; kein DB/SMTP-Setup mehr)
 
@@ -238,7 +240,11 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
       noch für den Backend-User; Admin-Seed ohne Default-Passwort (Setup-Wizard/CLI)
 - [ ] Flyway-Migration: `auto_end_power_threashold` → `auto_end_power_threshold`,
       `client_ip/-port/-uid/-last_seen` aus `locations` entfernen
-- [ ] Entscheidung umsetzen: fhem-Pfad und/oder `ui/small` entfernen (falls bestätigt)
+- [ ] App-Reste (`elwaapi`) entfernen: DB-User, Spalten `app_id`/`access_key`/`auth_key`
+      inkl. Trigger, Tabellen `reservations` + `foreign_authkeys`, Auth-Key-Anzeige im
+      Terminal-UI (UserSettings-/Confirmation-View)
+- [ ] Entscheidung umsetzen: fhem-Pfad entfernen (falls bestätigt; Testharness vorher auf
+      deCONZ-Simulator umstellen)
 - [ ] Release-Pipeline final: Terminal-fat-jar + Backend-Image je Release
 - [ ] Doku-Endstand: READMEs, kb/, setup-Anleitungen auf Zielarchitektur
 
@@ -258,15 +264,17 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
 - **2026-07-20**: **Fix bleiben:** Java-Backend, PostgreSQL, Raspi-Terminals mit
   Touch-Display. **Alles andere darf neu gedacht werden.** Nutzer dürfen sich nicht
   umstellen müssen (Bedienfluss/Funktionen bleiben).
+- **2026-07-20**: **Vaadin Flow** als Portal-Stack bestätigt.
+- **2026-07-20**: **Kleines Display (320×240) ist noch im Einsatz** → `ui/small` bleibt
+  und wird mit modernisiert.
+- **2026-07-20**: **Mobile App (`elwaapi`) ist nicht relevant** → alle App-Reste werden
+  in Phase 5 entfernt.
 
 ## Offene Fragen / mit Auftraggeber klären
-1. **Portal-Stack bestätigen:** Empfehlung Vaadin Flow 24 (alles Java) – ok, oder lieber
-   Web-Frontend (HTMX/React)?
-2. **fhem-Unterstützung**: Gibt es noch fhem-Standorte? (Empfehlung: entfernen)
-3. **Kleines Display (320×240, `ui/small`)**: noch im Einsatz? (Empfehlung: entfernen)
-4. **Mobile App (`elwaapi`)/Reservierungen/Föderation (`foreign_authkeys`)**: noch relevant?
-   Falls ja: als REST-API-Scope im Backend abbilden; falls nein: in Phase 5 entfernen.
-5. **Betriebsmodell Backend**: Docker/Compose auf eigenem Server ok, oder Bare-Metal
+1. **fhem-Unterstützung**: Wird an einem Standort noch fhem (statt deCONZ/ConBee2) als
+   Gateway genutzt? Falls nein → Entfernen in Phase 5 (Testharness vorher auf
+   deCONZ-Simulator umstellen).
+2. **Betriebsmodell Backend**: Docker/Compose auf eigenem Server ok, oder Bare-Metal
    (systemd) gewünscht?
 
 ## Änderungslog
@@ -275,3 +283,4 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
 | 2026-07-19 | Erstfassung des Plans erstellt |
 | 2026-07-20 | **Phase 0 abgeschlossen** (Build + UI/E2E-Sicherheitsnetz steht: Client 21, Portal 18, Cross-Component grün); PR-CI (vorgezogen) grün |
 | 2026-07-20 | **Plan überarbeitet zur Zielarchitektur-Fassung**: Rahmenbedingungen des Auftraggebers aufgenommen (Java-Backend, Postgres, Raspi-Terminals fix; Nutzerverhalten unverändert); vollständige Komponenten-Inventur mit Entscheidung je Komponente; Zielarchitektur „zentrales Spring-Boot-Backend, Portal integriert, Terminal über API“; Roadmap neu geschnitten (Phasen 1–5) |
+| 2026-07-20 | **Entscheidungen eingearbeitet**: Vaadin Flow bestätigt; `ui/small` bleibt (Display im Einsatz); App-Reste (`elwaapi`) werden entfernt; fhem-Frage präzisiert (inkl. Abhängigkeit der Testharness vom fhem-Simulator) |
