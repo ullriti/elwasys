@@ -83,16 +83,19 @@ Zielarchitektur). Kein Reactor-Bezug zu `common` – das Backend bekommt sein ei
 Datenmodell (Entities folgen im nächsten Arbeitspaket), keine Wiederverwendung der alten
 `Common`-POJOs/`DataManager`.
 
-**Aktueller Stand (AP4, 2026-07-20)**: Actuator-Health, Flyway-Baseline gegen das
+**Aktueller Stand (Phase 3 AP1, 2026-07-20)**: Actuator-Health, Flyway-Baseline gegen das
 Bestandsschema (AP1), JPA-Entities/Repositories und die Kern-Geschäftslogik (Abrechnung,
 Berechtigungen, Preisberechnung, Execution-Lebenszyklus) als Services (AP2), Auth
 (Argon2id-Hashing + SHA1-Migrationspfad, session-basiertes Login-Fundament) mit Spring
-Security (AP3), sowie seit AP4 eine erste fachliche REST-API v1 (`/api/v1/**`,
-Standort-Token-Auth) + ein WebSocket-Endpunkt-Fundament für Terminals (siehe Abschnitt
-„REST-API v1 + Standort-Token-Auth + WebSocket“ unten). Wird weiterhin von niemandem
-produktiv konsumiert (Terminals sprechen bis Phase 4 laut Roadmap weiter direkt SQL) – das
-Backend schreibt produktiv noch nichts, außer wenn ein Terminal die neue API testweise
-aufruft.
+Security (AP3), eine fachliche REST-API v1 (`/api/v1/**`, Standort-Token-Auth) + ein
+WebSocket-Endpunkt-Fundament für Terminals (AP4, siehe Abschnitt „REST-API v1 +
+Standort-Token-Auth + WebSocket“ unten), ein Benachrichtigungsdienst hinter einem
+Konfig-Flag (AP5), Deployment-Artefakte (AP6) sowie – seit Phase 3 AP1 – ein
+**Vaadin-Flow-Admin-Portal-Grundgerüst** (Login, rollenbasierte Layouts/Navigation,
+Platzhalter-Views; siehe Abschnitt „Portal-UI (Vaadin Flow)“ unten). Die REST-API/WebSocket-
+Schicht wird weiterhin von niemandem produktiv konsumiert (Terminals sprechen bis Phase 4
+laut Roadmap weiter direkt SQL); das Portal-Grundgerüst hat noch keine Stammdaten-Inhalte
+(folgen in AP2/AP3 dieser Phase).
 
 ### Datenmodell & Geschäftslogik (AP2)
 
@@ -240,6 +243,13 @@ erbt und ein zweiter Parent in Maven nicht möglich ist):
   `TerminalWsMessage`/`TerminalWsMessageType` (Protokoll), `TerminalWebSocketHandler`,
   `TerminalHandshakeInterceptor`, `TerminalConnectionRegistry`, `TerminalHeartbeatScheduler`,
   `TerminalWebSocketConfig`
+- `src/main/java/.../backend/ui/` – Vaadin-Flow-Admin-Portal (Phase 3 AP1, siehe Abschnitt
+  „Portal-UI (Vaadin Flow)“ unten): `RootView`, `login/LoginView`, `admin/AdminLayout` +
+  6 Admin-Views, `user/UserLayout` + `UserDashboardView`, `component/UserMenuBar`,
+  `component/PlaceholderView`
+- `src/main/frontend/` – von Vaadin auto-generierte Frontend-Tooling-Ausgabe (`generated/`
+  ist per `.gitignore` ausgeschlossen, nie hand-editiert; `index.html` ist das
+  Standard-Bootstrap-Template, wird committet)
 - `src/test/java/.../backend/BackendApplicationTest.java` – Integrationstest (Spring-Kontext +
   Flyway-Migration gegen echtes PostgreSQL, prüft Health-Endpoint + Baseline-Schema/Seeds)
 - `src/test/java/.../backend/support/TestPostgres.java` – DB-Bereitstellung für Tests:
@@ -264,6 +274,8 @@ erbt und ein zweiter Parent in Maven nicht möglich ist):
   (Standort/Token/Benutzer/Gerät/Programm anlegen)
 - `src/test/java/.../backend/ws/TerminalWebSocketTest.java` – WebSocket-End-to-End-Test (AP4,
   siehe unten)
+- `src/test/java/.../backend/ui/` – Portal-UI-Tests (Phase 3 AP1, siehe unten):
+  `VaadinPortalSecurityTest`, `RouteAccessAnnotationsTest`
 
 ### REST-API v1 + Standort-Token-Auth + WebSocket (AP4, 2026-07-20)
 
@@ -474,6 +486,125 @@ per Default aus ist).
   Fallstrick oben.
 - `NotificationsPropertiesDefaultTest`: voller Spring-Kontext, beweist `enabled=false` ohne
   gesetzte Umgebungsvariable.
+
+### Portal-UI (Vaadin Flow, Phase 3 AP1, 2026-07-20, Package `backend/.../ui/`)
+
+Admin-Portal als Vaadin-Flow-UI im Backend (siehe kb/05-migration-plan.md, Zielarchitektur
+„Portal ist Teil des Backends“) – dieses Arbeitspaket liefert nur das Grundgerüst
+(Login/Layout/Navigation/Rollen-Guard); Stammdaten-Inhalte folgen in AP2/AP3.
+
+**Abhängigkeiten**: `vaadin-bom`/`vaadin-spring-boot-starter` (Version **24.10.8**) per
+BOM-Import, analog zum Spring-Boot-BOM (siehe AP1 oben). Zwei Ausschlüsse aus
+`vaadin-spring-boot-starter`:
+- `hilla` (TypeScript/React-Gegenstück zu Flow – nicht Auftrag, siehe kb/05
+  „Technologie-Entscheidungen“: „Vaadin Flow 24“). Ohne diesen Ausschluss wirft
+  `com.vaadin.flow.spring.security.RequestUtil#isAllowedHillaView` beim Auswerten der
+  Sicherheitskette eine `IllegalStateException` in jedem Testkontext ohne echten,
+  Servlet-Container-gebootstrappten `ServletContainerInitializer` (u. a. `SecurityConfigTest`,
+  `AbstractApiIT`-Unterklassen, `webEnvironment=MOCK`) – hätte die komplette Backend-Testsuite
+  gebrochen.
+- `collaboration-engine` (kommerzielles Vaadin-Pro-Add-on für Echtzeit-Kollaboration, hier
+  nirgends genutzt) – sauberer Ausschluss statt funktionslosem Mitschleppen.
+
+**Wichtiger Befund – Vaadin-Lizenzpflicht im Dev-Modus** (siehe kb/05-migration-plan.md,
+Risikotabelle, für die vollständige Herleitung und den Klärungsbedarf mit dem Auftraggeber):
+unabhängig von den beiden Ausschlüssen oben verlangt Vaadin 24.10.x beim ersten
+`VaadinServlet#init()` im Dev-Modus einen Online-Lizenzcheck gegen vaadin.com ("This Vaadin
+version requires an extended maintenance subscription" – die 24-Linie gilt inzwischen als
+kostenpflichtige „Extended Maintenance“). Diese Sandbox-/Build-Umgebung hat keinen
+Netzwerkzugriff auf vaadin.com; `mvn spring-boot:run` (Dev-Modus) scheitert hier daher beim
+Servlet-Start, ein erzwungener Produktionsmodus findet mangels gebautem
+`-Pproduction`-Bundle kein Frontend. Die automatisierte Testsuite ist davon nicht betroffen
+(erzwingt `vaadin.productionMode=true` für alle Tests, siehe unten – kein Test ruft eine
+Vaadin-UI-Route über einen echten Servlet-Container auf).
+
+**Views/Layouts**:
+- `login/LoginView` (Route `/login`, `@AnonymousAllowed`) – Vaadins eingebaute `LoginForm`
+  mit deutschen Texten 1:1 aus dem Alt-Portal (`Portal/.../PublicLayout`,
+  `SessionManager#login`): Titel „Login"/Beschriftung „Waschportal“, Felder
+  „Benutzername"/„Passwort", Fehlermeldung „Login fehlgeschlagen"/„Bitte prüfen Sie die
+  Anmeldedaten und versuchen Sie es erneut.". Formular postet über Spring Securitys
+  Standard-Mechanismus an `/login` (siehe `SecurityConfig` unten) – authentifiziert weiterhin
+  über den unveränderten `ElwasysAuthenticationProvider` (AP3), inkl. dessen Verschärfung
+  „gesperrte Nutzer werden abgewiesen".
+- `RootView` (Route `""`, `@PermitAll`) – fachlicher Nachfolger von
+  `WaschportalUI#loadSessionContent`: leitet nach dem Login abhängig von der Rolle sofort
+  weiter (`AuthenticationContext#hasRole("ADMIN")`) – Administratoren zu
+  `AdminDashboardView`, alle anderen angemeldeten Benutzer zu `UserDashboardView` (vgl. P2/P15).
+- `admin/AdminLayout` (`AppLayout` + `SideNav`) – fachlicher Nachfolger von
+  `Portal/.../AdministratorLayout` + `components/MainMenu`: Navigation Dashboard/Benutzer/
+  Benutzergruppen/Programme/Geräte/**Standorte**. „Standorte" ist NEU als eigener Menüpunkt
+  (im Alt-Portal nur über einen Dashboard-Dialog erreichbar, `components/LocationWindow`,
+  vgl. P14) – bewusste, vom Auftraggeber ausdrücklich gewünschte UX-Verbesserung (siehe
+  kb/05-migration-plan.md, „Entscheidungen“, Gestaltungsrahmen Portal-Neubau), keine
+  Funktionsänderung. 6 Platzhalter-Views (`AdminDashboardView`, `AdminUsersView`,
+  `AdminUserGroupsView`, `AdminProgramsView`, `AdminDevicesView`, `AdminLocationsView`), alle
+  `@RolesAllowed("ADMIN")` – Inhalte folgen in AP2/AP3.
+- `user/UserLayout` (`AppLayout` + `SideNav`, ein Menüpunkt „Übersicht") – fachlicher
+  Nachfolger des schlanken `Portal/.../UserLayout`; laut Auftraggeber loggen sich im
+  Wesentlichen nur Admins ein (kb/05-migration-plan.md, „Entscheidungen“), entsprechend
+  niedrigere Parity-Priorität. `UserDashboardView` (`@RolesAllowed("USER")`) ist ein
+  Platzhalter – Guthaben-/Übersichtsinhalte (vgl. P15) folgen in AP3.
+- `component/UserMenuBar` – gemeinsame Kopfzeilenkomponente (Name des angemeldeten Benutzers +
+  Logout-Knopf, `AuthenticationContext#logout()`) für Admin-/Benutzer-Layout; fachlicher
+  Nachfolger des Benutzermenüs in `Portal/.../components/MainMenu`. „Einstellungen"/„Passwort
+  ändern" (dort zusätzlich vorhanden) sind bewusst NICHT Teil dieses Grundgerüsts.
+- `component/PlaceholderView` – gemeinsame Basis aller Platzhalter-Views (Titel + Hinweistext).
+
+**Security-Integration** (`backend/.../auth/SecurityConfig`, unverändertes Paket seit AP3):
+statt `formLogin(Customizer.withDefaults())` jetzt
+`http.with(VaadinSecurityConfigurer.vaadin(), c -> c.loginView(LoginView.class).anyRequest(AuthorizedUrl::authenticated))`.
+Das bindet `LoginView` als Login-Ziel, gibt die Login-Route + alle Vaadin-internen statischen
+Ressourcen für nicht angemeldete Anfragen frei und aktiviert Vaadins routenweise
+`NavigationAccessControl` (wertet `@RolesAllowed`/`@PermitAll`/`@AnonymousAllowed` an den
+Views aus – siehe oben). Der `AuthenticationManager` (`ElwasysAuthenticationProvider`) bleibt
+unverändert derselben Kette zugeordnet. Terminal-API-Kette (`TerminalApiSecurityConfig`,
+`/api/v1/**`) und WebSocket-Endpunkt sind UNBERÜHRT – eigene, niedrigere `@Order`-Kette
+(AP4), dedizierter Regressionstest (`TerminalApiSecurityTest`, unverändert grün) beweist das.
+
+**Zwei nicht offensichtliche Fallstricke gefunden und behoben** (Details siehe Javadoc
+`SecurityConfig`/`AbstractBackendIT`):
+1. Vaadins Spring-Autokonfigurationsklassen (`SpringBootAutoConfiguration`,
+   `SpringSecurityAutoConfiguration`, `VaadinScopesConfig`, siehe
+   `vaadin-spring`s `META-INF/spring/...AutoConfiguration.imports`) sind NICHT auf
+   `@ConditionalOnWebApplication` eingeschränkt und versuchen daher auch in den bestehenden
+   `webEnvironment=NONE`-Tests (`AbstractBackendIT`, AP2) einen `WebApplicationContext`/eine
+   `ServletRegistrationBean<SpringServlet>` zu autowiren – hätte ALLE Service-/Repository-/
+   Auth-Tests aus AP2/AP3 gebrochen. Fix: `AbstractBackendIT` schließt alle drei
+   Autokonfigurationsklassen explizit aus (`spring.autoconfigure.exclude`).
+2. `VaadinSecurityConfigurer` braucht für den Login-Routen-Pfad zwingend einen echten
+   `ServletContext`-Bean (`getServletContextPath()`) – in einem Nicht-Web-Kontext wäre die
+   `securityFilterChain`-Bean-Erzeugung mit einer `NullPointerException` gescheitert. Fix:
+   `@ConditionalOnWebApplication` NUR auf dieser einen Bean-Methode (nicht auf der ganzen
+   `SecurityConfig`-Klasse, sonst hätte `TerminalApiSecurityConfig` seinen von
+   `@EnableWebSecurity` bereitgestellten `HttpSecurity`-Bean verloren).
+
+**Build-Konfiguration** (`backend/pom.xml`): Default-`mvn package` bleibt schnell (nur
+`vaadin-maven-plugin:prepare-frontend`, kein npm-Bundling); neues Maven-Profil `production`
+(`mvn package -Pproduction`) baut zusätzlich das produktive Frontend-Bundle
+(`build-frontend`, `vaadin.productionMode=true`). Surefire-Konfiguration erzwingt
+`vaadin.productionMode=true` als System-Property für ALLE Testläufe dieses Moduls – verhindert,
+dass ein Testfall mit echtem eingebettetem Servlet-Container (z. B. `TerminalWebSocketTest`,
+`BackendApplicationTest`, `webEnvironment=RANDOM_PORT`) Vaadins Dev-Modus (inkl. des oben
+beschriebenen Lizenzchecks) startet.
+
+**Tests** (9 neu, Package `backend/.../ui/`): bewusst KEIN Test über einen echten
+eingebetteten Servlet-Container, der eine Vaadin-UI-Route tatsächlich rendern lässt – siehe
+„Wichtiger Befund" oben, ein solcher Test könnte in dieser Sandbox nicht grün laufen.
+Stattdessen:
+- `VaadinPortalSecurityTest` (5, `webEnvironment=MOCK`, genügt für alles, was rein in der
+  Spring-Security-Filterkette entschieden wird): geschützte Routen (`/`, `/admin`) leiten
+  nicht angemeldete Anfragen um; Formular-Login über die Vaadin-Login-Route authentifiziert
+  gültige Zugangsdaten UND weist gesperrte Nutzer ab (`ElwasysAuthenticationProvider`-
+  Integration); Logout leitet zur Login-Seite um.
+- `RouteAccessAnnotationsTest` (4, reiner Reflection-Test ohne Spring-Kontext/DB): beweist die
+  `@AnonymousAllowed`/`@PermitAll`/`@RolesAllowed`-Zuordnung je View-Klasse (`LoginView`,
+  `RootView`, alle 6 Admin-Views, `UserDashboardView`) – das ist genau die Information, die
+  Vaadins `NavigationAccessControl` zur Laufzeit auswertet (vgl. Testfall P18).
+
+Ein vollständiger, per Browser/JS getriebener Login-Durchstich (Vaadins `LoginForm` ist eine
+clientseitig gerenderte Web-Komponente, kein klassisches Server-HTML-Formular mit
+scrapebarem CSRF-Feld) bleibt der späteren Playwright-E2E-Suite vorbehalten (kb/08-test-plan.md, P18).
 
 **Build/Test/Run**: siehe kb/04-build-and-run.md (Abschnitt „Backend bauen, testen, lokal
 starten“). `backend/run-backend-tests.sh` für den Docker-losen lokalen Testweg,

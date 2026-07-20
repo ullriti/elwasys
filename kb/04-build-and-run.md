@@ -151,6 +151,17 @@ Gegen eine über `database-init.sql` angelegte Bestands-DB migriert Flyway beim 
 per `baselineOnMigrate` (kein DDL, keine Datenänderung); gegen eine leere DB durchläuft Flyway
 die Baseline-Migration `V1__baseline_schema_0_4_0.sql` normal.
 
+**Achtung seit Phase 3 AP1 (Vaadin-Flow-Portal-Grundgerüst)**: der obige Start (Dev-Modus,
+`vaadin.productionMode` nicht gesetzt) scheitert in DIESER Sandbox-Umgebung beim
+Vaadin-Servlet-Init mit einer `LicenseException` – Vaadin 24.10.x verlangt im Dev-Modus einen
+Online-Lizenzcheck gegen vaadin.com, den diese Umgebung mangels Netzwerkzugriff nicht
+bedienen kann (Details/Klärungsbedarf siehe kb/05-migration-plan.md, Risikotabelle + „Offene
+Fragen"). Betrifft NICHT `backend/run-backend-tests.sh` (erzwingt
+`vaadin.productionMode=true`, siehe kb/03-modules.md, Abschnitt „Portal-UI (Vaadin Flow)“).
+Für einen echten produktiven Start mit funktionierendem Frontend-Bundle:
+`mvn -f backend/pom.xml package -Pproduction` (baut das Bundle, braucht npm/Internetzugang
+zum npm-Registry, aber KEINEN Vaadin-Lizenzcheck – der greift nur im Dev-Modus).
+
 **Backend-Tests seit AP4**: `backend/run-backend-tests.sh` führt jetzt **96/96** Tests aus (52
 aus AP1–AP3 + 44 neu aus AP4: Standort-Token-Auth, REST-API v1, WebSocket-Endpunkt – siehe
 kb/05-migration-plan.md Änderungslog).
