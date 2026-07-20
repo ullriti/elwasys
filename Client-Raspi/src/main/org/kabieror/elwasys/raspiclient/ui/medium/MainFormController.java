@@ -34,7 +34,10 @@ import java.util.concurrent.TimeUnit;
 @SuppressWarnings("serial")
 public class MainFormController extends AbstractMainFormController implements IMainFormStateListener,
         IExecutionStartedListener {
-    private final MainFormStateManager stateManager;
+    // Package-private (statt private): ermöglicht MainFormStateManagerTest im selben
+    // Package den direkten Zugriff auf den Zustandsautomaten, ohne einen Getter für
+    // reinen Testgebrauch in die Produktions-API aufzunehmen.
+    final MainFormStateManager stateManager;
 
     @FXML
     StartupViewController startupPaneController;
@@ -92,8 +95,36 @@ public class MainFormController extends AbstractMainFormController implements IM
      * Konstruktor
      */
     public MainFormController() {
-        // Registriere beim Manager
-        ElwaManager.instance.setMainFormController(this);
+        this(true);
+    }
+
+    /**
+     * Konstruktor.
+     * <p>
+     * Der Parameter erlaubt es, den Controller aufzubauen, ohne den {@link ElwaManager}-
+     * Singleton anzufassen. Das ist nötig, weil bereits das bloße Referenzieren von
+     * {@code ElwaManager.instance} dessen statischen Initialisierer auslöst (Laden der
+     * Konfigurationsdatei, Start des Wartungs-Servers) – für isolierte Unit-Tests des
+     * Zustandsautomaten ({@link MainFormStateManager}, siehe MainFormStateManagerTest im
+     * selben Package) ist das weder nötig noch gewünscht. In Produktion wird ausschließlich
+     * der öffentliche No-Arg-Konstruktor verwendet (durch den FXMLLoader), der unverändert
+     * {@code wireToElwaManager=true} übergibt.
+     * <p>
+     * Aus demselben Grund wird bei {@code wireToElwaManager=false} auch kein echter
+     * {@link InactivityScheduler} angelegt: dessen Konstruktor liest ebenfalls
+     * {@code ElwaManager.instance} (für die Aktivitäts-Listener am Hauptfenster) und würde
+     * die Singleton-Initialisierung sonst über einen zweiten Pfad erzwingen.
+     * {@link MainFormStateManager} benötigt den InactivityScheduler nicht.
+     *
+     * @param wireToElwaManager Ob die Kopplung an {@link ElwaManager#instance} hergestellt
+     *                          werden soll (Produktion: {@code true}). Package-private
+     *                          nutzbar mit {@code false} nur für Tests in diesem Package.
+     */
+    MainFormController(boolean wireToElwaManager) {
+        if (wireToElwaManager) {
+            // Registriere beim Manager
+            ElwaManager.instance.setMainFormController(this);
+        }
 
         this.updateService = Executors.newScheduledThreadPool(4);
         this.waitPaneService = Executors.newSingleThreadScheduledExecutor();
@@ -101,27 +132,29 @@ public class MainFormController extends AbstractMainFormController implements IM
         // Zustandsmanager initiieren
         this.stateManager = new MainFormStateManager(this);
 
-        this.inactivityScheduler = new InactivityScheduler();
+        if (wireToElwaManager) {
+            this.inactivityScheduler = new InactivityScheduler();
 
-        // Auto-Logout initiieren
-        this.registeredUser.addListener((observable, oldValue, newValue) -> {
-            if (this.runningLogoutDelay != null) {
-                this.runningLogoutDelay.cancel();
-            }
-            if (newValue != null) {
-                this.runningLogoutDelay = this.inactivityScheduler.scheduleJob(() -> Platform.runLater(() -> {
-                    // Bei Fehlerzustand darf keine Veränderung am angemeldeten Benutzer vorgenommen werden
-                    if (this.stateManager.getState() == MainFormState.ERROR) {
-                        this.logger.warn("Cannot auto-logout user while in error state");
-                    } else if (this.waiting) {
-                        this.logger.warn("Cannot auto-logout user while waiting for an action to finish");
-                    } else {
-                        this.registeredUser.set(null);
-                    }
-                }), ElwaManager.instance.getConfigurationManager().getAutoLogoutSeconds(), TimeUnit.SECONDS, -1);
-                this.runningLogoutDelay.setName("MainFormController.LogoutJob");
-            }
-        });
+            // Auto-Logout initiieren
+            this.registeredUser.addListener((observable, oldValue, newValue) -> {
+                if (this.runningLogoutDelay != null) {
+                    this.runningLogoutDelay.cancel();
+                }
+                if (newValue != null) {
+                    this.runningLogoutDelay = this.inactivityScheduler.scheduleJob(() -> Platform.runLater(() -> {
+                        // Bei Fehlerzustand darf keine Veränderung am angemeldeten Benutzer vorgenommen werden
+                        if (this.stateManager.getState() == MainFormState.ERROR) {
+                            this.logger.warn("Cannot auto-logout user while in error state");
+                        } else if (this.waiting) {
+                            this.logger.warn("Cannot auto-logout user while waiting for an action to finish");
+                        } else {
+                            this.registeredUser.set(null);
+                        }
+                    }), ElwaManager.instance.getConfigurationManager().getAutoLogoutSeconds(), TimeUnit.SECONDS, -1);
+                    this.runningLogoutDelay.setName("MainFormController.LogoutJob");
+                }
+            });
+        }
     }
 
     /**

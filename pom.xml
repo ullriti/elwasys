@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<groupId>org.kabieror.elwasys</groupId>
+	<artifactId>elwasys-parent</artifactId>
+	<version>0.0.0-local-development</version>
+	<packaging>pom</packaging>
+	<name>elwasys parent</name>
+	<description>Aggregator/parent POM for the elwasys modules (Common, Client-Raspi, Portal).</description>
+
+	<modules>
+		<module>Common</module>
+		<module>Client-Raspi</module>
+		<module>Portal</module>
+	</modules>
+
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<!-- Default Java language level for modules that don't override it
+		     (Common, Client-Raspi). Portal freezes its own compiler source/target
+		     at 1.8 (Vaadin 7/GWT 2.7 is not verified for newer language levels)
+		     via its own project.source.version/project.target.version properties,
+		     independent of this default. -->
+		<maven.compiler.release>21</maven.compiler.release>
+	</properties>
+
+	<!-- Centrally managed versions for dependencies shared across modules.
+	     Modules can still declare the dependency without a <version> to pick
+	     this up, or keep an explicit version to intentionally diverge. -->
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.postgresql</groupId>
+				<artifactId>postgresql</artifactId>
+				<!-- Aligned across Common/Portal: the old drivers predate
+				     SCRAM-SHA-256 support and cannot authenticate against
+				     modern PostgreSQL servers. -->
+				<version>42.6.0</version>
+			</dependency>
+			<dependency>
+				<groupId>org.slf4j</groupId>
+				<artifactId>slf4j-api</artifactId>
+				<version>1.7.12</version>
+			</dependency>
+			<dependency>
+				<groupId>ch.qos.logback</groupId>
+				<artifactId>logback-classic</artifactId>
+				<!-- Newer of the two versions in use (Client-Raspi); Common/Portal
+				     were still on 1.1.3. -->
+				<version>1.2.9</version>
+			</dependency>
+			<dependency>
+				<groupId>ch.qos.logback</groupId>
+				<artifactId>logback-core</artifactId>
+				<version>1.2.9</version>
+			</dependency>
+			<dependency>
+				<groupId>org.apache.commons</groupId>
+				<artifactId>commons-email</artifactId>
+				<!-- Newer of the two versions in use (Client-Raspi); Portal was
+				     still on 1.4. -->
+				<version>1.5</version>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+</project>

@@ -29,7 +29,10 @@ fi
 # the driver can use over TCP.
 sudo -u postgres psql -q -c "ALTER USER postgres WITH PASSWORD 'postgres';"
 
-# 3. Ensure Common is installed, then run the E2E tests headlessly
-mvn -q -B -f "$REPO_ROOT/Common/pom.xml" install -DskipTests
+# 3. Ensure Common (and its parent POM) are installed, then run the E2E tests
+#    headlessly. Building via the root reactor (-pl Common -am) also installs
+#    the aggregator parent POM into the local repo, which a plain
+#    "mvn -f Common/pom.xml install" does not.
+mvn -q -B -f "$REPO_ROOT/pom.xml" install -pl Common -am -DskipTests
 exec xvfb-run -a --server-args="-screen 0 1024x768x24" \
   mvn -B test -Dtest='*E2ETest'

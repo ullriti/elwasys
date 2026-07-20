@@ -1,9 +1,9 @@
 package org.kabieror.elwasys.raspiclient.ui.scheduler;
 
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testng.Assert;
-import org.testng.annotations.Test;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -46,9 +46,9 @@ public class InactivitySchedulerTest {
             throws InterruptedException {
         InactivityFuture future = sched.scheduleJob(() -> executionCounter.incrementAndGet(), rate, timeUnit, 1);
         Thread.sleep(waitMs);
-        Assert.assertTrue(future.isDone());
-        Assert.assertFalse(future.isCancelled());
-        Assert.assertEquals(executionCounter.get(), 1);
+        Assertions.assertTrue(future.isDone());
+        Assertions.assertFalse(future.isCancelled());
+        Assertions.assertEquals(1, executionCounter.get());
 
         sched.shutdown();
     }
@@ -61,25 +61,25 @@ public class InactivitySchedulerTest {
         InactivityFuture future =
                 sched.scheduleJob(() -> this.executionCounter.incrementAndGet(), 50, TimeUnit.MILLISECONDS, 5);
         Thread.sleep(52);
-        Assert.assertEquals(this.executionCounter.get(), 1);
-        Assert.assertFalse(future.isDone());
-        Assert.assertFalse(future.isCancelled());
+        Assertions.assertEquals(1, this.executionCounter.get());
+        Assertions.assertFalse(future.isDone());
+        Assertions.assertFalse(future.isCancelled());
         Thread.sleep(50);
-        Assert.assertEquals(this.executionCounter.get(), 2);
-        Assert.assertFalse(future.isDone());
-        Assert.assertFalse(future.isCancelled());
+        Assertions.assertEquals(2, this.executionCounter.get());
+        Assertions.assertFalse(future.isDone());
+        Assertions.assertFalse(future.isCancelled());
         Thread.sleep(50);
-        Assert.assertEquals(this.executionCounter.get(), 3);
-        Assert.assertFalse(future.isDone());
-        Assert.assertFalse(future.isCancelled());
+        Assertions.assertEquals(3, this.executionCounter.get());
+        Assertions.assertFalse(future.isDone());
+        Assertions.assertFalse(future.isCancelled());
         Thread.sleep(50);
-        Assert.assertEquals(this.executionCounter.get(), 4);
-        Assert.assertFalse(future.isDone());
-        Assert.assertFalse(future.isCancelled());
+        Assertions.assertEquals(4, this.executionCounter.get());
+        Assertions.assertFalse(future.isDone());
+        Assertions.assertFalse(future.isCancelled());
         Thread.sleep(50);
-        Assert.assertEquals(this.executionCounter.get(), 5);
-        Assert.assertTrue(future.isDone());
-        Assert.assertFalse(future.isCancelled());
+        Assertions.assertEquals(5, this.executionCounter.get());
+        Assertions.assertTrue(future.isDone());
+        Assertions.assertFalse(future.isCancelled());
 
         sched.shutdown();
     }
@@ -93,15 +93,15 @@ public class InactivitySchedulerTest {
         Thread.sleep(40);
         sched.onActivityDetected();
         Thread.sleep(20);
-        Assert.assertFalse(future.isDone());
-        Assert.assertEquals(this.executionCounter.get(), 0);
+        Assertions.assertFalse(future.isDone());
+        Assertions.assertEquals(0, this.executionCounter.get());
         sched.onActivityDetected();
         Thread.sleep(45);
-        Assert.assertFalse(future.isDone());
-        Assert.assertEquals(this.executionCounter.get(), 0);
+        Assertions.assertFalse(future.isDone());
+        Assertions.assertEquals(0, this.executionCounter.get());
         Thread.sleep(10);
-        Assert.assertTrue(future.isDone());
-        Assert.assertEquals(this.executionCounter.get(), 1);
+        Assertions.assertTrue(future.isDone());
+        Assertions.assertEquals(1, this.executionCounter.get());
 
         sched.shutdown();
     }
@@ -115,9 +115,9 @@ public class InactivitySchedulerTest {
         Thread.sleep(40);
         future.cancel();
         Thread.sleep(20);
-        Assert.assertEquals(this.executionCounter.get(), 0);
-        Assert.assertTrue(future.isDone());
-        Assert.assertTrue(future.isCancelled());
+        Assertions.assertEquals(0, this.executionCounter.get());
+        Assertions.assertTrue(future.isDone());
+        Assertions.assertTrue(future.isCancelled());
 
         sched.shutdown();
     }

@@ -16,10 +16,11 @@ Modernisierungsprojekts. Vor jeder Arbeit lesen:
 3. Je nach Aufgabe: 01 (Architektur), 02 (Datenmodell), 03 (Module),
    04 (Build/Run), 06 (UI-Tests), 07 (Remote-Umgebung), 08 (Testplan).
 
-**Aktueller Stand (2026-07-20):** Phase 0 (Sicherheitsnetz: Build + E2E-Tests) ist
-abgeschlossen, alle Grundsatzentscheidungen sind gefallen.
-**Nächster Schritt: Phase 1** (Parent-POM, Java 21, JUnit 5, ElwaManager-DI) –
-siehe Roadmap in kb/05.
+**Aktueller Stand (2026-07-20):** Phase 0 (Sicherheitsnetz: Build + E2E-Tests) und
+Phase 1 (Fundament: Parent-POM, Java 21, JUnit 5, ElwaManager-DI) sind abgeschlossen,
+alle Grundsatzentscheidungen sind gefallen.
+**Nächster Schritt: Phase 2** (Backend-Gerüst: Spring-Boot-Modul `backend` parallel
+zum Bestand) – siehe Roadmap in kb/05.
 
 ## Arbeitsregeln
 
@@ -35,10 +36,14 @@ siehe Roadmap in kb/05.
 ## Build & Tests (Remote-Umgebung ist vorbereitet, siehe kb/07)
 
 ```bash
-# Build (Reihenfolge wichtig, noch kein Parent-POM – Phase-1-Aufgabe)
-mvn -f Common/pom.xml install
+# Build (seit Phase 1 gibt es ein Aggregator-Parent-POM, siehe kb/04/kb/05).
+# WICHTIG: "mvn -f Common/pom.xml install" allein installiert die Parent-POM
+# NICHT mit ins lokale Repo – Client-Raspi/Portal scheitern dann beim
+# Auflösen von "common". Immer über den Root-Reactor bauen:
+mvn -f pom.xml install -pl Common -am -DskipTests
 mvn -f Client-Raspi/pom.xml package
 mvn -f Portal/pom.xml package
+# oder komplett: mvn install (von der Repo-Wurzel)
 
 # Client: UI-/E2E-Tests headless (startet PG, seedet DB, Xvfb)
 Client-Raspi/run-ui-tests.sh              # alle

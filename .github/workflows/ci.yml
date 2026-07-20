@@ -27,15 +27,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      # JDK 21, not 17: since Phase 1, Common/Client-Raspi compile at language
+      # level 21 (maven.compiler.release=21 in the parent POM). All three jobs
+      # build Common first, so all three need a >= 21 JDK, even the Portal job
+      # (Portal itself still compiles at 1.8, but the runner JDK must satisfy
+      # Common's release level to build it at all).
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'liberica'
           cache: maven
 
       - name: Build & test Common
-        run: mvn -B -f Common/pom.xml install
+        # Build via the root reactor (-pl Common -am) so the aggregator
+        # parent POM is installed into the local repo too — a plain
+        # "mvn -f Common/pom.xml install" would not install it, and the
+        # Client-Raspi/Portal jobs need it on the runner to resolve Common.
+        run: mvn -B -f pom.xml install -pl Common -am
 
   # ---------------------------------------------------------------------------
   # Raspi-Client – JavaFX TestFX characterization tests + a headless end-to-end
@@ -48,10 +57,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'liberica'
           cache: maven
 
@@ -92,10 +101,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'liberica'
           cache: maven
 

@@ -10,8 +10,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# Ensure the Common library is available in the local Maven repo.
-mvn -q -B -f ../Common/pom.xml install -DskipTests
+# Ensure the Common library (and its parent POM) are available in the local
+# Maven repo. Building via the root reactor (-pl Common -am) also installs
+# the aggregator parent POM, which "mvn -f Common/pom.xml install" alone does
+# not — and Client-Raspi's dependency resolution needs it on the local repo.
+mvn -q -B -f ../pom.xml install -pl Common -am -DskipTests
 
 # The E2E tests seed fixtures via JDBC as the postgres superuser (they need to
 # clean up credit_accounting, which the elwaportal role may not delete). Give

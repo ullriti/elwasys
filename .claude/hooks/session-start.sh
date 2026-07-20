@@ -31,8 +31,11 @@ fi
 
 # --- Warm the Maven cache: install Common, resolve Client deps --------------
 # Container state is cached after the hook, so subsequent builds/tests are fast.
-echo "[elwasys hook] Building/installing Common into local Maven repo"
-mvn -q -B -f Common/pom.xml install -DskipTests
+# Building via the root reactor (-pl Common -am) also installs the aggregator
+# parent POM into the local repo, which a plain "mvn -f Common/pom.xml
+# install" does not — and Client-Raspi/Portal need it to resolve Common.
+echo "[elwasys hook] Building/installing Common (+ parent POM) into local Maven repo"
+mvn -q -B -f pom.xml install -pl Common -am -DskipTests
 
 echo "[elwasys hook] Resolving Client-Raspi dependencies (offline warm-up)"
 mvn -q -B -f Client-Raspi/pom.xml dependency:go-offline -DskipTests || \

@@ -2,22 +2,39 @@
 
 ## Build-Reihenfolge
 
-Es gibt **kein** Aggregator-/Parent-POM. Common muss zuerst ins lokale Maven-Repo
-installiert werden, dann können Client und Portal es als Dependency auflösen.
+Seit Phase 1 (2026-07-20) gibt es ein **Aggregator-/Parent-POM** (`/pom.xml`,
+`packaging=pom`, Module `Common`/`Client-Raspi`/`Portal`, gemeinsame Version
+`0.0.0-local-development`, zentrale `dependencyManagement` für
+postgresql/logback/slf4j-api/commons-email, `maven.compiler.release=21` als
+Default). Wichtig: Ein isoliertes `mvn -f Common/pom.xml install` installiert
+**nur** das `common`-Artefakt ins lokale Repo, **nicht** die Parent-POM selbst –
+andere Module, die `common` später als Dependency auflösen (Client-Raspi,
+Portal), scheitern dann mit `Could not find artifact
+org.kabieror.elwasys:elwasys-parent:pom:...`. Deshalb immer über den
+Root-Reactor bauen, wenn Common isoliert installiert werden soll:
 
 ```bash
-# 1. Common (Bibliothek) installieren
-cd Common && mvn install
+# 1. Common (+ Parent-POM) installieren – WICHTIG: über den Root-Reactor,
+#    nicht "mvn -f Common/pom.xml install" allein (siehe Hinweis oben)
+mvn -f pom.xml install -pl Common -am -DskipTests
 
 # 2a. Raspi-Client bauen (fat-jar)
-cd ../Client-Raspi && mvn package
+mvn -f Client-Raspi/pom.xml package
 #   → target/raspi-client-<version>-jar-with-dependencies.jar
 
 # 2b. Portal bauen (WAR) bzw. lokal starten
-cd ../Portal && mvn package        # → target/*.war
+mvn -f Portal/pom.xml package      # → target/*.war
 #   oder Entwicklungsserver:
-mvn jetty:run                      # http://localhost:8080
+mvn -f Portal/pom.xml jetty:run    # http://localhost:8080
+
+# Alternative: kompletter Reactor-Build aller drei Module in einem Aufruf
+mvn install   # von der Repo-Wurzel aus
 ```
+
+Portal friert sein javac-Sprachlevel weiterhin explizit auf 1.8
+(`project.source.version`/`-target.version` in `Portal/pom.xml`) ein –
+unabhängig vom `maven.compiler.release=21`-Default des Parents (Vaadin 7/GWT 2.7
+ist nicht für neuere Sprachlevel getestet). Der Build-JDK selbst ist weiterhin 21.
 
 > ✅ Portal-Build in der Remote-Umgebung repariert (2026-07-19), siehe unten.
 
@@ -58,8 +75,8 @@ sudo -u postgres psql -c "ALTER USER elwaportal WITH PASSWORD 'elwaportal';"
 # 2. Config bereitstellen (/etc/elwaportal/elwaportal.properties)
 #    database.user=elwaportal, database.password=elwaportal, database.name=elwasys
 
-# 3. Common installieren, Portal starten
-mvn -f Common/pom.xml install -DskipTests
+# 3. Common (+ Parent-POM) installieren, Portal starten
+mvn -f pom.xml install -pl Common -am -DskipTests
 mvn -f Portal/pom.xml jetty:run        # http://localhost:8080  (Login: admin/admin)
 ```
 
@@ -108,20 +125,46 @@ Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).
 
 ## CI (GitHub Actions)
 
-`.github/workflows/ci.yml` *(seit 2026-07-20)*:
+`.github/workflows/ci.yml` *(seit 2026-07-20, JDK-Version am 2026-07-20 im
+Phase-1-QA-Review korrigiert)*:
 - Trigger: jeder Pull Request + Pushes auf `master`
 - 3 parallele Jobs (Common / Client / Portal): Build + Tests, spiegeln die lokalen
   Runner-Skripte (`run-ui-tests.sh` etc., siehe kb/06)
+- **JDK 21** (Liberica) in **allen drei** Jobs – nicht mehr JDK 17: Seit Phase 1
+  verlangt der Parent-POM-Default `maven.compiler.release=21` für Common/
+  Client-Raspi; ein JDK 17 kann `--release 21` nicht bedienen
+  (`invalid target release: 21`). Da alle drei Jobs Common zuerst bauen
+  (`mvn -f pom.xml install -pl Common -am`), brauchen auch Client- und
+  Portal-Job ein >= 21-JDK, obwohl Portal selbst weiterhin mit Sprachlevel 1.8
+  kompiliert.
 
-`.github/workflows/maven-publish.yml` (Release):
+`.github/workflows/maven-publish.yml` (Release) *(seit 2026-07-20: Parent-POM-Versionierung;
+JDK-Version am 2026-07-20 im Phase-1-QA-Review korrigiert)*:
 - Trigger: **nur** bei `release: created`
-- JDK 17 (Liberica), ersetzt Version im POM/Utilities durch Tag-Namen
-- Baut Common → Client-Raspi, lädt das fat-jar als Release-Asset hoch
-- Umstellung auf Parent-POM-Versionierung ist Phase-1-Aufgabe (siehe kb/05)
+- **JDK 21** (Liberica) – aus demselben Grund wie oben (`mvn install -pl
+  Common,Client-Raspi -am` baut Common mit, das Sprachlevel 21 verlangt)
+- `mvn versions:set -DnewVersion=<tag>` im Root setzt die Version in Parent-POM
+  **und** allen drei Modulen konsistent (kein sed-Hack über mehrere POMs mehr);
+  `Utilities.APP_VERSION` ist eine reine Java-Konstante und bleibt per
+  `sed -i -E` gesetzt
+- Reactor-Build `mvn install -pl Common,Client-Raspi -am` (installiert dabei
+  auch die neu versionierte Parent-POM), lädt das fat-jar als Release-Asset hoch
 
 ## Bekannte Build-Risiken
 
 - Vaadin 7 / GWT 2.7 Widgetset-Compilation: langsam, speicherhungrig, alte Repos
   (`maven.vaadin.com`, teils `http://`), ggf. nicht mehr erreichbar.
 - Alte Plugin-/Dependency-Versionen (Postgres 9.3-Treiber im Portal, unirest 1.x).
-- Gemischte Java-Level (8/16) und gemischte Test-Frameworks (JUnit + TestNG).
+- **Raspi-Terminal-Laufzeit vs. Build-Sprachlevel**: `setup.sh` installiert seit
+  Phase 1 `bellsoft-java21-runtime-full` (armhf) statt `-java17-`, weil das
+  Client-Raspi-fat-jar seit dem Java-21-Sprachlevel-Sprung (s.o.) Bytecode
+  Major-Version 65 erzeugt und auf einem Java-17-JRE mit
+  `UnsupportedClassVersionError` fehlschlagen würde. Wurde im Phase-1-QA-Review
+  gefunden (Gefahr: bestehende, bereits mit `setup.sh` provisionierte
+  Raspberry-Pi-Terminals laufen noch mit dem alten Java-17-JRE – ein
+  Fat-Jar-Update ohne erneuten `setup.sh`-Lauf bzw. manuelles JRE-Upgrade auf
+  diesen Geräten würde das Terminal beim Start crashen lassen). Für neu
+  provisionierte/aktualisierte Terminals ist das jetzt behoben; ein
+  JRE-Upgrade-Pfad für bereits im Feld befindliche Geräte ist **nicht**
+  Bestandteil dieses Fixes und sollte vor dem nächsten Release explizit
+  geklärt werden (z. B. in `setup.sh`/Update-Doku ergänzen).

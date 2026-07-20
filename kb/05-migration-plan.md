@@ -4,9 +4,10 @@
 > vollständige **Komponenten-Inventur**, die **Zielarchitektur**, die **Reihenfolge** der
 > Schritte und den **Fortschritt** fest.
 >
-> Stand 2026-07-20: Phase 0 (Sicherheitsnetz) ist abgeschlossen. Auf Basis der neuen
-> Vorgaben des Auftraggebers wurde der Plan von einer reinen „Upgrade-Liste“ zu einem
-> Zielarchitektur-getriebenen Modernisierungsplan überarbeitet.
+> Stand 2026-07-20: Phase 0 (Sicherheitsnetz) und Phase 1 (Fundament: Build &
+> Konsolidierung) sind abgeschlossen. Auf Basis der neuen Vorgaben des Auftraggebers wurde
+> der Plan von einer reinen „Upgrade-Liste“ zu einem Zielarchitektur-getriebenen
+> Modernisierungsplan überarbeitet.
 
 ## Rahmenbedingungen (Vorgaben des Auftraggebers, 2026-07-20)
 
@@ -177,18 +178,56 @@ Wesentliche Änderungen gegenüber heute:
 - [x] Reproduzierbarer Build aller drei Module; PR-CI (3 Jobs) grün
 - [x] Zustandsübergänge der Client-State-Machine über die E2E-Suite abgesichert
 
-### Phase 1 – Fundament (Build & Konsolidierung)
+### Phase 1 – Fundament (Build & Konsolidierung) *(abgeschlossen 2026-07-20)*
 Ziel: einheitliche, moderne Basis, auf der das neue Backend-Modul aufsetzen kann.
-- [ ] Aggregator-Parent-POM (Module: Common, Client-Raspi, Portal; einheitliche Versionen,
+- [x] Aggregator-Parent-POM (Module: Common, Client-Raspi, Portal; einheitliche Versionen,
       `dependencyManagement`, Properties); Release-Workflow (`maven-publish.yml`) auf
-      Parent-Versionierung umstellen
-- [ ] Java-Level vereinheitlichen auf **21** (Common 8 → 21, Client 16 → 21, Portal bleibt
-      vorerst 8-kompatibel gebaut, bis es abgelöst ist – prüfen, ob Vaadin 7 unter 21 baut,
-      sonst Portal im Alt-Level einfrieren)
-- [ ] Testframeworks vereinheitlichen (JUnit 5; TestNG-Reste migrieren)
-- [ ] `ElwaManager`-Singleton per DI entkoppeln → isolierte Charakterisierungs-Tests der
-      State-Machine (`MainFormStateManager`) nachziehen (aus Phase 0 übernommen)
-- [ ] CI an Parent-POM anpassen (ein Build-Job + Test-Jobs)
+      Parent-Versionierung umstellen *(erledigt 2026-07-20, siehe „Änderungslog“ unten)*
+- [x] Java-Level vereinheitlichen auf **21** (Common 8 → 21 ✅; Client-Raspi 16 → 21 ✅;
+      Portal bleibt bewusst 8-kompatibel gebaut, bis es in Phase 3 abgelöst ist – Vaadin 7/GWT
+      baut unter JDK 21 mit Sprachlevel 8 problemlos, Sprachlevel bleibt explizit eingefroren)
+      *(erledigt 2026-07-20)*
+- [x] Testframeworks vereinheitlichen (JUnit 5; TestNG-Reste migrieren) – ✅ erledigt
+      2026-07-20: einzige TestNG-Testklasse (`InactivitySchedulerTest`) nach JUnit 5
+      migriert und von `src/main` (wurde von Surefire nie ausgeführt!) nach `src/test`
+      verschoben; TestNG- **und** die inzwischen ungenutzte JUnit-4-Dependency aus
+      Client-Raspi/pom.xml entfernt. Common hat nur einen vollständig auskommentierten
+      JUnit-Test (`MaintenanceConnectionTest`, kein `@Test` aktiv) – nichts zu migrieren,
+      bleibt vorerst so dokumentiert.
+- [x] `ElwaManager`-Singleton per DI entkoppeln → isolierte Charakterisierungs-Tests der
+      State-Machine (`MainFormStateManager`) nachziehen (aus Phase 0 übernommen) – ✅ erledigt
+      2026-07-20: minimaler DI-Seam (package-private Test-Konstruktor `MainFormController`,
+      der das Verdrahten mit `ElwaManager.instance`/`InactivityScheduler` überspringt), 12 neue
+      JUnit-5-Tests ohne TestFX/Xvfb/DB decken alle Zustandsübergänge der State-Machine ab.
+      Korrektur (QA-Review 2026-07-20): Voll-Suite ist **37/37** grün (21 vorher + 12 neu +
+      4 migrierte `InactivityScheduler`-Tests, die vorher fälschlich nicht mitgezählt waren –
+      siehe die beiden „33/33"-Korrekturen im Änderungslog/Status-Log unten)
+- [x] CI an Parent-POM angepasst *(2026-07-20)*: die bestehende 3-Job-Struktur
+      (Common/Client/Portal, kleinstes Risiko, Verhalten unverändert) wurde beibehalten statt
+      auf einen kombinierten Reactor-Job umzustellen; alle Stellen, die Common isoliert
+      installieren (CI-Job, `run-ui-tests.sh`, `run-client-e2e.sh`,
+      `run-cross-component-e2e.sh`, `start-portal.sh`, SessionStart-Hook), bauen jetzt über
+      `mvn -f pom.xml install -pl Common -am`, damit die Parent-POM mit ins lokale Repo
+      installiert wird (sonst schlägt die Abhängigkeitsauflösung von `common` in
+      Client-Raspi/Portal fehl)
+- [x] **QA-Review-Fix (2026-07-20)**: Zwei echte Regressionen gefunden und behoben, die die
+      lokale Verifikation nicht aufgedeckt hätte, weil die Remote-Dev-Umgebung bereits
+      systemweit JDK 21 hat:
+      1. `.github/workflows/ci.yml` (alle 3 Jobs) und `.github/workflows/maven-publish.yml`
+         setzten weiterhin JDK 17 auf (`actions/setup-java`), obwohl Common/Client-Raspi seit
+         diesem Arbeitspaket mit `maven.compiler.release=21` bauen – ein JDK 17 kann
+         `--release 21` nicht bedienen, echte GitHub-Actions-Läufe wären mit
+         `invalid target release: 21` fehlgeschlagen. Auf JDK 21 (Liberica) angehoben.
+      2. `Client-Raspi/setup.sh` installiert auf frisch provisionierten Raspberry-Pi-Terminals
+         `bellsoft-java17-runtime-full` (armhf) – das Client-fat-jar hat durch den
+         Sprachlevel-Sprung aber jetzt Bytecode-Major-Version 65 (Java 21) und würde auf
+         einem Java-17-JRE mit `UnsupportedClassVersionError` abstürzen. Auf
+         `bellsoft-java21-runtime-full` angehoben (für armhf verfügbar, inkl. LibericaFX).
+         **Restrisiko** (nicht Teil dieses Fixes, siehe Risikotabelle unten): bereits im Feld
+         befindliche Terminals, die nicht erneut `setup.sh` durchlaufen, haben weiterhin nur
+         ein Java-17-JRE installiert – ein reines Fat-Jar-Update ohne JRE-Upgrade auf diesen
+         Geräten würde den Terminal-Start brechen. Muss vor dem nächsten Client-Release
+         geklärt sein (z. B. JRE-Upgrade-Schritt in die Update-Prozedur aufnehmen).
 
 ### Phase 2 – Backend-Gerüst (parallel zum Bestand)
 Ziel: neues Modul `backend` läuft produktionsnah **neben** Client & Portal auf derselben DB.
@@ -252,6 +291,45 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
 - [ ] Release-Pipeline final: Terminal-fat-jar + Backend-Image je Release
 - [ ] Doku-Endstand: READMEs, kb/, setup-Anleitungen auf Zielarchitektur
 
+### Phase 6 – Produktivumschaltung (Cutover)
+Ziel: das **bestehende** Produktiv-Setup (physische Raspi-Terminals im Feld + laufendes
+Portal/DB) auf die neue Architektur umstellen – ohne Datenverlust und mit klarem
+Rollback-Pfad, statt nur eine neue Umgebung danebenzustellen.
+- [ ] Migrationsskripte für den Produktivbestand: über die Flyway-Baseline (Phase 2) hinaus
+      alles vorbereiten, was der eigentliche Umzug bestehender Daten braucht (z. B.
+      Standort-Tokens für Terminals anlegen statt DB-Credentials, veraltete
+      `locations`-Registrierungen bereinigen); dazu ein Rückbau-/Rollback-Skript für den
+      Fall eines abgebrochenen Cutovers
+- [ ] Terminals neu aufsetzen: alle im Feld befindlichen Raspberry-Pi-Terminals auf den
+      neuen Unterbau bringen (Java 21, Backend-URL/Token statt DB-Credentials). Löst dabei
+      das in Phase 1 dokumentierte Restrisiko auf: im Feld läuft bislang nur ein
+      Java-17-JRE, das neue Client-Jar braucht Sprachlevel 21 – JRE-Upgrade ist daher
+      zwingender erster Schritt vor jedem Rollout eines mit Sprachlevel 21 gebauten
+      Release-Jars auf ein Bestandsgerät (siehe Risikotabelle)
+- [ ] Upgrade-Skript für Terminals (`update.sh` o. ä.): künftige Updates vereinfachen (neues
+      fat-jar laden, Dienst neu starten), ohne dass vor Ort jedes Mal das komplette
+      (interaktive) `setup.sh` erneut durchlaufen werden muss
+- [ ] Optional, aber empfohlen: Auto-Update mit Rollback für Terminals – der Client prüft
+      periodisch (oder auf Anstoß des Backends) auf eine neue Version, lädt sie, wechselt
+      um und verifiziert den erfolgreichen Start (State-Machine erreicht `SELECT_DEVICE`
+      innerhalb einer Frist); schlägt das fehl, automatischer Rollback auf die zuvor
+      bekannt funktionierende Version (altes Jar + Konfiguration bleiben bis zur nächsten
+      erfolgreichen Aktualisierung als Fallback erhalten) – wichtig, weil Terminals
+      unbeaufsichtigt im Feld stehen und ein fehlgeschlagenes Update ohne Rollback ein
+      Gerät lahmlegen würde
+- [ ] Portal/Backend brauchen **kein** eigenes Upgrade-/Rollback-Skript: Rollout und
+      Rollback laufen über die gewählte Betriebsplattform (Docker-Compose-Redeploy bzw.
+      Kubernetes-Rolling-Update/Helm-Rollback, siehe Zielarchitektur „Betriebsmodell
+      Backend“ – das übernehmen die Plattformen selbst). Stattdessen reicht hier eine
+      automatisierte Smoke-Test-Suite, die nach jedem Deployment automatisch läuft und die
+      Funktionsfähigkeit bestätigt (z. B. Health-/Actuator-Endpoint + eine schlanke
+      Teilmenge der Playwright-Suite gegen die frisch deployte Umgebung), bevor ein Rollout
+      als erfolgreich gilt bzw. bevor manuell/automatisch zurückgerollt wird
+- [ ] Cutover-Reihenfolge festlegen und proben (Strangler-Muster aus den Leitgedanken
+      beibehalten: z. B. zuerst Portal/Backend umstellen und beobachten, dann Terminals
+      schrittweise, nicht alle auf einmal); Wartungsfenster/Nutzerkommunikation planen,
+      falls für den Umschaltzeitpunkt nötig
+
 ## Risiken & Gegenmaßnahmen
 
 | Risiko | Gegenmaßnahme |
@@ -262,6 +340,9 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
 | SHA1→Argon2-Migration sperrt Nutzer aus | Re-Hash beim ersten Login (SHA1 wird verifiziert, dann ersetzt); Admin-Reset-Flow bleibt |
 | Parallelbetrieb Alt/Neu auf einer DB (Phase 2–4) | Backend anfangs nur lesend/additiv; Schreibpfade erst umstellen, wenn der jeweilige Alt-Pfad abgeschaltet wird; keine Schema-Brüche vor Phase 5 |
 | Vaadin-7-Portal baut nicht unter Java 21 (Phase 1) | Portal bis zur Ablösung auf altem Sprachlevel einfrieren – es wird ohnehin ersetzt |
+| Bereits im Feld befindliche Raspi-Terminals haben nur ein Java-17-JRE (aus einem früheren `setup.sh`-Lauf), das Client-fat-jar baut seit Phase 1 aber mit Sprachlevel 21 (Bytecode-Major 65) | `setup.sh` installiert bei Neu-Provisionierung jetzt `bellsoft-java21-runtime-full` (2026-07-20 gefixt); der Update-Pfad für bereits provisionierte Geräte (JRE-Upgrade vor dem ersten Sprachlevel-21-Release) ist Teil der Terminal-Neuaufsetzung in Phase 6 |
+| Terminal-Auto-Update (Phase 6) schlägt fehl oder bricht mitten im Update ab – Gerät steht unbeaufsichtigt im Feld | Vorherige, bekannt funktionierende Version (Jar + Konfiguration) bleibt als Fallback erhalten; Update gilt erst nach verifiziertem erfolgreichem Start (State-Machine erreicht `SELECT_DEVICE`) als abgeschlossen, sonst automatischer Rollback |
+| Cutover auf das neue Produktiv-Setup (Phase 6) verliert Bestandsdaten oder legt Terminals/Portal lahm | Migrationsskripte + eigenes Rollback-Skript für den Cutover; Strangler-Reihenfolge (erst Portal/Backend, dann Terminals schrittweise) statt Big-Bang-Umstellung aller Komponenten gleichzeitig |
 
 ## Entscheidungen (Auftraggeber)
 - **2026-07-19**: UI-Tests parallel für Client (TestFX) **und** Portal (E2E) aufbauen. ✅
@@ -287,6 +368,12 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
   gewohnte Struktur wiedererkennbar bleibt.
 - **2026-07-20**: **Betriebsmodell Backend**: Betrieb als **Docker-Compose-Stack oder
   Kubernetes**; neben Compose ist ein **Helm Chart vorzubereiten**.
+- **2026-07-20**: **Neue Phase 6 „Produktivumschaltung“ ergänzt**: Der eigentliche Umbau des
+  bestehenden Produktiv-Setups (nicht nur eine neue Umgebung danebenstellen) ist ein
+  eigener Schritt nach Phase 5. Terminals brauchen ein eigenes Upgrade-Skript (optional mit
+  Auto-Update + Rollback), weil sie unbeaufsichtigt im Feld stehen. Portal/Backend brauchen
+  **kein** eigenes Upgrade-/Rollback-Skript, weil das Docker/Kubernetes/Helm ohnehin selbst
+  übernehmen – dort reichen automatisierte Smoke-Tests nach jedem Deployment.
 
 ## Offene Fragen / mit Auftraggeber klären
 *Derzeit keine – alle Grundsatzfragen sind entschieden (siehe „Entscheidungen“).*
@@ -300,3 +387,8 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
 | 2026-07-20 | **Entscheidungen eingearbeitet**: Vaadin Flow bestätigt; `ui/small` bleibt (Display im Einsatz); App-Reste (`elwaapi`) werden entfernt; fhem-Frage präzisiert (inkl. Abhängigkeit der Testharness vom fhem-Simulator) |
 | 2026-07-20 | **Restentscheidungen eingearbeitet**: fhem UND deCONZ bleiben beide unterstützt (E2E künftig mit beiden Simulatoren, deCONZ-Sim in Phase 4); App-Entfernung bestätigt; Nutzungsprofil Portal dokumentiert (nur Admins → Admin-Views priorisiert). Einzige offene Frage: Betriebsmodell Backend |
 | 2026-07-20 | **Letzte Grundsatzfragen entschieden**: Portal-Struktur bleibt erhalten, UX-Verbesserungen erwünscht; Betrieb als Docker-Compose-Stack oder Kubernetes (Helm Chart vorbereiten). Keine offenen Grundsatzfragen mehr – Phase 1 kann starten |
+| 2026-07-20 | **Phase 1: Testframeworks vereinheitlicht** – `InactivitySchedulerTest` (einzige TestNG-Klasse) nach JUnit 5 migriert und von `src/main` nach `src/test` verschoben (lief zuvor gar nicht unter Surefire); TestNG- und ungenutzte JUnit-4-Dependency aus Client-Raspi/pom.xml entfernt |
+| 2026-07-20 | **Phase 1 (Build/Backend-Teil)**: Aggregator-Parent-POM (`/pom.xml`) angelegt (gemeinsame Version `0.0.0-local-development`, `dependencyManagement` für postgresql/logback/slf4j-api/commons-email, `maven.compiler.release=21`-Default); Common/Client-Raspi/Portal erben jetzt davon (groupId/version nicht mehr redundant, common-Dependency via `${project.version}`). Common auf Java 21 gehoben (reine POJO/JDBC-Bibliothek, keine Quelländerungen nötig); Portal friert Sprachlevel weiterhin explizit auf 1.8 ein (Vaadin 7/GWT 2.7). Wichtiger Build-Fallstrick gefunden und behoben: `mvn -f Common/pom.xml install` installiert die Parent-POM NICHT mit ins lokale Repo, daher überall auf `mvn -f pom.xml install -pl Common -am` umgestellt (CI-Common-Job, `run-ui-tests.sh`, `run-client-e2e.sh`, `run-cross-component-e2e.sh`, `Portal/e2e/scripts/start-portal.sh`, SessionStart-Hook). Release-Workflow (`maven-publish.yml`) auf `mvn versions:set` umgestellt statt sed-Hack über mehrere POMs (APP_VERSION in Utilities.java bleibt eine Java-Konstante, weiterhin per sed gesetzt, aber `-iE`-Tippfehler behoben, der eine stille Backup-Datei erzeugte). Alle drei Module bauen grün (`mvn package`/`install`) |
+| 2026-07-20 | **Phase 1 (Client-Raspi Java 21 + ElwaManager-DI)**: Client-Raspi-Sprachlevel 16 → 21 gehoben (keine Quelländerungen nötig); minimaler DI-Seam für `ElwaManager` eingeführt (package-private Test-Konstruktor `MainFormController(boolean wireToElwaManager)`, der das Verdrahten mit `ElwaManager.instance`/`InactivityScheduler` in Tests überspringt, Produktionsverhalten unverändert); 12 neue isolierte JUnit-5-Charakterisierungstests für `MainFormStateManager` (kein TestFX/Xvfb/DB nötig). Volle Client-Suite grün (~~33/33~~ **37/37** – die 33 zählte die 4 migrierten `InactivityScheduler`-Tests nicht mit, siehe QA-Review-Eintrag unten) |
+| 2026-07-20 | **Phase 1 QA-Review** (dieser Durchgang): Diff-Review aller Commits gegen CLAUDE.md/Roadmap; DI-Seam in `MainFormController` verifiziert (Produktionspfad `this(true)` unverändert, Verhalten 1:1 wie vorher); 12 neue State-Machine-Tests stichprobenartig gelesen – isoliert, kein `ElwaManager.instance`, kein DB-/Netzwerkzugriff; Portal-Bytecode nach dem Build tatsächlich als Class-Major-Version 52 (Java 8) verifiziert (nicht vom Parent-Default 21 überschrieben). Volle Testsuiten grün: Client 37/37 (`run-ui-tests.sh`), Cross-Component 3/3, Portal-E2E 18/18 (Playwright), `mvn package` für Client und Portal grün. **Zwei echte Regressionen gefunden und behoben** (Details oben unter Phase-1-Roadmap "QA-Review-Fix" sowie in 04-build-and-run.md): (1) CI/Release-Workflows setzten noch JDK 17 auf, obwohl Common/Client-Raspi jetzt Sprachlevel 21 verlangen – auf JDK 21 angehoben; (2) `setup.sh` installierte auf neu provisionierten Raspi-Terminals noch ein Java-17-JRE, das das jetzt mit Sprachlevel 21 gebaute Client-fat-jar nicht mehr ausführen könnte – auf `bellsoft-java21-runtime-full` angehoben (Restrisiko für bereits im Feld befindliche, nicht neu provisionierte Geräte bleibt in der Risikotabelle dokumentiert). Zusätzlich zwei Dokumentationskorrekturen: Test-Anzahl 33/33 → 37/37 in kb/05 und kb/README.md; `CLAUDE.md`-Abschnitt „Aktueller Stand" von „Phase 0 abgeschlossen/Phase 1 nächster Schritt" auf „Phase 1 abgeschlossen" aktualisiert. Phase 1 wird hiermit formal als abgeschlossen markiert. |
+| 2026-07-20 | **Neue Roadmap-Phase 6 „Produktivumschaltung“ ergänzt** (auf Auftraggeber-Wunsch): eigener Schritt nach Phase 5 für den tatsächlichen Umbau des bestehenden Produktiv-Setups (nicht nur eine neue Umgebung danebenstellen) – Migrationsskripte für den Bestand, Terminal-Neuaufsetzung (löst das Java-17-Restrisiko aus Phase 1 endgültig auf), ein Upgrade-Skript für Terminals sowie optional Auto-Update mit Rollback (Terminals stehen unbeaufsichtigt im Feld). Für Portal/Backend explizit **kein** eigenes Upgrade-/Rollback-Skript vorgesehen, da Docker-Compose/Kubernetes/Helm Rollout und Rollback selbst übernehmen – dort genügen automatisierte Smoke-Tests nach jedem Deployment. Risikotabelle um zwei neue Einträge (Terminal-Auto-Update-Fehlschlag, Cutover-Datenverlust) ergänzt |
