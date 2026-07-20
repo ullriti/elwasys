@@ -83,13 +83,16 @@ Zielarchitektur). Kein Reactor-Bezug zu `common` – das Backend bekommt sein ei
 Datenmodell (Entities folgen im nächsten Arbeitspaket), keine Wiederverwendung der alten
 `Common`-POJOs/`DataManager`.
 
-**Aktueller Stand (AP3, 2026-07-20)**: Actuator-Health, Flyway-Baseline gegen das
+**Aktueller Stand (AP4, 2026-07-20)**: Actuator-Health, Flyway-Baseline gegen das
 Bestandsschema (AP1), JPA-Entities/Repositories und die Kern-Geschäftslogik (Abrechnung,
-Berechtigungen, Preisberechnung, Execution-Lebenszyklus) als Services (AP2), sowie Auth
+Berechtigungen, Preisberechnung, Execution-Lebenszyklus) als Services (AP2), Auth
 (Argon2id-Hashing + SHA1-Migrationspfad, session-basiertes Login-Fundament) mit Spring
-Security (AP3). Noch **keine** fachlichen REST-Endpunkte (folgen in AP4 laut Roadmap) – die
-Services/das Auth-Fundament in diesem Stand werden ausschließlich von Tests konsumiert, das
-Backend schreibt produktiv noch nichts.
+Security (AP3), sowie seit AP4 eine erste fachliche REST-API v1 (`/api/v1/**`,
+Standort-Token-Auth) + ein WebSocket-Endpunkt-Fundament für Terminals (siehe Abschnitt
+„REST-API v1 + Standort-Token-Auth + WebSocket“ unten). Wird weiterhin von niemandem
+produktiv konsumiert (Terminals sprechen bis Phase 4 laut Roadmap weiter direkt SQL) – das
+Backend schreibt produktiv noch nichts, außer wenn ein Terminal die neue API testweise
+aufruft.
 
 ### Datenmodell & Geschäftslogik (AP2)
 
@@ -212,13 +215,31 @@ erbt und ein zweiter Parent in Maven nicht möglich ist):
   kb/02-data-model.md
 - `src/main/resources/db/migration/V2__widen_users_password_column.sql` – `users.password`
   `VARCHAR(50)` → `VARCHAR(255)` (AP3, Argon2id-Hashes brauchen ~97 Zeichen, siehe oben)
-- `src/main/java/.../backend/domain/` – JPA-Entities (AP2, siehe oben)
-- `src/main/java/.../backend/repository/` – Spring-Data-Repositories (AP2)
+- `src/main/resources/db/migration/V3__create_terminal_tokens.sql` – neue Tabelle
+  `terminal_tokens` (AP4, siehe kb/02-data-model.md)
+- `src/main/resources/application-token-cli.yml` – Profil `token-cli` für
+  `TerminalTokenCliRunner` (AP4, `spring.main.web-application-type: none`)
+- `src/main/java/.../backend/domain/` – JPA-Entities (AP2, siehe oben) + `TerminalTokenEntity`
+  (AP4)
+- `src/main/java/.../backend/repository/` – Spring-Data-Repositories (AP2) +
+  `TerminalTokenRepository` (AP4)
 - `src/main/java/.../backend/service/` – Geschäftslogik-Services (AP2)
 - `src/main/java/.../backend/exception/` – `NotEnoughCreditException` (AP2)
 - `src/main/java/.../backend/auth/` – Auth (AP3, siehe oben):
   `PasswordVerificationService`, `AuthProperties`, `ElwasysAuthenticationProvider`,
   `ElwasysUserPrincipal`, `SecurityConfig`
+- `src/main/java/.../backend/auth/terminal/` – Standort-Token-Auth (AP4, siehe unten):
+  `TerminalTokenService`, `IssuedTerminalToken`, `TerminalPrincipal`,
+  `TerminalAuthenticationToken`, `TerminalTokenAuthenticationFilter`,
+  `TerminalApiSecurityConfig`, `TerminalTokenCliRunner`
+- `src/main/java/.../backend/api/` – REST-API v1 (AP4, siehe unten): Controller
+  (`CardLoginController`, `LocationController`, `DeviceController`, `ExecutionController`,
+  `UserController`), `api/dto/` (DTOs), `api/exception/` (`ApiException`-Hierarchie),
+  `ApiExceptionHandler`, `TerminalScopeGuard`, `OpenApiConfig`
+- `src/main/java/.../backend/ws/` – WebSocket-Endpunkt (AP4, siehe unten):
+  `TerminalWsMessage`/`TerminalWsMessageType` (Protokoll), `TerminalWebSocketHandler`,
+  `TerminalHandshakeInterceptor`, `TerminalConnectionRegistry`, `TerminalHeartbeatScheduler`,
+  `TerminalWebSocketConfig`
 - `src/test/java/.../backend/BackendApplicationTest.java` – Integrationstest (Spring-Kontext +
   Flyway-Migration gegen echtes PostgreSQL, prüft Health-Endpoint + Baseline-Schema/Seeds)
 - `src/test/java/.../backend/support/TestPostgres.java` – DB-Bereitstellung für Tests:
@@ -234,7 +255,158 @@ erbt und ein zweiter Parent in Maven nicht möglich ist):
   `Utilities.sha1`-Routine), `ElwasysAuthenticationProviderTest` (DB-Integrationstests,
   Re-Hash-Flag AUS), `ElwasysAuthenticationProviderRehashEnabledTest` (Flag per
   `@TestPropertySource` gezielt AN), `SecurityConfigTest` (MockMvc-End-to-End über die
-  echte HTTP-/Servlet-Schicht)
+  echte HTTP-/Servlet-Schicht), `terminal/TerminalTokenServiceTest` (AP4)
+- `src/test/java/.../backend/api/` – REST-API-Tests (AP4, siehe unten):
+  `TerminalApiSecurityTest`, `CardLoginControllerTest`, `DeviceControllerTest`,
+  `ExecutionControllerTest`
+- `src/test/java/.../backend/support/AbstractApiIT.java` – Test-Support (AP4): Basisklasse
+  für REST-API-Integrationstests (MockMvc, beide Sicherheitsketten) + Fixture-Helfer
+  (Standort/Token/Benutzer/Gerät/Programm anlegen)
+- `src/test/java/.../backend/ws/TerminalWebSocketTest.java` – WebSocket-End-to-End-Test (AP4,
+  siehe unten)
+
+### REST-API v1 + Standort-Token-Auth + WebSocket (AP4, 2026-07-20)
+
+Erste fachliche HTTP-/WS-Schicht des Backends (siehe kb/05-migration-plan.md, Roadmap-Punkte
+5+6). Terminals sprechen bis Phase 4 weiter direkt SQL (Alt-Code unverändert) – diese Schicht
+wird in Phase 2 von niemandem produktiv konsumiert, sondern ist das Fundament, gegen das die
+Terminal-Modernisierung (Phase 4) später implementiert.
+
+#### Standort-Token-Auth
+
+Package `backend/.../auth/terminal/`:
+- `TerminalTokenEntity`/`TerminalTokenRepository` – siehe kb/02-data-model.md
+  (`terminal_tokens`).
+- `TerminalTokenService` – erzeugt Tokens (`createToken`: 32 Byte {@code SecureRandom},
+  Base64-URL-kodiert, Präfix `elwt_`), prüft sie (`authenticate`: SHA-256-Hash-Lookup,
+  aktualisiert `last_used_at`), widerruft sie (`revoke`). Nur der Hash wird gespeichert, das
+  Klartext-Token existiert nur im Rückgabewert von `createToken` (`IssuedTerminalToken`).
+- `TerminalPrincipal` (record: `tokenId`, `locationId`, `locationName`) +
+  `TerminalAuthenticationToken` – der Standort-Kontext im `SecurityContext` eines
+  authentifizierten Terminal-Requests.
+- `TerminalTokenAuthenticationFilter` – liest `Authorization: Bearer <token>`, prüft über
+  `TerminalTokenService`, setzt bei Erfolg die `TerminalAuthenticationToken` in den
+  `SecurityContext`; bei fehlendem/unbekanntem/widerrufenem Token antwortet der Filter SELBST
+  mit `401` + `ProblemDetail` (kein Weiterreichen an einen Entry-Point).
+- `TerminalApiSecurityConfig` – eigene, zustandslose `SecurityFilterChain`
+  (`securityMatcher(new AntPathRequestMatcher("/api/v1/**"))`, `@Order(1)`, `STATELESS`,
+  CSRF aus), wie in `SecurityConfig` (AP3) vorgesehen, OHNE diese Klasse zu ändern. Zwei
+  Fallstricke dabei gefunden (siehe Klassen-Javadoc für Details): (1) jede
+  `Filter`-Spring-Bean wird von Spring Boot zusätzlich automatisch als globaler Servlet-Filter
+  für ALLE Pfade registriert – eine `FilterRegistrationBean` mit `setEnabled(false)`
+  unterdrückt das, sonst hätte der Token-Filter auch `/actuator/health` blockiert; (2)
+  `securityMatcher(String...)` löst über Spring MVC auf und braucht dafür die Bean
+  `mvcHandlerMappingIntrospector`, die in den `webEnvironment=NONE`-Tests dieses Moduls nicht
+  existiert – der explizite `AntPathRequestMatcher` umgeht das.
+- **Entscheidung – Header**: `Authorization: Bearer <token>` (Standard-HTTP-Mechanismus,
+  funktioniert unverändert für den WebSocket-Handshake, kein proprietärer Header nötig) statt
+  eines eigenen `X-Elwasys-Terminal-Token`-Headers.
+- **Entscheidung – Speicherung/Rotation**: nur der SHA-256-Hash landet in der DB (nie das
+  Klartext-Token); pro Standort sind beliebig viele aktive Tokens gleichzeitig gültig, das
+  ermöglicht Rotation ohne Ausfallfenster (neues Token anlegen, Terminal umstellen, altes
+  Token widerrufen).
+- **Verwaltungspfad (Phase 2, kein Admin-UI)**: `TerminalTokenCliRunner`
+  (`@Profile("token-cli")`, siehe `application-token-cli.yml`,
+  `spring.main.web-application-type: none`) – Kommandos siehe kb/04-build-and-run.md. Das
+  Klartext-Token wird genau einmal auf `stdout` ausgegeben.
+
+#### REST-API v1 (`/api/v1/**`, Package `backend/.../api/`)
+
+DTOs (`api/dto/`, Java Records) statt Entity-Serialisierung an der API-Grenze (die AP2-EAGER-
+Assoziationen würden sonst ungefiltert/rekursiv serialisiert). Fehlerbilder einheitlich als
+RFC-7807-`ProblemDetail` über `ApiExceptionHandler` (`@RestControllerAdvice`, nur für
+`org.kabieror.elwasys.backend.api`), gespeist aus der `ApiException`-Hierarchie
+(`api/exception/`, je Unterklasse HTTP-Status + `type`-URI `urn:elwasys:<slug>` + Titel).
+Standort-Scope (Geräte/Executions nur am eigenen Standort, vgl. Client-E2E-Fall C16) über
+`TerminalScopeGuard` durchgesetzt – ein Gerät/eine Ausführung eines ANDEREN Standorts wird wie
+ein unbekanntes behandelt (`404`, nicht `403`, um keine Existenz an fremden Standorten zu
+verraten). API-Dokumentation: springdoc-openapi (`/v3/api-docs`, `/swagger-ui.html`, hinter
+der AP3-Catch-all-Kette, also login-pflichtig).
+
+| Methode | Pfad | Zweck | Erfolg | Fehler |
+|---|---|---|---|---|
+| `POST` | `/api/v1/card-login` | Kartenlogin (`CardLoginRequest{cardId}` → `UserDto` inkl. Guthaben), 1:1 `MainFormController#onCardDetected` | `200` | `404 card-not-found`, `403 user-blocked`, `403 location-not-allowed` |
+| `GET` | `/api/v1/locations/me` | Standort des Tokens (`LocationDto`) | `200` | – |
+| `GET` | `/api/v1/devices?userId=` | Geräteliste des Standorts, je Gerät `usableByUser`/`occupied`/gefilterte `programs` (`PermissionService`) | `200` | `400` (userId fehlt), `404 user-not-found` |
+| `GET` | `/api/v1/devices/{id}?userId=` | Einzelgerät (Standort-Scope) | `200` | `404 device-not-found`, `404 user-not-found` |
+| `POST` | `/api/v1/executions` | Execution anlegen+starten (`ExecutionStartRequest{userId,deviceId,programId}`) | `201 ExecutionDto` | `404 device/program/user-not-found`, `403 user-blocked/location-not-allowed/device-not-usable/program-not-available`, `409 device-occupied`, `402 insufficient-credit` |
+| `GET` | `/api/v1/executions/{id}` | Aktueller Stand einer Ausführung | `200` | `404 execution-not-found` |
+| `POST` | `/api/v1/executions/{id}/finish` | Reguläres Ende (bezahlt) | `200` | `404`, `409 execution-already-finished` |
+| `POST` | `/api/v1/executions/{id}/abort` | Vorzeitiger Abbruch (persistenzseitig identisch zu `finish`, eigener Endpunkt für API-Klarheit) | `200` | wie `finish` |
+| `POST` | `/api/v1/executions/{id}/reset` | Zurücksetzen ohne Abrechnung (Alt-Code: Steckdose ließ sich nach Anlegen nicht einschalten) | `200` | `404` |
+| `GET` | `/api/v1/users/{id}/credit` | Guthabenabfrage (NICHT standortgebunden – Guthaben ist personenbezogen, siehe `UserController`-Javadoc) | `200 CreditResponse` | `404 user-not-found` |
+
+Alle Endpunkte (außer der reinen Standort-Selbstauskunft) prüfen Berechtigungen 1:1 über die
+AP2-Services (`PermissionService`, `PricingService`, `CreditService`, `ExecutionService`) –
+keine Duplikation der Fachlogik in der API-Schicht.
+
+#### WebSocket-Endpunkt (`/api/v1/terminal-ws`, Package `backend/.../ws/`)
+
+Liegt bewusst unter `/api/v1/**`, damit dieselbe `TerminalApiSecurityConfig`-Kette auch den
+Handshake absichert – der Handshake ist zunächst eine normale HTTP-Anfrage und durchläuft
+daher den `TerminalTokenAuthenticationFilter` wie jeder REST-Aufruf.
+`TerminalHandshakeInterceptor` übernimmt danach den bereits authentifizierten
+`TerminalPrincipal` aus dem `SecurityContext` in die `WebSocketSession`-Attribute
+(`elwasys.terminal.locationId`/`elwasys.terminal.locationName`).
+
+**Nachrichtenformat** (JSON, `TerminalWsMessage`, versioniert über das Feld `v`):
+```json
+{ "v": 1, "type": "HELLO", "id": "<Korrelations-Id>", "payload": { "clientVersion": "0.4.0" } }
+```
+`id` wird vom Absender vergeben; eine Antwort trägt dieselbe `id` wie die auslösende Anfrage
+(`TerminalWsMessage.inReplyTo`), damit der Absender Anfrage/Antwort zuordnen kann. Unbekannte
+zusätzliche Felder werden ignoriert (Vorwärtskompatibilität).
+
+**Nachrichtentypen** (`TerminalWsMessageType`):
+
+| Typ | Richtung | Phase-2-Verhalten (AP4) |
+|---|---|---|
+| `HELLO` | Terminal → Backend | Server antwortet `HELLO_ACK` |
+| `HELLO_ACK` | Backend → Terminal | Payload `locationId`, `locationName`, `serverTime`, `protocolVersion` |
+| `PING` | beide Richtungen | Empfänger antwortet `PONG` (server-seitig; ein vom Backend gesendetes `PING`, siehe Heartbeat unten, erwartet ein `PONG` vom Terminal) |
+| `PONG` | beide Richtungen | Aktualisiert intern den „zuletzt gesehen“-Zeitstempel der Verbindung |
+| `STATUS_REQUEST` | beide Richtungen | Server antwortet `STATUS_RESPONSE` (Gerüst: `locationId`, `locationName`, `connectedSince`, `serverTime` – die volle Fernwartungs-Portierung [laufende Ausführungen, Backlight-/Interface-Status, fachliche Referenz `GetStatusResponse`] folgt Phase 3/4) |
+| `STATUS_RESPONSE` | beide Richtungen | Phase 2: nur geloggt, kein Handler (Portal-seitige Auswertung folgt mit der Fernwartungs-Portierung) |
+| `LOG_REQUEST`/`LOG_RESPONSE` | reserviert | Beantwortet mit `ERROR{reason:"not-implemented"}` (fachliche Referenz `GetLogRequest`/`GetLogResponse`, Portierung folgt Phase 3/4) |
+| `RESTART_REQUEST` | reserviert | wie oben (fachliche Referenz `RestartAppRequest`) |
+| `ERROR` | beide Richtungen | Protokoll-/Verarbeitungsfehler, `payload.reason` (`malformed-message`/`not-implemented`) |
+
+**Verbindungsregistry**: `TerminalConnectionRegistry` (in-memory, `Map<locationId, Session>`)
+– ersetzt fachlich die alte `client_ip`/`client_port`-Registrierung in `locations` (siehe
+kb/02-data-model.md). Genau eine aktive Session pro Standort: verbindet sich ein Terminal
+erneut, wird die alte Session geschlossen und ersetzt.
+
+**Heartbeat**: `TerminalHeartbeatScheduler` (`@Scheduled(fixedRate = 30_000)`) sendet allen
+verbundenen Terminals ein `PING` und schließt Verbindungen, deren letztes `PONG` länger als 90
+Sekunden zurückliegt. `@EnableScheduling` sitzt auf `TerminalWebSocketConfig`, die bewusst
+`@Profile("!token-cli")` trägt: Spring Boots Standard-Scheduler-Thread ist kein Daemon-Thread
+und hätte den einmaligen `TerminalTokenCliRunner`-Prozess sonst nie beendet (beim manuellen
+Testen der CLI gefunden und behoben).
+
+**Tests**: `TerminalWebSocketTest` nutzt den JDK-eigenen `java.net.http`-WebSocket-Client
+(keine zusätzliche Testabhängigkeit – derselbe Client, den der Terminal laut
+kb/05-migration-plan.md ohnehin nutzen soll) gegen einen echten, per
+`@SpringBootTest(webEnvironment=RANDOM_PORT)` gestarteten Server: Handshake ohne/mit
+ungültigem Token wird abgelehnt, HELLO/HELLO_ACK, PING/PONG, STATUS_REQUEST/STATUS_RESPONSE
+und ein unimplementierter Typ (→ `ERROR`) sind grün.
+
+**Tests der REST-API/Token-Auth**: `TerminalApiSecurityTest` (401 bei fehlendem/unbekanntem/
+widerrufenem Token, 200 bei gültigem, Terminal-Token gewährt KEINEN Zugriff auf die
+AP3-Catch-all-Kette), `TerminalTokenServiceTest` (Erzeugung/Prüfung/Rotation/Widerruf,
+Hash-statt-Klartext), `CardLoginControllerTest`, `DeviceControllerTest` (inkl. Standort-Scope,
+Programm-Filterung, `occupied`/`usableByUser`), `ExecutionControllerTest` (voller
+Lebenszyklus + alle Fehlerfälle, orientiert an C9/C16). 44 neue Tests, siehe
+kb/05-migration-plan.md (Änderungslog, AP4) für die Gesamtzahl.
+
+**Build-Besonderheit**: `backend/pom.xml` setzt `maven.compiler.parameters=true` (nur für
+dieses Modul) – ohne dieses Flag wirft Spring MVC zur Laufzeit eine
+`IllegalArgumentException` für jeden `@RequestParam`/`@PathVariable` ohne explizit
+angegebenen Namen („parameter name information not available via reflection“); **Vorsicht
+bei künftigen `pom.xml`-Änderungen**: der Maven-Compiler-Plugin erkennt eine reine
+Properties-/Plugin-Konfigurationsänderung nicht immer als Grund für eine Neukompilierung
+(inkrementeller Compiler) – nach einer solchen Änderung ggf. `mvn clean` davor schalten,
+sonst bleiben alte, ohne `-parameters` kompilierte Klassen im `target`-Verzeichnis liegen
+(in AP4 tatsächlich aufgetreten, siehe kb/05-migration-plan.md).
 
 **Build/Test/Run**: siehe kb/04-build-and-run.md (Abschnitt „Backend bauen, testen, lokal
 starten“). `backend/run-backend-tests.sh` für den Docker-losen lokalen Testweg,

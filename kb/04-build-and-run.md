@@ -87,7 +87,7 @@ mvn -f pom.xml install -pl Common -am -DskipTests
 mvn -f Portal/pom.xml jetty:run        # http://localhost:8080  (Login: admin/admin)
 ```
 
-### Backend bauen, testen, lokal starten (seit Phase 2 AP1, JPA/Services seit AP2)
+### Backend bauen, testen, lokal starten (seit Phase 2 AP1, JPA/Services seit AP2, REST-API/WS seit AP4)
 
 Neues Modul `backend/` (Spring Boot 3.x, siehe kb/01-architecture.md, kb/03-modules.md).
 Läuft zur Laufzeit weiterhin unabhängig von Common/Client-Raspi/Portal (eigenes
@@ -150,6 +150,34 @@ curl http://localhost:8080/actuator/health
 Gegen eine über `database-init.sql` angelegte Bestands-DB migriert Flyway beim ersten Start
 per `baselineOnMigrate` (kein DDL, keine Datenänderung); gegen eine leere DB durchläuft Flyway
 die Baseline-Migration `V1__baseline_schema_0_4_0.sql` normal.
+
+**Backend-Tests seit AP4**: `backend/run-backend-tests.sh` führt jetzt **96/96** Tests aus (52
+aus AP1–AP3 + 44 neu aus AP4: Standort-Token-Auth, REST-API v1, WebSocket-Endpunkt – siehe
+kb/05-migration-plan.md Änderungslog).
+
+**Standort-Tokens erzeugen/widerrufen (AP4, kein Admin-UI vor Phase 3)** – über das Profil
+`token-cli` (`application-token-cli.yml` setzt `spring.main.web-application-type: none`, der
+Prozess führt nur den `TerminalTokenCliRunner` aus und beendet sich danach von selbst):
+```bash
+# Neues Token für einen Standort erzeugen (Standortname muss existieren, z.B. "Default"):
+ELWASYS_DB_URL=jdbc:postgresql://localhost:5432/elwasys \
+ELWASYS_DB_USER=elwaportal ELWASYS_DB_PASSWORD=elwaportal \
+java -jar backend/target/elwasys-backend.jar \
+    --spring.profiles.active=token-cli \
+    --location=Default \
+    --label=terminal-kueche   # optional, rein informativ
+
+# Ausgabe zeigt das Klartext-Token GENAU EINMAL - sofort in die Terminal-Konfiguration
+# übernehmen, es wird nirgends gespeichert und kann nicht erneut angezeigt werden.
+
+# Altes Token widerrufen (z.B. nach Rotation auf ein neues Token):
+java -jar backend/target/elwasys-backend.jar \
+    --spring.profiles.active=token-cli \
+    --revoke-token-id=<Id aus der Erzeuge-Ausgabe>
+```
+Details/Design (Hash statt Klartext, mehrere aktive Tokens pro Standort für
+ausfallfreie Rotation, `Authorization: Bearer <token>`-Header) siehe kb/03-modules.md und
+kb/05-migration-plan.md.
 
 ## Umgebung (dieser Remote-Container)
 

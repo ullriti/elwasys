@@ -103,6 +103,18 @@ Gerätereservierungen.
 - `id`, `user_id` → users, `device_id` → devices, `start_time`
 - Unique-Constraint (`user_id`, `device_id`)
 
+### terminal_tokens *(neu, seit Phase 2 AP4)*
+Standort-Tokens für die Terminal-REST-API/den WebSocket-Endpunkt (additive Migration
+`V3__create_terminal_tokens.sql`, siehe „Flyway-Migrationen“ unten und
+kb/05-migration-plan.md). Vom Alt-Code unbenutzt/unbekannt.
+- `id`, `location_id` → locations (`ON DELETE CASCADE`)
+- `token_hash` (VARCHAR(64), unique) – SHA-256-Hex-Hash des Klartext-Tokens; das Klartext-
+  Token selbst wird NIE gespeichert (nur einmalig beim Erzeugen angezeigt)
+- `label` (optional, rein informativ, z.B. Terminal-Hostname)
+- `created_at`, `revoked_at` (NULL = aktiv), `last_used_at` (vom Auth-Filter aktualisiert)
+- Mehrere aktive Tokens pro Standort zulässig (Rotation ohne Ausfallfenster: neues Token
+  anlegen, Terminal umstellen, dann altes per `revoked_at` widerrufen)
+
 ## DB-Rollen & Rechte
 
 - **Gruppe `elwaclients`**, User `elwaclient1` (PW `elwaclient1`):
@@ -182,6 +194,11 @@ Zusammenfassung:
   selbst nutzt sie in AP1 noch nicht (es hat noch keine fachlichen Endpunkte); die
   Ablösung durch einen einzelnen technischen Backend-User ist laut Roadmap erst Phase 5
   vorgesehen.
+- **`V3__create_terminal_tokens.sql`** (Phase 2 AP4, 2026-07-20): neue Tabelle
+  `terminal_tokens` (siehe „Tabellen“ oben) für die Standort-Token-Auth der Terminal-API.
+  Rein additiv (neue Tabelle, keine Änderung an Bestandstabellen) – der Alt-Code bekommt
+  davon nichts mit. Details/Entscheidungen (Hash statt Klartext, Rotation über mehrere
+  aktive Tokens) siehe kb/05-migration-plan.md.
 
 ## JPA-Entities (seit Phase 2 AP2, 2026-07-20)
 
