@@ -179,12 +179,13 @@ Wesentliche Änderungen gegenüber heute:
 
 ### Phase 1 – Fundament (Build & Konsolidierung)
 Ziel: einheitliche, moderne Basis, auf der das neue Backend-Modul aufsetzen kann.
-- [ ] Aggregator-Parent-POM (Module: Common, Client-Raspi, Portal; einheitliche Versionen,
+- [x] Aggregator-Parent-POM (Module: Common, Client-Raspi, Portal; einheitliche Versionen,
       `dependencyManagement`, Properties); Release-Workflow (`maven-publish.yml`) auf
-      Parent-Versionierung umstellen
-- [ ] Java-Level vereinheitlichen auf **21** (Common 8 → 21, Client 16 → 21, Portal bleibt
-      vorerst 8-kompatibel gebaut, bis es abgelöst ist – prüfen, ob Vaadin 7 unter 21 baut,
-      sonst Portal im Alt-Level einfrieren)
+      Parent-Versionierung umstellen *(erledigt 2026-07-20, siehe „Änderungslog“ unten)*
+- [x] Java-Level vereinheitlichen auf **21** (Common 8 → 21 ✅; Client-Raspi 16 → 21 ✅;
+      Portal bleibt bewusst 8-kompatibel gebaut, bis es in Phase 3 abgelöst ist – Vaadin 7/GWT
+      baut unter JDK 21 mit Sprachlevel 8 problemlos, Sprachlevel bleibt explizit eingefroren)
+      *(erledigt 2026-07-20)*
 - [x] Testframeworks vereinheitlichen (JUnit 5; TestNG-Reste migrieren) – ✅ erledigt
       2026-07-20: einzige TestNG-Testklasse (`InactivitySchedulerTest`) nach JUnit 5
       migriert und von `src/main` (wurde von Surefire nie ausgeführt!) nach `src/test`
@@ -192,9 +193,19 @@ Ziel: einheitliche, moderne Basis, auf der das neue Backend-Modul aufsetzen kann
       Client-Raspi/pom.xml entfernt. Common hat nur einen vollständig auskommentierten
       JUnit-Test (`MaintenanceConnectionTest`, kein `@Test` aktiv) – nichts zu migrieren,
       bleibt vorerst so dokumentiert.
-- [ ] `ElwaManager`-Singleton per DI entkoppeln → isolierte Charakterisierungs-Tests der
-      State-Machine (`MainFormStateManager`) nachziehen (aus Phase 0 übernommen)
-- [ ] CI an Parent-POM anpassen (ein Build-Job + Test-Jobs)
+- [x] `ElwaManager`-Singleton per DI entkoppeln → isolierte Charakterisierungs-Tests der
+      State-Machine (`MainFormStateManager`) nachziehen (aus Phase 0 übernommen) – ✅ erledigt
+      2026-07-20: minimaler DI-Seam (package-private Test-Konstruktor `MainFormController`,
+      der das Verdrahten mit `ElwaManager.instance`/`InactivityScheduler` überspringt), 12 neue
+      JUnit-5-Tests ohne TestFX/Xvfb/DB decken alle Zustandsübergänge der State-Machine ab
+- [x] CI an Parent-POM angepasst *(2026-07-20)*: die bestehende 3-Job-Struktur
+      (Common/Client/Portal, kleinstes Risiko, Verhalten unverändert) wurde beibehalten statt
+      auf einen kombinierten Reactor-Job umzustellen; alle Stellen, die Common isoliert
+      installieren (CI-Job, `run-ui-tests.sh`, `run-client-e2e.sh`,
+      `run-cross-component-e2e.sh`, `start-portal.sh`, SessionStart-Hook), bauen jetzt über
+      `mvn -f pom.xml install -pl Common -am`, damit die Parent-POM mit ins lokale Repo
+      installiert wird (sonst schlägt die Abhängigkeitsauflösung von `common` in
+      Client-Raspi/Portal fehl)
 
 ### Phase 2 – Backend-Gerüst (parallel zum Bestand)
 Ziel: neues Modul `backend` läuft produktionsnah **neben** Client & Portal auf derselben DB.
@@ -307,3 +318,5 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
 | 2026-07-20 | **Restentscheidungen eingearbeitet**: fhem UND deCONZ bleiben beide unterstützt (E2E künftig mit beiden Simulatoren, deCONZ-Sim in Phase 4); App-Entfernung bestätigt; Nutzungsprofil Portal dokumentiert (nur Admins → Admin-Views priorisiert). Einzige offene Frage: Betriebsmodell Backend |
 | 2026-07-20 | **Letzte Grundsatzfragen entschieden**: Portal-Struktur bleibt erhalten, UX-Verbesserungen erwünscht; Betrieb als Docker-Compose-Stack oder Kubernetes (Helm Chart vorbereiten). Keine offenen Grundsatzfragen mehr – Phase 1 kann starten |
 | 2026-07-20 | **Phase 1: Testframeworks vereinheitlicht** – `InactivitySchedulerTest` (einzige TestNG-Klasse) nach JUnit 5 migriert und von `src/main` nach `src/test` verschoben (lief zuvor gar nicht unter Surefire); TestNG- und ungenutzte JUnit-4-Dependency aus Client-Raspi/pom.xml entfernt |
+| 2026-07-20 | **Phase 1 (Build/Backend-Teil)**: Aggregator-Parent-POM (`/pom.xml`) angelegt (gemeinsame Version `0.0.0-local-development`, `dependencyManagement` für postgresql/logback/slf4j-api/commons-email, `maven.compiler.release=21`-Default); Common/Client-Raspi/Portal erben jetzt davon (groupId/version nicht mehr redundant, common-Dependency via `${project.version}`). Common auf Java 21 gehoben (reine POJO/JDBC-Bibliothek, keine Quelländerungen nötig); Portal friert Sprachlevel weiterhin explizit auf 1.8 ein (Vaadin 7/GWT 2.7). Wichtiger Build-Fallstrick gefunden und behoben: `mvn -f Common/pom.xml install` installiert die Parent-POM NICHT mit ins lokale Repo, daher überall auf `mvn -f pom.xml install -pl Common -am` umgestellt (CI-Common-Job, `run-ui-tests.sh`, `run-client-e2e.sh`, `run-cross-component-e2e.sh`, `Portal/e2e/scripts/start-portal.sh`, SessionStart-Hook). Release-Workflow (`maven-publish.yml`) auf `mvn versions:set` umgestellt statt sed-Hack über mehrere POMs (APP_VERSION in Utilities.java bleibt eine Java-Konstante, weiterhin per sed gesetzt, aber `-iE`-Tippfehler behoben, der eine stille Backup-Datei erzeugte). Alle drei Module bauen grün (`mvn package`/`install`) |
+| 2026-07-20 | **Phase 1 (Client-Raspi Java 21 + ElwaManager-DI)**: Client-Raspi-Sprachlevel 16 → 21 gehoben (keine Quelländerungen nötig); minimaler DI-Seam für `ElwaManager` eingeführt (package-private Test-Konstruktor `MainFormController(boolean wireToElwaManager)`, der das Verdrahten mit `ElwaManager.instance`/`InactivityScheduler` in Tests überspringt, Produktionsverhalten unverändert); 12 neue isolierte JUnit-5-Charakterisierungstests für `MainFormStateManager` (kein TestFX/Xvfb/DB nötig). Volle Client-Suite grün (33/33) |

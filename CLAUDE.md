@@ -35,10 +35,14 @@ siehe Roadmap in kb/05.
 ## Build & Tests (Remote-Umgebung ist vorbereitet, siehe kb/07)
 
 ```bash
-# Build (Reihenfolge wichtig, noch kein Parent-POM – Phase-1-Aufgabe)
-mvn -f Common/pom.xml install
+# Build (seit Phase 1 gibt es ein Aggregator-Parent-POM, siehe kb/04/kb/05).
+# WICHTIG: "mvn -f Common/pom.xml install" allein installiert die Parent-POM
+# NICHT mit ins lokale Repo – Client-Raspi/Portal scheitern dann beim
+# Auflösen von "common". Immer über den Root-Reactor bauen:
+mvn -f pom.xml install -pl Common -am -DskipTests
 mvn -f Client-Raspi/pom.xml package
 mvn -f Portal/pom.xml package
+# oder komplett: mvn install (von der Repo-Wurzel)
 
 # Client: UI-/E2E-Tests headless (startet PG, seedet DB, Xvfb)
 Client-Raspi/run-ui-tests.sh              # alle

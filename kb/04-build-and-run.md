@@ -2,22 +2,39 @@
 
 ## Build-Reihenfolge
 
-Es gibt **kein** Aggregator-/Parent-POM. Common muss zuerst ins lokale Maven-Repo
-installiert werden, dann können Client und Portal es als Dependency auflösen.
+Seit Phase 1 (2026-07-20) gibt es ein **Aggregator-/Parent-POM** (`/pom.xml`,
+`packaging=pom`, Module `Common`/`Client-Raspi`/`Portal`, gemeinsame Version
+`0.0.0-local-development`, zentrale `dependencyManagement` für
+postgresql/logback/slf4j-api/commons-email, `maven.compiler.release=21` als
+Default). Wichtig: Ein isoliertes `mvn -f Common/pom.xml install` installiert
+**nur** das `common`-Artefakt ins lokale Repo, **nicht** die Parent-POM selbst –
+andere Module, die `common` später als Dependency auflösen (Client-Raspi,
+Portal), scheitern dann mit `Could not find artifact
+org.kabieror.elwasys:elwasys-parent:pom:...`. Deshalb immer über den
+Root-Reactor bauen, wenn Common isoliert installiert werden soll:
 
 ```bash
-# 1. Common (Bibliothek) installieren
-cd Common && mvn install
+# 1. Common (+ Parent-POM) installieren – WICHTIG: über den Root-Reactor,
+#    nicht "mvn -f Common/pom.xml install" allein (siehe Hinweis oben)
+mvn -f pom.xml install -pl Common -am -DskipTests
 
 # 2a. Raspi-Client bauen (fat-jar)
-cd ../Client-Raspi && mvn package
+mvn -f Client-Raspi/pom.xml package
 #   → target/raspi-client-<version>-jar-with-dependencies.jar
 
 # 2b. Portal bauen (WAR) bzw. lokal starten
-cd ../Portal && mvn package        # → target/*.war
+mvn -f Portal/pom.xml package      # → target/*.war
 #   oder Entwicklungsserver:
-mvn jetty:run                      # http://localhost:8080
+mvn -f Portal/pom.xml jetty:run    # http://localhost:8080
+
+# Alternative: kompletter Reactor-Build aller drei Module in einem Aufruf
+mvn install   # von der Repo-Wurzel aus
 ```
+
+Portal friert sein javac-Sprachlevel weiterhin explizit auf 1.8
+(`project.source.version`/`-target.version` in `Portal/pom.xml`) ein –
+unabhängig vom `maven.compiler.release=21`-Default des Parents (Vaadin 7/GWT 2.7
+ist nicht für neuere Sprachlevel getestet). Der Build-JDK selbst ist weiterhin 21.
 
 > ✅ Portal-Build in der Remote-Umgebung repariert (2026-07-19), siehe unten.
 
@@ -58,8 +75,8 @@ sudo -u postgres psql -c "ALTER USER elwaportal WITH PASSWORD 'elwaportal';"
 # 2. Config bereitstellen (/etc/elwaportal/elwaportal.properties)
 #    database.user=elwaportal, database.password=elwaportal, database.name=elwasys
 
-# 3. Common installieren, Portal starten
-mvn -f Common/pom.xml install -DskipTests
+# 3. Common (+ Parent-POM) installieren, Portal starten
+mvn -f pom.xml install -pl Common -am -DskipTests
 mvn -f Portal/pom.xml jetty:run        # http://localhost:8080  (Login: admin/admin)
 ```
 
@@ -113,11 +130,15 @@ Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).
 - 3 parallele Jobs (Common / Client / Portal): Build + Tests, spiegeln die lokalen
   Runner-Skripte (`run-ui-tests.sh` etc., siehe kb/06)
 
-`.github/workflows/maven-publish.yml` (Release):
+`.github/workflows/maven-publish.yml` (Release) *(seit 2026-07-20: Parent-POM-Versionierung)*:
 - Trigger: **nur** bei `release: created`
-- JDK 17 (Liberica), ersetzt Version im POM/Utilities durch Tag-Namen
-- Baut Common → Client-Raspi, lädt das fat-jar als Release-Asset hoch
-- Umstellung auf Parent-POM-Versionierung ist Phase-1-Aufgabe (siehe kb/05)
+- JDK 17 (Liberica)
+- `mvn versions:set -DnewVersion=<tag>` im Root setzt die Version in Parent-POM
+  **und** allen drei Modulen konsistent (kein sed-Hack über mehrere POMs mehr);
+  `Utilities.APP_VERSION` ist eine reine Java-Konstante und bleibt per
+  `sed -i -E` gesetzt
+- Reactor-Build `mvn install -pl Common,Client-Raspi -am` (installiert dabei
+  auch die neu versionierte Parent-POM), lädt das fat-jar als Release-Asset hoch
 
 ## Bekannte Build-Risiken
 
