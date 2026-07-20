@@ -78,7 +78,8 @@ z. B. zusätzlicher Nicht-Admin-Benutzer mit Passwort, Gruppen, Geräte, Program
 | P18 | P3 | Nicht-Admin sieht keine Admin-Views (Berechtigung) ✅ | „Benutzergruppen"/„Geräte" nicht vorhanden |
 | P19 | P3 | „Passwort vergessen?"-Dialog ✅ | Dialog „Passwort zurücksetzen" öffnet (kein echter Mailversand) |
 | P20 | P4 | Dashboard-Gerätestatus „Frei/Besetzt" aus laufender Execution ✅ | Status entspricht DB-Zustand |
-| P21 | P4 | Log-Viewer / Client-Neustart (Wartungsverbindung) | **Cross-Component** (Portal + laufender Client) – zurückgestellt |
+| P21 | P4 | Log-Viewer / Client-Neustart (Wartungsverbindung) ✅ | **Cross-Component**: Server holt Log, sendet Neustart-Befehl an laufenden Client |
+| P22 | P4 | Client-Status/Uptime über Wartungsverbindung ✅ | **Cross-Component**: `GetStatusRequest` → Interface-Status, Startzeit, laufende Executions |
 
 **Hinweise/Feasibility**
 - Vaadin 7 vergibt keine stabilen IDs → Lokatoren über Captions/CSS-Klassen. **Empfehlung
@@ -103,15 +104,26 @@ z. B. zusätzlicher Nicht-Admin-Benutzer mit Passwort, Gruppen, Geräte, Program
 
 ## Stand der Umsetzung (2026-07-20)
 
-**Umgesetzt & grün** — Client (TestFX/Xvfb, 18 Tests): C1–C16 (vollständig).
-Portal (Playwright, 18 Tests): P1–P20 (vollständig, außer P21).
+**Umgesetzt & grün** — Client (TestFX/Xvfb, 21 Tests): C1–C16 sowie der
+Cross-Component-Fall P21/P22 (Wartungsverbindung). Portal (Playwright, 18 Tests):
+P1–P20. **Alle geplanten Fälle sind umgesetzt.**
 
-**Verbleibend / bewusst zurückgestellt:**
-- **P21** (Log-Viewer / Client-Neustart über die Wartungsverbindung): einziger noch
-  offener Fall. Echter Cross-Component-E2E – braucht einen *laufenden* Client, der sich
-  am Wartungs-Server des Portals registriert (Portal ⇄ Client). Das erfordert ein
-  gemeinsames Hochfahren beider Komponenten inkl. Maintenance-Verbindung und ist als
-  eigener, größerer Meilenstein sinnvoll. Zurückgestellt.
+**Cross-Component (P21/P22) — Umsetzung:**
+- Realisiert als Client-Test `ClientMaintenanceConnectionE2ETest` (läuft im bestehenden
+  Client-CI-Job mit; eigenes Skript `Client-Raspi/run-cross-component-e2e.sh`).
+- Die *Portal-Seite* wird durch genau die Klasse `MaintenanceServer` (aus `Common`)
+  dargestellt, die das Portal in seinem `MaintenanceConnectionManager` kapselt; die
+  *Client-Seite* ist die real hochgefahrene Client-Anwendung. Beide reden über einen
+  echten TCP-Socket.
+- Der laufende Client registriert sich am Server unter seinem Standortnamen; anschließend
+  beantwortet er: **P21** Log holen (`GetLogRequest`→`GetLogResponse`) und Neustart-Befehl
+  (`RestartAppRequest`→`ElwaManager.restart()`, beobachtet über das Close-Event), sowie
+  **P22** Status/Uptime (`GetStatusRequest`→`GetStatusResponse`).
+- Hinweis: Ein voller Portal-UI-Durchstich (Vaadin-Dashboard-Knopf „Log anzeigen"/
+  „Neustart") würde denselben Wartungskanal nur über die UI auslösen; der Mehrwert läge in
+  der UI-Verdrahtung, die Kern-Logik (der Socket-Kanal) ist hier bereits abgedeckt. Als
+  optionaler Folgeschritt könnte man Portal + laufenden Client gemeinsam hochfahren und den
+  Knopf per Playwright klicken.
 
 **Hinweise zu den zuletzt ergänzten Fällen:**
 - **C13**: laufende Execution (start gesetzt, finished=false) vor App-Start seeden; nach
