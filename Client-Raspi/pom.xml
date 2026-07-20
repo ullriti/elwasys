@@ -18,12 +18,6 @@
 			<artifactId>pi4j-core</artifactId>
 			<version>1.0</version>
 		</dependency>
-		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-			<version>4.13.1</version>
-			<scope>test</scope>
-		</dependency>
 		<!-- UI test harness: JUnit 5 + TestFX (headless via Xvfb, see kb/06-ui-tests.md) -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
@@ -63,11 +57,6 @@
 			<artifactId>pushover-client</artifactId>
 			<version>1.0.0</version>
 		</dependency>
-        <dependency>
-            <groupId>org.testng</groupId>
-            <artifactId>testng</artifactId>
-            <version>RELEASE</version>
-        </dependency>
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-email</artifactId>
