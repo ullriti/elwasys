@@ -33,7 +33,7 @@ Legende Priorität: **P1** = Kern-Happy-Path zuerst, **P2** = wichtige Varianten
 | C8 | P2 | Benutzergruppe am Standort nicht erlaubt ✅ | `#userInfo` Style `location-disallowed`, kein Login |
 | C9 | P2 | Zu wenig Guthaben ✅ | `#confirmationPane` Style `credit-insufficient`, Start-Button disabled |
 | C10 | P2 | Auto-Logout nach `sessionTimeout` Inaktivität ✅ | `registeredUser` wird null |
-| C11 | P3 | Auto-Ende: Leistungsabfall via `FhemSimulator` (`powerevent`) | Execution `finished`, Gerät frei |
+| C11 | P3 | Auto-Ende: Gerät zieht keine Leistung → Ende nach `auto_end_wait_time` ✅ | Execution automatisch beendet |
 | C12 | P3 | Laufende Execution abbrechen (Bestätigung) ✅ | Execution gestoppt (keine laufende Execution mehr) |
 | C13 | P3 | Unterbrochene Execution beim Start fortsetzen (geseedet) | Execution wird als laufend übernommen |
 | C14 | P3 | DYNAMIC-Programm: Preisanzeige (Grundgebühr/Zeitpreis/Höchstpreis) | korrekte Formatierung/Werte |
@@ -64,7 +64,7 @@ z. B. zusätzlicher Nicht-Admin-Benutzer mit Passwort, Gruppen, Geräte, Program
 | P4 | P1 | Logout ✅ | zurück auf Login-Seite |
 | P5 | P1 | Navigation: alle Admin-Views (Dashboard/Benutzer/Gruppen/Programme/Geräte) ✅ | URL-Fragment `#!<view>` je Sektion |
 | P6 | P2 | Benutzer anlegen (Name, Username, Gruppe) ✅ | erscheint in Benutzerliste |
-| P7 | P2 | Benutzer bearbeiten (sperren, E-Mail) | Änderung persistent/sichtbar |
+| P7 | P2 | Benutzer bearbeiten: sperren ✅ | „Gesperrt" persistent (nach erneutem Öffnen gesetzt) |
 | P8 | P2 | Guthaben aufladen (UserCreditWindow) ✅ | Guthaben in der Benutzerliste aktualisiert |
 | P9 | P2 | Benutzergruppe anlegen ✅ | erscheint in Gruppenliste |
 | P10 | P2 | Gerät anlegen (Name, Position, Standort, fhem-Namen) ✅ | erscheint in Geräteliste |
