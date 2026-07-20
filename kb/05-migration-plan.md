@@ -185,7 +185,13 @@ Ziel: einheitliche, moderne Basis, auf der das neue Backend-Modul aufsetzen kann
 - [ ] Java-Level vereinheitlichen auf **21** (Common 8 → 21, Client 16 → 21, Portal bleibt
       vorerst 8-kompatibel gebaut, bis es abgelöst ist – prüfen, ob Vaadin 7 unter 21 baut,
       sonst Portal im Alt-Level einfrieren)
-- [ ] Testframeworks vereinheitlichen (JUnit 5; TestNG-Reste migrieren)
+- [x] Testframeworks vereinheitlichen (JUnit 5; TestNG-Reste migrieren) – ✅ erledigt
+      2026-07-20: einzige TestNG-Testklasse (`InactivitySchedulerTest`) nach JUnit 5
+      migriert und von `src/main` (wurde von Surefire nie ausgeführt!) nach `src/test`
+      verschoben; TestNG- **und** die inzwischen ungenutzte JUnit-4-Dependency aus
+      Client-Raspi/pom.xml entfernt. Common hat nur einen vollständig auskommentierten
+      JUnit-Test (`MaintenanceConnectionTest`, kein `@Test` aktiv) – nichts zu migrieren,
+      bleibt vorerst so dokumentiert.
 - [ ] `ElwaManager`-Singleton per DI entkoppeln → isolierte Charakterisierungs-Tests der
       State-Machine (`MainFormStateManager`) nachziehen (aus Phase 0 übernommen)
 - [ ] CI an Parent-POM anpassen (ein Build-Job + Test-Jobs)
@@ -300,3 +306,4 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
 | 2026-07-20 | **Entscheidungen eingearbeitet**: Vaadin Flow bestätigt; `ui/small` bleibt (Display im Einsatz); App-Reste (`elwaapi`) werden entfernt; fhem-Frage präzisiert (inkl. Abhängigkeit der Testharness vom fhem-Simulator) |
 | 2026-07-20 | **Restentscheidungen eingearbeitet**: fhem UND deCONZ bleiben beide unterstützt (E2E künftig mit beiden Simulatoren, deCONZ-Sim in Phase 4); App-Entfernung bestätigt; Nutzungsprofil Portal dokumentiert (nur Admins → Admin-Views priorisiert). Einzige offene Frage: Betriebsmodell Backend |
 | 2026-07-20 | **Letzte Grundsatzfragen entschieden**: Portal-Struktur bleibt erhalten, UX-Verbesserungen erwünscht; Betrieb als Docker-Compose-Stack oder Kubernetes (Helm Chart vorbereiten). Keine offenen Grundsatzfragen mehr – Phase 1 kann starten |
+| 2026-07-20 | **Phase 1: Testframeworks vereinheitlicht** – `InactivitySchedulerTest` (einzige TestNG-Klasse) nach JUnit 5 migriert und von `src/main` nach `src/test` verschoben (lief zuvor gar nicht unter Surefire); TestNG- und ungenutzte JUnit-4-Dependency aus Client-Raspi/pom.xml entfernt |
