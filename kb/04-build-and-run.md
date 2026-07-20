@@ -221,6 +221,96 @@ Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).
   Release-JAR, schreibt `elwasys.properties`/`logback.xml`/`run.sh`, richtet Autostart über
   `~/.xsession` ein.
 - **Portal**: WAR auf Servlet-Container/Jetty deployen; `elwaportal.properties` bereitstellen.
+- **Backend** (seit Phase 2 AP6, siehe kb/05-migration-plan.md): Container-Image
+  (`backend/Dockerfile`), Betrieb per docker-compose oder Kubernetes/Helm - siehe unten.
+
+### Backend: Container-Image bauen
+
+`backend/Dockerfile` (Build-Kontext ist die **Repo-Wurzel**, nicht `backend/` - der Build
+braucht die Parent-POM und `Common`, siehe den bekannten Root-Reactor-Fallstrick oben):
+```bash
+docker build -f backend/Dockerfile -t elwasys-backend:local .
+```
+Multi-Stage: Maven-Build (Root-Reactor, zwei Aufrufe wie oben dokumentiert: erst
+`install -pl Common -am -DskipTests`, dann `package -pl backend -DskipTests`) → schlankes
+`eclipse-temurin:21-jre-jammy`-Runtime-Image, non-root User (UID/GID 1000), `HEALTHCHECK`
+gegen `/actuator/health`. `.dockerignore` an der Repo-Wurzel hält den Build-Kontext klein
+(Client-Raspi/Portal-Quellcode wird für den Backend-Build nicht gebraucht, nur deren
+`pom.xml`, damit Maven den Reactor parsen kann).
+
+### Backend: docker-compose
+
+`deploy/compose/` (Backend + eine mitgelieferte PostgreSQL-16-Instanz für Neuinstallationen):
+```bash
+cd deploy/compose
+cp .env.example .env   # Platzhalter durch echte Werte ersetzen
+docker compose up -d --build
+curl http://localhost:8080/actuator/health
+```
+Eine leere Datenbank wird beim ersten Start vollständig per Flyway-Baseline-Migration
+angelegt (kein gemountetes `database-init.sql` - würde sich mit dem bereits per
+`POSTGRES_DB`/`_USER` angelegten Datenbanknamen beißen und wäre doppelte Schemaverwaltung
+neben Flyway). Variante **„Anbindung an eine Bestands-DB"**: `ELWASYS_DB_URL`/`_USER`/
+`_PASSWORD` in `.env` auf die externe Instanz setzen und nur den `backend`-Service starten
+(`docker compose up backend`, ohne den mitgelieferten `postgres`-Service) -
+`baselineOnMigrate` übernimmt eine bestehende Alt-Weg-DB unverändert (siehe
+kb/02-data-model.md).
+
+TLS-Konzept Compose: das Basis-File terminiert selbst kein TLS (reiner HTTP-Zugriff, gedacht
+für lokale Tests oder Betrieb hinter einem bereits vorhandenen externen Reverse Proxy).
+Optionales TLS-Overlay mit Caddy (automatisches Let's-Encrypt-Zertifikat):
+```bash
+docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d --build
+```
+
+### Backend: Kubernetes / Helm Chart
+
+`deploy/helm/elwasys-backend/` (Deployment, Service, Ingress, ConfigMap/Secret getrennt,
+Liveness/Readiness gegen `/actuator/health`). `values.yaml` ist zugleich die
+Values-Dokumentation (jeder Abschnitt kommentiert). Der Chart bringt bewusst **kein**
+PostgreSQL-Sub-Chart mit - externe/bereits vorhandene DB ist der dokumentierte Regelfall
+(Begründung in `values.yaml` unter `database:` und in kb/05-migration-plan.md
+„Entscheidungen"); für Neuinstallationen ohne vorhandene DB wird empfohlen, z. B. das
+Bitnami-`postgresql`-Chart separat zu installieren und Service/Secret in `values.yaml`
+einzutragen:
+```bash
+helm install elwasys-db bitnami/postgresql -n elwasys \
+  --set auth.database=elwasys --set auth.username=elwaportal
+
+helm install elwasys deploy/helm/elwasys-backend -n elwasys \
+  --set secret.password=<DB-Passwort> \
+  --set database.host=elwasys-db-postgresql.elwasys.svc.cluster.local
+```
+TLS über einen bereits im Cluster vorhandenen Ingress-Controller + entweder eine
+cert-manager-`ClusterIssuer`-Annotation (automatisch) oder ein selbst verwaltetes
+TLS-Secret (siehe `values.yaml` unter `ingress:`):
+```bash
+helm install elwasys deploy/helm/elwasys-backend -n elwasys \
+  --set secret.password=<DB-Passwort> \
+  --set ingress.enabled=true \
+  --set ingress.hosts[0].host=elwasys.example.com
+```
+Validierung: `helm lint`/`helm template` (kein `helm` in dieser Sandbox-Umgebung
+vorinstalliert - über `go install helm.sh/helm/v3/cmd/helm@v3.15.4` beschafft, siehe
+kb/05-migration-plan.md AP6).
+
+### Backend: Standort-Tokens im Container erzeugen/widerrufen
+
+Dasselbe Image, Profil `token-cli` (siehe oben, „Standort-Tokens erzeugen/widerrufen"),
+gegen dieselbe Datenbank wie das laufende Deployment - als Einmal-Container, nicht per
+`exec` in den laufenden Webserver-Container:
+```bash
+# docker-compose:
+docker compose -f deploy/compose/docker-compose.yml run --rm backend \
+    --spring.profiles.active=token-cli --location=Default --label=terminal-kueche
+
+# Kubernetes (siehe auch "helm install ... " NOTES.txt):
+kubectl run elwasys-token-cli --rm -it --restart=Never -n elwasys \
+    --image=<dasselbe Image wie im Deployment> \
+    --env="ELWASYS_DB_URL=..." --env="ELWASYS_DB_USER=..." --env="ELWASYS_DB_PASSWORD=..." \
+    -- --spring.profiles.active=token-cli --location=Default --label=terminal-kueche
+```
+Das Klartext-Token erscheint GENAU EINMAL in der Ausgabe.
 
 ## CI (GitHub Actions)
 
@@ -242,6 +332,11 @@ Phase-1-QA-Review korrigiert; Backend-Job seit Phase 2 AP1, 2026-07-20)*:
   Sandbox-Entwicklungsumgebung, siehe kb/07-cloud-init.md) – das ist der von Spring Boot
   standardmäßig vorgesehene Testweg und braucht dort kein manuelles DB-Setup. `backend` hat
   keine Reactor-Abhängigkeit auf `common`, der Job baut daher nur `-pl backend` ohne `-am`.
+- **Backend-Job, Image-Build** (seit Phase 2 AP6, 2026-07-20): zusätzlicher Schritt
+  `docker build -f backend/Dockerfile -t elwasys-backend:ci .` - baut nur (kein Push),
+  beweist aber, dass `backend/Dockerfile` in einer echten Docker-Umgebung tatsächlich baubar
+  ist (kann in dieser daemonlosen Sandbox nicht direkt verifiziert werden, siehe
+  kb/07-cloud-init.md).
 
 `.github/workflows/maven-publish.yml` (Release) *(seit 2026-07-20: Parent-POM-Versionierung;
 JDK-Version am 2026-07-20 im Phase-1-QA-Review korrigiert)*:
@@ -254,6 +349,13 @@ JDK-Version am 2026-07-20 im Phase-1-QA-Review korrigiert)*:
   `sed -i -E` gesetzt
 - Reactor-Build `mvn install -pl Common,Client-Raspi -am` (installiert dabei
   auch die neu versionierte Parent-POM), lädt das fat-jar als Release-Asset hoch
+- **Backend-Image-Veröffentlichung** (seit Phase 2 AP6, 2026-07-20): baut zusätzlich
+  `backend/Dockerfile` (derselbe, bereits per `versions:set` versionierte Arbeitsbaum als
+  Build-Kontext) und pusht es nach GHCR (`ghcr.io/<owner>/elwasys-backend:<tag>` +
+  `:latest`) - Anmeldung über den eingebauten `GITHUB_TOKEN` (`packages: write` war bereits
+  gesetzt, kein zusätzliches Secret nötig). Andere Registries (z. B. Docker Hub) würden ein
+  separates, hier bewusst nicht angelegtes Secret brauchen - offener Punkt für eine spätere
+  Phase, falls gewünscht.
 
 ## Bekannte Build-Risiken
 

@@ -22,11 +22,13 @@ alle Grundsatzentscheidungen sind gefallen. Phase 2 ist gestartet: AP1 (Backend-
 Flyway-Baseline), AP2 (JPA-Entities/Repositories + Geschäftslogik-Portierung:
 Abrechnung, Berechtigungen, Preisberechnung, Execution-Lebenszyklus), AP3 (Auth:
 Argon2id-Hashing + SHA1-Migrationspfad, Login-/Session-Handling), AP4 (REST-API v1 +
-Standort-Token-Auth + WebSocket-Endpunkt für Terminals) und AP5 (Benachrichtigungsdienst
+Standort-Token-Auth + WebSocket-Endpunkt für Terminals), AP5 (Benachrichtigungsdienst
 SMTP/Pushover, implementiert/getestet hinter Konfig-Flag, Default AUS – Scharfschaltung
-mit echten Ereignissen folgt Phase 4) sind abgeschlossen.
-**Nächster Schritt: Phase 2 „Deployment“** (Dockerfile + docker-compose, Helm Chart für
-Kubernetes) – siehe Roadmap in kb/05.
+mit echten Ereignissen folgt Phase 4) und AP6 (Deployment: Dockerfile + docker-compose,
+Helm Chart für Kubernetes, TLS-Konzept) sind abgeschlossen – die Phase-2-Roadmap ist damit
+vollständig abgearbeitet. Phase 2 selbst gilt erst nach einer abschließenden QA-Review als
+abgeschlossen; **nächster Schritt: QA-Review von AP6, danach Entscheidung über Phase 3**
+(Portal-Neubau) – siehe Roadmap in kb/05.
 
 ## Arbeitsregeln
 
