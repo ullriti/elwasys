@@ -109,6 +109,12 @@ public class MainFormController extends AbstractMainFormController implements IM
      * selben Package) ist das weder nötig noch gewünscht. In Produktion wird ausschließlich
      * der öffentliche No-Arg-Konstruktor verwendet (durch den FXMLLoader), der unverändert
      * {@code wireToElwaManager=true} übergibt.
+     * <p>
+     * Aus demselben Grund wird bei {@code wireToElwaManager=false} auch kein echter
+     * {@link InactivityScheduler} angelegt: dessen Konstruktor liest ebenfalls
+     * {@code ElwaManager.instance} (für die Aktivitäts-Listener am Hauptfenster) und würde
+     * die Singleton-Initialisierung sonst über einen zweiten Pfad erzwingen.
+     * {@link MainFormStateManager} benötigt den InactivityScheduler nicht.
      *
      * @param wireToElwaManager Ob die Kopplung an {@link ElwaManager#instance} hergestellt
      *                          werden soll (Produktion: {@code true}). Package-private
@@ -126,9 +132,9 @@ public class MainFormController extends AbstractMainFormController implements IM
         // Zustandsmanager initiieren
         this.stateManager = new MainFormStateManager(this);
 
-        this.inactivityScheduler = new InactivityScheduler();
-
         if (wireToElwaManager) {
+            this.inactivityScheduler = new InactivityScheduler();
+
             // Auto-Logout initiieren
             this.registeredUser.addListener((observable, oldValue, newValue) -> {
                 if (this.runningLogoutDelay != null) {
