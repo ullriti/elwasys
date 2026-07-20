@@ -15,7 +15,7 @@ Teststrategie und die Remote-/Cloud-Init-Umgebung dokumentiert und fortlaufend g
 | [02-data-model.md](02-data-model.md) | Datenbankschema (PostgreSQL), Entitäten, Beziehungen |
 | [03-modules.md](03-modules.md) | Detaillierte Beschreibung der Module (Common, Client-Raspi, Portal) |
 | [04-build-and-run.md](04-build-and-run.md) | Build, Ausführung, Konfiguration, Deployment, CI |
-| [05-migration-plan.md](05-migration-plan.md) | Migrations-/Modernisierungsplan (lebendes Dokument) |
+| [05-migration-plan.md](05-migration-plan.md) | Modernisierungsplan: Rahmenbedingungen, Komponenten-Inventur, Zielarchitektur, Roadmap (lebendes Dokument) |
 | [06-ui-tests.md](06-ui-tests.md) | UI-Test-Strategie für Client (JavaFX) und Portal (Vaadin) |
 | [07-cloud-init.md](07-cloud-init.md) | Remote-/Cloud-Init-Umgebung zum Ausführen von Build & Tests |
 | [08-test-plan.md](08-test-plan.md) | Testplan: Vertiefung der Frontend-Tests (Client & Portal) |
@@ -45,3 +45,4 @@ Teststrategie und die Remote-/Cloud-Init-Umgebung dokumentiert und fortlaufend g
 | 2026-07-20 | Portal P14 (Standort), P16 (Passwort ändern), P17 (Einstellungen), P19 (Passwort vergessen), P20 (Gerätestatus) grün; Portal 18/18. Nur P21 (Cross-Component) offen |
 | 2026-07-20 | Cross-Component P21/P22 (Wartungsverbindung Portal⇄Client: Log holen, Neustart, Status) grün; Client 21/21. Alle geplanten Tests umgesetzt |
 | 2026-07-20 | **Phase 0 abgeschlossen** (Sicherheitsnetz steht); isolierte State-Machine-Charakterisierung + ElwaManager-DI nach Phase 1 verschoben (05-migration-plan.md) |
+| 2026-07-20 | **Modernisierungsplan überarbeitet** (05-migration-plan.md): Rahmenbedingungen fixiert (Java-Backend, Postgres, Raspi-Terminals bleiben; Nutzerverhalten unverändert), vollständige Komponenten-Inventur, Zielarchitektur (zentrales Spring-Boot-Backend, Portal integriert, Terminal über API), Roadmap Phasen 1–5 |
