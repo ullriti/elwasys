@@ -147,24 +147,42 @@ test('admin can block a user', async ({ page }) => {
   await expect(blockedBox(win)).toBeChecked();
 });
 
+/** Create a user group with no discount via the Vaadin UI. */
+async function createGroup(page: Page, groupName: string) {
+  await openSection(page, 'Benutzergruppen', 'groups');
+  await page.locator('.v-menubar-menuitem', { hasText: 'Neu' }).click();
+  const win = page.locator('.v-window', { hasText: 'Gruppe erstellen' });
+  await expect(win).toBeVisible();
+  await fieldByCaption(win, 'Name').fill(groupName);
+  await win.locator('.v-select-option', { hasText: 'Keiner' }).locator('input').check({ force: true });
+  await win.locator('.v-button', { hasText: 'Erstellen' }).click();
+  await expect(win).toBeHidden();
+}
+
 test('admin can create a user group', async ({ page }) => {
   const groupName = `E2E-Gruppe-${Date.now()}`;
 
   await loginAsAdmin(page);
-  await openSection(page, 'Benutzergruppen', 'groups');
-
-  await page.locator('.v-menubar-menuitem', { hasText: 'Neu' }).click();
-  const win = page.locator('.v-window', { hasText: 'Gruppe erstellen' });
-  await expect(win).toBeVisible();
-
-  await fieldByCaption(win, 'Name').fill(groupName);
-  // Discount type "Keiner" (no discount) — an OptionGroup radio button.
-  await win.locator('.v-select-option', { hasText: 'Keiner' }).locator('input').check({ force: true });
-
-  await win.locator('.v-button', { hasText: 'Erstellen' }).click();
-  await expect(win).toBeHidden();
+  await createGroup(page, groupName);
 
   await expect(page.getByText(groupName, { exact: true })).toBeVisible();
+});
+
+test('admin can delete a user group', async ({ page }) => {
+  const groupName = `E2E-DelGruppe-${Date.now()}`;
+
+  await loginAsAdmin(page);
+  await createGroup(page, groupName);
+  await expect(page.getByText(groupName, { exact: true })).toBeVisible();
+
+  // Delete it via the row's trash button (the last enabled action button).
+  const rowRe = new RegExp(groupName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  await page.getByRole('row', { name: rowRe }).locator('.v-button:not(.v-disabled)').last().click();
+
+  // Confirm the deletion ("Ja" in the confirmation window).
+  await page.locator('.v-button', { hasText: 'Ja' }).click();
+
+  await expect(page.getByText(groupName, { exact: true })).toHaveCount(0);
 });
 
 test('admin can create a device', async ({ page }) => {

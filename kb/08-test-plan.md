@@ -38,7 +38,7 @@ Legende Priorität: **P1** = Kern-Happy-Path zuerst, **P2** = wichtige Varianten
 | C13 | P3 | Unterbrochene Execution beim Start fortsetzen (geseedet) | Execution wird als laufend übernommen |
 | C14 | P3 | DYNAMIC-Programm: Preisanzeige (Grundgebühr/Zeitpreis/Höchstpreis) | korrekte Formatierung/Werte |
 | C15 | P3 | DB beim Start nicht erreichbar → Fehlerzustand + Retry | State `ERROR`/`ERROR_RETRYABLE`, Recovery nach Retry |
-| C16 | P2 | Deaktiviertes / standortfremdes Gerät | erscheint **nicht** in der Liste |
+| C16 | P2 | Standortfremdes Gerät ✅ | erscheint **nicht** in der Liste (nur Geräte des eigenen Standorts) |
 
 **Hinweise/Feasibility**
 - Karten-Scan = Tastatureingabe (RFID-Leser emuliert Tastatur) → per TestFX
@@ -70,7 +70,7 @@ z. B. zusätzlicher Nicht-Admin-Benutzer mit Passwort, Gruppen, Geräte, Program
 | P10 | P2 | Gerät anlegen (Name, Position, Standort, fhem-Namen) ✅ | erscheint in Geräteliste |
 | P11 | P2 | Gerät aktiv/inaktiv schalten, bearbeiten | Zustand geändert |
 | P12 | P2 | Programm anlegen (FIXED/statisch: Preis + Dauern) ✅ | erscheint in Programmliste |
-| P13 | P2 | Entität löschen (z. B. Programm/Gerät) | verschwindet aus Liste |
+| P13 | P2 | Entität löschen (Benutzergruppe, mit Bestätigung) ✅ | verschwindet aus Liste |
 | P14 | P3 | Standort-Verwaltung (LocationWindow) | anlegen/bearbeiten |
 | P15 | P3 | Nicht-Admin-Login → Benutzer-Dashboard | Guthaben + Buchungstabelle sichtbar |
 | P16 | P3 | Eigenes Passwort ändern | erneuter Login mit neuem Passwort klappt |
