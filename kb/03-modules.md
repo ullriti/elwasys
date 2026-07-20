@@ -487,11 +487,14 @@ per Default aus ist).
 - `NotificationsPropertiesDefaultTest`: voller Spring-Kontext, beweist `enabled=false` ohne
   gesetzte Umgebungsvariable.
 
-### Portal-UI (Vaadin Flow, Phase 3 AP1, 2026-07-20, Package `backend/.../ui/`)
+### Portal-UI (Vaadin Flow, Phase 3 AP1+AP2, 2026-07-20, Package `backend/.../ui/`)
 
 Admin-Portal als Vaadin-Flow-UI im Backend (siehe kb/05-migration-plan.md, Zielarchitektur
-„Portal ist Teil des Backends“) – dieses Arbeitspaket liefert nur das Grundgerüst
-(Login/Layout/Navigation/Rollen-Guard); Stammdaten-Inhalte folgen in AP2/AP3.
+„Portal ist Teil des Backends“) – AP1 lieferte das Grundgerüst (Login/Layout/Navigation/
+Rollen-Guard, siehe unten), **AP2 füllt die 5 Stammdaten-Views (Benutzer, Benutzergruppen,
+Geräte, Programme, Standorte) mit echten Listen + CRUD-Dialogen** (siehe Abschnitt
+„Stammdaten-Views (AP2)“ am Ende dieses Kapitels). Dashboard/UsersDashboard/Guthaben-
+Aufladen folgen in AP3.
 
 **Abhängigkeiten**: `vaadin-bom`/`vaadin-spring-boot-starter` (Version **24.10.8**) per
 BOM-Import, analog zum Spring-Boot-BOM (siehe AP1 oben). Zwei Ausschlüsse aus
@@ -517,6 +520,21 @@ Servlet-Start, ein erzwungener Produktionsmodus findet mangels gebautem
 `-Pproduction`-Bundle kein Frontend. Die automatisierte Testsuite ist davon nicht betroffen
 (erzwingt `vaadin.productionMode=true` für alle Tests, siehe unten – kein Test ruft eine
 Vaadin-UI-Route über einen echten Servlet-Container auf).
+
+**Update AP2 (2026-07-20, siehe kb/05-migration-plan.md, Änderungslog „Phase 3 AP2“)**: der
+Produktionsmodus-Build (`mvn -f backend/pom.xml package -Pproduction`) wurde als
+De-Risking-Auftrag geprüft und läuft in dieser Sandbox tatsächlich grün durch (auch nach
+`mvn clean`) – Vaadin erkennt, dass für diese rein aus Standard-Flow-Komponenten bestehende
+UI kein eigener Frontend-Build nötig ist, und liefert ein vorgefertigtes Produktions-Bundle
+aus den `vaadin-core`-Jars aus (kein npm/Netzwerkzugriff im Build-Log). Das damit gebaute Jar
+wurde gegen eine frische Postgres-Instanz gestartet: `/actuator/health` → `200 UP`, `/login` →
+`200` mit echtem Vaadin-Bootstrap-HTML samt ausgeliefertem JS/CSS-Bundle. Der Server loggt
+beim Start dennoch dieselbe Lizenz-Fehlermeldung wie im Dev-Modus, bricht aber – anders als
+dort – nicht ab. Für AP6 heißt das: eine Playwright-Suite kann gegen einen
+produktionsmodus-gebauten, hier gestarteten Server laufen, ohne dass eine
+Extended-Maintenance-Subscription/ein Offline-Lizenzschlüssel beschafft werden muss (die
+rechtliche Frage, ob das so betrieben werden darf, bleibt trotzdem offen – siehe kb/05,
+„Offene Fragen“).
 
 **Views/Layouts**:
 - `login/LoginView` (Route `/login`, `@AnonymousAllowed`) – Vaadins eingebaute `LoginForm`
@@ -610,3 +628,80 @@ scrapebarem CSRF-Feld) bleibt der späteren Playwright-E2E-Suite vorbehalten (kb
 starten“). `backend/run-backend-tests.sh` für den Docker-losen lokalen Testweg,
 `backend/verify-schema-baseline.sh` für den dokumentierten Schema-Äquivalenz-/
 `baselineOnMigrate`-Nachweis.
+
+#### Stammdaten-Views (AP2, 2026-07-20)
+
+Die 5 Admin-Platzhalter-Views aus AP1 (`AdminUsersView`, `AdminUserGroupsView`,
+`AdminDevicesView`, `AdminProgramsView`, `AdminLocationsView`) haben jetzt echte Inhalte –
+Feature-Parität zum Alt-Portal (siehe kb/08-test-plan.md, Testfälle P6/P7/P9–P14). `@Route`/
+`@PageTitle`/`@RolesAllowed` sind dabei UNVERÄNDERT geblieben (nur die Basisklasse wechselt
+von `PlaceholderView` auf `VerticalLayout` mit echtem Inhalt) – `RouteAccessAnnotationsTest`
+brauchte deshalb keine Anpassung.
+
+**Services** (`backend/.../service/`, jeweils mit den entsprechenden Alt-Fenstern als
+fachlicher Referenz):
+- `UserService` – Anlegen/Bearbeiten/weiches Löschen von Benutzern (fachlicher Nachfolger von
+  `Portal/.../components/UserWindow`, ohne dessen Admin-Passwort-Reset-Teil – der ist AP4).
+  Löschen entspricht 1:1 `Common.User#setDeleted`: der Benutzername wird zusätzlich mit
+  `#del<id>#` präfixiert, damit er (UNIQUE-Constraint auf `users.username`) sofort wieder
+  frei ist. Kartennummer-Mehrfachvergabe wirft `DuplicateCardIdException` (neu, Package
+  `backend/.../exception/`).
+- `UserGroupService` – Anlegen/Bearbeiten/Löschen (fachlicher Nachfolger von
+  `Portal/.../components/UserGroupWindow`). Löschen entspricht 1:1
+  `Common.UserGroup#delete`: Benutzer der gelöschten Gruppe werden einer anderen Gruppe
+  zugewiesen (`UserGroupRepository#findFirstByIdNotOrderByIdAsc` bildet die Alt-SQL nach);
+  gibt es keine andere Gruppe, wirft der Service `EntityInUseException` (neu) statt eines
+  NOT-NULL-Constraint-Verstoßes wie im Alt-Code. Besonderheit: `UserGroupEntity` selbst
+  besitzt KEINE Sammlung ihrer Standorte/Geräte/Programme (die drei `@ManyToMany`-Relationen
+  sind unidirektional von `LocationEntity`/`DeviceEntity`/`ProgramEntity` aus modelliert,
+  siehe deren Klassenkommentare) – `setValidLocations`/`-Devices`/`-Programs` togglen die
+  Gruppenzugehörigkeit deshalb von der jeweils anderen Tabellenseite aus (iterieren über alle
+  Standorte/Geräte/Programme).
+- `DeviceService` – Anlegen/Bearbeiten/Löschen (fachlicher Nachfolger von
+  `Portal/.../components/DeviceWindow`). Löschen bewusst OHNE Wächter, 1:1
+  `Common.Device#delete` (Ausführungen behalten ihren Bezug per `ON DELETE SET DEFAULT` auf
+  ein virtuelles Gerät, siehe kb/02-data-model.md).
+- `ProgramService` – Anlegen/Bearbeiten/Löschen (fachlicher Nachfolger von
+  `Portal/.../components/ProgramWindow`). Löschen mit Wächter: ein Programm, das noch
+  mindestens einem Gerät zugeordnet ist, wird NICHT gelöscht (1:1
+  `Portal/.../views/ProgramsView#deleteProgram` – eine fachliche Schutzregel, obwohl
+  `device_program_rel` selbst `ON DELETE CASCADE` trägt und die DB das technisch zuließe).
+- `LocationService` – Anlegen/Bearbeiten/Löschen. Standorte sind seit AP1 ein eigener
+  Menüpunkt (`AdminLocationsView`, im Alt-Portal nur über einen Dashboard-Dialog erreichbar,
+  `Portal/.../components/LocationWindow`) – eine vom Auftraggeber gewünschte
+  UX-Verbesserung. Löschen mit Wächter analog zu `ProgramService` (ein Standort mit noch
+  zugeordneten Geräten wird nicht gelöscht, entspricht fachlich
+  `DataManager#removeUnusedLocations`, jetzt als expliziter Admin-Vorgang statt impliziter
+  Hintergrundaktion).
+
+Neue Repository-Methoden: `UserGroupRepository#findFirstByIdNotOrderByIdAsc`,
+`DeviceRepository#findAllByOrderByNameAsc`/`#findByPrograms_Id`,
+`ProgramRepository#findAllByOrderByNameAsc`.
+
+**UI** (neues Sub-Paket `backend/.../ui/admin/dialog/`): jede der 5 Views ist ein Vaadin
+`Grid` (Spalten wie im Alt-Portal, siehe kb/08-test-plan.md) mit Symbolleiste „Neu“ und
+Zeilen-Aktionen (Bearbeiten/Löschen), die einen modalen `Dialog` öffnen – fachliche
+Nachfolger der Alt-`components/*Window`-Fenster: `UserFormDialog`, `UserGroupFormDialog`,
+`DeviceFormDialog`, `ProgramFormDialog`, `LocationFormDialog`. Neue gemeinsame Komponente
+`backend/.../ui/component/ConfirmDeleteDialog` (Nachfolger von
+`Portal/.../components/ConfirmWindow`) nutzt Vaadins eingebauten `ConfirmDialog` mit
+deutschen „Ja“/„Nein“-Beschriftungen. Die Alt-`TwinColSelect`-Mehrfachauswahlen (Standorte/
+Geräte/Programme/Benutzergruppen) sind als `MultiSelectComboBox` umgesetzt – funktional
+identisch, moderneres Bedienelement (UX-Verbesserung im erlaubten Rahmen, siehe
+kb/05-migration-plan.md, „Entscheidungen“).
+
+**Bewusst NICHT Teil dieses Arbeitspakets** (bewusste Abweichungen, keine stillen Lücken):
+Admin-Passwort-Reset im Benutzer-Dialog (AP4); Guthaben-AUFLADEN (`UserCreditWindow`, AP3 –
+die Benutzerliste zeigt Guthaben nur an, über `CreditService#getCredit`); „Nicht abgerechnete
+Programmausführungen“-Warnicon (`ExpiredExecutionsWindow`, eigener Roadmap-Punkt „Dialoge/
+Funktionen“); `DeviceWindow`s Inline-Standort-Anlage entfällt ersatzlos (durch die
+eigenständige Standort-Verwaltung überflüssig).
+
+**Tests** (19 neu, Package `backend/.../service/`, Muster wie Phase 2 AP2 –
+`AbstractBackendIT`/`Fixtures`): `UserServiceTest`, `UserGroupServiceTest` +
+`UserGroupServiceDeleteGuardTest` (reiner Mockito-Unit-Test für den in der gemeinsam
+genutzten Testdatenbank nicht sauber herstellbaren Randfall „keine andere Gruppe mehr
+vorhanden“), `DeviceServiceTest`, `ProgramServiceTest`, `LocationServiceTest`. Backend-Suite
+insgesamt **135/135** grün. Bewusst KEIN Test, der über einen echten eingebetteten
+Servlet-Container eine Vaadin-Route rendert (unverändertes Risiko aus AP1) – siehe
+„Wichtiger Befund“ oben für den De-Risking-Nachweis über den Produktionsmodus-Build.
