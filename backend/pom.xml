@@ -33,6 +33,11 @@
 		     brauchen es nicht). Nur für dieses Modul gesetzt, betrifft Common/Client-
 		     Raspi/Portal nicht. -->
 		<maven.compiler.parameters>true</maven.compiler.parameters>
+		<!-- Phase 3 AP1 (Portal-Neubau, siehe kb/05-migration-plan.md): Vaadin Flow 24,
+		     bestätigt als Portal-Stack. Neuester 24.x-Release zum Zeitpunkt dieses
+		     Arbeitspakets (24-Linie bleibt auf Spring Boot 3.2-3.5 kompatibel; 25.x wäre ein
+		     Major-Sprung mit eigenen Kompatibilitätsfragen, hier bewusst nicht gewählt). -->
+		<vaadin.version>24.10.8</vaadin.version>
 	</properties>
 
 	<dependencyManagement>
@@ -78,6 +83,16 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-dependencies</artifactId>
 				<version>${spring-boot.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+
+			<!-- Vaadin Flow 24 (Phase 3 AP1, siehe kb/05-migration-plan.md): pinnt u.a.
+			     vaadin-spring-boot-starter auf eine zu Spring Boot 3.5 passende Version. -->
+			<dependency>
+				<groupId>com.vaadin</groupId>
+				<artifactId>vaadin-bom</artifactId>
+				<version>${vaadin.version}</version>
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
@@ -162,6 +177,66 @@
 			<artifactId>spring-boot-starter-websocket</artifactId>
 		</dependency>
 
+		<!-- Admin-Portal-UI (Phase 3 AP1, siehe kb/05-migration-plan.md): Vaadin Flow im
+		     Backend eingebettet statt eines separaten Frontend-Stacks (Vorgabe "Java
+		     Backend"). Bringt u.a. Spring-Integration (Routen-basierte @SpringComponent-
+		     Scans, Session-Handling) und die Vaadin-Servlet-Autokonfiguration mit.
+
+		     Ausschluss "hilla" (TypeScript/React-Gegenstück zu Flow, wird hier NICHT
+		     eingesetzt - Auftrag/Entscheidung ist explizit Vaadin FLOW, siehe
+		     kb/05-migration-plan.md): der volle "vaadin-spring-boot-starter" bringt Hilla per
+		     Default mit. Ohne diesen Ausschluss wirft
+		     com.vaadin.flow.spring.security.RequestUtil#isAllowedHillaView beim Auswerten der
+		     Sicherheitskette eine IllegalStateException ("The application Lookup instance is
+		     not found in VaadinContext") in jedem Testkontext ohne echten, über einen
+		     ServletContainerInitializer bootstrapped Servlet-Container (u.a.
+		     @SpringBootTest(webEnvironment=MOCK), wie es die BESTEHENDEN AP3/AP4-Tests
+		     (SecurityConfigTest, AbstractApiIT-Unterklassen) verwenden) - das hätte die
+		     komplette Backend-Testsuite gebrochen, nicht nur neue Vaadin-UI-Tests.
+
+		     Ausschluss "collaboration-engine" (kommerzielles Vaadin-Pro-Add-on für
+		     Echtzeit-Kollaborationsfunktionen, transitiv über vaadin-core-components ->
+		     vaadin-core-internal -> vaadin-core eingebunden): wird hier nirgends verwendet,
+		     daher sauber ausgeschlossen statt es funktionslos im Klassenpfad mitzuschleppen.
+
+		     WICHTIGER BEFUND (siehe kb/05-migration-plan.md, Abschnitt "Offene Punkte/Risiken
+		     Phase 3 AP1" für die vollständige Herleitung): unabhängig von diesem Ausschluss
+		     verlangt Vaadin 24.10.x (flow-server) im Dev-Modus beim allerersten
+		     VaadinServlet#init() einen ONLINE-Lizenzcheck gegen vaadin.com
+		     (com.vaadin.pro.licensechecker.LicenseChecker, aufgerufen aus
+		     VaadinServlet#verifyLicense) - NICHT weil ein Pro-Add-on genutzt würde, sondern
+		     weil die 24-Linie inzwischen als "Extended Maintenance" (kostenpflichtig)
+		     eingestuft ist ("This Vaadin version requires an extended maintenance
+		     subscription", beobachtet 2026-07-20). Diese Sandbox-/Build-Umgebung hat KEINEN
+		     Netzwerkzugriff auf vaadin.com (Proxy liefert 403) und damit auch keine
+		     Möglichkeit, einen Offline-Schlüssel zu beziehen - "mvn spring-boot:run" (Dev-Modus)
+		     scheitert deshalb HIER beim Start des Vaadin-Servlets, unabhängig vom Java-Code
+		     dieses Arbeitspakets. Ein forcierter Produktionsmodus (nur zum Testen versucht)
+		     umgeht zwar den Lizenzcheck, scheitert dann aber daran, dass kein
+		     Produktions-Frontend-Bundle vorliegt ("Unable to find index.html..." - das Bundle
+		     wird nur im "production"-Maven-Profil gebaut, siehe unten). Die BESTEHENDE
+		     Testsuite bleibt davon unberührt (siehe Surefire-Konfiguration unten,
+		     vaadin.productionMode=true für Tests + keiner der bestehenden Tests ruft je eine
+		     Vaadin-UI-Route auf); betroffen sind ausschließlich (a) manuelles interaktives
+		     Ausprobieren der UI in dieser Sandbox und (b) ein potenzieller künftiger
+		     Browser-/Playwright-E2E-Test gegen einen echten laufenden Server - beides ist
+		     dokumentiertes Risiko für den nächsten Schritt (AP2), nicht Teil dieses
+		     Arbeitspakets. -->
+		<dependency>
+			<groupId>com.vaadin</groupId>
+			<artifactId>vaadin-spring-boot-starter</artifactId>
+			<exclusions>
+				<exclusion>
+					<groupId>com.vaadin</groupId>
+					<artifactId>hilla</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>com.vaadin</groupId>
+					<artifactId>collaboration-engine</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+
 		<!-- API-Dokumentation (AP4): generiert die OpenAPI-Beschreibung + Swagger-UI aus den
 		     REST-Controllern unter /api/v1/**. Version 2.8.x ist die springdoc-openapi-Reihe
 		     für Spring Boot 3.4/3.5 (Spring Framework 6.2/Jakarta), nicht vom Spring-Boot-BOM
@@ -238,6 +313,83 @@
 					</execution>
 				</executions>
 			</plugin>
+
+			<!-- Vaadin Flow (Phase 3 AP1, siehe kb/05-migration-plan.md): erzeugt beim
+			     "package"-Build die frontend-Tooling-Konfiguration (prepare-frontend) und im
+			     Dev-Modus ein Vorab-Bundle (build-frontend), damit der erste App-Start nicht
+			     auf einen frisch startenden npm/Vite-Vorgang warten muss. LÄUFT NICHT bei
+			     "mvn test" (Phase "prepare-package" liegt nach "test" im Lifecycle) - die
+			     bestehende Backend-Testsuite bleibt davon unberührt; siehe zusätzlich die
+			     Surefire-Konfiguration unten (vaadin.productionMode=true für Tests), die
+			     zusätzlich verhindert, dass ein Testfall mit vollem Embedded-Servlet-
+			     Container (z.B. TerminalWebSocketTest, RANDOM_PORT) den Vaadin-Dev-Modus
+			     (npm/Vite) startet. Die eigentliche Produktions-Bundle-Erzeugung
+			     (minifiziert, ohne Dev-Server) läuft nur im "production"-Profil unten. -->
+			<plugin>
+				<groupId>com.vaadin</groupId>
+				<artifactId>vaadin-maven-plugin</artifactId>
+				<version>${vaadin.version}</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>prepare-frontend</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- Erzwingt den Vaadin-Produktionsmodus für alle Testläufe dieses Moduls (lokal
+			     via run-backend-tests.sh UND in der CI, siehe .github/workflows/ci.yml) -
+			     unabhängig davon, ob ein einzelner Testfall einen echten Embedded-Servlet-
+			     Container hochfährt (z.B. TerminalWebSocketTest/ExecutionControllerTest,
+			     webEnvironment=RANDOM_PORT). Ohne dieses Flag würde Vaadins
+			     DevModeInitializer beim Hochfahren eines solchen Containers versuchen, einen
+			     Node/Vite-Entwicklungsserver zu starten (inkl. npm-Installationsschritt) -
+			     das ist für Tests, die keine Vaadin-UI-Route aufrufen, unnötig und macht die
+			     Testsuite von Netzwerk-/Node-Verfügbarkeit abhängig. Im Produktionsmodus
+			     überspringt Vaadin den Dev-Server vollständig; ein fehlendes, noch nicht
+			     gebautes Produktions-Frontend-Bundle stört nicht, solange kein Test eine
+			     Vaadin-UI-Route aufruft (AP1: nur Platzhalter-Views, keine UI-Tests). -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>3.5.6</version>
+				<configuration>
+					<systemPropertyVariables>
+						<vaadin.productionMode>true</vaadin.productionMode>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<!-- Produktions-Frontend-Bundle (minifiziert, kein Dev-Server) - analog zum
+		     Standard-Vaadin/Spring-Boot-Starter-POM. Bewusst NICHT im Default-Build
+		     aktiv: "mvn package" ohne dieses Profil bleibt schnell und deterministisch
+		     (kein npm-Bundling), siehe Klassen-Javadoc der Plugin-Konfiguration oben.
+		     Aktivieren mit "mvn -f backend/pom.xml package -Pproduction". -->
+		<profile>
+			<id>production</id>
+			<properties>
+				<vaadin.productionMode>true</vaadin.productionMode>
+			</properties>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>com.vaadin</groupId>
+						<artifactId>vaadin-maven-plugin</artifactId>
+						<version>${vaadin.version}</version>
+						<executions>
+							<execution>
+								<goals>
+									<goal>build-frontend</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 </project>
