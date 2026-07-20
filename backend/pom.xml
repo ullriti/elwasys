@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.kabieror.elwasys</groupId>
+		<artifactId>elwasys-parent</artifactId>
+		<version>0.0.0-local-development</version>
+		<relativePath>../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>backend</artifactId>
+	<packaging>jar</packaging>
+	<name>elwasys backend</name>
+	<description>
+		Spring-Boot-Backend (Phase 2 des Modernisierungsplans, siehe kb/05-migration-plan.md).
+		Läuft parallel zum Bestand (Client-Raspi, Portal) auf derselben PostgreSQL-Datenbank
+		(Strangler-Muster). Erbt das elwasys-Parent-POM (Java 21 per Default), bindet Spring
+		Boot bewusst per BOM-Import statt über spring-boot-starter-parent ein, damit das
+		gemeinsame Parent-POM die Wurzel des Vererbungsbaums bleibt.
+	</description>
+
+	<properties>
+		<!-- Aktuelles Spring Boot 3.x (siehe kb/05-migration-plan.md, Technologie-
+		     Entscheidungen: "Spring Boot 3.x"). -->
+		<spring-boot.version>3.5.16</spring-boot.version>
+	</properties>
+
+	<dependencyManagement>
+		<dependencies>
+			<!-- Overrides for elwasys-parent's own dependencyManagement (logback/slf4j/
+			     postgresql, see /pom.xml): a Maven BOM import never overrides a version
+			     that is already explicitly managed somewhere in the inheritance chain -
+			     that's by design, so you can import a BOM and still pin individual
+			     versions. Since elwasys-parent pins comparatively old versions for
+			     Common/Client-Raspi/Portal (logback 1.2.9, slf4j 1.7.12, postgres driver
+			     42.6.0), those would silently "win" over the newer, mutually-compatible
+			     versions Spring Boot 3.5's BOM below expects for this module (Spring
+			     Boot's Logback integration needs logback >= 1.5 for its Configurator
+			     SPI). These explicit entries make backend use the exact versions
+			     spring-boot-dependencies ${spring-boot.version} itself manages, instead
+			     of the parent's older pins. Client-Raspi/Portal/Common are unaffected -
+			     they don't import this BOM. -->
+			<dependency>
+				<groupId>ch.qos.logback</groupId>
+				<artifactId>logback-classic</artifactId>
+				<version>1.5.34</version>
+			</dependency>
+			<dependency>
+				<groupId>ch.qos.logback</groupId>
+				<artifactId>logback-core</artifactId>
+				<version>1.5.34</version>
+			</dependency>
+			<dependency>
+				<groupId>org.slf4j</groupId>
+				<artifactId>slf4j-api</artifactId>
+				<version>2.0.18</version>
+			</dependency>
+			<dependency>
+				<groupId>org.postgresql</groupId>
+				<artifactId>postgresql</artifactId>
+				<version>42.7.11</version>
+			</dependency>
+
+			<!-- BOM-Import statt spring-boot-starter-parent: das Modul erbt bereits von
+			     elwasys-parent, ein zweiter Parent ist in Maven nicht möglich. Der
+			     Dependency-Management-Import bringt dieselben abgestimmten Versionen. -->
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-dependencies</artifactId>
+				<version>${spring-boot.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+	<dependencies>
+		<!-- Web (REST-Grundgerüst, kommt in einem späteren Arbeitspaket zum Einsatz) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+
+		<!-- Actuator: Health-Endpoint -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+
+		<!-- JDBC + Flyway. JPA folgt erst im nächsten Arbeitspaket (Entities/Repositories). -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-jdbc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
+		<!-- Bean Validation -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+
+		<!-- Tests -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<finalName>elwasys-backend</finalName>
+		<plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+				<version>${spring-boot.version}</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>repackage</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+</project>

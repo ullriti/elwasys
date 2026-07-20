@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: elwasys-backend
+
+  # Datenbank: dieselbe PostgreSQL-DB wie Client-Raspi/Portal (Parallelbetrieb, siehe
+  # kb/05-migration-plan.md). Alle drei Werte sind per Umgebungsvariable überschreibbar;
+  # die Defaults passen zur lokalen Entwicklungsumgebung (siehe kb/04-build-and-run.md).
+  datasource:
+    url: ${ELWASYS_DB_URL:jdbc:postgresql://localhost:5432/elwasys}
+    username: ${ELWASYS_DB_USER:elwaportal}
+    password: ${ELWASYS_DB_PASSWORD:elwaportal}
+
+  flyway:
+    # baselineOnMigrate: eine bereits über den Alt-Weg (database-init.sql +
+    # database-upgrade/*.sql) angelegte Bestands-DB hat keine flyway_schema_history-Tabelle,
+    # aber bereits alle Tabellen. Flyway markiert sie dann als "auf baselineVersion migriert",
+    # ohne V1 (== der Alt-Weg-Endstand 0.4.0) erneut auszuführen. Eine leere/frische DB
+    # durchläuft V1 stattdessen ganz normal. Siehe kb/02-data-model.md.
+    baseline-on-migrate: true
+    baseline-version: 1
+    baseline-description: "Bestandsschema 0.4.0 (Alt-Weg: database-init.sql + database-upgrade/*.sql)"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+logging:
+  level:
+    root: INFO
+    org.kabieror.elwasys: INFO
+    org.flywaydb: INFO
