@@ -17,6 +17,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Since AP2 (JPA entities/services), the backend module has a test-scope dependency on
+# "common" (Alt-vs-Neu-Äquivalenztests, see kb/05-migration-plan.md) - ensure it (and the
+# aggregator parent POM, which a plain "mvn -f Common/pom.xml install" would NOT install)
+# is available in the local Maven repo, same pattern as Client-Raspi/run-ui-tests.sh.
+mvn -q -B -f pom.xml install -pl Common -am -DskipTests
+
 DB_NAME="elwasys_backend_it"
 
 # Start PostgreSQL if it isn't running yet (best-effort, mirrors run-ui-tests.sh / CI).

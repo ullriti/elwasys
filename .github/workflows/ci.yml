@@ -144,8 +144,12 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Backend – new Spring Boot module (Phase 2, parallel to the legacy stack, see
-  # kb/05-migration-plan.md). Independent of Common/Client-Raspi/Portal (no reactor
-  # dependency), so this job doesn't need to build them first.
+  # kb/05-migration-plan.md).
+  #
+  # Since AP2 (JPA entities/services) the module has a test-scope dependency on "common"
+  # (Alt-vs-Neu-Äquivalenztests für Preis-/Guthabenberechnung, see kb/05-migration-plan.md) -
+  # this job now builds Common first via the root reactor (-pl Common -am), same pattern as
+  # the "common"/"client" jobs above, so backend's test classpath can resolve it.
   #
   # Tests use Testcontainers by default (see backend/src/test/.../TestPostgres.java) - unlike
   # the Client-Raspi/Portal jobs above, which seed a local PostgreSQL cluster because the
@@ -166,6 +170,9 @@ jobs:
           java-version: '21'
           distribution: 'liberica'
           cache: maven
+
+      - name: Build Common (test-scope dependency of backend)
+        run: mvn -B -f pom.xml install -pl Common -am -DskipTests
 
       - name: Build & test backend
         run: mvn -B -f pom.xml test -pl backend
