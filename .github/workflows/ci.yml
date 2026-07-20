@@ -141,3 +141,39 @@ jobs:
           name: portal-playwright-report
           path: Portal/e2e/playwright-report/
           if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Backend – new Spring Boot module (Phase 2, parallel to the legacy stack, see
+  # kb/05-migration-plan.md). Independent of Common/Client-Raspi/Portal (no reactor
+  # dependency), so this job doesn't need to build them first.
+  #
+  # Tests use Testcontainers by default (see backend/src/test/.../TestPostgres.java) - unlike
+  # the Client-Raspi/Portal jobs above, which seed a local PostgreSQL cluster because the
+  # sandboxed dev container this project is normally developed in (see kb/07-cloud-init.md)
+  # has no Docker daemon. GitHub-hosted ubuntu-24.04 runners *do* have a Docker daemon, so
+  # here Testcontainers can run unmodified and doesn't need the local-PG workaround
+  # backend/run-backend-tests.sh provides for that daemon-less environment.
+  # ---------------------------------------------------------------------------
+  backend:
+    name: Backend (Spring Boot, Testcontainers)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'liberica'
+          cache: maven
+
+      - name: Build & test backend
+        run: mvn -B -f pom.xml test -pl backend
+
+      - name: Upload Surefire reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-surefire-reports
+          path: backend/target/surefire-reports/
+          if-no-files-found: ignore
