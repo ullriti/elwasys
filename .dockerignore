@@ -1,0 +1,44 @@
+# Build-Kontext-Filter für "docker build -f backend/Dockerfile ." (Kontext = Repo-Wurzel,
+# siehe backend/Dockerfile). Ziel: nur das in den Container-Build schicken, was das Backend-
+# Image tatsächlich braucht (Root-POM + Common/Client-Raspi/Portal-POMs + Common/backend-
+# Quellcode) - alles andere raus, damit der Build-Kontext klein bleibt und Layer-Caching nicht
+# durch irrelevante Änderungen (z.B. Portal-Quellcode) invalidiert wird.
+
+# Versionskontrolle / IDE / Editor
+.git/
+.github/
+.claude/
+.settings/
+.vscode/
+.idea/
+*.iml
+
+# Bereits gebaute Artefakte (werden im Container neu gebaut)
+**/target/
+*.class
+*.jar
+*.war
+
+# Client-Raspi/Portal-Quellcode wird für den Backend-Image-Build nicht gebraucht (nur deren
+# pom.xml, damit der Root-Reactor sich parsen lässt - siehe backend/Dockerfile). Kein
+# generisches "Client-Raspi/"/"Portal/"-Ignore, weil das auch die benötigten pom.xml-Dateien
+# treffen würde.
+Client-Raspi/src/
+Client-Raspi/*.sh
+Client-Raspi/res/
+Portal/src/
+Portal/src-gwt/
+Portal/e2e/
+Portal/WebContent/
+
+# Deployment-eigene Dateien (nicht Teil des Java-Builds)
+deploy/
+kb/
+doc/
+*.md
+LICENSE.md
+
+# Sonstiges
+.hgignore
+.DS_Store
+*.log
