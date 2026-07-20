@@ -1,0 +1,7 @@
+# Profil fürs einmalige CLI-Erzeugen/Widerrufen von Standort-Tokens (siehe
+# TerminalTokenCliRunner). web-application-type=none verhindert, dass der eingebettete
+# Webserver hochfährt - der Prozess führt nur den ApplicationRunner aus und beendet sich
+# danach von selbst.
+spring:
+  main:
+    web-application-type: none
