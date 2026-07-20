@@ -40,3 +40,4 @@ Teststrategie und die Remote-/Cloud-Init-Umgebung dokumentiert und fortlaufend g
 | 2026-07-20 | Client C11 (Auto-Ende) + Portal P7 (Benutzer sperren) grün; Client 14 / Portal 11 |
 | 2026-07-20 | Client C16 (standortfremdes Gerät) + Portal P13 (Gruppe löschen) grün; Client 15 / Portal 12 |
 | 2026-07-20 | Portal P15+P18 (Nicht-Admin-Frontend & Berechtigungen) grün; Portal 13 |
+| 2026-07-20 | Client C14 (DYNAMIC-Preisanzeige) grün; Client 16. Verbleibende Fälle in 08-test-plan.md dokumentiert |

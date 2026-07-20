@@ -36,7 +36,7 @@ Legende Priorität: **P1** = Kern-Happy-Path zuerst, **P2** = wichtige Varianten
 | C11 | P3 | Auto-Ende: Gerät zieht keine Leistung → Ende nach `auto_end_wait_time` ✅ | Execution automatisch beendet |
 | C12 | P3 | Laufende Execution abbrechen (Bestätigung) ✅ | Execution gestoppt (keine laufende Execution mehr) |
 | C13 | P3 | Unterbrochene Execution beim Start fortsetzen (geseedet) | Execution wird als laufend übernommen |
-| C14 | P3 | DYNAMIC-Programm: Preisanzeige (Grundgebühr/Zeitpreis/Höchstpreis) | korrekte Formatierung/Werte |
+| C14 | P3 | DYNAMIC-Programm: Preisanzeige (Grundgebühr/Zeitpreis) ✅ | „Grundgebühr"/„Zeitpreis" auf Bestätigung sichtbar |
 | C15 | P3 | DB beim Start nicht erreichbar → Fehlerzustand + Retry | State `ERROR`/`ERROR_RETRYABLE`, Recovery nach Retry |
 | C16 | P2 | Standortfremdes Gerät ✅ | erscheint **nicht** in der Liste (nur Geräte des eigenen Standorts) |
 
@@ -100,6 +100,23 @@ z. B. zusätzlicher Nicht-Admin-Benutzer mit Passwort, Gruppen, Geräte, Program
   PostgreSQL-Service.
 - **Reihenfolge-Unabhängigkeit**: wie beim Client-E2E (stabile IDs, Registrierungs-Reset)
   konsequent für alle datenverändernden Tests.
+
+## Stand der Umsetzung (2026-07-20)
+
+**Umgesetzt & grün** — Client (TestFX/Xvfb, 16 Tests): C1–C12, C14, C16.
+Portal (Playwright, 13 Tests): P1–P13, P15, P18.
+
+**Verbleibend / bewusst zurückgestellt:**
+- **C13** (unterbrochene Execution beim Start fortsetzen): machbar (laufende Execution
+  seeden, App booten, prüfen dass sie übernommen wird) – nächster sinnvoller Client-Fall.
+- **C15** (DB-Ausfall → Fehlerzustand + Retry): braucht kontrolliertes Stoppen/Starten der
+  DB mitten im Test; zurückgestellt (Flakiness-Risiko, Infrastruktur).
+- **P14** (Standort-Verwaltung), **P16** (Passwort ändern), **P17** (Benutzereinstellungen),
+  **P19** (Passwort-vergessen-Dialog): reine Portal-Formularflows, mit den vorhandenen
+  Patterns schnell ergänzbar.
+- **P20/P21** (Dashboard-Gerätestatus / Log-Viewer / Client-Neustart): hängen an der
+  Wartungs-Verbindung Portal⇄Client (Cross-Component). Eigener, größerer Meilenstein –
+  am besten Portal + laufender Client gemeinsam hochfahren. Zurückgestellt.
 
 ## Empfohlene Reihenfolge
 1. **Client P1** (C2–C5) – der Kern-Nutzungsablauf am Terminal.
