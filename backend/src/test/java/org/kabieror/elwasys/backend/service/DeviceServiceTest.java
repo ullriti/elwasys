@@ -65,6 +65,20 @@ class DeviceServiceTest extends AbstractBackendIT {
     }
 
     @Test
+    void findByLocationReturnsOnlyDevicesOfThatLocationOrderedByName() {
+        LocationEntity locationA = this.locationRepository.save(new LocationEntity(Fixtures.unique("locA")));
+        LocationEntity locationB = this.locationRepository.save(new LocationEntity(Fixtures.unique("locB")));
+        DeviceEntity deviceZ = this.deviceService.create("Z-" + Fixtures.unique("dev"), 1, locationA, "", "", "", "",
+                1f, Duration.ofSeconds(10), true, Set.of(), Set.of());
+        DeviceEntity deviceA = this.deviceService.create("A-" + Fixtures.unique("dev"), 2, locationA, "", "", "", "",
+                1f, Duration.ofSeconds(10), true, Set.of(), Set.of());
+        this.deviceService.create(Fixtures.unique("otherLocDev"), 1, locationB, "", "", "", "", 1f,
+                Duration.ofSeconds(10), true, Set.of(), Set.of());
+
+        assertThat(this.deviceService.findByLocation(locationA)).containsExactly(deviceA, deviceZ);
+    }
+
+    @Test
     void deletesADeviceWithoutAGuard() {
         LocationEntity location = this.locationRepository.save(new LocationEntity(Fixtures.unique("loc")));
         DeviceEntity device = this.deviceService.create(Fixtures.unique("dev"), 1, location, "", "", "", "", 1f,

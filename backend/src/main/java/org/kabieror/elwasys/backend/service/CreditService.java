@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.kabieror.elwasys.backend.domain.CreditAccountingEntryEntity;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
@@ -149,5 +150,29 @@ public class CreditService {
     @Transactional
     public CreditAccountingEntryEntity payout(UserEntity user, BigDecimal amount) {
         return payout(user, amount, "Payout from Washportal");
+    }
+
+    /**
+     * Entspricht {@code DataManager#getAccountingEntries(User)} - die vollständige, nie
+     * veränderte Buchungshistorie eines Benutzers, neueste zuerst. Fachlicher Nachfolger von
+     * {@code Portal/.../components/CreditAccountingWindow} (Alt-Portal, "Umsätze ansehen")
+     * sowie des Buchungsteils von {@code Portal/.../views/UsersDashboardView} (Testfall P15,
+     * Phase 3 AP3, siehe kb/05-migration-plan.md). Liest nur - Buchungen werden hier wie
+     * überall in diesem Service niemals verändert.
+     */
+    @Transactional(readOnly = true)
+    public List<CreditAccountingEntryEntity> getAccountingEntries(UserEntity user) {
+        return this.creditAccountingEntryRepository.findByUser_IdOrderByDateDesc(user.getId());
+    }
+
+    /**
+     * 1:1-Portierung von {@code DataManager#getLastInpayment(User)} - die letzte positive
+     * Buchung (Einzahlung) eines Benutzers, für die "Letzte Einzahlung"-Kachel des
+     * Benutzer-Dashboards ({@code Portal/.../views/UsersDashboardView}, Phase 3 AP3).
+     */
+    @Transactional(readOnly = true)
+    public Optional<CreditAccountingEntryEntity> getLastInpayment(UserEntity user) {
+        return this.creditAccountingEntryRepository.findFirstByUser_IdAndAmountGreaterThanOrderByDateDesc(
+                user.getId(), BigDecimal.ZERO);
     }
 }

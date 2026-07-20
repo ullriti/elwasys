@@ -40,6 +40,18 @@ public class DeviceService {
         return this.deviceRepository.findById(id);
     }
 
+    /**
+     * Entspricht {@code DataManager#getDevicesToDisplay(Location)} - alle Geräte eines
+     * Standorts, alphabetisch nach Name. Wird vom Admin-Dashboard (Phase 3 AP3, siehe
+     * kb/05-migration-plan.md, {@code DashboardService}) verwendet, um Geräte je Standort zu
+     * gruppieren - fachlich identisch zu {@code AdminDashboardView#buildDeviceInfo} im
+     * Alt-Portal.
+     */
+    @Transactional(readOnly = true)
+    public List<DeviceEntity> findByLocation(LocationEntity location) {
+        return this.deviceRepository.findByLocation_IdOrderByName(location.getId());
+    }
+
     @Transactional
     public DeviceEntity create(String name, int position, LocationEntity location, String fhemName,
             String fhemSwitchName, String fhemPowerName, String deconzUuid, float autoEndPowerThreshold,
