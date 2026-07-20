@@ -41,6 +41,15 @@ management:
     health:
       show-details: when-authorized
 
+# Auth (AP3, siehe kb/05-migration-plan.md).
+elwasys:
+  auth:
+    # SHA1->Argon2id-Migration beim Login: siehe AuthProperties-Javadoc/kb/05-migration-plan.md
+    # ("Entscheidungen") für die vollständige Begründung. Default AUS, solange das Alt-Portal
+    # noch läuft und SHA1 direkt in dieselbe Spalte schreibt/liest (Parallelbetrieb) - wird
+    # erst beim Portal-Cutover (Phase 3) aktiviert.
+    rehash-on-login: ${ELWASYS_AUTH_REHASH_ON_LOGIN:false}
+
 logging:
   level:
     root: INFO

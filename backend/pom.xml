@@ -90,6 +90,24 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
+		<!-- Auth (AP3, siehe kb/05-migration-plan.md): Argon2id-Hashing (spring-security-crypto,
+		     transitiv über diesen Starter) + Session-Login-Fundament fürs künftige Vaadin-Flow-
+		     Portal (Phase 3). Sichert per Default alles außer /actuator/health ab (siehe
+		     SecurityConfig) - noch keine fachlichen HTTP-Endpunkte, die kommen erst in AP4. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<!-- Spring Securitys Argon2PasswordEncoder braucht Bouncy Castle als
+		     Kryptografie-Provider - bewusst NICHT von spring-security-crypto/vom
+		     Spring-Boot-BOM mitgebracht (offiziell als "optional, selbst hinzufügen"
+		     dokumentiert), daher hier explizit mit fester Version. -->
+		<dependency>
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcprov-jdk18on</artifactId>
+			<version>1.80</version>
+		</dependency>
+
 		<!-- JDBC + Flyway (Schema-Migration, siehe AP1). -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -125,6 +143,11 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
