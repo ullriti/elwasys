@@ -4,9 +4,10 @@
 > vollständige **Komponenten-Inventur**, die **Zielarchitektur**, die **Reihenfolge** der
 > Schritte und den **Fortschritt** fest.
 >
-> Stand 2026-07-20: Phase 0 (Sicherheitsnetz) ist abgeschlossen. Auf Basis der neuen
-> Vorgaben des Auftraggebers wurde der Plan von einer reinen „Upgrade-Liste“ zu einem
-> Zielarchitektur-getriebenen Modernisierungsplan überarbeitet.
+> Stand 2026-07-20: Phase 0 (Sicherheitsnetz) und Phase 1 (Fundament: Build &
+> Konsolidierung) sind abgeschlossen. Auf Basis der neuen Vorgaben des Auftraggebers wurde
+> der Plan von einer reinen „Upgrade-Liste“ zu einem Zielarchitektur-getriebenen
+> Modernisierungsplan überarbeitet.
 
 ## Rahmenbedingungen (Vorgaben des Auftraggebers, 2026-07-20)
 
@@ -177,7 +178,7 @@ Wesentliche Änderungen gegenüber heute:
 - [x] Reproduzierbarer Build aller drei Module; PR-CI (3 Jobs) grün
 - [x] Zustandsübergänge der Client-State-Machine über die E2E-Suite abgesichert
 
-### Phase 1 – Fundament (Build & Konsolidierung)
+### Phase 1 – Fundament (Build & Konsolidierung) *(abgeschlossen 2026-07-20)*
 Ziel: einheitliche, moderne Basis, auf der das neue Backend-Modul aufsetzen kann.
 - [x] Aggregator-Parent-POM (Module: Common, Client-Raspi, Portal; einheitliche Versionen,
       `dependencyManagement`, Properties); Release-Workflow (`maven-publish.yml`) auf
@@ -197,7 +198,10 @@ Ziel: einheitliche, moderne Basis, auf der das neue Backend-Modul aufsetzen kann
       State-Machine (`MainFormStateManager`) nachziehen (aus Phase 0 übernommen) – ✅ erledigt
       2026-07-20: minimaler DI-Seam (package-private Test-Konstruktor `MainFormController`,
       der das Verdrahten mit `ElwaManager.instance`/`InactivityScheduler` überspringt), 12 neue
-      JUnit-5-Tests ohne TestFX/Xvfb/DB decken alle Zustandsübergänge der State-Machine ab
+      JUnit-5-Tests ohne TestFX/Xvfb/DB decken alle Zustandsübergänge der State-Machine ab.
+      Korrektur (QA-Review 2026-07-20): Voll-Suite ist **37/37** grün (21 vorher + 12 neu +
+      4 migrierte `InactivityScheduler`-Tests, die vorher fälschlich nicht mitgezählt waren –
+      siehe die beiden „33/33"-Korrekturen im Änderungslog/Status-Log unten)
 - [x] CI an Parent-POM angepasst *(2026-07-20)*: die bestehende 3-Job-Struktur
       (Common/Client/Portal, kleinstes Risiko, Verhalten unverändert) wurde beibehalten statt
       auf einen kombinierten Reactor-Job umzustellen; alle Stellen, die Common isoliert
@@ -206,6 +210,24 @@ Ziel: einheitliche, moderne Basis, auf der das neue Backend-Modul aufsetzen kann
       `mvn -f pom.xml install -pl Common -am`, damit die Parent-POM mit ins lokale Repo
       installiert wird (sonst schlägt die Abhängigkeitsauflösung von `common` in
       Client-Raspi/Portal fehl)
+- [x] **QA-Review-Fix (2026-07-20)**: Zwei echte Regressionen gefunden und behoben, die die
+      lokale Verifikation nicht aufgedeckt hätte, weil die Remote-Dev-Umgebung bereits
+      systemweit JDK 21 hat:
+      1. `.github/workflows/ci.yml` (alle 3 Jobs) und `.github/workflows/maven-publish.yml`
+         setzten weiterhin JDK 17 auf (`actions/setup-java`), obwohl Common/Client-Raspi seit
+         diesem Arbeitspaket mit `maven.compiler.release=21` bauen – ein JDK 17 kann
+         `--release 21` nicht bedienen, echte GitHub-Actions-Läufe wären mit
+         `invalid target release: 21` fehlgeschlagen. Auf JDK 21 (Liberica) angehoben.
+      2. `Client-Raspi/setup.sh` installiert auf frisch provisionierten Raspberry-Pi-Terminals
+         `bellsoft-java17-runtime-full` (armhf) – das Client-fat-jar hat durch den
+         Sprachlevel-Sprung aber jetzt Bytecode-Major-Version 65 (Java 21) und würde auf
+         einem Java-17-JRE mit `UnsupportedClassVersionError` abstürzen. Auf
+         `bellsoft-java21-runtime-full` angehoben (für armhf verfügbar, inkl. LibericaFX).
+         **Restrisiko** (nicht Teil dieses Fixes, siehe Risikotabelle unten): bereits im Feld
+         befindliche Terminals, die nicht erneut `setup.sh` durchlaufen, haben weiterhin nur
+         ein Java-17-JRE installiert – ein reines Fat-Jar-Update ohne JRE-Upgrade auf diesen
+         Geräten würde den Terminal-Start brechen. Muss vor dem nächsten Client-Release
+         geklärt sein (z. B. JRE-Upgrade-Schritt in die Update-Prozedur aufnehmen).
 
 ### Phase 2 – Backend-Gerüst (parallel zum Bestand)
 Ziel: neues Modul `backend` läuft produktionsnah **neben** Client & Portal auf derselben DB.
@@ -279,6 +301,7 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
 | SHA1→Argon2-Migration sperrt Nutzer aus | Re-Hash beim ersten Login (SHA1 wird verifiziert, dann ersetzt); Admin-Reset-Flow bleibt |
 | Parallelbetrieb Alt/Neu auf einer DB (Phase 2–4) | Backend anfangs nur lesend/additiv; Schreibpfade erst umstellen, wenn der jeweilige Alt-Pfad abgeschaltet wird; keine Schema-Brüche vor Phase 5 |
 | Vaadin-7-Portal baut nicht unter Java 21 (Phase 1) | Portal bis zur Ablösung auf altem Sprachlevel einfrieren – es wird ohnehin ersetzt |
+| Bereits im Feld befindliche Raspi-Terminals haben nur ein Java-17-JRE (aus einem früheren `setup.sh`-Lauf), das Client-fat-jar baut seit Phase 1 aber mit Sprachlevel 21 (Bytecode-Major 65) | `setup.sh` installiert bei Neu-Provisionierung jetzt `bellsoft-java21-runtime-full` (2026-07-20 gefixt); vor dem nächsten Release muss der Update-Pfad für bereits provisionierte Geräte geklärt werden (JRE-Upgrade-Schritt ergänzen, bevor ein mit Sprachlevel 21 gebautes Release-Jar an Bestandsgeräte ausgeliefert wird) |
 
 ## Entscheidungen (Auftraggeber)
 - **2026-07-19**: UI-Tests parallel für Client (TestFX) **und** Portal (E2E) aufbauen. ✅
@@ -319,4 +342,5 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
 | 2026-07-20 | **Letzte Grundsatzfragen entschieden**: Portal-Struktur bleibt erhalten, UX-Verbesserungen erwünscht; Betrieb als Docker-Compose-Stack oder Kubernetes (Helm Chart vorbereiten). Keine offenen Grundsatzfragen mehr – Phase 1 kann starten |
 | 2026-07-20 | **Phase 1: Testframeworks vereinheitlicht** – `InactivitySchedulerTest` (einzige TestNG-Klasse) nach JUnit 5 migriert und von `src/main` nach `src/test` verschoben (lief zuvor gar nicht unter Surefire); TestNG- und ungenutzte JUnit-4-Dependency aus Client-Raspi/pom.xml entfernt |
 | 2026-07-20 | **Phase 1 (Build/Backend-Teil)**: Aggregator-Parent-POM (`/pom.xml`) angelegt (gemeinsame Version `0.0.0-local-development`, `dependencyManagement` für postgresql/logback/slf4j-api/commons-email, `maven.compiler.release=21`-Default); Common/Client-Raspi/Portal erben jetzt davon (groupId/version nicht mehr redundant, common-Dependency via `${project.version}`). Common auf Java 21 gehoben (reine POJO/JDBC-Bibliothek, keine Quelländerungen nötig); Portal friert Sprachlevel weiterhin explizit auf 1.8 ein (Vaadin 7/GWT 2.7). Wichtiger Build-Fallstrick gefunden und behoben: `mvn -f Common/pom.xml install` installiert die Parent-POM NICHT mit ins lokale Repo, daher überall auf `mvn -f pom.xml install -pl Common -am` umgestellt (CI-Common-Job, `run-ui-tests.sh`, `run-client-e2e.sh`, `run-cross-component-e2e.sh`, `Portal/e2e/scripts/start-portal.sh`, SessionStart-Hook). Release-Workflow (`maven-publish.yml`) auf `mvn versions:set` umgestellt statt sed-Hack über mehrere POMs (APP_VERSION in Utilities.java bleibt eine Java-Konstante, weiterhin per sed gesetzt, aber `-iE`-Tippfehler behoben, der eine stille Backup-Datei erzeugte). Alle drei Module bauen grün (`mvn package`/`install`) |
-| 2026-07-20 | **Phase 1 (Client-Raspi Java 21 + ElwaManager-DI)**: Client-Raspi-Sprachlevel 16 → 21 gehoben (keine Quelländerungen nötig); minimaler DI-Seam für `ElwaManager` eingeführt (package-private Test-Konstruktor `MainFormController(boolean wireToElwaManager)`, der das Verdrahten mit `ElwaManager.instance`/`InactivityScheduler` in Tests überspringt, Produktionsverhalten unverändert); 12 neue isolierte JUnit-5-Charakterisierungstests für `MainFormStateManager` (kein TestFX/Xvfb/DB nötig). Volle Client-Suite grün (33/33) |
+| 2026-07-20 | **Phase 1 (Client-Raspi Java 21 + ElwaManager-DI)**: Client-Raspi-Sprachlevel 16 → 21 gehoben (keine Quelländerungen nötig); minimaler DI-Seam für `ElwaManager` eingeführt (package-private Test-Konstruktor `MainFormController(boolean wireToElwaManager)`, der das Verdrahten mit `ElwaManager.instance`/`InactivityScheduler` in Tests überspringt, Produktionsverhalten unverändert); 12 neue isolierte JUnit-5-Charakterisierungstests für `MainFormStateManager` (kein TestFX/Xvfb/DB nötig). Volle Client-Suite grün (~~33/33~~ **37/37** – die 33 zählte die 4 migrierten `InactivityScheduler`-Tests nicht mit, siehe QA-Review-Eintrag unten) |
+| 2026-07-20 | **Phase 1 QA-Review** (dieser Durchgang): Diff-Review aller Commits gegen CLAUDE.md/Roadmap; DI-Seam in `MainFormController` verifiziert (Produktionspfad `this(true)` unverändert, Verhalten 1:1 wie vorher); 12 neue State-Machine-Tests stichprobenartig gelesen – isoliert, kein `ElwaManager.instance`, kein DB-/Netzwerkzugriff; Portal-Bytecode nach dem Build tatsächlich als Class-Major-Version 52 (Java 8) verifiziert (nicht vom Parent-Default 21 überschrieben). Volle Testsuiten grün: Client 37/37 (`run-ui-tests.sh`), Cross-Component 3/3, Portal-E2E 18/18 (Playwright), `mvn package` für Client und Portal grün. **Zwei echte Regressionen gefunden und behoben** (Details oben unter Phase-1-Roadmap "QA-Review-Fix" sowie in 04-build-and-run.md): (1) CI/Release-Workflows setzten noch JDK 17 auf, obwohl Common/Client-Raspi jetzt Sprachlevel 21 verlangen – auf JDK 21 angehoben; (2) `setup.sh` installierte auf neu provisionierten Raspi-Terminals noch ein Java-17-JRE, das das jetzt mit Sprachlevel 21 gebaute Client-fat-jar nicht mehr ausführen könnte – auf `bellsoft-java21-runtime-full` angehoben (Restrisiko für bereits im Feld befindliche, nicht neu provisionierte Geräte bleibt in der Risikotabelle dokumentiert). Zusätzlich zwei Dokumentationskorrekturen: Test-Anzahl 33/33 → 37/37 in kb/05 und kb/README.md; `CLAUDE.md`-Abschnitt „Aktueller Stand" von „Phase 0 abgeschlossen/Phase 1 nächster Schritt" auf „Phase 1 abgeschlossen" aktualisiert. Phase 1 wird hiermit formal als abgeschlossen markiert. |

@@ -125,14 +125,24 @@ Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).
 
 ## CI (GitHub Actions)
 
-`.github/workflows/ci.yml` *(seit 2026-07-20)*:
+`.github/workflows/ci.yml` *(seit 2026-07-20, JDK-Version am 2026-07-20 im
+Phase-1-QA-Review korrigiert)*:
 - Trigger: jeder Pull Request + Pushes auf `master`
 - 3 parallele Jobs (Common / Client / Portal): Build + Tests, spiegeln die lokalen
   Runner-Skripte (`run-ui-tests.sh` etc., siehe kb/06)
+- **JDK 21** (Liberica) in **allen drei** Jobs – nicht mehr JDK 17: Seit Phase 1
+  verlangt der Parent-POM-Default `maven.compiler.release=21` für Common/
+  Client-Raspi; ein JDK 17 kann `--release 21` nicht bedienen
+  (`invalid target release: 21`). Da alle drei Jobs Common zuerst bauen
+  (`mvn -f pom.xml install -pl Common -am`), brauchen auch Client- und
+  Portal-Job ein >= 21-JDK, obwohl Portal selbst weiterhin mit Sprachlevel 1.8
+  kompiliert.
 
-`.github/workflows/maven-publish.yml` (Release) *(seit 2026-07-20: Parent-POM-Versionierung)*:
+`.github/workflows/maven-publish.yml` (Release) *(seit 2026-07-20: Parent-POM-Versionierung;
+JDK-Version am 2026-07-20 im Phase-1-QA-Review korrigiert)*:
 - Trigger: **nur** bei `release: created`
-- JDK 17 (Liberica)
+- **JDK 21** (Liberica) – aus demselben Grund wie oben (`mvn install -pl
+  Common,Client-Raspi -am` baut Common mit, das Sprachlevel 21 verlangt)
 - `mvn versions:set -DnewVersion=<tag>` im Root setzt die Version in Parent-POM
   **und** allen drei Modulen konsistent (kein sed-Hack über mehrere POMs mehr);
   `Utilities.APP_VERSION` ist eine reine Java-Konstante und bleibt per
@@ -145,4 +155,16 @@ Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).
 - Vaadin 7 / GWT 2.7 Widgetset-Compilation: langsam, speicherhungrig, alte Repos
   (`maven.vaadin.com`, teils `http://`), ggf. nicht mehr erreichbar.
 - Alte Plugin-/Dependency-Versionen (Postgres 9.3-Treiber im Portal, unirest 1.x).
-- Gemischte Java-Level (8/16) und gemischte Test-Frameworks (JUnit + TestNG).
+- **Raspi-Terminal-Laufzeit vs. Build-Sprachlevel**: `setup.sh` installiert seit
+  Phase 1 `bellsoft-java21-runtime-full` (armhf) statt `-java17-`, weil das
+  Client-Raspi-fat-jar seit dem Java-21-Sprachlevel-Sprung (s.o.) Bytecode
+  Major-Version 65 erzeugt und auf einem Java-17-JRE mit
+  `UnsupportedClassVersionError` fehlschlagen würde. Wurde im Phase-1-QA-Review
+  gefunden (Gefahr: bestehende, bereits mit `setup.sh` provisionierte
+  Raspberry-Pi-Terminals laufen noch mit dem alten Java-17-JRE – ein
+  Fat-Jar-Update ohne erneuten `setup.sh`-Lauf bzw. manuelles JRE-Upgrade auf
+  diesen Geräten würde das Terminal beim Start crashen lassen). Für neu
+  provisionierte/aktualisierte Terminals ist das jetzt behoben; ein
+  JRE-Upgrade-Pfad für bereits im Feld befindliche Geräte ist **nicht**
+  Bestandteil dieses Fixes und sollte vor dem nächsten Release explizit
+  geklärt werden (z. B. in `setup.sh`/Update-Doku ergänzen).

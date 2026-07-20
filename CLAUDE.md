@@ -16,10 +16,11 @@ Modernisierungsprojekts. Vor jeder Arbeit lesen:
 3. Je nach Aufgabe: 01 (Architektur), 02 (Datenmodell), 03 (Module),
    04 (Build/Run), 06 (UI-Tests), 07 (Remote-Umgebung), 08 (Testplan).
 
-**Aktueller Stand (2026-07-20):** Phase 0 (Sicherheitsnetz: Build + E2E-Tests) ist
-abgeschlossen, alle Grundsatzentscheidungen sind gefallen.
-**Nächster Schritt: Phase 1** (Parent-POM, Java 21, JUnit 5, ElwaManager-DI) –
-siehe Roadmap in kb/05.
+**Aktueller Stand (2026-07-20):** Phase 0 (Sicherheitsnetz: Build + E2E-Tests) und
+Phase 1 (Fundament: Parent-POM, Java 21, JUnit 5, ElwaManager-DI) sind abgeschlossen,
+alle Grundsatzentscheidungen sind gefallen.
+**Nächster Schritt: Phase 2** (Backend-Gerüst: Spring-Boot-Modul `backend` parallel
+zum Bestand) – siehe Roadmap in kb/05.
 
 ## Arbeitsregeln
 
