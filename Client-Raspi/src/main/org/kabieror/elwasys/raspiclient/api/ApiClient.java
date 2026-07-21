@@ -11,6 +11,7 @@ import org.kabieror.elwasys.raspiclient.api.dto.ExecutionDto;
 import org.kabieror.elwasys.raspiclient.api.dto.ExecutionEndRequest;
 import org.kabieror.elwasys.raspiclient.api.dto.ExecutionStartRequest;
 import org.kabieror.elwasys.raspiclient.api.dto.LocationDto;
+import org.kabieror.elwasys.raspiclient.api.dto.SnapshotDto;
 import org.kabieror.elwasys.raspiclient.api.dto.UpdateDeconzUuidRequest;
 import org.kabieror.elwasys.raspiclient.api.dto.UserDto;
 import org.slf4j.Logger;
@@ -90,6 +91,15 @@ public class ApiClient {
         return get("api/v1/locations/me", LocationDto.class);
     }
 
+    /**
+     * Standort-Snapshot für die Offline-Buchungs-Vorbereitung (Phase 4 AP3/AP6, siehe
+     * kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"). Wird
+     * periodisch aufgerufen und von {@code offline.OfflineSnapshotStore} persistiert.
+     */
+    public SnapshotDto getSnapshot() throws ApiException {
+        return get("api/v1/snapshot", SnapshotDto.class);
+    }
+
     // --- Geräte ------------------------------------------------------------------------------
 
     public List<DeviceOverviewDto> getDevicesOverview() throws ApiException {
@@ -109,7 +119,21 @@ public class ApiClient {
 
     public ExecutionDto createExecution(int userId, int deviceId, int programId, LocalDateTime clientTimestamp)
             throws ApiException {
-        String idempotencyKey = UUID.randomUUID().toString();
+        return createExecution(userId, deviceId, programId, clientTimestamp, UUID.randomUUID().toString());
+    }
+
+    /**
+     * Wie {@link #createExecution(int, int, int, LocalDateTime)}, aber mit einem vom
+     * Aufrufer vorgegebenen Idempotenz-Schlüssel statt einer frisch erzeugten UUID (Phase 4
+     * AP6, siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"
+     * Punkt 4 "Nachmeldung (Replay)"): der Aufrufer braucht den Schlüssel VOR dem Aufruf
+     * (z. B. um ihn im Ereignis-Journal zu hinterlegen, falls die Anfrage wegen eines
+     * Kommunikationsfehlers fehlschlägt), damit ein späterer Replay mit demselben Schlüssel
+     * korrekt dedupliziert wird - auch dann, wenn die Anfrage den Server in Wahrheit bereits
+     * erreicht hatte und nur die Antwort verloren ging.
+     */
+    public ExecutionDto createExecution(int userId, int deviceId, int programId, LocalDateTime clientTimestamp,
+            String idempotencyKey) throws ApiException {
         return post("api/v1/executions", new ExecutionStartRequest(userId, deviceId, programId, clientTimestamp),
                 ExecutionDto.class, idempotencyKey);
     }
@@ -119,13 +143,31 @@ public class ApiClient {
     }
 
     public ExecutionDto finishExecution(int id, LocalDateTime clientTimestamp) throws ApiException {
-        String idempotencyKey = UUID.randomUUID().toString();
+        return finishExecution(id, clientTimestamp, UUID.randomUUID().toString());
+    }
+
+    /**
+     * Wie {@link #finishExecution(int, LocalDateTime)}, mit vorgegebenem Idempotenz-Schlüssel
+     * - siehe {@link #createExecution(int, int, int, LocalDateTime, String)} für die
+     * Begründung.
+     */
+    public ExecutionDto finishExecution(int id, LocalDateTime clientTimestamp, String idempotencyKey)
+            throws ApiException {
         return post("api/v1/executions/" + id + "/finish", new ExecutionEndRequest(clientTimestamp),
                 ExecutionDto.class, idempotencyKey);
     }
 
     public ExecutionDto abortExecution(int id, LocalDateTime clientTimestamp) throws ApiException {
-        String idempotencyKey = UUID.randomUUID().toString();
+        return abortExecution(id, clientTimestamp, UUID.randomUUID().toString());
+    }
+
+    /**
+     * Wie {@link #abortExecution(int, LocalDateTime)}, mit vorgegebenem Idempotenz-Schlüssel
+     * - siehe {@link #createExecution(int, int, int, LocalDateTime, String)} für die
+     * Begründung.
+     */
+    public ExecutionDto abortExecution(int id, LocalDateTime clientTimestamp, String idempotencyKey)
+            throws ApiException {
         return post("api/v1/executions/" + id + "/abort", new ExecutionEndRequest(clientTimestamp),
                 ExecutionDto.class, idempotencyKey);
     }

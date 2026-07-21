@@ -57,6 +57,19 @@ public class ApiException extends IOException {
     }
 
     /**
+     * Ob dies ein reiner Kommunikationsfehler ist (keine Antwort empfangen - Verbindung
+     * verweigert/Timeout/DNS-Fehler o. ä.), im Unterschied zu einer empfangenen
+     * Fehlerantwort (z. B. {@code 403 user-blocked}). Phase 4 AP6 (siehe
+     * kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"): genau dieser
+     * Fall löst die Offline-Behandlung aus ({@code offline.OfflineGateway}) - ein
+     * echter fachlicher Fehler (z. B. gesperrter Benutzer) wird weiterhin ganz normal
+     * gemeldet, auch wenn er lokal gegen den Snapshot geprüft wurde.
+     */
+    public boolean isCommunicationFailure() {
+        return this.httpStatus == 0;
+    }
+
+    /**
      * Der fachliche Fehler-Slug aus der {@code ProblemDetail}-Antwort (z. B.
      * {@code "user-blocked"}), oder {@code null} bei einem reinen Kommunikationsfehler bzw.
      * einer Antwort ohne auswertbaren {@code type}.

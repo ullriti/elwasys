@@ -209,6 +209,27 @@ public class WashguardConfiguration extends ConfigurationManager {
     }
 
     /**
+     * Wie oft (in Sekunden) der periodische Offline-Abgleich läuft (Snapshot aktualisieren +
+     * ausstehendes Ereignis-Journal nachmelden, sobald das Backend wieder erreichbar ist -
+     * Phase 4 AP6, siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
+     * Terminal"). Default 20s, wie der bestehende Hintergrundabgleich in
+     * {@code executions.ExecutionManager}; konfigurierbar, damit Tests das Intervall
+     * verkürzen können.
+     */
+    public int getOfflinePollIntervalSeconds() {
+        int seconds;
+        try {
+            seconds = Integer.parseInt(this.props.getProperty("offline.pollIntervalSeconds"));
+        } catch (final NumberFormatException e) {
+            this.logger.warn(
+                    "The configuration value 'offline.pollIntervalSeconds' has an invalid format. Using the "
+                            + "default value of 20 seconds instead.");
+            return 20;
+        }
+        return seconds;
+    }
+
+    /**
      * Gibt die eindeutige ID dieses Clients zurück.
      *
      * @return Die eindeutige ID dieses Clients.

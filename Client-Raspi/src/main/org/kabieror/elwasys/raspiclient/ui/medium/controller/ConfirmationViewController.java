@@ -191,7 +191,9 @@ public class ConfirmationViewController implements Initializable, IViewControlle
     private List<ClientProgram> loadProgramsForSelectedDevice() throws ApiException {
         int userId = this.mfc.getRegisteredUser().getId();
         int deviceId = this.mfc.getSelectedDevice().getId();
-        List<DeviceDto> devices = ElwaManager.instance.getApiClient().getDevices(userId);
+        // Faellt bei einem Kommunikationsfehler auf den lokalen Offline-Snapshot zurueck
+        // (Phase 4 AP6, siehe kb/05-migration-plan.md).
+        List<DeviceDto> devices = ElwaManager.instance.getDevicesForUser(userId);
         for (DeviceDto d : devices) {
             if (d.id() == deviceId) {
                 return d.programs().stream().map(ClientProgram::of).toList();
@@ -238,11 +240,11 @@ public class ConfirmationViewController implements Initializable, IViewControlle
 
                 final ClientExecution ex;
                 try {
-                    var dto = ElwaManager.instance.getApiClient()
-                            .createExecution(this.mfc.getRegisteredUser().getId(), this.mfc.getSelectedDevice().getId(),
-                                    this.selectedProgram.getId(), LocalDateTime.now());
-                    ex = ClientExecution.of(dto, this.mfc.getSelectedDevice(), this.selectedProgram,
-                            this.mfc.getRegisteredUser());
+                    // Faellt bei einem Kommunikationsfehler auf eine Offline-Buchung gegen den
+                    // Snapshot zurueck (Phase 4 AP6, siehe kb/05-migration-plan.md
+                    // "Konzeptskizze: Offline-Buchungen am Terminal").
+                    ex = ElwaManager.instance.createExecution(this.mfc.getRegisteredUser(),
+                            this.mfc.getSelectedDevice(), this.selectedProgram);
                 } catch (final ApiException e1) {
                     this.logger.error("The execution cannot be created.", e1);
                     Platform.runLater(() -> {

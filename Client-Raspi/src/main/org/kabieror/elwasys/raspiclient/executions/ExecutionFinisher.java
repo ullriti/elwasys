@@ -113,20 +113,51 @@ class ExecutionFinisher implements Runnable {
         // Ende + Guthaben-Abbuchung atomar, siehe ExecutionController#finish/abort); für
         // virtuelle/offline Ausführungen (Tür öffnen) bleibt es - wie im Alt-Code - rein
         // lokal und ohne Abrechnung.
-        if (!this.e.isVirtual()) {
+        //
+        // Phase 4 AP6 (Offline-Robustheit, siehe kb/05-migration-plan.md "Konzeptskizze:
+        // Offline-Buchungen am Terminal"): eine WÄHREND eines Backend-Ausfalls offline
+        // gebuchte Ausführung (e.isOfflinePendingReplay()) hat noch keine echte Backend-Id -
+        // ihr Ende/Abbruch wird darum IMMER direkt im Ereignis-Journal hinterlegt, nie über
+        // einen Live-Aufruf versucht (siehe ClientExecution Klassenkommentar). Für eine
+        // normal online gestartete, reale Ausführung wird der Live-Aufruf wie bisher
+        // versucht - scheitert er an einem reinen Kommunikationsfehler (Backend während der
+        // laufenden Ausführung ausgefallen, Stufe A), wird das Ende ebenfalls lokal
+        // vollzogen und nachgemeldet, statt den Bediener mit einem Fehler-/Retry-Zustand zu
+        // konfrontieren ("kein Datenverlust bei Backend-Schluckauf" - siehe Auftrag). Ein
+        // ECHTER fachlicher Fehler (z. B. 409 execution-already-finished) wird weiterhin wie
+        // bisher als Fehler gemeldet (bestehendes Retry-UX unverändert).
+        if (this.e.isVirtual()) {
+            this.e.stopLocally();
+        } else if (this.e.isOfflinePendingReplay()) {
+            LocalDateTime clientTimestamp = LocalDateTime.now();
+            String idempotencyKey = java.util.UUID.randomUUID().toString();
+            ElwaManager.instance.getOfflineGateway()
+                    .appendFinishOrAbort(this.e, this.aborted, clientTimestamp, idempotencyKey);
+            this.e.stopLocally();
+        } else {
+            LocalDateTime clientTimestamp = LocalDateTime.now();
+            String idempotencyKey = java.util.UUID.randomUUID().toString();
             try {
-                LocalDateTime clientTimestamp = LocalDateTime.now();
                 var updated = this.aborted ? ElwaManager.instance.getApiClient()
-                        .abortExecution(this.e.getId(), clientTimestamp)
-                        : ElwaManager.instance.getApiClient().finishExecution(this.e.getId(), clientTimestamp);
+                        .abortExecution(this.e.getId(), clientTimestamp, idempotencyKey)
+                        : ElwaManager.instance.getApiClient()
+                                .finishExecution(this.e.getId(), clientTimestamp, idempotencyKey);
                 this.e.applyDto(updated);
             } catch (final ApiException e1) {
-                this.logger.error("[" + this.e.getDevice().getName() + "] Could not finish the execution on the " +
-                        "backend.", e1);
-                throw e1;
+                if (e1.isCommunicationFailure()) {
+                    this.logger.warn("[" + this.e.getDevice().getName() + "] Backend nicht erreichbar beim "
+                            + "Beenden/Abbrechen - schliesse die Ausfuehrung lokal ab und melde sie nach der "
+                            + "Wiederverbindung nach (Phase 4 AP6).", e1);
+                    ElwaManager.instance.getOfflineGateway()
+                            .appendFinishOrAbort(this.e, this.aborted, clientTimestamp, idempotencyKey);
+                    this.e.stopLocally();
+                } else {
+                    this.logger.error(
+                            "[" + this.e.getDevice().getName() + "] Could not finish the execution on the " +
+                                    "backend.", e1);
+                    throw e1;
+                }
             }
-        } else {
-            this.e.stopLocally();
         }
 
         // Informiere Gerät über Ende der Ausführung

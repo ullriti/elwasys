@@ -8,8 +8,10 @@ import org.kabieror.elwasys.common.NoDataFoundException;
 import org.kabieror.elwasys.common.Utilities;
 import org.kabieror.elwasys.raspiclient.api.ApiClient;
 import org.kabieror.elwasys.raspiclient.api.ApiException;
+import org.kabieror.elwasys.raspiclient.api.dto.DeviceDto;
 import org.kabieror.elwasys.raspiclient.api.dto.DeviceOverviewDto;
 import org.kabieror.elwasys.raspiclient.api.dto.ExecutionDto;
+import org.kabieror.elwasys.raspiclient.api.dto.UserDto;
 import org.kabieror.elwasys.raspiclient.configuration.WashguardConfiguration;
 import org.kabieror.elwasys.raspiclient.devices.FhemDevicePowerManager;
 import org.kabieror.elwasys.raspiclient.devices.IDevicePowerManager;
@@ -25,17 +27,25 @@ import org.kabieror.elwasys.raspiclient.model.ClientDevice;
 import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 import org.kabieror.elwasys.raspiclient.model.ClientProgram;
 import org.kabieror.elwasys.raspiclient.model.ClientUser;
+import org.kabieror.elwasys.raspiclient.offline.OfflineGateway;
+import org.kabieror.elwasys.raspiclient.offline.OfflineJournal;
+import org.kabieror.elwasys.raspiclient.offline.OfflineSnapshotStore;
 import org.kabieror.elwasys.raspiclient.ui.AbstractMainFormController;
 import org.kabieror.elwasys.raspiclient.ws.TerminalWebSocketClient;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class ElwaManager {
 
@@ -82,6 +92,19 @@ public class ElwaManager {
      * Direkt-DB-Zugriff des Terminals entfallen, siehe {@link TerminalWebSocketClient}.
      */
     private TerminalWebSocketClient terminalWebSocketClient;
+
+    /**
+     * Offline-Robustheit (Phase 4 AP6, siehe kb/05-migration-plan.md "Konzeptskizze:
+     * Offline-Buchungen am Terminal"): persistenter Standort-Snapshot, persistentes
+     * Ereignis-Journal und die daraus gespeiste Offline-Entscheidungslogik/das Journal-Replay.
+     * Greifen NUR, wenn ein {@link ApiClient}-Aufruf mit
+     * {@link ApiException#isCommunicationFailure()} scheitert (siehe {@link #cardLogin},
+     * {@link #getDevicesForUser}, {@link #createExecution}, {@link #getManagedDevices()}).
+     */
+    private OfflineSnapshotStore offlineSnapshotStore;
+    private OfflineJournal offlineJournal;
+    private OfflineGateway offlineGateway;
+    private ScheduledExecutorService offlineScheduler;
 
     /**
      * Der Manager für die Konfiguration
@@ -157,6 +180,16 @@ public class ElwaManager {
             this.apiClient = new ApiClient(this.configurationManager.getBackendUrl(),
                     this.configurationManager.getBackendToken());
 
+            // Offline-Robustheit (Phase 4 AP6, siehe kb/05-migration-plan.md "Konzeptskizze:
+            // Offline-Buchungen am Terminal"): Snapshot/Journal liegen bewusst UNVERSCHLÜSSELT
+            // im Arbeitsverzeichnis (Auftraggeber-Entscheidung, siehe kb/05-migration-plan.md
+            // "Festlegungen zu den Offline-Detailfragen" - das Terminal-Dateisystem gilt wie
+            // bisher als vertrauenswürdig).
+            Path workDir = Path.of(System.getProperty("user.dir"));
+            this.offlineSnapshotStore = new OfflineSnapshotStore(workDir.resolve("offline-snapshot.json"));
+            this.offlineJournal = new OfflineJournal(workDir.resolve("offline-journal.jsonl"));
+            this.offlineGateway = new OfflineGateway(this.apiClient, this.offlineSnapshotStore, this.offlineJournal);
+
             // Ausgehende Fernwartungs-Verbindung (Phase 4 AP5, siehe kb/05-migration-plan.md
             // "Arbeitspakete Phase 4", AP5): ersetzt die ehemalige, Direkt-DB-basierte
             // Registrierung (LocationManager/MaintenanceServerManager). Läuft mit derselben
@@ -173,7 +206,25 @@ public class ElwaManager {
             // "Standort aus der Datenbank laden"-Schritt, jetzt über die API - ein
             // nicht erreichbares Backend führt wie zuvor eine nicht erreichbare
             // Datenbank zum ERROR-Zustand, siehe Testfall C15).
-            this.apiClient.getMyLocation();
+            //
+            // Phase 4 AP6 (siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
+            // Terminal" Punkt 5 "Zeitfenster"): ist das Backend nicht erreichbar, aber ein
+            // noch nicht abgelaufener Snapshot vorhanden, fährt das Terminal trotzdem hoch
+            // (Offline-Modus) statt in den Fehlerzustand zu gehen - das C15-Fehlerbild bleibt
+            // für den Fall ohne (nutzbaren) Snapshot unverändert bestehen.
+            try {
+                this.apiClient.getMyLocation();
+            } catch (ApiException e) {
+                if (!e.isCommunicationFailure() || !this.offlineGateway.hasUsableSnapshot()) {
+                    throw e;
+                }
+                this.logger.warn("Backend beim Start nicht erreichbar - fahre im Offline-Modus hoch "
+                        + "(Phase 4 AP6, siehe kb/05-migration-plan.md).", e);
+            }
+            // Best effort: falls das Backend doch erreichbar war (oder gerade wieder wurde),
+            // gleich einen frischen Snapshot laden, statt auf den ersten periodischen Abgleich
+            // zu warten.
+            this.offlineGateway.refreshSnapshot();
 
             if (StringUtils.isNotBlank(this.configurationManager.getDeconzServer())) {
                 this.logger.info("Using deCONZ as gateway.");
@@ -210,6 +261,25 @@ public class ElwaManager {
                     this.executionManager.startExecution(execution);
                 }
             }
+
+            // Periodischer Offline-Abgleich (Phase 4 AP6): Snapshot aktualisieren und ein
+            // evtl. ausstehendes Ereignis-Journal nachmelden, sobald das Backend wieder
+            // erreichbar ist (Konzeptskizze Punkt 1 "periodisch aktualisierter Snapshot" +
+            // Punkt 4 "Nachmeldung (Replay)"). Läuft unabhängig vom bestehenden
+            // 20-Sekunden-Hintergrundabgleich in ExecutionManager (der kümmert sich nur um
+            // Steckdosenzustände).
+            int pollIntervalSeconds = this.configurationManager.getOfflinePollIntervalSeconds();
+            this.offlineScheduler = Executors.newSingleThreadScheduledExecutor();
+            this.offlineScheduler.scheduleAtFixedRate(() -> {
+                try {
+                    this.offlineGateway.refreshSnapshot();
+                    if (this.offlineGateway.hasPendingJournalEntries()) {
+                        this.offlineGateway.replay();
+                    }
+                } catch (Exception ex) {
+                    this.logger.error("Fehler im periodischen Offline-Abgleich.", ex);
+                }
+            }, pollIntervalSeconds, pollIntervalSeconds, TimeUnit.SECONDS);
         } catch (Exception e) {
             this.logger.error("Failed to start up managers.", e);
             if (deconzEventListener != null) {
@@ -282,6 +352,73 @@ public class ElwaManager {
      */
     public ApiClient getApiClient() {
         return this.apiClient;
+    }
+
+    /**
+     * Gibt die Offline-Entscheidungslogik/das Journal-Replay zurück (Phase 4 AP6, siehe
+     * kb/05-migration-plan.md). Wird von {@code executions.ExecutionFinisher} für Stufe A/B
+     * ("laufende Ausführungen lokal zu Ende führen" bzw. "Offline-Buchungen") benötigt.
+     */
+    public OfflineGateway getOfflineGateway() {
+        return this.offlineGateway;
+    }
+
+    /**
+     * Kartenlogin: online über die API, oder - falls das Backend nicht erreichbar ist -
+     * offline gegen den zuletzt geladenen Snapshot (Phase 4 AP6, siehe
+     * kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"). Liefert
+     * denselben {@link UserDto}-Vertrag wie zuvor {@code ApiClient#cardLogin} direkt - Aufrufer
+     * (z. B. {@code MainFormController#onCardDetected}) bleiben dadurch unverändert.
+     */
+    public UserDto cardLogin(String cardId) throws ApiException {
+        try {
+            return this.apiClient.cardLogin(cardId);
+        } catch (ApiException e) {
+            if (!e.isCommunicationFailure()) {
+                throw e;
+            }
+            return this.offlineGateway.cardLogin(cardId, e);
+        }
+    }
+
+    /**
+     * Die für einen Benutzer nutzbaren Geräte: online über die API, oder offline gegen den
+     * Snapshot (Phase 4 AP6, siehe kb/05-migration-plan.md). Liefert denselben
+     * {@link DeviceDto}-Vertrag wie zuvor {@code ApiClient#getDevices} direkt.
+     */
+    public List<DeviceDto> getDevicesForUser(int userId) throws ApiException {
+        try {
+            return this.apiClient.getDevices(userId);
+        } catch (ApiException e) {
+            if (!e.isCommunicationFailure()) {
+                throw e;
+            }
+            return this.offlineGateway.getDevicesForUser(userId, e);
+        }
+    }
+
+    /**
+     * Bucht eine neue Ausführung: online über die API, oder - falls das Backend nicht
+     * erreichbar ist - offline gegen den Snapshot (Phase 4 AP6, Stufe B, siehe
+     * kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"). Der
+     * Idempotenz-Schlüssel wird VOR dem eigentlichen Versuch erzeugt (statt wie sonst erst
+     * innerhalb von {@code ApiClient}), damit er im Fehlerfall auch für den
+     * Offline-Journal-Eintrag zur Verfügung steht.
+     */
+    public ClientExecution createExecution(ClientUser user, ClientDevice device, ClientProgram program)
+            throws ApiException {
+        LocalDateTime clientTimestamp = LocalDateTime.now();
+        String idempotencyKey = UUID.randomUUID().toString();
+        try {
+            ExecutionDto dto = this.apiClient.createExecution(user.getId(), device.getId(), program.getId(),
+                    clientTimestamp, idempotencyKey);
+            return ClientExecution.of(dto, device, program, user);
+        } catch (ApiException e) {
+            if (!e.isCommunicationFailure()) {
+                throw e;
+            }
+            return this.offlineGateway.createExecution(user, device, program, clientTimestamp, idempotencyKey, e);
+        }
     }
 
     /**
@@ -373,6 +510,9 @@ public class ElwaManager {
      */
     public void onClose(boolean restart) {
         this.logger.info("Application is terminating now.");
+        if (this.offlineScheduler != null) {
+            this.offlineScheduler.shutdownNow();
+        }
         for (final ICloseListener l : this.closeListeners) {
             l.onClose(restart);
         }
@@ -392,7 +532,17 @@ public class ElwaManager {
      * {@link ClientDevice} Klassenkommentar).
      */
     public List<ClientDevice> getManagedDevices() throws ApiException {
-        List<DeviceOverviewDto> overview = this.apiClient.getDevicesOverview();
+        List<DeviceOverviewDto> overview;
+        try {
+            overview = this.apiClient.getDevicesOverview();
+        } catch (ApiException e) {
+            if (!e.isCommunicationFailure()) {
+                throw e;
+            }
+            // Phase 4 AP6 (siehe kb/05-migration-plan.md): Backend nicht erreichbar - falle
+            // auf die im letzten Snapshot enthaltenen Geräte zurück, sofern noch nutzbar.
+            overview = this.offlineGateway.getDevicesOverview(e);
+        }
         List<ClientDevice> result = new java.util.ArrayList<>(overview.size());
         for (DeviceOverviewDto dto : overview) {
             ClientDevice device = this.deviceCache.computeIfAbsent(dto.id(), ClientDevice::new);

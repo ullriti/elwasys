@@ -381,13 +381,17 @@ public class MainFormController extends AbstractMainFormController implements IM
         actionContainer.setAction(() -> {
             final Runnable searchUserRunnable = () -> {
                 try {
-                    var userDto = ElwaManager.instance.getApiClient().cardLogin(e.getCardId());
+                    var userDto = ElwaManager.instance.cardLogin(e.getCardId());
                     final ClientUser newUser = ClientUser.of(userDto);
                     // Entspricht Common.Device#getValidUserGroups().contains(user.getGroup())
                     // im Alt-Code: einmalig ermitteln, welche Geräte dieser Benutzer nutzen
                     // darf, damit jede Gerätekachel das lokal (ohne eigenen Netzwerkaufruf)
                     // prüfen kann (siehe DeviceListEntry#applyUserStyle).
-                    var usableDeviceIds = ElwaManager.instance.getApiClient().getDevices(newUser.getId()).stream()
+                    // ElwaManager#cardLogin/#getDevicesForUser fallen bei einem Kommunikations-
+                    // fehler auf den lokalen Offline-Snapshot zurück (Phase 4 AP6, siehe
+                    // kb/05-migration-plan.md) - für diesen Controller unverändert, derselbe
+                    // Vertrag wie zuvor der direkte ApiClient-Aufruf.
+                    var usableDeviceIds = ElwaManager.instance.getDevicesForUser(newUser.getId()).stream()
                             .filter(d -> d.usableByUser()).map(d -> d.id()).collect(java.util.stream.Collectors.toSet());
                     newUser.setUsableDeviceIds(usableDeviceIds);
                     this.logger.info("User logged in: " + newUser.getName());

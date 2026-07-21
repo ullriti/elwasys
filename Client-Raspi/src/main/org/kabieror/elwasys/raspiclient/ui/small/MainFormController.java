@@ -371,10 +371,11 @@ public class MainFormController extends AbstractMainFormController {
                     assert this.selectedDevice != null;
                     final ClientExecution ex;
                     try {
-                        var dto = ElwaManager.instance.getApiClient().createExecution(this.registeredUser.getId(),
-                                this.selectedDevice.getId(), this.selectedProgram.getId(),
-                                java.time.LocalDateTime.now());
-                        ex = ClientExecution.of(dto, this.selectedDevice, this.selectedProgram, this.registeredUser);
+                        // Faellt bei einem Kommunikationsfehler auf eine Offline-Buchung gegen
+                        // den Snapshot zurueck (Phase 4 AP6, siehe kb/05-migration-plan.md
+                        // "Konzeptskizze: Offline-Buchungen am Terminal").
+                        ex = ElwaManager.instance.createExecution(this.registeredUser, this.selectedDevice,
+                                this.selectedProgram);
                     } catch (final ApiException e1) {
                         this.logger.error("The execution cannot be created.", e1);
                         Platform.runLater(() -> {
@@ -664,7 +665,9 @@ public class MainFormController extends AbstractMainFormController {
      * Liste nicht mehr auftaucht (z. B. zwischenzeitlich deaktiviert).
      */
     private ClientProgram reloadSelectedProgramFor(ClientUser user) throws ApiException {
-        for (var d : ElwaManager.instance.getApiClient().getDevices(user.getId())) {
+        // Faellt bei einem Kommunikationsfehler auf den lokalen Offline-Snapshot zurueck
+        // (Phase 4 AP6, siehe kb/05-migration-plan.md).
+        for (var d : ElwaManager.instance.getDevicesForUser(user.getId())) {
             if (d.id() == this.selectedDevice.getId()) {
                 for (var p : d.programs()) {
                     if (p.id() == this.selectedProgram.getId()) {
@@ -821,7 +824,9 @@ public class MainFormController extends AbstractMainFormController {
             actionContainer.setAction(() -> {
                 final Runnable searchUserRunnable = () -> {
                     try {
-                        var userDto = ElwaManager.instance.getApiClient().cardLogin(e.getCardId());
+                        // Faellt bei einem Kommunikationsfehler auf den lokalen
+                        // Offline-Snapshot zurueck (Phase 4 AP6, siehe kb/05-migration-plan.md).
+                        var userDto = ElwaManager.instance.cardLogin(e.getCardId());
                         this.registeredUser = ClientUser.of(userDto);
                         // Das vor dem Kartenlogin gewählte Programm wurde ohne Gruppenrabatt
                         // bepreist (siehe DeviceOverviewDto#programs()) - jetzt mit dem

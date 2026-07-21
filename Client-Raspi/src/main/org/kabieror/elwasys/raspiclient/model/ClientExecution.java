@@ -13,13 +13,24 @@ import java.time.LocalDateTime;
  * feldbasiert) - die tatsächliche Persistenz (Start/Ende/Abrechnung) läuft jetzt über
  * {@code ApiClient}, aufgerufen von {@code ExecutionManager}/{@code ExecutionFinisher}.
  * <p>
- * <b>Virtuelle/lokale Ausführungen</b> ({@link #isVirtual()}, {@code id < 0}): entsprechen
+ * <b>Virtuelle/lokale Ausführungen</b> ({@link #isVirtual()}): entsprechen
  * {@code Common.Execution#getOfflineExecution(...)}, verwendet für die "Tür öffnen"-Funktion
  * der Gerätekacheln. Genau wie im Alt-Code lösen sie NIE einen Server-Aufruf aus (siehe
  * {@code ExecutionManager}/{@code ExecutionFinisher}: dort wird {@link #isVirtual()}
  * geprüft, bevor {@code ApiClient#createExecution}/{@code #finishExecution}/
  * {@code #abortExecution}/{@code #resetExecution} aufgerufen wird) - Start/Ende werden nur
  * lokal vermerkt, es entsteht nie ein Datenbankeintrag und nie eine Abrechnung.
+ *
+ * <p><b>Offline gebuchte Ausführungen</b> ({@link #isOfflinePendingReplay()}, Phase 4 AP6,
+ * siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"): anders als
+ * eine virtuelle Ausführung sind das ECHTE, abzurechnende Buchungen, nur eben lokal
+ * angelegt, während das Backend nicht erreichbar war ({@code offline.OfflineGateway}
+ * #createExecution). Sie tragen noch KEINE echte Backend-Id ({@link #getId()} liefert einen
+ * Platzhalter), sondern den beim Anlegen im Ereignis-Journal verwendeten Idempotenz-Schlüssel
+ * ({@link #getOfflinePendingIdempotencyKey()}) - {@code ExecutionFinisher} referenziert damit
+ * beim späteren Beenden/Abbrechen den zugehörigen Journal-Start-Eintrag, ohne einen (noch
+ * nicht existierenden) Live-API-Aufruf zu versuchen; das Journal-Replay legt die Ausführung
+ * beim Nachmelden dann tatsächlich serverseitig an.
  */
 public class ClientExecution {
 
@@ -27,16 +38,21 @@ public class ClientExecution {
     private final ClientDevice device;
     private final ClientProgram program;
     private final ClientUser user;
+    private final boolean virtual;
+    private final String offlinePendingIdempotencyKey;
 
     private LocalDateTime start;
     private LocalDateTime stop;
     private boolean finished;
 
-    private ClientExecution(int id, ClientDevice device, ClientProgram program, ClientUser user) {
+    private ClientExecution(int id, ClientDevice device, ClientProgram program, ClientUser user, boolean virtual,
+            String offlinePendingIdempotencyKey) {
         this.id = id;
         this.device = device;
         this.program = program;
         this.user = user;
+        this.virtual = virtual;
+        this.offlinePendingIdempotencyKey = offlinePendingIdempotencyKey;
     }
 
     /**
@@ -45,7 +61,7 @@ public class ClientExecution {
      * {@code GET /api/v1/executions/{id}}, oder nach finish/abort/reset).
      */
     public static ClientExecution of(ExecutionDto dto, ClientDevice device, ClientProgram program, ClientUser user) {
-        ClientExecution e = new ClientExecution(dto.id(), device, program, user);
+        ClientExecution e = new ClientExecution(dto.id(), device, program, user, false, null);
         e.applyDto(dto);
         return e;
     }
@@ -55,11 +71,53 @@ public class ClientExecution {
      * Ausführung ohne jede Serverkommunikation, für die "Tür öffnen"-Funktion.
      */
     public static ClientExecution offline(ClientDevice device, ClientProgram program, ClientUser user) {
-        return new ClientExecution(-1, device, program, user);
+        return new ClientExecution(-1, device, program, user, true, null);
     }
 
+    /**
+     * Eine WÄHREND eines Backend-Ausfalls neu gebuchte Ausführung (Phase 4 AP6, Stufe B,
+     * siehe Klassenkommentar) - angelegt von {@code offline.OfflineGateway#createExecution},
+     * nachdem Berechtigungs-/Guthabenprüfung lokal gegen den Snapshot erfolgreich waren und
+     * ein START-Eintrag mit {@code startIdempotencyKey} im Ereignis-Journal hinterlegt wurde.
+     *
+     * @param localSequenceId nur für die Anzeige/Log-Zwecke; niemals an das Backend
+     *                        geschickt (siehe {@link #getId()} Javadoc)
+     */
+    public static ClientExecution pendingOfflineReplay(int localSequenceId, ClientDevice device,
+            ClientProgram program, ClientUser user, LocalDateTime start, String startIdempotencyKey) {
+        ClientExecution e = new ClientExecution(-(1000 + Math.abs(localSequenceId)), device, program, user, false,
+                startIdempotencyKey);
+        e.start = start;
+        return e;
+    }
+
+    /**
+     * Ob dies eine rein lokale, nie abzurechnende "Tür öffnen"-Ausführung ist (siehe
+     * Klassenkommentar). Bewusst NICHT (mehr) über {@code id < 0} bestimmt - eine
+     * {@link #isOfflinePendingReplay() offline gebuchte} Ausführung hat ebenfalls eine
+     * negative Platzhalter-Id, ist aber eine echte, abzurechnende Buchung.
+     */
     public boolean isVirtual() {
-        return this.id < 0;
+        return this.virtual;
+    }
+
+    /**
+     * Ob diese Ausführung während eines Backend-Ausfalls lokal gebucht wurde und noch nicht
+     * per Journal-Replay beim Backend angelegt ist (siehe Klassenkommentar). Solange das der
+     * Fall ist, hat {@link #getId()} keine reale Bedeutung - {@code ExecutionFinisher}
+     * referenziert stattdessen {@link #getOfflinePendingIdempotencyKey()}.
+     */
+    public boolean isOfflinePendingReplay() {
+        return this.offlinePendingIdempotencyKey != null;
+    }
+
+    /**
+     * Der Idempotenz-Schlüssel, unter dem der START-Eintrag dieser Ausführung im
+     * Ereignis-Journal liegt (siehe {@link #isOfflinePendingReplay()}), oder {@code null}
+     * für jede online angelegte oder virtuelle Ausführung.
+     */
+    public String getOfflinePendingIdempotencyKey() {
+        return this.offlinePendingIdempotencyKey;
     }
 
     public void applyDto(ExecutionDto dto) {
@@ -68,6 +126,14 @@ public class ClientExecution {
         this.finished = dto.finished();
     }
 
+    /**
+     * Die Backend-Id dieser Ausführung, oder ein negativer Platzhalter für eine
+     * {@link #isVirtual() virtuelle} bzw. eine {@link #isOfflinePendingReplay() offline
+     * gebuchte, noch nicht nachgemeldete} Ausführung (siehe Klassenkommentar) - im letzteren
+     * Fall wird die echte Id erst durch das Journal-Replay vergeben, dieses Objekt selbst
+     * erfährt sie nie (es referenziert stattdessen weiterhin
+     * {@link #getOfflinePendingIdempotencyKey()}).
+     */
     public int getId() {
         return this.id;
     }
