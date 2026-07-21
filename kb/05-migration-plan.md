@@ -445,14 +445,17 @@ am Phasenende; Befunde gehen als Fix-Aufträge zurück an Implementierungs-Agent
 | AP5 | **Fernwartung umdrehen**: ausgehende WS-Verbindung des Terminals zum Backend (bestehendes Protokoll HELLO/PING/STATUS_REQUEST/LOG_REQUEST/RESTART_REQUEST bedienen), `MaintenanceServerManager` + IP-Registrierung in `locations` stilllegen; Cross-Component-Suite P21/P22 durch Nachfolgetests über den Backend-Kanal ersetzen | Maintenance |
 | AP6 | **Offline-Robustheit**: laufende Executions bei Backend-Ausfall lokal zu Ende führen und nachmelden; Offline-Buchungen laut Konzeptskizze (Snapshot, Journal, Replay, Zeitfenster); Tests für die Offline-Szenarien (C15-Nachfolger) | Robustheit/Offline-Buchungen |
 
-**Vorläufige Festlegungen zu den offenen Offline-Detailfragen** (Koordinationsentscheidung
-2026-07-21, vom Auftraggeber zu bestätigen – spätestens vor AP6-Beginn):
+**Festlegungen zu den Offline-Detailfragen** (vom Auftraggeber bestätigt 2026-07-21,
+siehe „Entscheidungen“ unten; für AP6 verbindlich):
 
 - `offline.max-duration`: Default **60 Minuten**; danach keine neuen Buchungen (Fehlerbild
-  wie heute C15), laufende Vorgänge werden weiterhin lokal beendet.
+  wie heute C15), laufende Vorgänge werden weiterhin lokal beendet. **Auftraggeber-Auflage:
+  der Wert muss über das Portal konfigurierbar sein** – geplant als Feld pro Standort im
+  Standorte-Dialog (additive Migration; das Terminal erhält den Wert über API/Snapshot).
 - **Kein Sicherheitsabschlag** aufs gecachte Guthaben (einfachste Regel; durch
   Offline-Buchungen negativ gewordene Salden werden beim Replay normal verbucht, wie im
-  Konzept vorgesehen).
+  Konzept vorgesehen). Bestätigt nach Erläuterung; bei Bedarf später als konfigurierbarer
+  Wert nachrüstbar.
 - Zwischenzeitlich gesperrte Nutzer: der **Snapshot-Stand gilt** während des Zeitfensters
   (Sperren sind selten, Schaden begrenzt; konservativere Alternativen verworfen).
 - Snapshot/Journal liegen **unverschlüsselt** auf dem Gerät (keine Passwort-Hashes
@@ -461,7 +464,8 @@ am Phasenende; Befunde gehen als Fix-Aufträge zurück an Implementierungs-Agent
 - Benachrichtigungen zu nachgemeldeten Ereignissen versendet das Backend beim Replay;
   Ereignisse, die älter sind als die maximale Offline-Dauer, werden ohne Versand verbucht.
 - Uhren-Drift: Terminals laufen mit NTP (Raspbian-Default); das Backend akzeptiert
-  Original-Zeitstempel innerhalb Zeitfenster + Toleranz, sonst Server-Zeit + Protokollhinweis.
+  Original-Zeitstempel innerhalb Zeitfenster + **Toleranz (konkret: ±5 Minuten,
+  konfigurierbar)**, sonst Server-Zeit + Protokollhinweis.
 
 ### Phase 5 – Ablösung, Härtung, Aufräumen
 - [ ] Alt-Portal-Modul und `Common.DataManager`/Maintenance-Altprotokoll entfernen;
@@ -569,6 +573,13 @@ Uhren-Drift der Terminals, Verschlüsselung des Snapshots/Journals auf dem Gerä
 | **Vaadin-Lizenzpflicht im Dev-Modus** (gefunden Phase 3 AP1, 2026-07-20): Vaadin 24.10.x verlangt beim ersten `VaadinServlet#init()` im Dev-Modus einen Online-Lizenzcheck gegen vaadin.com ("This Vaadin version requires an extended maintenance subscription") – die 24-Linie gilt inzwischen als „Extended Maintenance" (kostenpflichtig über die freie Community-Support-Periode hinaus), unabhängig davon, ob ein kommerzielles Add-on genutzt wird. Diese Sandbox-/Build-Umgebung hat keinen Netzwerkzugriff auf vaadin.com (Proxy liefert `403`) und kann daher weder online validieren noch einen Offline-Schlüssel abrufen – `mvn spring-boot:run` (Dev-Modus) scheitert hier beim Servlet-Start; ein erzwungener Produktionsmodus umgeht den Lizenzcheck zwar, findet dann aber kein Produktions-Frontend-Bundle (nur im `production`-Maven-Profil gebaut). | Betrifft NICHT die automatisierte Testsuite (Tests laufen mit `vaadin.productionMode=true`, keiner ruft eine Vaadin-UI-Route auf, siehe Surefire-Konfiguration in `backend/pom.xml`) – 116/116 Backend-Tests grün. Betrifft aber (a) manuelles interaktives Ausprobieren der UI in dieser Sandbox und (b) jeden künftigen JUnit-Test, der über einen echten eingebetteten Servlet-Container eine Vaadin-Route real rendern lassen will, sowie (c) eine spätere Playwright-E2E-Suite gegen einen hier laufenden Server. **Für AP2/AP3 zu klären (Auftraggeber-Entscheidung nötig, siehe „Offene Fragen" unten)**: entweder (1) einen Offline-Entwicklungsschlüssel besorgen (einmaliger Zugriff auf vaadin.com von außerhalb dieser Sandbox nötig, `mvn com.vaadin:vaadin-maven-plugin:download-offline-license`), (2) eine Vaadin-Extended-Maintenance-Subscription abschließen, oder (3) production-Bundle-Build + Deployment als primären Verifikationsweg etablieren (kein Dev-Modus-Lizenzcheck bei reinem Produktionsbetrieb) und Browser-/Playwright-Tests nur gegen eine echte, lizenzierte Umgebung (z. B. CI mit Internetzugang) fahren. **Update AP2 (2026-07-20, siehe Änderungslog „Phase 3 AP2")**: Option (3) wurde in dieser Sandbox tatsächlich verifiziert und funktioniert – `mvn package -Pproduction` baut grün (Vaadin liefert dafür ein vorgefertigtes Produktions-Bundle aus den `vaadin-core`-Jars aus, kein npm/Netzwerk nötig, weil diese UI keinen eigenen Frontend-Code hat), ein damit gestarteter Server liefert echte Vaadin-Seiten (`/login` inkl. JS/CSS-Bundle) aus UND beantwortet Anfragen trotz einer beim Start geloggten `MissingLicenseKeyException` (anders als der fatale Dev-Modus-Abbruch aus AP1 – die Ursache für den Unterschied Dev- vs. Produktionsmodus ist technisch nicht abschließend geklärt). Die AP6-Playwright-Suite kann sich also an einem produktionsmodus-gebauten Server orientieren. Die Lizenz-Fehlermeldung selbst ist damit NICHT verschwunden (weiterhin ungeklärt, ob das rechtlich unbedenklich ist) – nur der technische Show-Stopper für Tests/Deployment in dieser Sandbox ist entschärft. |
 
 ## Entscheidungen (Auftraggeber)
+- **2026-07-21**: **Offline-Detailfragen entschieden** (Rückmeldung auf die vorläufigen
+  Festlegungen der Phase-4-Planung): 60-Minuten-Default OK, **muss aber über das Portal
+  konfigurierbar sein**; kein Sicherheitsabschlag (nach Erläuterung bestätigt);
+  Snapshot-Stand gilt bei zwischenzeitlichen Sperrungen; unverschlüsselter
+  Snapshot/Journal OK; Replay-Benachrichtigungsregel OK; Uhren-Drift-Toleranz einplanen
+  (umgesetzt als ±5 Minuten, konfigurierbar). Details im Festlegungs-Block unter
+  „Arbeitspakete Phase 4“.
 - **2026-07-19**: UI-Tests parallel für Client (TestFX) **und** Portal (E2E) aufbauen. ✅
 - **2026-07-20**: **Fix bleiben:** Java-Backend, PostgreSQL, Raspi-Terminals mit
   Touch-Display. **Alles andere darf neu gedacht werden.** Nutzer dürfen sich nicht
