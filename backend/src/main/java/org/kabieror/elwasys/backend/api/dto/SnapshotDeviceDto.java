@@ -13,13 +13,13 @@ import org.kabieror.elwasys.backend.domain.UserGroupEntity;
  */
 public record SnapshotDeviceDto(Integer id, String name, int position, boolean enabled,
         List<Integer> validUserGroupIds, List<Integer> programIds, String fhemName, String fhemSwitchName,
-        String fhemPowerName, String deconzUuid, float autoEndPowerThreashold, int autoEndWaitTimeSeconds) {
+        String fhemPowerName, String deconzUuid, float autoEndPowerThreshold, int autoEndWaitTimeSeconds) {
 
     public static SnapshotDeviceDto of(DeviceEntity device) {
         List<Integer> groupIds = device.getValidUserGroups().stream().map(UserGroupEntity::getId).toList();
         List<Integer> programIds = device.getPrograms().stream().map(p -> p.getId()).toList();
         return new SnapshotDeviceDto(device.getId(), device.getName(), device.getPosition(), device.isEnabled(),
                 groupIds, programIds, device.getFhemName(), device.getFhemSwitchName(), device.getFhemPowerName(),
-                device.getDeconzUuid(), device.getAutoEndPowerThreashold(), device.getAutoEndWaitTimeSeconds());
+                device.getDeconzUuid(), device.getAutoEndPowerThreshold(), device.getAutoEndWaitTimeSeconds());
     }
 }

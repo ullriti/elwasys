@@ -12,24 +12,22 @@ import org.kabieror.elwasys.backend.domain.DeviceEntity;
  *
  * <p><b>Gateway-/Hardwarefelder (AP3, Phase 4, additiv ergänzt):</b> {@code fhemName}/
  * {@code fhemSwitchName}/{@code fhemPowerName}/{@code deconzUuid}/
- * {@code autoEndPowerThreashold}/{@code autoEndWaitTimeSeconds} entsprechen 1:1 den
+ * {@code autoEndPowerThreshold}/{@code autoEndWaitTimeSeconds} entsprechen 1:1 den
  * gleichnamigen {@link DeviceEntity}-Feldern (siehe kb/02-data-model.md) - der Alt-Client
  * lädt sie bislang über {@code DataManager#getDevicesToDisplay}/{@code Device}, das
  * Terminal-Cutover (AP4) braucht sie über die API, um die Steckdose des jeweiligen
  * Gateways (fhem ODER deCONZ) korrekt anzusteuern und automatische Programmenden per
- * Leistungsmessung auszulösen. Der Tippfehler {@code autoEndPowerThreashold} (statt
- * *threshold*) ist Teil des Bestandsschemas und bleibt bewusst erhalten (siehe
- * {@link DeviceEntity}).
+ * Leistungsmessung auszulösen.
  */
 public record DeviceDto(Integer id, String name, int position, boolean enabled, boolean usableByUser,
         boolean occupied, List<ProgramDto> programs, String fhemName, String fhemSwitchName, String fhemPowerName,
-        String deconzUuid, float autoEndPowerThreashold, int autoEndWaitTimeSeconds) {
+        String deconzUuid, float autoEndPowerThreshold, int autoEndWaitTimeSeconds) {
 
     public static DeviceDto of(DeviceEntity device, boolean usableByUser, boolean occupied,
             List<ProgramDto> programs) {
         return new DeviceDto(device.getId(), device.getName(), device.getPosition(), device.isEnabled(),
                 usableByUser, occupied, programs, device.getFhemName(), device.getFhemSwitchName(),
-                device.getFhemPowerName(), device.getDeconzUuid(), device.getAutoEndPowerThreashold(),
+                device.getFhemPowerName(), device.getDeconzUuid(), device.getAutoEndPowerThreshold(),
                 device.getAutoEndWaitTimeSeconds());
     }
 }

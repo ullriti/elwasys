@@ -11,5 +11,5 @@ import java.util.List;
  */
 public record SnapshotDeviceDto(Integer id, String name, int position, boolean enabled,
         List<Integer> validUserGroupIds, List<Integer> programIds, String fhemName, String fhemSwitchName,
-        String fhemPowerName, String deconzUuid, float autoEndPowerThreashold, int autoEndWaitTimeSeconds) {
+        String fhemPowerName, String deconzUuid, float autoEndPowerThreshold, int autoEndWaitTimeSeconds) {
 }

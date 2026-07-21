@@ -208,7 +208,7 @@ public class ClientSmallUiSmokeE2ETest {
             // maps devices to its four fixed tiles by "position" (1..4).
             final int deviceId = insertReturningId(s,
                     "INSERT INTO devices (name, position, location_id, fhem_name, fhem_switch_name, " +
-                            "fhem_power_name, deconz_uuid, auto_end_power_threashold, auto_end_wait_time, enabled) " +
+                            "fhem_power_name, deconz_uuid, auto_end_power_threshold, auto_end_wait_time, enabled) " +
                             "VALUES ('" + DEVICE_NAME + "', 1, " + locationId +
                             ", 'wm1', 'wm1sw', 'wm1pw', '', 0.5, 20, TRUE) RETURNING id");
             s.executeUpdate("INSERT INTO device_program_rel (device_id, program_id) VALUES ("
@@ -224,8 +224,6 @@ public class ClientSmallUiSmokeE2ETest {
                             + groupId + ", FALSE, FALSE, FALSE) RETURNING id");
             s.executeUpdate("INSERT INTO credit_accounting (user_id, amount, description) VALUES ("
                     + userId + ", 100, 'E2E seed')");
-
-            s.executeUpdate("UPDATE locations SET client_uid=NULL, client_last_seen=NULL WHERE id=" + locationId);
         }
     }
 

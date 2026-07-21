@@ -46,7 +46,7 @@ import org.kabieror.elwasys.backend.domain.DeviceEntity;
  */
 public record DeviceOverviewDto(Integer id, String name, int position, boolean enabled, boolean occupied,
         Integer runningExecutionId, Integer lastUserId, String lastUserName, String fhemName, String fhemSwitchName,
-        String fhemPowerName, String deconzUuid, float autoEndPowerThreashold, int autoEndWaitTimeSeconds,
+        String fhemPowerName, String deconzUuid, float autoEndPowerThreshold, int autoEndWaitTimeSeconds,
         List<ProgramDto> programs) {
 
     public static DeviceOverviewDto of(DeviceEntity device, boolean occupied, Integer runningExecutionId,
@@ -54,6 +54,6 @@ public record DeviceOverviewDto(Integer id, String name, int position, boolean e
         return new DeviceOverviewDto(device.getId(), device.getName(), device.getPosition(), device.isEnabled(),
                 occupied, runningExecutionId, lastUserId, lastUserName, device.getFhemName(),
                 device.getFhemSwitchName(), device.getFhemPowerName(), device.getDeconzUuid(),
-                device.getAutoEndPowerThreashold(), device.getAutoEndWaitTimeSeconds(), programs);
+                device.getAutoEndPowerThreshold(), device.getAutoEndWaitTimeSeconds(), programs);
     }
 }

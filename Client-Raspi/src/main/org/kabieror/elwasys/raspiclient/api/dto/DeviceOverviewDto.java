@@ -11,6 +11,6 @@ import java.util.List;
  */
 public record DeviceOverviewDto(Integer id, String name, int position, boolean enabled, boolean occupied,
         Integer runningExecutionId, Integer lastUserId, String lastUserName, String fhemName, String fhemSwitchName,
-        String fhemPowerName, String deconzUuid, float autoEndPowerThreashold, int autoEndWaitTimeSeconds,
+        String fhemPowerName, String deconzUuid, float autoEndPowerThreshold, int autoEndWaitTimeSeconds,
         List<ProgramDto> programs) {
 }

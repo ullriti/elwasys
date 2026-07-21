@@ -125,15 +125,13 @@ public class ClientDeviceVisibilityE2ETest {
 
             insertDevice(s, LOCAL_DEVICE, defaultLocation, groupId);
             insertDevice(s, FOREIGN_DEVICE, foreignLocation, groupId);
-
-            s.executeUpdate("UPDATE locations SET client_uid=NULL, client_last_seen=NULL WHERE id=" + defaultLocation);
         }
     }
 
     private static void insertDevice(Statement s, String name, int locationId, int groupId) throws Exception {
         final int deviceId = insertReturningId(s,
                 "INSERT INTO devices (name, position, location_id, fhem_name, fhem_switch_name, " +
-                        "fhem_power_name, deconz_uuid, auto_end_power_threashold, auto_end_wait_time, enabled) " +
+                        "fhem_power_name, deconz_uuid, auto_end_power_threshold, auto_end_wait_time, enabled) " +
                         "VALUES ('" + name + "', 1, " + locationId +
                         ", 'wm1', 'wm1sw', 'wm1pw', '', 0.5, 20, TRUE) RETURNING id");
         s.executeUpdate("INSERT INTO devices_valid_user_groups (device_id, group_id) VALUES ("

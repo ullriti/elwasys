@@ -18,9 +18,9 @@ import java.util.Set;
  * Entspricht der Tabelle {@code devices} (siehe kb/02-data-model.md) sowie
  * {@code org.kabieror.elwasys.common.Device} im Alt-Code.
  *
- * <p>Die Spalte {@code auto_end_power_threashold} behält den Tippfehler des
- * Bestandsschemas bei (siehe Rahmenbedingungen: keine Schema-Änderungen in AP2; die
- * Umbenennung ist für Phase 5 vorgesehen).
+ * <p>Die Spalte hieß im Bestandsschema (bis V7) {@code auto_end_power_threashold}
+ * (Tippfehler); Phase 5 AP3 hat sie per {@code V8__rename_auto_end_power_threshold.sql}
+ * auf {@code auto_end_power_threshold} umbenannt.
  */
 @Entity
 @Table(name = "devices")
@@ -56,12 +56,8 @@ public class DeviceEntity {
     @Column(name = "deconz_uuid", length = 64)
     private String deconzUuid = "";
 
-    /**
-     * Tippfehler ("threashold" statt "threshold") ist Teil des Bestandsschemas und bleibt
-     * bewusst erhalten, siehe Klassenkommentar.
-     */
-    @Column(name = "auto_end_power_threashold", nullable = false)
-    private float autoEndPowerThreashold = 0.5f;
+    @Column(name = "auto_end_power_threshold", nullable = false)
+    private float autoEndPowerThreshold = 0.5f;
 
     /**
      * Wartezeit nach Unterschreiten des Leistungs-Grenzwerts in Sekunden (Spalte ist ein
@@ -164,12 +160,12 @@ public class DeviceEntity {
         this.deconzUuid = deconzUuid;
     }
 
-    public float getAutoEndPowerThreashold() {
-        return this.autoEndPowerThreashold;
+    public float getAutoEndPowerThreshold() {
+        return this.autoEndPowerThreshold;
     }
 
-    public void setAutoEndPowerThreashold(float autoEndPowerThreashold) {
-        this.autoEndPowerThreashold = autoEndPowerThreashold;
+    public void setAutoEndPowerThreshold(float autoEndPowerThreshold) {
+        this.autoEndPowerThreshold = autoEndPowerThreshold;
     }
 
     public int getAutoEndWaitTimeSeconds() {

@@ -136,7 +136,7 @@ class DeviceControllerTest extends AbstractApiIT {
         device.setFhemSwitchName("wm1sw");
         device.setFhemPowerName("wm1pw");
         device.setDeconzUuid("abc-123");
-        device.setAutoEndPowerThreashold(1.5f);
+        device.setAutoEndPowerThreshold(1.5f);
         device.setAutoEndWaitTimeSeconds(42);
         this.deviceRepository.save(device);
         UserEntity user = newUser(newGroup());
@@ -146,7 +146,7 @@ class DeviceControllerTest extends AbstractApiIT {
                 jsonPath("$[0].fhemName").value("wm1")).andExpect(jsonPath("$[0].fhemSwitchName").value("wm1sw"))
                 .andExpect(jsonPath("$[0].fhemPowerName").value("wm1pw")).andExpect(
                 jsonPath("$[0].deconzUuid").value("abc-123")).andExpect(
-                jsonPath("$[0].autoEndPowerThreashold").value(1.5)).andExpect(
+                jsonPath("$[0].autoEndPowerThreshold").value(1.5)).andExpect(
                 jsonPath("$[0].autoEndWaitTimeSeconds").value(42));
     }
 

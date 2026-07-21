@@ -56,14 +56,13 @@ Benutzergruppen mit Rabattregel.
 ### locations
 Ein Standort = ein Client-Terminal.
 - `id`, `name` (unique)
-- `client_uid`, `client_ip`, `client_port`, `client_last_seen` – **obsolet seit Phase 4 AP5**
-  (2026-07-21): dienten der Alt-IP-Registrierung für die Fernwartung (`LocationManager`, siehe
-  kb/01-architecture.md „Maintenance-Protokoll (Common)“) – der Client schreibt/liest diese
-  Spalten nicht mehr (die Fernwartung läuft jetzt über eine vom Terminal ausgehende
-  WebSocket-Verbindung, `TerminalConnectionRegistry` im Backend hält die Erreichbarkeit rein
-  in-memory, siehe kb/03-modules.md). Die Spalten bleiben laut Roadmap **bis Phase 5**
-  bestehen (KEINE Migration entfernt Bestandsspalten in Phase 4) – Entfall per additiver
-  Migration ist für Phase 5 vorgesehen.
+- `client_uid`, `client_ip`, `client_port`, `client_last_seen` – **entfernt in Phase 5 AP3**
+  (2026-07-21, `V9__drop_obsolete_location_client_columns.sql`): dienten der Alt-IP-
+  Registrierung für die Fernwartung (`LocationManager`, siehe kb/01-architecture.md
+  „Maintenance-Protokoll (Common)“) – seit Phase 4 AP5 läuft die Fernwartung über eine vom
+  Terminal ausgehende WebSocket-Verbindung, `TerminalConnectionRegistry` im Backend hält die
+  Erreichbarkeit rein in-memory (siehe kb/03-modules.md). Die Spalten waren seitdem ungenutzt
+  und wurden per V9 gedroppt.
 - Seed: `Default`
 - `offline_max_duration_minutes` (INT, NOT NULL, Default 60) – **neu seit Phase 4 AP6**
   (2026-07-21): `offline.max-duration` dieses Standorts (Auftraggeber-Vorgabe, siehe
@@ -82,7 +81,8 @@ Ein Gerät (Waschmaschine/Trockner).
 - `id`, `name`, `position`, `location_id` → locations
 - fhem: `fhem_name`, `fhem_switch_name`, `fhem_power_name`
 - deCONZ: `deconz_uuid`
-- Ende-Erkennung: `auto_end_power_threashold` (REAL, Default 0.5 W),
+- Ende-Erkennung: `auto_end_power_threshold` (REAL, Default 0.5 W; hieß bis V7
+  `auto_end_power_threashold` – Tippfehler in Phase 5 AP3 per V8 korrigiert),
   `auto_end_wait_time` (INT, Default 20 s)
 - `enabled`
 
@@ -185,8 +185,8 @@ genau einer `elwasys`-Datenbank tritt das nicht auf, siehe Kommentarkopf der Mig
 - Passwörter als **SHA1** gespeichert → bei Modernisierung sicherheitskritisch
   (Wechsel auf bcrypt/argon2 einplanen, Migrationspfad nötig).
 - Klartext-/schwache Default-Passwörter (`elwaclient1`, `api1234`) → härten.
-- Tippfehler in Spaltenname `auto_end_power_threashold` (statt *threshold*) – bei
-  Schema-Refactor berücksichtigen (Kompatibilität!).
+- Tippfehler in Spaltenname `auto_end_power_threashold` (statt *threshold*) – in Phase 5 AP3
+  per `V8__rename_auto_end_power_threshold.sql` auf `auto_end_power_threshold` korrigiert.
 
 ## Flyway-Baseline (seit Phase 2 AP1, 2026-07-20)
 
@@ -206,8 +206,9 @@ Zusammenfassung:
   einen `DO`-Block mit Existenzprüfung (`pg_roles`) gefasst, weil PostgreSQL-Rollen
   Cluster-weit sind (nicht pro Datenbank) und ein zweiter Lauf gegen denselben Cluster sonst
   mit „role already exists“ fehlschlagen würde. Der Spaltentypo
-  `auto_end_power_threashold` bleibt bewusst erhalten (Umbenennung erst Phase 5, siehe
-  Roadmap).
+  `auto_end_power_threashold` blieb hier bewusst erhalten (eingefrorene 0.4.0-Baseline);
+  Phase 5 AP3 hat ihn per `V8` auf dem Migrationspfad vorwärts korrigiert (siehe
+  Änderungslog).
 - **Zwei Betriebsszenarien**, beide mit `backend/verify-schema-baseline.sh` verifiziert:
   1. **Frische, leere DB**: Flyway führt `V1` normal aus → schema-äquivalent zu einer frischen
      `database-init.sql`-DB (verifiziert per `pg_dump --schema-only`-Diff; einzige Abweichung

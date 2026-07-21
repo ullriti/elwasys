@@ -30,6 +30,13 @@
 # script's "fresh path" comparison at flyway.target=1 (true V1-only check) or replace it
 # with an explicit, maintained list of expected post-baseline diffs.
 #
+# UPDATE (Phase 5 AP3, 2026-07-21): the same "fresh path" divergence now also covers V8
+# (devices.auto_end_power_threashold -> auto_end_power_threshold) and V9 (drops
+# locations.client_uid/client_ip/client_port/client_last_seen) - both are additional,
+# expected, non-regression diffs against the untouched legacy-path DB from step 1. Full
+# rework of this script (explicit expected-diff list or flyway.target=1) is deferred to
+# Phase 5 AP6 as noted above; this script is still not part of any CI/test suite.
+#
 # Requires: JDK 21, Maven, local PostgreSQL 16 (pg_ctlcluster) + sudo. Not part of the routine
 # test suite (run-backend-tests.sh) - this is the documented one-off verification the AP1
 # work order asked for; safe to re-run any time to re-check the baseline after touching the

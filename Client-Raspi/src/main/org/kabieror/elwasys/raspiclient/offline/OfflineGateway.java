@@ -122,7 +122,7 @@ public class OfflineGateway {
                 programs.add(toProgramDto(p, group));
             }
             result.add(new DeviceDto(d.id(), d.name(), d.position(), d.enabled(), usable, false, programs,
-                    d.fhemName(), d.fhemSwitchName(), d.fhemPowerName(), d.deconzUuid(), d.autoEndPowerThreashold(),
+                    d.fhemName(), d.fhemSwitchName(), d.fhemPowerName(), d.deconzUuid(), d.autoEndPowerThreshold(),
                     d.autoEndWaitTimeSeconds()));
         }
         return result;
@@ -152,7 +152,7 @@ public class OfflineGateway {
                 }
             }
             result.add(new DeviceOverviewDto(d.id(), d.name(), d.position(), d.enabled(), false, null, null, null,
-                    d.fhemName(), d.fhemSwitchName(), d.fhemPowerName(), d.deconzUuid(), d.autoEndPowerThreashold(),
+                    d.fhemName(), d.fhemSwitchName(), d.fhemPowerName(), d.deconzUuid(), d.autoEndPowerThreshold(),
                     d.autoEndWaitTimeSeconds(), programs));
         }
         return result;
