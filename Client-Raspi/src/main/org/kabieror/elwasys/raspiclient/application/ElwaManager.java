@@ -3,7 +3,6 @@ package org.kabieror.elwasys.raspiclient.application;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 import org.apache.commons.lang3.StringUtils;
-import org.kabieror.elwasys.common.DataManager;
 import org.kabieror.elwasys.common.LocationOccupiedException;
 import org.kabieror.elwasys.common.NoDataFoundException;
 import org.kabieror.elwasys.common.Utilities;
@@ -11,7 +10,6 @@ import org.kabieror.elwasys.raspiclient.api.ApiClient;
 import org.kabieror.elwasys.raspiclient.api.ApiException;
 import org.kabieror.elwasys.raspiclient.api.dto.DeviceOverviewDto;
 import org.kabieror.elwasys.raspiclient.api.dto.ExecutionDto;
-import org.kabieror.elwasys.raspiclient.configuration.LocationManager;
 import org.kabieror.elwasys.raspiclient.configuration.WashguardConfiguration;
 import org.kabieror.elwasys.raspiclient.devices.FhemDevicePowerManager;
 import org.kabieror.elwasys.raspiclient.devices.IDevicePowerManager;
@@ -28,6 +26,7 @@ import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 import org.kabieror.elwasys.raspiclient.model.ClientProgram;
 import org.kabieror.elwasys.raspiclient.model.ClientUser;
 import org.kabieror.elwasys.raspiclient.ui.AbstractMainFormController;
+import org.kabieror.elwasys.raspiclient.ws.TerminalWebSocketClient;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
@@ -54,8 +53,6 @@ public class ElwaManager {
      */
     private final Utilities utilities;
 
-    private final MaintenanceServerManager maintenanceServerManager;
-
     /**
      * Listener
      */
@@ -78,13 +75,13 @@ public class ElwaManager {
     private ApiClient apiClient;
 
     /**
-     * Die Anbindung an die Datenbank - seit Phase 4 AP4 NUR NOCH für den transitional
-     * verbliebenen Fernwartungs-Registrierungspfad ({@link LocationManager}) verwendet, bis
-     * dieser in AP5 durch die ausgehende WebSocket-Verbindung ersetzt wird (siehe
-     * kb/05-migration-plan.md "Arbeitspakete Phase 4", AP4-Auftrag). Alle übrigen
-     * Datenzugriffe laufen über {@link #apiClient}.
+     * Die ausgehende WebSocket-Verbindung zum Backend (Phase 4 AP5, siehe
+     * kb/05-migration-plan.md "Arbeitspakete Phase 4", AP5-Auftrag). Ersetzt die ehemalige
+     * Fernwartungs-Registrierung über {@code LocationManager}/{@code MaintenanceServerManager}
+     * (Direkt-DB-Zugriff, Terminal lauschte als TCP-Server) - damit ist der letzte
+     * Direkt-DB-Zugriff des Terminals entfallen, siehe {@link TerminalWebSocketClient}.
      */
-    private DataManager dataManager;
+    private TerminalWebSocketClient terminalWebSocketClient;
 
     /**
      * Der Manager für die Konfiguration
@@ -103,11 +100,6 @@ public class ElwaManager {
     private IDevicePowerManager devicePowerManager;
 
     private IDeviceRegistrationService deviceRegistrationService;
-
-    /**
-     * Der Manager für die Registrierung auf einen Ort (transitional, siehe {@link #dataManager}).
-     */
-    private LocationManager locationManager;
 
     /**
      * Der Controller für das Hauptformular
@@ -149,10 +141,6 @@ public class ElwaManager {
             System.exit(1);
         }
         this.utilities = new Utilities(this.configurationManager);
-
-        // Starte Wartungs-Server
-        this.maintenanceServerManager = new MaintenanceServerManager(this);
-        this.maintenanceServerManager.start();
     }
 
     /**
@@ -169,11 +157,17 @@ public class ElwaManager {
             this.apiClient = new ApiClient(this.configurationManager.getBackendUrl(),
                     this.configurationManager.getBackendToken());
 
-            // Transitional (AP5 löst dies durch die ausgehende WS-Verbindung ab, siehe
-            // kb/05-migration-plan.md): die Fernwartungs-Registrierung läuft weiterhin
-            // direkt gegen die Datenbank.
-            this.dataManager = new DataManager(this.configurationManager);
-            this.locationManager = new LocationManager(this.configurationManager);
+            // Ausgehende Fernwartungs-Verbindung (Phase 4 AP5, siehe kb/05-migration-plan.md
+            // "Arbeitspakete Phase 4", AP5): ersetzt die ehemalige, Direkt-DB-basierte
+            // Registrierung (LocationManager/MaintenanceServerManager). Läuft mit derselben
+            // backend.url/backend.token-Konfiguration wie die REST-API (kein neuer Konfig-
+            // Schlüssel nötig) und überlebt einen späteren restart() (siehe
+            // TerminalWebSocketClient#onClose).
+            this.terminalWebSocketClient = new TerminalWebSocketClient(this,
+                    this.configurationManager.getBackendUrl(), this.configurationManager.getBackendToken(),
+                    this.configurationManager.getUid());
+            this.listenToCloseEvent(this.terminalWebSocketClient);
+            this.terminalWebSocketClient.start();
 
             // Erreichbarkeits-Check des Backends beim Start (entspricht dem alten
             // "Standort aus der Datenbank laden"-Schritt, jetzt über die API - ein
@@ -288,16 +282,6 @@ public class ElwaManager {
      */
     public ApiClient getApiClient() {
         return this.apiClient;
-    }
-
-    /**
-     * Gibt die Anbindung an die Datenbank zurück - transitional, nur noch für die
-     * Fernwartungs-Registrierung gebraucht (siehe {@link #dataManager}).
-     *
-     * @return Die Anbindung an die Datenbank.
-     */
-    public DataManager getDataRetriever() {
-        return this.dataManager;
     }
 
     /**

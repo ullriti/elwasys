@@ -28,39 +28,16 @@ function collect_data() {
     echo
     echo === Backend Connection ===
     echo
-    echo "Since Phase 4 the terminal talks to the elwasys backend (REST API v1)"
-    echo "instead of the database directly. Enter its base URL and this terminal's"
+    echo "Since Phase 4 the terminal talks to the elwasys backend exclusively (REST API v1"
+    echo "for login/devices/programs/executions, plus an outgoing WebSocket connection for"
+    echo "remote maintenance - status/log/restart). Enter its base URL and this terminal's"
     echo "location token (issued via the backend's token-cli, see kb/04-build-and-run.md)."
+    echo "No database access is needed on the terminal any more."
     echo
     read -p "Enter backend base URL (e.g., https://backend-host:8080/): " BACKEND_URL
     echo
     read -s -p "Enter this terminal's backend token: " BACKEND_TOKEN
     echo
-
-    echo
-    echo
-    echo === Database Connection \(TRANSITIONAL\) ===
-    echo
-    echo "TRANSITIONAL: direct database access is only still used for the maintenance"
-    echo "connection registration (LocationManager); it will be replaced by the"
-    echo "outgoing WebSocket connection in Phase 4 AP5, after which these questions go"
-    echo "away. All other data access goes through the backend above."
-    echo
-    read -p "Enter database server address (e.g., localhost:5432): " DB_SERVER
-    echo
-    read -p "Enter database name: " DB_NAME
-    echo
-    read -p "Enter database username: " DB_USER
-    echo
-    read -s -p "Enter database password: " DB_PASSWORD
-    echo
-    echo
-    read -p "Should the database connection use SSL? (true/false): " DB_USE_SSL
-    echo
-    echo "Please enter the CA certificate for verifying the server SSL certificate."
-    echo "Provide a file in PEM format."
-    echo "When you're done, type #"
-    read -d '#' DB_CA_CERT
 
     echo
     echo
@@ -170,36 +147,19 @@ function config_elwasys() {
     # Populate the Config file
     config_file="./elwasys.properties"
     tee "$config_file" > /dev/null <<EOT
-# Base URL of the elwasys backend (REST API v1). Since Phase 4 this is the
-# terminal's primary data access path (login, devices, programs, executions,
-# credit); see kb/05-migration-plan.md "Client-Cutover".
+# Base URL of the elwasys backend (REST API v1 + outgoing WebSocket maintenance
+# connection). Since Phase 4 AP5 this is the terminal's ONLY data access path
+# (login, devices, programs, executions, credit, remote status/log/restart); see
+# kb/05-migration-plan.md "Client-Cutover"/"Arbeitspakete Phase 4" AP4/AP5. No
+# direct database access remains on the terminal.
 backend.url: $BACKEND_URL
 
 # This terminal's location token for the backend API v1 (issued via token-cli).
+# Used for both the REST API and the outgoing maintenance WebSocket connection.
 backend.token: $BACKEND_TOKEN
 
-# TRANSITIONAL (Phase 4 AP4, removed in AP5): the direct database connection is
-# only still used for the maintenance connection registration (LocationManager);
-# all other data access goes through backend.url/backend.token above.
-# The address of the postgresql server
-# z.B. - databaseserver1:5432
-#      - 192.168.0.100:10090,
-#      - 10.0.0.5
-database.server: $DB_SERVER
-
-# Name of the database
-database.name: $DB_NAME
-
-# Username for the database connection
-database.user: $DB_USER
-
-# Password for the database connection
-database.password: $DB_PASSWORD
-
-# Weather the database connection is to be encrypted
-database.useSsl: $DB_USE_SSL
-
-# Location of this client
+# Location of this client (display name only, e.g. shown in error messages -
+# the actual access scope is determined by backend.token above)
 #   Only devices at this location will be available.
 # e.g. Laundry
 location: $LOCATION
@@ -226,9 +186,10 @@ deconz.password: $DECONZ_PASSWORD
 # (elwasys.notifications.enabled in the backend configuration). This client no
 # longer sends any notifications itself, so smtp.*/pushover.* settings are gone.
 
-# Port to listen on for incoming maintenance requests
-maintenance.server: $DB_SERVER
-maintenance.port: 3591
+# Remote maintenance (status/log/restart) is requested by the portal over the same
+# outgoing WebSocket connection the terminal already holds for the REST API (see
+# backend.url/backend.token above) - the terminal no longer listens on a port itself,
+# so maintenance.server/maintenance.port no longer exist here either.
 EOT
     sudo chmod 600 "$config_file"
 
@@ -280,16 +241,6 @@ EOT
 </configuration>
 EOT
 
-    # create ca-db.pem
-    ca_db="./ca-db.pem"
-    echo -e "$DB_CA_CERT" > $ca_db
-
-    truststore_password=$(generate_password)
-    truststore_file="./.truststore"
-    # Remove truststore file if it already exists
-    [ -f "$truststore_file" ] && rm -f $truststore_file
-    sudo keytool -import -trustcacerts -keystore "$truststore_file" -storepass "$truststore_password" -alias ca_cert -file "$ca_db" -noprompt
-
     # run.sh script
     run_script="./run.sh"
     tee "$run_script" > /dev/null <<EOT
@@ -298,7 +249,6 @@ EOT
 sudo killall java 2> /dev/null
 
 java -Djavafx.platform=gtk -Dlogback.configurationFile=$ELWA_ROOT/logback.xml \
-        -Djavax.net.ssl.trustStore=$ELWA_ROOT/.truststore -Djavax.net.ssl.trustStorePassword=$truststore_password \
         -jar raspi-client.latest.jar -verbose > log/stdout 2> log/errout
 EOT
     chmod +x "$run_script"

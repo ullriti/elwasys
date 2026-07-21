@@ -165,39 +165,6 @@ public class WashguardConfiguration extends ConfigurationManager {
     }
 
     /**
-     * Die IP-Adresse, über welche der Wartungsserver kontaktiert werden soll.
-     *
-     * @return Die IP-Adresse des Wartungsservers.
-     */
-    public String getMaintenanceServer() {
-        final String ip = this.props.getProperty("maintenance.server");
-        if (ip == null || ip.isEmpty()) {
-            return "";
-        } else if (!ip.matches("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}")) {
-            this.logger.warn("The configuration value 'maintenance.server' has an invalid format and cannot be used.");
-            return "";
-        }
-        return ip;
-    }
-
-    /**
-     * Der Port, auf welchem der Wartungsserver erreichbar ist.
-     *
-     * @return Der Port, auf welchem der Wartungsserver erreichbar ist.
-     */
-    public int getMaintenancePort() {
-        int port;
-        try {
-            port = Integer.parseInt(this.props.getProperty("maintenance.port"));
-        } catch (final NumberFormatException e) {
-            this.logger.warn("The configuration valid maintenance.port is not specified or has an invalid format. Using the default 3591 " +
-                    "instead.");
-            return 3591;
-        }
-        return port;
-    }
-
-    /**
      * The port on which the application should listen to prevent multiple instances of itself
      * @return
      */
