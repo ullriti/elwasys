@@ -54,7 +54,20 @@ DeviceState), `MaintenanceConnectionTest`, `InactivitySchedulerTest` (liegt im m
 Wichtige Keys: `database.*`, `location`, `displayTimeout`, `startupDelay`,
 `sessionTimeout`, `portalUrl`, `deconz.*` **oder** `fhem.*`, `smtp.*`, `maintenance.port`.
 
-## Portal (`org.kabieror.elwasys.webportal`)
+## Portal (`org.kabieror.elwasys.webportal`) – ⚠️ STILLGELEGT (Phase 3 AP6, 2026-07-21)
+
+> **Fachlich abgelöst** durch das neue, ins Backend eingebettete Portal
+> (`backend/.../ui/`, Vaadin Flow – siehe „Portal-UI (Vaadin Flow)" weiter unten).
+> Feature-Parität ist über die neue Playwright-Suite (`backend/e2e/`, P1–P20, siehe
+> kb/06-ui-tests.md) nachgewiesen; die alte Playwright-Suite (`Portal/e2e/`) läuft nicht mehr
+> in der CI. **Der Code dieses Moduls bleibt laut Roadmap bis Phase 5 im Repo** (siehe
+> kb/05-migration-plan.md) – nicht gelöscht, nur nicht mehr Teil des E2E-Abnahmepfads. Die CI
+> baut das Modul weiterhin (Job `portal-legacy-build` in `.github/workflows/ci.yml`), damit
+> Regressionen am liegengebliebenen Code trotzdem auffallen, solange er existiert. Die
+> Fernwartungsverbindung (`MaintenanceConnectionManager`, Testfälle P21/P22) bleibt bis Phase 4
+> in Betrieb (siehe kb/05-migration-plan.md, „Entscheidungen") – die Cross-Component-E2E-Suite
+> dafür läuft unverändert weiter (Teil des „client"-CI-Jobs, hängt nur an `Common`, nicht an
+> diesem Modul).
 
 Vaadin-7-Webanwendung (WAR). Java 8. 36 Java-Dateien.
 
@@ -522,7 +535,15 @@ per Default aus ist).
 - `NotificationsPropertiesDefaultTest`: voller Spring-Kontext, beweist `enabled=false` ohne
   gesetzte Umgebungsvariable.
 
-### Portal-UI (Vaadin Flow, Phase 3 AP1–AP5, 2026-07-20/21, Package `backend/.../ui/`)
+### Portal-UI (Vaadin Flow, Phase 3 AP1–AP6, 2026-07-20/21, Package `backend/.../ui/`)
+
+**AP6 (2026-07-21, letztes Arbeitspaket der Phase-3-Roadmap)**: Feature-Parität mit dem
+Alt-Portal ist jetzt durch eine portierte Playwright-Suite (`backend/e2e/`, P1–P20
+vollständig inkl. dem zuvor nie umgesetzten P11) nachgewiesen – Details, Selektor-Strategie
+und Test-für-Test-Status in kb/06-ui-tests.md. Ein dabei gefundener kleiner, aber echter
+1:1-Abweichungs-Bug (`LoginView`: „Passwort vergessen?"-Knopf blieb beim Vaadin-Default
+„Forgot password" hängen) wurde behoben. Das Alt-Portal-Modul ist damit als E2E-Ziel
+stillgelegt (siehe Abschnitt „Portal" oben), bleibt aber bis Phase 5 im Repo.
 
 Admin-Portal als Vaadin-Flow-UI im Backend (siehe kb/05-migration-plan.md, Zielarchitektur
 „Portal ist Teil des Backends“) – AP1 lieferte das Grundgerüst (Login/Layout/Navigation/

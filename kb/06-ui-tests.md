@@ -57,9 +57,18 @@ machte aus einem leeren Wert `"http://"` (nicht blank) → `ElwaManager.initiate
 **immer** deCONZ, der dokumentierte fhem-Fallback war toter Code (zudem NPE bei fehlendem
 Key). Fix: leer bleibt leer. Damit ist der fhem-Pfad wieder erreichbar und testbar.
 
-## Portal (Vaadin 7) – Playwright E2E ✅ (umgesetzt)
+## Alt-Portal (Vaadin 7) – Playwright E2E ⚠️ STILLGELEGT (Phase 3 AP6, 2026-07-21)
 
-Entscheidung (Auftraggeber): **Playwright (Node/TypeScript)**. Projekt unter `Portal/e2e/`.
+> **Stillgelegt.** Diese Suite (`Portal/e2e/`) war der Maßstab für P1–P20 und lief bis Phase 3
+> AP6 in der PR-CI. Sie ist jetzt durch [`backend/e2e/`](#backend-vaadin-flow--playwright-e2e--umgesetzt-phase-3-ap6)
+> (Vaadin Flow, dasselbe Testplan-Inventar P1–P20) abgelöst und **läuft nicht mehr in der
+> CI** (`.github/workflows/ci.yml`, Job `portal-legacy-build` baut das Alt-Portal-Modul nur
+> noch, ohne Playwright). Code und dieses Dokument-Kapitel bleiben laut Roadmap bis Phase 5 im
+> Repo (siehe kb/05-migration-plan.md, kb/03-modules.md) – lokal weiterhin lauffähig
+> (`cd Portal/e2e && npm test`), aber kein CI-Gate mehr.
+
+Entscheidung (Auftraggeber, historisch): **Playwright (Node/TypeScript)**. Projekt unter
+`Portal/e2e/`.
 
 - **Browser**: vorinstalliertes Chromium (`/opt/pw-browsers/chromium`) via
   `executablePath` – kein `playwright install` nötig.
@@ -71,16 +80,138 @@ Entscheidung (Auftraggeber): **Playwright (Node/TypeScript)**. Projekt unter `Po
 - **Vaadin-7-Selektoren**: keine stabilen IDs → Lokatoren über Vaadin-CSS-Klassen
   (`input.v-textfield`, `.v-button`) und sichtbare Captions.
 
-**Tests (grün, 2/2):** `tests/login.spec.ts`
-- Login-Seite rendert (Titel „Waschportal", Benutzer-/Passwortfeld, Login-Button).
-- Seed-Admin (`admin`/`admin`) meldet sich an und erreicht das Admin-Dashboard
-  (Menüpunkte „Benutzergruppen", „Geräte").
-
-Verifiziert kompletter Stack: PostgreSQL → DB-Seed → Jetty/Vaadin → DB-Verbindung
-(DataManager) → Login → Dashboard.
+**Letzter Stand vor der Stilllegung: 18/18 grün** (`tests/login.spec.ts`, `admin.spec.ts`,
+`admin-crud.spec.ts`, `dashboard.spec.ts`, `user-portal.spec.ts` – deckten P1–P10, P12–P20 ab;
+P11 „Gerät aktiv/inaktiv schalten" wurde hier nie umgesetzt, siehe kb/08-test-plan.md).
 
 ### Nicht weiter verfolgt
 - **Vaadin TestBench** (kommerziell/lizenzabhängig) – verworfen.
+
+## Backend (Vaadin Flow) – Playwright E2E ✅ (umgesetzt, Phase 3 AP6)
+
+Fachlicher Nachfolger der Alt-Suite oben, gegen das neue, ins Backend eingebettete Portal
+(`backend/.../ui/`, Vaadin Flow). Projekt unter `backend/e2e/`, analog zu `Portal/e2e/`
+aufgebaut (Playwright/Node/TS, gleiches `package.json`-Muster, gleiche Chromium-Bereitstellung).
+
+### Aufbau
+
+- **`backend/e2e/playwright.config.ts`**: `baseURL`/`webServer.url` zeigen auf
+  `http://localhost:${E2E_BACKEND_PORT}` (Default **8081** – bewusst NICHT 8080, damit die
+  Suite nicht mit einem manuell laufenden Alt-`Portal/e2e`-Server auf demselben Host
+  kollidiert). `fullyParallel: false`/`workers: 1` (wie die Alt-Suite – die Tests teilen sich
+  Login-Sessions/globalen Zustand). `globalSetup: ./global-setup.ts`.
+- **`backend/e2e/scripts/start-backend.sh`** (Playwright `webServer.command`, fachlicher
+  Nachfolger von `Portal/e2e/scripts/start-portal.sh`): startet PostgreSQL, legt eine
+  **frische, dedizierte** Datenbank an (`elwasys_backend_e2e`, bei jedem Lauf gedroppt+neu
+  angelegt – anders als die Alt-Suite, die eine dauerhafte `elwasys`-DB wiederverwendet und
+  E2E-Fixtures per Namenspräfix aufräumt; hier ist „frische DB pro Lauf" einfacher UND
+  robuster für den Stabilitätsnachweis), baut Common + das Backend-Jar im
+  **Produktionsmodus** (`mvn package -Pproduction` – der einzige in dieser Sandbox
+  lizenzcheck-freie Build-Weg, siehe kb/05-migration-plan.md „Phase 3 AP2") und startet den
+  Jar im Vordergrund auf `SERVER_PORT`. Der Flyway-Baseline-Lauf beim ersten Start seedet
+  bereits `admin`/`admin`, die Gruppe „Default" und den Standort „Default" (1:1 aus
+  `database-init.sql` übernommen, siehe `V1__baseline_schema_0_4_0.sql`) – kein separates
+  Seed-SQL-Skript nötig wie bei der Alt-Suite.
+- **`backend/e2e/global-setup.ts`**: seedet die zwei zusätzlichen Nicht-Admin-Testnutzer
+  (`e2e_portal_user`, `e2e_pwchange_user`, Passwort „test", SHA1-Alt-Hash – wird vom neuen
+  Backend im Parallelbetrieb unverändert akzeptiert, siehe Phase 2 AP3) für P15–P19. Läuft
+  **garantiert nach** `webServer`s Bereitschaftsprüfung und **vor** jedem Test (Playwright-
+  Ausführungsreihenfolge) – wichtig, weil das Schema erst existiert, sobald die Anwendung
+  hochgefahren ist und Flyway migriert hat; ein Seeding aus `start-backend.sh` selbst würde
+  mit Playwrights eigenem Bereitschafts-Poll auf denselben Port um dieselbe Ressource
+  wettlaufen (Details in den Kommentaren der Datei).
+- **`backend/e2e/tests/helpers.ts`**: gemeinsame Lokatoren-Helfer (Login, Navigation,
+  ComboBox-Auswahl, Grid-Zeilen-Zugriff, Dialog-Handling) für alle Spec-Dateien.
+- **Spec-Dateien** (1:1 zur Alt-Suite benannt): `login.spec.ts` (P1/P2), `admin.spec.ts`
+  (P3–P5), `admin-crud.spec.ts` (P6–P14, inkl. dem neu ergänzten P11), `dashboard.spec.ts`
+  (P20), `user-portal.spec.ts` (P15–P19).
+
+### Vaadin-Flow-Selektoren (wichtige Erkenntnisse)
+
+- Formularfelder haben – anders als Vaadin 7 – über `<label for="...">` echte, mit dem
+  internen `<input>` verknüpfte Labels → **`page.getByLabel('Feldname')`** funktioniert
+  zuverlässig (Playwright pierct dabei transparent die internen Shadow-Roots der
+  Vaadin-Komponenten). Bei mehrdeutigen Präfixen (z. B. „Name" vs. „Username") `{ exact:
+  true }` verwenden.
+- Login: `vaadin-login-form` rendert echte `<input name="username">`/`<input
+  name="password">` (Spring-Security-Standardnamen) – direkt per
+  `input[name="username"]` ansprechbar, kein Component-spezifisches Wissen nötig.
+- Dialoge (`Dialog`) rendern als **ein** `<vaadin-dialog-overlay>` pro offenem Dialog, Titel
+  in `h2[slot="title"]`.
+- RadioButtonGroup-Optionen und Checkboxen haben echte ARIA-Rollen
+  (`getByRole('radio', { name })`, `.check()`/`.uncheck({ force: true })`).
+- ComboBox-Auswahl: klicken, Text tippen (filtert), `Enter` drücken, Wert verifizieren
+  (`pickCombo()` in `helpers.ts`) – funktional identisch zum alten `pickCombo()` für
+  Vaadin 7s `v-filterselect`, nur die Selektoren sind neu.
+- **`vaadin-grid`-Zellen/Zeilen (wichtigster Fallstrick)**: Zellinhalte werden als
+  **Light-DOM**-`<vaadin-grid-cell-content slot="...">`-Elemente gerendert, die Kinder von
+  `<vaadin-grid>` selbst sind – NICHT Nachkommen der zugehörigen `<tr>` (sie werden nur über
+  das `slot`-Attribut in einen `<td><slot></td>` innerhalb der Zeilen-Shadow-DOM
+  „hineingerendert"). `row.locator(...)` von einer per `getByRole('row', { name })`
+  gefundenen Zeile aus liefert deshalb **still und leise nichts** – `getByRole('row')`
+  funktioniert trotzdem, weil die Accessibility-Tree-Berechnung dem „geflatteten"
+  Rendering-Baum folgt, DOM-Traversal aber nicht. Lösung (`gridRowCells()`/
+  `gridRowActions()`/`rowActionButton()` in `helpers.ts`): die `slot`-NAMEN aus den
+  echten Shadow-DOM-Kindern der Zeile (`row.locator('td slot')`) auslesen und die
+  passenden `vaadin-grid-cell-content`-Elemente global über diesen Namen erneut
+  lokalisieren.
+- Icon-Buttons in Grid-Zeilen (Bearbeiten/Löschen/…) tragen ihren Hinweistext nur als
+  `vaadin-tooltip` (`aria-describedby` – trägt zur ARIA-**Beschreibung**, nicht zum
+  ARIA-**Namen** bei) → `getByRole('button', { name: 'Bearbeiten' })` findet dort **nichts**.
+  `rowActionButton()` adressiert sie deshalb bewusst über ihre Quellcode-Reihenfolge
+  (`actionButtons()`-Methode der jeweiligen View), genau wie die Alt-Suite es für Vaadin 7
+  tat.
+
+### Test-für-Test-Status (P1–P20, letzter Lauf 2026-07-21)
+
+Alle 20 Testfälle grün, mehrfach (≥ 5 vollständige Läufe, 3 davon über den echten
+`webServer`-Pfad inkl. Produktions-Build+Jar-Neustart, 2 gegen einen bereits laufenden
+Server) ohne einen einzigen Fehlschlag oder Retry – `retries: 0` in der Config macht Flakes
+sofort sichtbar statt sie zu verschlucken.
+
+| Test | Datei | Status |
+|---|---|---|
+| P1 Login-Seite rendert | login.spec.ts | grün |
+| P2 Admin-Login → Dashboard | login.spec.ts | grün |
+| P3 Falsches Passwort | admin.spec.ts | grün |
+| P4 Logout | admin.spec.ts | grün |
+| P5 Navigation aller Admin-Sektionen | admin.spec.ts | grün (inkl. neuem „Standorte"-Punkt) |
+| P6 Benutzer anlegen | admin-crud.spec.ts | grün |
+| P7 Benutzer sperren | admin-crud.spec.ts | grün |
+| P8 Guthaben aufladen | admin-crud.spec.ts | grün |
+| P9 Benutzergruppe anlegen | admin-crud.spec.ts | grün |
+| P10 Gerät anlegen | admin-crud.spec.ts | grün |
+| P11 Gerät aktiv/inaktiv schalten | admin-crud.spec.ts | grün – **neu ergänzt** (in der Alt-Suite nie umgesetzt) |
+| P12 Programm anlegen | admin-crud.spec.ts | grün |
+| P13 Benutzergruppe löschen | admin-crud.spec.ts | grün |
+| P14 Standort bearbeiten | admin-crud.spec.ts | grün – **angepasst**: eigener „Standorte"-Menüpunkt statt Dashboard-Dialog (dokumentierte, gewünschte UX-Änderung, keine Funktionsänderung, siehe kb/05) |
+| P15 Nicht-Admin-Dashboard | user-portal.spec.ts | grün |
+| P16 Eigenes Passwort ändern | user-portal.spec.ts | grün – **angepasst**: nur der Neu-Portal-Teil (erneuter Login mit neuem Passwort) ist Testgegenstand, siehe kb/05 „Entscheidungen" (Argon2id) |
+| P17 Benutzereinstellungen | user-portal.spec.ts | grün |
+| P18 Berechtigungen (kein Admin-Zugriff) | user-portal.spec.ts | grün – zusätzlich direkter URL-Zugriffsversuch auf eine Admin-Route geprüft |
+| P19 „Passwort vergessen?"-Dialog | user-portal.spec.ts | grün – zusätzlich Fehlerfall (unbekannte Email, kein SMTP konfiguriert) durchgespielt: Dialog bleibt offen, zeigt Fehlermeldung, **stürzt nicht ab** |
+| P20 Dashboard-Gerätestatus | dashboard.spec.ts | grün |
+
+**Nebenbefund/Bugfix**: beim Aufbau dieser Suite fiel auf, dass der „Passwort vergessen?"-
+Knopf auf der Login-Seite trotz sonst durchgehend eingedeutschter Formulartexte beim
+Vaadin-Default „Forgot password" (Englisch) hängengeblieben war (`LoginI18n.Form` hat ein
+eigenes `forgotPassword`-Feld, das `LoginView#buildGermanI18n` schlicht nicht gesetzt hatte).
+Gefixt (`form.setForgotPassword("Passwort vergessen?")`) – ein winziger, aber echter
+1:1-Verhaltensbruch zum Alt-Portal, der ohne den Blick auf die reale Portal-Seite nicht
+aufgefallen wäre.
+
+### Kommandos
+
+```bash
+cd backend/e2e
+npm install                 # einmalig
+npx playwright test         # baut Common+Backend (-Pproduction), startet frische DB+Jar, testet
+E2E_NO_WEBSERVER=1 npx playwright test   # gegen einen bereits laufenden Server (:8081)
+npx playwright show-report  # letzten HTML-Report öffnen
+```
+
+Details/Begründungen siehe die Kommentare in `backend/e2e/playwright.config.ts`,
+`backend/e2e/scripts/start-backend.sh` und `backend/e2e/global-setup.ts`.
 
 ## Ausführung headless (Remote/CI)
 - Client-TestFX mit Monocle → **kein** X-Server nötig.
@@ -116,8 +247,15 @@ nutzen). Bis dahin: ElwaManager-freie Views zuerst testen.
 - [x] Ersten headless-Smoke-Test (FX-Startup) zum Laufen bringen
 - [x] Erster Charakterisierungstest für echtes App-FXML (ProgramListEntry)
 - [x] Echtes Client-E2E (`Main` headless → SELECT_DEVICE, fhem-Simulator + Test-DB)
-- [ ] Weitere Client-E2E-Flows (Karten-Login simulieren, Geräteliste, Programmstart)
-- [ ] Weitere isolierte Charakterisierungstests (Toolbar-Zustände) – benötigt
-      Entkopplung von ElwaManager
-- [x] Portal-E2E mit Playwright + Test-DB (Login-Smoke-Test grün)
-- [ ] Weitere Portal-E2E-Flows (CRUD: Benutzer/Geräte/Programme anlegen)
+- [x] Weitere Client-E2E-Flows (Karten-Login, Geräteliste, Programmstart, Login-Varianten,
+      Execution-Lifecycle) – C1–C16, siehe kb/08-test-plan.md, Stand der Umsetzung
+- [x] Isolierte Charakterisierungstests der State-Machine nach `ElwaManager`-DI-Entkopplung
+      (Phase 1, `MainFormStateManager`-Tests)
+- [x] Alt-Portal-E2E mit Playwright + Test-DB – P1–P20 (bis auf P11), siehe „Alt-Portal
+      (Vaadin 7)" oben; **seit Phase 3 AP6 (2026-07-21) stillgelegt**, durch die Backend-Suite
+      unten abgelöst
+- [x] **Backend-(Vaadin-Flow-)Portal-E2E mit Playwright** – P1–P20 vollständig (inkl. neu
+      ergänztem P11), siehe „Backend (Vaadin Flow)" oben (Phase 3 AP6, 2026-07-21,
+      Abnahmekriterium für Phase 3 erfüllt)
+- [x] Cross-Component-E2E (P21/P22, Wartungsverbindung) – läuft weiterhin gegen das Alt-TCP-
+      Protokoll bis Phase 4 (siehe kb/05-migration-plan.md), Teil des „client"-CI-Jobs

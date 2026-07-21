@@ -326,24 +326,37 @@ Das Klartext-Token erscheint GENAU EINMAL in der Ausgabe.
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` *(seit 2026-07-20, JDK-Version am 2026-07-20 im
-Phase-1-QA-Review korrigiert; Backend-Job seit Phase 2 AP1, 2026-07-20)*:
+Phase-1-QA-Review korrigiert; Backend-Job seit Phase 2 AP1, 2026-07-20; Portal/Backend-E2E-Jobs
+seit Phase 3 AP6, 2026-07-21 – siehe kb/05-migration-plan.md, kb/06-ui-tests.md)*:
 - Trigger: jeder Pull Request + Pushes auf `master`
-- 4 parallele Jobs (Common / Client / Portal / Backend): Build + Tests, spiegeln die lokalen
-  Runner-Skripte (`run-ui-tests.sh` etc., siehe kb/06) bzw. für Backend
-  `backend/run-backend-tests.sh` als lokales Analogon
-- **JDK 21** (Liberica) in **allen vier** Jobs – nicht mehr JDK 17: Seit Phase 1
+- 5 parallele Jobs: **common** / **client** (inkl. Cross-Component-Suite P21/P22) /
+  **portal-legacy-build** / **backend-e2e** / **backend** – Build + Tests, spiegeln die
+  lokalen Runner-Skripte (`run-ui-tests.sh` etc., siehe kb/06) bzw. für Backend
+  `backend/run-backend-tests.sh` als lokales Analogon.
+- **JDK 21** (Liberica) in **allen fünf** Jobs – nicht mehr JDK 17: Seit Phase 1
   verlangt der Parent-POM-Default `maven.compiler.release=21` für Common/
   Client-Raspi; ein JDK 17 kann `--release 21` nicht bedienen
-  (`invalid target release: 21`). Da Common/Client/Portal-Jobs Common zuerst bauen
-  (`mvn -f pom.xml install -pl Common -am`), brauchen sie ein >= 21-JDK, obwohl Portal selbst
-  weiterhin mit Sprachlevel 1.8 kompiliert. Der Backend-Job braucht JDK 21 unabhängig davon,
-  da `backend` selbst Java 21 nutzt.
-- **Backend-Job**: nutzt **Testcontainers** (nicht den Local-PG-Ansatz des Client-Jobs), weil
-  GitHub-Actions-`ubuntu-24.04`-Runner einen Docker-Daemon mitbringen (anders als diese
-  Sandbox-Entwicklungsumgebung, siehe kb/07-cloud-init.md) – das ist der von Spring Boot
-  standardmäßig vorgesehene Testweg und braucht dort kein manuelles DB-Setup. `backend` hat
-  keine Reactor-Abhängigkeit auf `common`, der Job baut daher nur `-pl backend` ohne `-am`.
-- **Backend-Job, Image-Build** (seit Phase 2 AP6, 2026-07-20): zusätzlicher Schritt
+  (`invalid target release: 21`). Jeder Job baut Common zuerst
+  (`mvn -f pom.xml install -pl Common -am`), braucht also ein >= 21-JDK, obwohl Portal selbst
+  weiterhin mit Sprachlevel 1.8 kompiliert.
+- **portal-legacy-build** (seit Phase 3 AP6, 2026-07-21, ersetzt den früheren `portal`-Job):
+  baut NUR noch das Alt-Portal-Modul (`mvn package -pl Portal -am -DskipTests`), OHNE
+  Playwright-E2E dagegen laufen zu lassen – die Alt-Suite (`Portal/e2e/`) ist als E2E-Ziel
+  stillgelegt (Code bleibt bis Phase 5 im Repo, siehe kb/03-modules.md). Zweck: eine
+  Regression am liegengebliebenen Alt-Portal-Code fällt trotzdem auf, solange er existiert.
+- **backend-e2e** (seit Phase 3 AP6, 2026-07-21, fachlicher Nachfolger des früheren
+  `portal`-Jobs): Playwright-E2E (P1–P20) gegen das neue, ins Backend eingebettete
+  Vaadin-Flow-Portal – `backend/e2e/scripts/start-backend.sh` baut das Backend-Jar im
+  Produktionsmodus (`mvn package -Pproduction`, kein Vaadin-Lizenzcheck-Show-Stopper, siehe
+  unten) und startet es gegen eine frische, dedizierte PostgreSQL-Datenbank. Details/
+  Selektor-Strategie/Test-Status in kb/06-ui-tests.md.
+- **backend-Job**: nutzt **Testcontainers** (nicht den Local-PG-Ansatz der Client-/
+  backend-e2e-Jobs), weil GitHub-Actions-`ubuntu-24.04`-Runner einen Docker-Daemon mitbringen
+  (anders als diese Sandbox-Entwicklungsumgebung, siehe kb/07-cloud-init.md) – das ist der von
+  Spring Boot standardmäßig vorgesehene Testweg und braucht dort kein manuelles DB-Setup.
+  `backend` hat keine Reactor-Abhängigkeit auf `common`, der Job baut daher nur `-pl backend`
+  ohne `-am`.
+- **backend-Job, Image-Build** (seit Phase 2 AP6, 2026-07-20): zusätzlicher Schritt
   `docker build -f backend/Dockerfile -t elwasys-backend:ci .` - baut nur (kein Push),
   beweist aber, dass `backend/Dockerfile` in einer echten Docker-Umgebung tatsächlich baubar
   ist (kann in dieser daemonlosen Sandbox nicht direkt verifiziert werden, siehe

@@ -146,3 +146,14 @@ P1–P20. **Alle geplanten Fälle sind umgesetzt.**
 4. **Client P2/P3** (C6–C12) – Login-Varianten & Execution-Lifecycle.
 5. **Portal P3** (P15–P19) – Benutzer-Frontend & Berechtigungen.
 6. **P4/Cross-Component** – Wartungs-abhängige Flows als eigener Meilenstein.
+
+## Update 2026-07-21 (Phase 3 AP6): P1–P20 auf das neue Portal portiert
+
+Der komplette Portal-Testplan P1–P20 (inkl. **P11**, das gegen das Alt-Portal nie umgesetzt
+wurde) ist jetzt auch als Playwright-Suite gegen das neue, ins Backend eingebettete
+Vaadin-Flow-Portal umgesetzt (`backend/e2e/`, 20/20 grün, mehrfach reproduziert) – die
+Alt-Suite (`Portal/e2e/`) oben bleibt als historische Dokumentation des ursprünglichen Plans
+stehen, ist aber nicht mehr das E2E-Ziel der CI. Details, Selektor-Strategie und
+Test-für-Test-Status: kb/06-ui-tests.md. Fachliche Abweichungen (P14 eigener
+„Standorte“-Menüpunkt, P16 nur noch Neu-Portal-Teil wegen Argon2id, P19 zusätzlicher
+Fehlerfall) sind dort begründet und in kb/05-migration-plan.md unter „Entscheidungen“ verortet.
