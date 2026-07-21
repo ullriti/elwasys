@@ -205,6 +205,19 @@ public class ClientAutoEndDeconzE2ETest {
                     + userId + ", 100, 'E2E seed')");
 
             s.executeUpdate("UPDATE locations SET client_uid=NULL, client_last_seen=NULL WHERE id=" + locationId);
+
+            // Phase 4 CI-Stabilität (deCONZ Test-Isolation, siehe kb/05 Änderungslog): entferne
+            // unfertige Ausführungen auf Geräten OHNE deCONZ-Id am Standort, bevor dieses
+            // deCONZ-Terminal startet. Der Start-Wiederaufnahme-Scan von ElwaManager#initiate()
+            // ist standortweit; eine von einer FRÜHEREN, fhem-basierten Testklasse hinterlassene
+            // unfertige Ausführung (z. B. ClientUsageE2ETest auf "E2E-Waschmaschine") würde sonst
+            // über den deCONZ-Gateway eingeschaltet und scheitern (keine deCONZ-Id → Init-Absturz,
+            // nie SELECT_DEVICE). In CI ist die Surefire-Klassenreihenfolge dateisystemabhängig,
+            // daher trat das nur dort und reihenfolgeabhängig auf. Diese deCONZ-Tests nehmen beim
+            // Start selbst nichts wieder auf, das Löschen ist also gefahrlos.
+            s.executeUpdate("DELETE FROM executions WHERE finished=false AND device_id IN "
+                    + "(SELECT id FROM devices WHERE location_id=" + locationId
+                    + " AND (deconz_uuid IS NULL OR deconz_uuid=''))");
         }
     }
 
