@@ -2,7 +2,8 @@ apiVersion: v2
 name: elwasys-backend
 description: >-
   elwasys-Backend (Spring Boot) – Geschäftslogik, REST-API/WebSocket für Terminals,
-  Admin-Portal (ab Phase 3). Siehe kb/05-migration-plan.md (Modernisierungsplan) und
+  integriertes Admin-Portal-UI (Vaadin Flow, seit Phase 3 Teil des Backends - kein
+  eigenständiges Portal-Modul mehr). Siehe kb/05-migration-plan.md (Modernisierungsplan) und
   kb/01-architecture.md im elwasys-Repo. Dieser Chart deployt AUSSCHLIESSLICH das Backend
   (Deployment/Service/Ingress/ConfigMap/Secret) - PostgreSQL wird bewusst nicht als
   Sub-Chart mitgeliefert, siehe die Begründung in values.yaml unter "database:" und in

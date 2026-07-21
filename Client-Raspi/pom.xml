@@ -49,7 +49,7 @@
 			<!-- Phase 4 AP2: 1.7.12 -> 2.0.18 (latest stable via Maven Central),
 			     required by logback-classic >= 1.3. Overrides the elwasys-parent
 			     dependencyManagement (1.7.12) for this module only, via Maven's
-			     nearest-wins dependency mediation, so Common/Portal are unaffected -
+			     nearest-wins dependency mediation, so Common is unaffected -
 			     see kb/05-migration-plan.md, Änderungslog "Phase 4 AP2". -->
 			<version>2.0.18</version>
 		</dependency>

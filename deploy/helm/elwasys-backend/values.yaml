@@ -179,8 +179,12 @@ pushover:
   # Secret-Wert, siehe smtp.password.
   apiToken: ""
 
-# Auth (siehe AP3) - bleibt aus, bis das Alt-Portal beim Cutover abgeschaltet wird (siehe
-# kb/05-migration-plan.md "Entscheidungen", AP3).
+# Auth (siehe AP3) - der ursprüngliche Grund für den Default AUS (Parallelbetrieb mit dem
+# mittlerweile entfernten Alt-Portal, siehe AuthProperties-Javadoc) ist mit dessen
+# Abschaltung (Phase 3) und Entfernung (Phase 5 AP1) entfallen. Ob/wann re-hashOnLogin
+# produktiv aktiviert wird, ist eine Entscheidung der eigentlichen Produktivumschaltung
+# (Phase 6, siehe kb/05-migration-plan.md "Entscheidungen", AP3) - der Chart-Default bleibt
+# daher unverändert AUS.
 auth:
   rehashOnLogin: false
 

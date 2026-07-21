@@ -26,8 +26,12 @@ sudo pg_ctlcluster "$PG_VER" main start 2>/dev/null || true
 for i in $(seq 1 30); do pg_isready -q && break; sleep 1; done
 pg_isready || { echo "PostgreSQL not ready"; exit 1; }
 
-# 2. Seed the database once (creates DB, schema, roles incl. elwaclient1 and elwaportal -
-#    elwaportal is also the role the backend connects as, see backend/application.yml)
+# 2. Seed the database once (creates DB, schema, roles incl. elwaclient1 - a frozen
+#    baseline artifact from database-init.sql that Flyway migration V6 immediately
+#    drops again once the backend starts, since the Client-Raspi terminals no longer
+#    access the DB directly since Phase 4 AP4/AP5. The E2E harness here connects as
+#    the postgres superuser, see below; elwaportal remains the backend's productive
+#    DB role, see backend/application.yml)
 if ! sudo -u postgres psql -lqt | cut -d'|' -f1 | grep -qw elwasys; then
   echo "[run-ui-tests] initializing elwasys database"
   sudo -u postgres psql -q < "$REPO_ROOT/Common/resources/database-init.sql"

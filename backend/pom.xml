@@ -15,11 +15,14 @@
 	<packaging>jar</packaging>
 	<name>elwasys backend</name>
 	<description>
-		Spring-Boot-Backend (Phase 2 des Modernisierungsplans, siehe kb/05-migration-plan.md).
-		Läuft parallel zum Bestand (Client-Raspi, Portal) auf derselben PostgreSQL-Datenbank
-		(Strangler-Muster). Erbt das elwasys-Parent-POM (Java 21 per Default), bindet Spring
-		Boot bewusst per BOM-Import statt über spring-boot-starter-parent ein, damit das
-		gemeinsame Parent-POM die Wurzel des Vererbungsbaums bleibt.
+		Spring-Boot-Backend (Phase 2 des Modernisierungsplans, siehe kb/05-migration-plan.md) -
+		das zentrale Backend der Zielarchitektur: REST-API/WebSocket für die Client-Raspi-
+		Terminals plus das eingebettete Vaadin-Flow-Admin-Portal (seit Phase 3), auf derselben
+		PostgreSQL-Datenbank wie die Terminals. Ursprünglich (Phase 2 AP1) im Strangler-Muster
+		parallel zum inzwischen entfernten Alt-Portal-Modul begonnen (siehe kb/03-modules.md).
+		Erbt das elwasys-Parent-POM (Java 21 per Default), bindet Spring Boot bewusst per
+		BOM-Import statt über spring-boot-starter-parent ein, damit das gemeinsame Parent-POM
+		die Wurzel des Vererbungsbaums bleibt.
 	</description>
 
 	<properties>
@@ -30,8 +33,8 @@
 		     IllegalArgumentException für jeden @RequestParam/@PathVariable, dessen Name nicht
 		     explizit angegeben ist ("parameter name information not available via
 		     reflection") - der Parent-POM setzt dieses Flag nicht (Common/Client-Raspi
-		     brauchen es nicht). Nur für dieses Modul gesetzt, betrifft Common/Client-
-		     Raspi/Portal nicht. -->
+		     brauchen es nicht). Nur für dieses Modul gesetzt, betrifft Common/Client-Raspi
+		     nicht. -->
 		<maven.compiler.parameters>true</maven.compiler.parameters>
 		<!-- Phase 3 AP1 (Portal-Neubau, siehe kb/05-migration-plan.md): Vaadin Flow 24,
 		     bestätigt als Portal-Stack. Neuester 24.x-Release zum Zeitpunkt dieses
@@ -47,14 +50,14 @@
 			     that is already explicitly managed somewhere in the inheritance chain -
 			     that's by design, so you can import a BOM and still pin individual
 			     versions. Since elwasys-parent pins comparatively old versions for
-			     Common/Client-Raspi/Portal (logback 1.2.9, slf4j 1.7.12, postgres driver
+			     Common/Client-Raspi (logback 1.2.9, slf4j 1.7.12, postgres driver
 			     42.6.0), those would silently "win" over the newer, mutually-compatible
 			     versions Spring Boot 3.5's BOM below expects for this module (Spring
 			     Boot's Logback integration needs logback >= 1.5 for its Configurator
 			     SPI). These explicit entries make backend use the exact versions
 			     spring-boot-dependencies ${spring-boot.version} itself manages, instead
-			     of the parent's older pins. Client-Raspi/Portal/Common are unaffected -
-			     they don't import this BOM. -->
+			     of the parent's older pins. Client-Raspi/Common are unaffected - they
+			     don't import this BOM. -->
 			<dependency>
 				<groupId>ch.qos.logback</groupId>
 				<artifactId>logback-classic</artifactId>

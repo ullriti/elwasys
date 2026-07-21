@@ -2,9 +2,11 @@ spring:
   application:
     name: elwasys-backend
 
-  # Datenbank: dieselbe PostgreSQL-DB wie Client-Raspi/Portal (Parallelbetrieb, siehe
-  # kb/05-migration-plan.md). Alle drei Werte sind per Umgebungsvariable überschreibbar;
-  # die Defaults passen zur lokalen Entwicklungsumgebung (siehe kb/04-build-and-run.md).
+  # Datenbank: dieselbe PostgreSQL-DB wie die Client-Raspi-Terminals (die Terminals
+  # greifen seit Phase 4 nur noch über die REST-API/WS-Kanal des Backends zu, nicht mehr
+  # direkt auf die DB - siehe kb/05-migration-plan.md). Alle drei Werte sind per
+  # Umgebungsvariable überschreibbar; die Defaults passen zur lokalen Entwicklungsumgebung
+  # (siehe kb/04-build-and-run.md). "elwaportal" bleibt der produktive DB-User des Backends.
   datasource:
     url: ${ELWASYS_DB_URL:jdbc:postgresql://localhost:5432/elwasys}
     username: ${ELWASYS_DB_USER:elwaportal}
@@ -81,15 +83,20 @@ management:
 elwasys:
   auth:
     # SHA1->Argon2id-Migration beim Login: siehe AuthProperties-Javadoc/kb/05-migration-plan.md
-    # ("Entscheidungen") für die vollständige Begründung. Default AUS, solange das Alt-Portal
-    # noch läuft und SHA1 direkt in dieselbe Spalte schreibt/liest (Parallelbetrieb) - wird
-    # erst beim Portal-Cutover (Phase 3) aktiviert.
+    # ("Entscheidungen") für die vollständige Begründung. Der ursprüngliche Grund für den
+    # Default AUS (Parallelbetrieb mit dem Alt-Portal, das SHA1 direkt in dieselbe Spalte
+    # schreibt/liest) ist mit dem Portal-Cutover (Phase 3) und der Entfernung des Alt-Portal-
+    # Moduls (Phase 5 AP1) entfallen. Ob/wann das Flag produktiv aktiviert wird, ist eine
+    # Entscheidung der eigentlichen Produktivumschaltung (Phase 6) und bewusst nicht Teil
+    # dieses Arbeitspakets - der Code-Default bleibt daher unverändert AUS.
     rehash-on-login: ${ELWASYS_AUTH_REHASH_ON_LOGIN:false}
 
   # Benachrichtigungsdienst (AP5, siehe kb/05-migration-plan.md und NotificationsProperties-
-  # Javadoc). KRITISCH: enabled bleibt AUS, solange Client-Raspi im Parallelbetrieb weiterhin
-  # selbst Benachrichtigungen verschickt (Doppelversand-Risiko) - wird erst verdrahtet/
-  # aktiviert, wenn Phase 4 die Terminals auf "meldet nur Ereignisse" umstellt.
+  # Javadoc). Der Dienst ist seit Phase 4 AP4 an die Terminal-API angebunden (Client-Raspi
+  # verschickt seit dem Cutover keine eigenen Benachrichtigungen mehr, siehe ExecutionController).
+  # enabled bleibt dennoch bewusst AUS: die Scharfschaltung ist ein operativer Schritt der
+  # eigentlichen Produktivumschaltung (Phase 6), kein Teil dieses Arbeitspakets - der Code-
+  # Default bleibt daher unverändert AUS.
   notifications:
     enabled: ${ELWASYS_NOTIFICATIONS_ENABLED:false}
     smtp:
