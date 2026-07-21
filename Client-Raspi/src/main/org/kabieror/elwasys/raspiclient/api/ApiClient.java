@@ -215,16 +215,70 @@ public class ApiClient {
                 .header("Accept", "application/json");
     }
 
+    /**
+     * Anzahl zusätzlicher Versuche bei einem transienten I/O-Fehler (siehe
+     * {@link #isTransientCommunicationFailure(IOException)}) - bewusst nur einer: ein
+     * einmaliges, sofortiges Retry genügt, um die beobachtete CI-Flakiness abzufangen (siehe
+     * kb/05-migration-plan.md, Änderungslog "Phase 4 CI-Stabilität"), ohne den Normalpfad bei
+     * einem echt nicht erreichbaren Backend spürbar zu verlangsamen.
+     */
+    private static final int TRANSIENT_RETRY_COUNT = 1;
+
     private HttpResponse<String> send(HttpRequest request) throws ApiException {
-        try {
-            return this.httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        } catch (IOException e) {
-            this.logger.warn("Communication with the backend failed: {} {}", request.method(), request.uri(), e);
-            throw new ApiException("Das Backend ist nicht erreichbar: " + e.getLocalizedMessage(), e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new ApiException("Die Anfrage an das Backend wurde unterbrochen.", e);
+        IOException lastError = null;
+        for (int attempt = 0; attempt <= TRANSIENT_RETRY_COUNT; attempt++) {
+            try {
+                return this.httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            } catch (IOException e) {
+                lastError = e;
+                if (attempt < TRANSIENT_RETRY_COUNT && isTransientCommunicationFailure(e)) {
+                    // Beobachtet in CI (siehe kb/05-migration-plan.md, Änderungslog "Phase 4
+                    // CI-Stabilität"): unter Last kann eine vom java.net.http-Verbindungspool
+                    // wiederverwendete Keep-Alive-Verbindung serverseitig bereits geschlossen
+                    // worden sein, bevor der Client sie erneut nutzt - der Schreibvorgang
+                    // gelingt noch, die Antwort kommt aber als leeres EOF zurück ("HTTP/1.1
+                    // header parser received no bytes"). Ein GET (idempotent) oder ein
+                    // mutierender Aufruf mit Idempotency-Key (siehe Klassen-Kommentar) darf
+                    // deshalb gefahrlos sofort wiederholt werden - kein Backoff, damit der
+                    // Normalpfad nicht spürbar langsamer wird.
+                    this.logger.warn("Transient I/O error talking to the backend, retrying once: {} {}",
+                            request.method(), request.uri(), e);
+                    continue;
+                }
+                this.logger.warn("Communication with the backend failed: {} {}", request.method(), request.uri(), e);
+                throw new ApiException("Das Backend ist nicht erreichbar: " + e.getLocalizedMessage(), e);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new ApiException("Die Anfrage an das Backend wurde unterbrochen.", e);
+            }
         }
+        // Unreachable (the loop above always either returns or throws), but required so the
+        // compiler sees every path returning/throwing.
+        throw new ApiException("Das Backend ist nicht erreichbar: " + lastError.getLocalizedMessage(), lastError);
+    }
+
+    /**
+     * Erkennt die transiente Fehlerklasse "Verbindung wurde angenommen, aber ohne Antwort
+     * wieder geschlossen" (EOF/„received no bytes"/Connection reset) - im Unterschied zu
+     * einem echten Kommunikationsfehler (Verbindung verweigert, DNS-Fehler, Timeout), der
+     * weiterhin sofort als {@link ApiException} gemeldet wird (kein Retry, s.
+     * {@link #TRANSIENT_RETRY_COUNT}).
+     */
+    private static boolean isTransientCommunicationFailure(IOException e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof java.io.EOFException) {
+                return true;
+            }
+            String message = t.getMessage();
+            if (message != null) {
+                String lower = message.toLowerCase(java.util.Locale.ROOT);
+                if (lower.contains("received no bytes") || lower.contains("eof reached")
+                        || lower.contains("connection reset")) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private <T> T parse(HttpResponse<String> response, Type responseType) throws ApiException {
