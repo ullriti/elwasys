@@ -1,8 +1,14 @@
 name: CI
 
 # Run the test suites on every pull request (and on pushes to master, so the
-# default branch stays green). The three modules are built/tested in parallel
-# jobs that mirror the documented local runner scripts (see kb/06-ui-tests.md).
+# default branch stays green). Jobs mirror the documented local runner scripts (see
+# kb/06-ui-tests.md, kb/05-migration-plan.md "Phase 3 AP6"): common/client/backend build+test
+# their module, portal-legacy-build keeps the still-in-repo Alt-Portal module compiling
+# (Playwright E2E against it is STILLGELEGT - superseded by backend-e2e, see that job's
+# comment), backend-e2e is the new Playwright suite (P1-P20) against the Vaadin-Flow Portal.
+# The Cross-Component maintenance-channel suite (P21/P22) needs neither Portal module - it
+# runs as part of "client" (plain `mvn test` there picks up
+# ClientMaintenanceConnectionE2ETest, which only depends on Common's MaintenanceServer).
 on:
   pull_request:
   push:
@@ -28,10 +34,10 @@ jobs:
       - uses: actions/checkout@v4
 
       # JDK 21, not 17: since Phase 1, Common/Client-Raspi compile at language
-      # level 21 (maven.compiler.release=21 in the parent POM). All three jobs
-      # build Common first, so all three need a >= 21 JDK, even the Portal job
-      # (Portal itself still compiles at 1.8, but the runner JDK must satisfy
-      # Common's release level to build it at all).
+      # level 21 (maven.compiler.release=21 in the parent POM). Every job below
+      # builds Common first, so all of them need a >= 21 JDK, even
+      # portal-legacy-build (Portal itself still compiles at 1.8, but the
+      # runner JDK must satisfy Common's release level to build it at all).
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -92,11 +98,44 @@ jobs:
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
-  # Portal – Vaadin 7 web app. Playwright E2E boots PostgreSQL + Jetty (via
-  # Portal/e2e/scripts/start-portal.sh) and drives the login flow in Chromium.
+  # Alt-Portal (Vaadin 7 WAR) – STILLGELEGT als Playwright-E2E-Ziel (Phase 3 AP6, siehe
+  # kb/05-migration-plan.md / kb/06-ui-tests.md): die alte Suite (Portal/e2e, P1-P20) ist durch
+  # backend/e2e (siehe unten) abgelöst und läuft hier nicht mehr. Das Alt-Portal-MODUL bleibt
+  # laut Roadmap bis Phase 5 im Repo und wird deshalb weiterhin gebaut - nicht weil die
+  # Cross-Component-Suite (P21/P22, "client"-Job oben) es bräuchte (sie hängt nur an Common's
+  # MaintenanceServer, siehe Client-Raspi/run-cross-component-e2e.sh - kein Portal-Bezug),
+  # sondern damit eine Portal-Regression trotzdem auffällt, solange der Code noch da ist.
   # ---------------------------------------------------------------------------
-  portal:
-    name: Portal (Playwright E2E)
+  portal-legacy-build:
+    name: Alt-Portal (Build, stillgelegt als E2E-Ziel)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'liberica'
+          cache: maven
+
+      - name: Build Alt-Portal
+        # Via den Root-Reactor (-pl Portal -am), damit die Parent-POM + Common mit aufgelöst
+        # werden (siehe Kommentar im "common"-Job oben) - Tests laufen bewusst nicht mit (die
+        # fachliche Prüfung läuft jetzt über backend/e2e, siehe unten).
+        run: mvn -B -f pom.xml package -pl Portal -am -DskipTests
+
+  # ---------------------------------------------------------------------------
+  # Backend Portal (Vaadin Flow) – Playwright E2E (Phase 3 AP6 Abnahmekriterium, siehe
+  # kb/05-migration-plan.md / kb/06-ui-tests.md). backend/e2e/scripts/start-backend.sh boots
+  # PostgreSQL, creates a fresh dedicated E2E database, builds the backend jar in production
+  # mode (mvn package -Pproduction - the only build mode verified to run without a Vaadin
+  # dev-mode license check, see kb/05-migration-plan.md "Phase 3 AP2") and runs it; the P1-P20
+  # test plan (kb/08-test-plan.md) is exercised against it in Chromium. Fachlicher Nachfolger
+  # des ehemaligen "portal"-Jobs oben.
+  # ---------------------------------------------------------------------------
+  backend-e2e:
+    name: Backend Portal (Playwright E2E)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -113,14 +152,14 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: Portal/e2e/package-lock.json
+          cache-dependency-path: backend/e2e/package-lock.json
 
       - name: Install E2E dependencies
-        working-directory: Portal/e2e
+        working-directory: backend/e2e
         run: npm ci
 
       - name: Install Playwright Chromium
-        working-directory: Portal/e2e
+        working-directory: backend/e2e
         run: |
           set -euo pipefail
           npx playwright install --with-deps chromium
@@ -130,16 +169,16 @@ jobs:
           CHROMIUM_PATH="$(node -e "console.log(require('@playwright/test').chromium.executablePath())")"
           echo "PLAYWRIGHT_CHROMIUM_PATH=$CHROMIUM_PATH" >> "$GITHUB_ENV"
 
-      - name: Run Portal E2E tests
-        working-directory: Portal/e2e
+      - name: Run backend Portal E2E tests
+        working-directory: backend/e2e
         run: npm test
 
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: portal-playwright-report
-          path: Portal/e2e/playwright-report/
+          name: backend-e2e-playwright-report
+          path: backend/e2e/playwright-report/
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
@@ -152,8 +191,8 @@ jobs:
   # the "common"/"client" jobs above, so backend's test classpath can resolve it.
   #
   # Tests use Testcontainers by default (see backend/src/test/.../TestPostgres.java) - unlike
-  # the Client-Raspi/Portal jobs above, which seed a local PostgreSQL cluster because the
-  # sandboxed dev container this project is normally developed in (see kb/07-cloud-init.md)
+  # the "client"/"backend-e2e" jobs above, which seed/boot a local PostgreSQL cluster because
+  # the sandboxed dev container this project is normally developed in (see kb/07-cloud-init.md)
   # has no Docker daemon. GitHub-hosted ubuntu-24.04 runners *do* have a Docker daemon, so
   # here Testcontainers can run unmodified and doesn't need the local-PG workaround
   # backend/run-backend-tests.sh provides for that daemon-less environment.
