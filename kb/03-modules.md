@@ -371,17 +371,36 @@ zusätzliche Felder werden ignoriert (Vorwärtskompatibilität).
 
 **Nachrichtentypen** (`TerminalWsMessageType`):
 
-| Typ | Richtung | Phase-2-Verhalten (AP4) |
+| Typ | Richtung | Verhalten |
 |---|---|---|
 | `HELLO` | Terminal → Backend | Server antwortet `HELLO_ACK` |
 | `HELLO_ACK` | Backend → Terminal | Payload `locationId`, `locationName`, `serverTime`, `protocolVersion` |
 | `PING` | beide Richtungen | Empfänger antwortet `PONG` (server-seitig; ein vom Backend gesendetes `PING`, siehe Heartbeat unten, erwartet ein `PONG` vom Terminal) |
 | `PONG` | beide Richtungen | Aktualisiert intern den „zuletzt gesehen“-Zeitstempel der Verbindung |
-| `STATUS_REQUEST` | beide Richtungen | Server antwortet `STATUS_RESPONSE` (Gerüst: `locationId`, `locationName`, `connectedSince`, `serverTime` – die volle Fernwartungs-Portierung [laufende Ausführungen, Backlight-/Interface-Status, fachliche Referenz `GetStatusResponse`] folgt Phase 3/4) |
-| `STATUS_RESPONSE` | beide Richtungen | Phase 2: nur geloggt, kein Handler (Portal-seitige Auswertung folgt mit der Fernwartungs-Portierung) |
-| `LOG_REQUEST`/`LOG_RESPONSE` | reserviert | Beantwortet mit `ERROR{reason:"not-implemented"}` (fachliche Referenz `GetLogRequest`/`GetLogResponse`, Portierung folgt Phase 3/4) |
-| `RESTART_REQUEST` | reserviert | wie oben (fachliche Referenz `RestartAppRequest`) |
+| `STATUS_REQUEST` | beide Richtungen | Server antwortet `STATUS_RESPONSE` (Gerüst: `locationId`, `locationName`, `connectedSince`, `serverTime` – die volle Fernwartungs-Portierung [laufende Ausführungen, Backlight-/Interface-Status, fachliche Referenz `GetStatusResponse`] bleibt für eine spätere Vertiefung offen, siehe „Offene Punkte“ in kb/05) |
+| `STATUS_RESPONSE` | beide Richtungen | Phase 2: nur geloggt, kein Handler (die Portal-UI nutzt für den Verbindungsstatus stattdessen direkt `TerminalConnectionRegistry#isConnected`/`#connectedSince`, siehe AP4 unten – kein Bedarf für einen Roundtrip) |
+| `LOG_REQUEST` | **Backend → Terminal** (seit Phase 3 AP4) | Portal-initiierte Anfrage (`TerminalMaintenanceService#requestLog`, Admin-Dashboard „Log anzeigen“), kein Payload (fachliche Referenz `GetLogRequest`) |
+| `LOG_RESPONSE` | **Terminal → Backend** (seit Phase 3 AP4) | Antwort auf `LOG_REQUEST`, Payload `{"lines": [...]}` (fachliche Referenz `GetLogResponse`); wird über die Korrelations-`id` an die wartende Anfrage zurückgeroutet |
+| `RESTART_REQUEST` | **Backend → Terminal** (seit Phase 3 AP4) | Portal-initiierte Anfrage (`TerminalMaintenanceService#requestRestart`, Admin-Dashboard „Neustart“), kein Payload (fachliche Referenz `RestartAppRequest`) |
+| `RESTART_RESPONSE` | **Terminal → Backend, NEU seit Phase 3 AP4** | Bestätigung von `RESTART_REQUEST` (im Alt-Protokoll gab es dafür keine Entsprechung – dort „fire-and-forget“; bewusste UX-Verbesserung, der Admin erfährt zuverlässig, ob der Befehl ankam) |
 | `ERROR` | beide Richtungen | Protokoll-/Verarbeitungsfehler, `payload.reason` (`malformed-message`/`not-implemented`) |
+
+**Phase 3 AP4 (Fernwartungs-Vermittlung, siehe kb/05-migration-plan.md)**: `TerminalMaintenanceService`
+(Package `ws`) ist die Portal-seitige Vermittlung für `LOG_REQUEST`/`RESTART_REQUEST` – sendet mit
+einer selbst vergebenen Korrelations-`id`, merkt sich ein `CompletableFuture` je Anfrage und
+erfüllt es, sobald `TerminalWebSocketHandler` eine `LOG_RESPONSE`/`RESTART_RESPONSE` mit
+passender `inReplyTo`-Id empfängt (`completeIfPending`). Ein nicht verbundener Standort
+(`TerminalConnectionRegistry#isConnected` false) liefert SOFORT `TerminalNotConnectedException`
+ohne Nachrichtenversand; eine Anfrage ohne Antwort innerhalb von 10s liefert
+`TerminalRequestTimeoutException`. **Realität in Phase 3**: da sich Alt-Clients laut
+kb/05-migration-plan.md erst in Phase 4 über diesen Kanal verbinden, zeigt die Admin-Dashboard-
+Toolbar in der Praxis fast immer „Nicht verbunden“ – der laut Auftrag geforderte klare Zustand.
+Die Vermittlungslogik selbst ist über einen SIMULIERTEN WS-Client in `TerminalWebSocketTest`
+(JUnit, kein echter Terminal) bewiesen: erfolgreiches Log/Neustart-Roundtrip, sofortiger Fehler
+bei nicht verbundenem Standort, Timeout bei einem verbundenen, aber nicht antwortenden Terminal.
+**Bewusst NICHT portiert**: das Alt-TCP-Protokoll (`Common.maintenance.*`,
+`MaintenanceConnectionManager`/`-Server`) selbst – das Alt-Portal bleibt dafür bis zum Cutover
+in Betrieb (siehe kb/05-migration-plan.md, „Entscheidungen“).
 
 **Verbindungsregistry**: `TerminalConnectionRegistry` (in-memory, `Map<locationId, Session>`)
 – ersetzt fachlich die alte `client_ip`/`client_port`-Registrierung in `locations` (siehe
@@ -434,13 +453,26 @@ aus. Vollständiges Alt-Inventar und Portierungsstand:
 | `ExecutionFinisher`: Ausführung abgebrochen | E-Mail | wie oben | **Ja** – `NotificationService#notifyExecutionAborted` |
 | `ExecutionFinisher`: Ausführung abgebrochen | Pushover | wie oben | **Ja** |
 | `ExecutionFinisher`: beide obigen Fälle | elwaApp-Push (`https://api.ionic.io/push/notifications`) | `user.isPushEnabled()` (Spalte `push_notification`, **nicht** `pushover_user_key`!) und `pushIonicId` gesetzt | **Nein** – mobile App laut Auftraggeber nicht relevant, Reste (`app_id`) fallen in Phase 5 weg; Auftrag ist zudem explizit auf „SMTP + Pushover" begrenzt |
-| Portal `PasswordForgotWindow`: „Passwort vergessen" | E-Mail (dieselbe `Utilities#sendEmail`) | Nutzer per E-Mail-Adresse gefunden | **Nein** – hängt am neuen Portal-Login-Flow (Reset-Key/-URL), laut Roadmap Phase 3 |
-| Portal `UserWindow`: Admin setzt neues Passwort | E-Mail | Admin-Aktion im Nutzer-Fenster | **Nein** – ebenfalls Phase 3 |
+| Portal `PasswordForgotWindow`: „Passwort vergessen" | E-Mail (dieselbe `Utilities#sendEmail`) | Nutzer per E-Mail-Adresse gefunden | **Ja** (Phase 3 AP4) – `NotificationService#sendPasswordResetEmail`, aufgerufen von `PasswordResetService#requestReset`; eigener Schalter `elwasys.password-reset.enabled` (Default **AN**, siehe unten) statt `elwasys.notifications.enabled` |
+| Portal `UserWindow`: Admin setzt neues Passwort | E-Mail | Admin-Aktion im Nutzer-Fenster | **Ja** (Phase 3 AP4) – `NotificationService#sendNewPasswordEmail`, aufgerufen von `PasswordResetService#resetPasswordByAdminAndNotify` (Checkbox „Sende dem Benutzer per Email ein neues Passwort" im `UserFormDialog`); derselbe Schalter wie oben |
 
 **Wichtiger Fallstrick** (im Code dokumentiert, siehe `NotificationService`-Javadoc):
 `users.push_notification` (Entity-Feld `UserEntity#isPushNotification()`) ist im Alt-Code
 das Opt-in für den **nicht** portierten elwaApp/Ionic-Kanal, nicht für Pushover. Das
 Pushover-Opt-in ergibt sich ausschließlich daraus, ob `pushover_user_key` gesetzt ist.
+
+**Passwort-Reset-Mails (Phase 3 AP4) hängen an einem EIGENEN Schalter, nicht an
+`elwasys.notifications.enabled`**: `elwasys.password-reset.enabled` (Default **`true`**, siehe
+`PasswordResetProperties`). Begründung (siehe auch kb/05-migration-plan.md, „Entscheidungen"):
+`elwasys.notifications.enabled` schützt vor einem *Doppelversand* – im Parallelbetrieb
+verschickt Client-Raspi weiterhin selbst Ausführungs-Benachrichtigungen für JEDES
+Programmende, ein zusätzlicher Versand durch das Backend für dasselbe automatische Ereignis
+wäre doppelt. Ein Passwort-Reset ist dagegen KEIN automatisches, wiederkehrendes Ereignis,
+sondern eine explizite, interaktive Aktion einer einzelnen Portal-Session (Klick auf „Passwort
+vergessen?" bzw. Admin setzt ein neues Passwort) – es gibt keinen Alt-Code-Pfad, der auf
+dasselbe Backend-Ereignis reagiert und doppelt verschicken würde. Der Schalter existiert
+trotzdem als Ops-Bremse (z.B. um das Backend ohne konfigurierten SMTP-Server sauber laufen zu
+lassen). Nutzt denselben `spring.mail.*`-Transport wie oben.
 
 **Komponenten**:
 - `NotificationsProperties` (`@ConfigurationProperties(prefix = "elwasys.notifications")`):
@@ -487,16 +519,19 @@ per Default aus ist).
 - `NotificationsPropertiesDefaultTest`: voller Spring-Kontext, beweist `enabled=false` ohne
   gesetzte Umgebungsvariable.
 
-### Portal-UI (Vaadin Flow, Phase 3 AP1–AP3, 2026-07-20, Package `backend/.../ui/`)
+### Portal-UI (Vaadin Flow, Phase 3 AP1–AP4, 2026-07-20/21, Package `backend/.../ui/`)
 
 Admin-Portal als Vaadin-Flow-UI im Backend (siehe kb/05-migration-plan.md, Zielarchitektur
 „Portal ist Teil des Backends“) – AP1 lieferte das Grundgerüst (Login/Layout/Navigation/
 Rollen-Guard, siehe unten), AP2 füllte die 5 Stammdaten-Views (Benutzer, Benutzergruppen,
 Geräte, Programme, Standorte) mit echten Listen + CRUD-Dialogen (siehe Abschnitt
-„Stammdaten-Views (AP2)“). **AP3 füllt Admin-Dashboard, Guthaben-Aufladen/-Historie und
-UsersDashboard** (siehe Abschnitt „Dashboard, Guthaben, UsersDashboard (AP3)“ am Ende dieses
-Kapitels) – Passwort-Flows/UserSettings/ExpiredExecutions/Log-Viewer/Fernwartung folgen in
-AP4.
+„Stammdaten-Views (AP2)“), AP3 füllte Admin-Dashboard, Guthaben-Aufladen/-Historie und
+UsersDashboard (siehe Abschnitt „Dashboard, Guthaben, UsersDashboard (AP3)“). **AP4 ergänzt
+die restlichen Dialoge/Funktionen** – eigenes Passwort ändern (P16), Passwort per Email
+zurücksetzen (P19, Selbstbedienung + Admin-Reset), UserSettings (P17), ExpiredExecutions
+sowie Log-Viewer/Fernwartung über den bestehenden WebSocket-Kanal – siehe Abschnitt „Dialoge/
+Funktionen (AP4)" am Ende dieses Kapitels. Live-Updates zwischen Sessions bleiben AP5
+vorbehalten.
 
 **Abhängigkeiten**: `vaadin-bom`/`vaadin-spring-boot-starter` (Version **24.10.8**) per
 BOM-Import, analog zum Spring-Boot-BOM (siehe AP1 oben). Zwei Ausschlüsse aus
@@ -778,3 +813,100 @@ besetztes/abgelaufenes Gerät, Standort-Gruppierung, Historie), `CreditServiceAc
 einen echten eingebetteten Servlet-Container eine Vaadin-Route rendert (unverändertes Risiko
 aus AP1); `RouteAccessAnnotationsTest` brauchte keine Anpassung (keine neuen Routen, nur
 Inhalte bestehender Views/neue Dialoge).
+
+#### Dialoge/Funktionen (AP4, 2026-07-21)
+
+Letztes Arbeitspaket der Phase-3-Roadmap „Dialoge/Funktionen“ (vor Live-Updates [AP5] und der
+Playwright-Portierung [AP6]) – siehe kb/05-migration-plan.md für die vollständige
+Entscheidungs-Historie.
+
+**Eigenes Passwort ändern** (`ChangePasswordDialog`, Testfall P16, fachlicher Nachfolger von
+`Portal/.../components/ChangePasswordWindow`): erreichbar über das jetzt aufklappbare
+Benutzermenü in `UserMenuBar` (bis AP4 nur ein Logout-Knopf, seit AP4 Menü mit
+„Einstellungen“/„Passwort ändern“/„Logout“ – 1:1 wie das Alt-`MainMenu`). Neuer,
+Vaadin-freier Service `PasswordService#changeOwnPassword` prüft das aktuelle Passwort über
+`PasswordVerificationService` (akzeptiert sowohl Argon2id- als auch SHA1-Bestandshashes) und
+setzt das neue Passwort IMMER im Argon2id-Format (`#encodeNew`, 1:1 wie der Rest von AP3).
+**Wichtige Konsequenz für den Parallelbetrieb** (in `PasswordService`-Javadoc dokumentiert):
+das Alt-Portal (`common.User#checkPassword`) vergleicht weiterhin `SHA1(eingegebenes
+Passwort) == gespeicherter String` – ein über das NEUE Portal gesetztes Argon2id-Passwort kann
+sich daher NICHT mehr im Alt-Portal anmelden. Das ist eine bewusste, dokumentierte
+Einschränkung (kein Verstoß gegen „Nutzer dürfen sich nicht umstellen müssen“, weil sie erst
+greift, wenn ein Nutzer AKTIV das neue Portal nutzt) – siehe kb/05-migration-plan.md,
+„Entscheidungen“.
+
+**UserSettings** (`UserSettingsDialog`, Testfall P17, fachlicher Nachfolger von
+`Portal/.../components/UserSettingsWindow`): Email, Email-Benachrichtigung (Checkbox),
+Pushover-Key – 1:1 dieselben drei Felder wie im Alt-Fenster, über den neuen
+`UserService#updateOwnSettings` (ändert bewusst NUR diese drei Felder, nicht
+Name/Username/Kartennummern/Gruppe/Gesperrt-Status/Admin-Flag – wie im Alt-Fenster).
+
+**Passwort per Email zurücksetzen** (Testfall P19, kb/03 Notification-Tabelle oben):
+- Selbstbedienung: `LoginView`s „Passwort vergessen?“-Knopf ist jetzt aktiv (bis AP4 über
+  `setForgotPasswordButtonVisible(false)` deaktiviert) und öffnet `PasswordForgotDialog`
+  (fachlicher Nachfolger von `PasswordForgotWindow`) – Email-Eingabe, ruft
+  `PasswordResetService#requestReset` auf.
+- Neue öffentliche Route `ResetPasswordView` (`/reset-password?key=<token>`,
+  `@AnonymousAllowed`, `RouteAccessAnnotationsTest` erweitert) zum Setzen des neuen Passworts –
+  fachlicher Nachfolger von `ResetPasswordWindow` (dort ein modales Fenster über der bereits
+  geladenen Alt-Portal-Seite mit `?rp=<key>`; hier eine eigene Vaadin-Route, weil Flow
+  serverseitiges Routing mit eigenen URLs kennt – fachlich gleichwertig).
+- Admin-seitig: `UserFormDialog` hat die Checkbox „Sende dem Benutzer per Email ein neues
+  Passwort“ zurück (in AP2 bewusst ausgespart, siehe dortiger Abschnitt) – ruft
+  `PasswordResetService#resetPasswordByAdminAndNotify` auf.
+- Neuer Service `PasswordResetService`: **Schlüssel-Speicherung** nutzt bewusst die
+  BESTEHENDEN Bestandsspalten `users.password_reset_key`/`password_reset_timeout` (Teil der
+  Flyway-Baseline `V1`, siehe kb/02-data-model.md) statt einer neuen Migration – additiv im
+  Sinne der Rahmenbedingung, weil diese Spalten bereits existieren und der Alt-Code sie
+  ebenfalls liest/schreibt (kein Konflikt). **Format**: 24 `SecureRandom`-Bytes, Base64-URL
+  ohne Padding (32 Zeichen, passt in die bestehende Spaltenbreite) statt des Alt-Formats
+  (`SHA1` über `Math.random()`-Bytes) – kryptographisch stärker. **Gültigkeit**: 2 Stunden
+  (konfigurierbar, `elwasys.password-reset.token-validity`), 1:1 wie der Alt-Code. **Reset-URL**:
+  `<elwasys.password-reset.portal-base-url>/reset-password?key=<token>` – anders als der
+  Alt-Code (leitet die URL aus der aktuellen Browser-Anfrage ab,
+  `WashportalUtilities#getPasswordResetUrl`) bewusst über eine Konfigurationseigenschaft
+  gebaut (robuster hinter einem Reverse Proxy/wenn der Versand nicht im Kontext einer
+  laufenden HTTP-Anfrage passiert). **Schalter**: `elwasys.password-reset.enabled` (Default
+  **AN**), bewusst NICHT `elwasys.notifications.enabled` – vollständige Begründung siehe
+  kb/05-migration-plan.md „Entscheidungen“ und `PasswordResetProperties`-Javadoc (Kurzfassung:
+  kein Doppelversand-Risiko, weil der Versand an eine explizite interaktive Aktion gebunden
+  ist, nicht an ein wiederkehrendes Ereignis wie ein Ausführungsende).
+
+**ExpiredExecutions** (`ExpiredExecutionsDialog`, fachlicher Nachfolger von
+`Portal/.../components/ExpiredExecutionsWindow`): in `AdminUsersView` öffnet ein
+Warndreieck-Symbol (nur sichtbar für nicht gesperrte Benutzer mit
+`ExecutionService#hasExpiredExecutions`, 1:1-Priorität wie
+`Portal/.../views/UsersView#fillItemWithUserData` – Gesperrt-Icon geht vor Warndreieck) den
+Dialog mit allen abgelaufenen, nicht abgerechneten Ausführungen (`getExpiredExecutions`, neue
+Methode). Je Zeile „Abrechnen“ (`ExecutionService#finishExecution`, entspricht
+`User#payExecution` + `Execution#finish`) oder „Löschen“ (neue Methode
+`ExecutionService#delete`, entspricht `Execution#delete`), zusätzlich „Alle abrechnen“ als
+Sammelaktion – 1:1 wie im Alt-Fenster.
+
+**Log-Viewer + Fernwartung** (Status/Logs/Restart, siehe WS-Protokolltabelle oben für die
+Nachrichtentypen/`TerminalMaintenanceService`): `AdminDashboardView` zeigt je Standort jetzt
+eine Kopfzeile mit Verbindungsstatus („Verbunden“/„Nicht verbunden“, aus
+`TerminalConnectionRegistry` – ersetzt die Alt-„IP-Adresse“, die mit der ausgehenden
+Verbindung entfällt, siehe kb/02-data-model.md) sowie den Knöpfen „Log anzeigen“
+(`LogViewerDialog`, fachlicher Nachfolger von `LogViewerWindow`) und „Neustart“ – fachlicher
+Nachfolger der `AdminDashboardLocationPanel`-Toolbar. Beide Knöpfe rufen
+`TerminalMaintenanceService` auf und zeigen für einen NICHT verbundenen Standort denselben
+Fehlertext wie der Alt-Code („Keine Verbindung zum Client“/„...zum Standort.“) – der in dieser
+Phase (siehe Roadmap: Alt-Clients verbinden sich erst in Phase 4 über diesen Kanal) praktisch
+immer erwartbare Fall. **Bewusst NICHT portiert**: das Alt-TCP-Protokoll selbst
+(`MaintenanceConnectionManager`/`Common.maintenance.*`) – das Alt-Portal bleibt dafür bis zum
+Cutover in Betrieb, siehe kb/05-migration-plan.md, „Entscheidungen“.
+
+**Tests** (17 neu): `PasswordServiceTest` (4, inkl. Migration eines SHA1-Bestandshashes beim
+Ändern), `PasswordResetServiceTest` (6, mit echtem SMTP-Mock GreenMail durch den vollen
+Spring-Kontext – Token-Erzeugung/-Gültigkeit/-Einmalverwendung, unbekannte Email, Admin-Reset),
+2 neue Tests in `ExecutionServiceTest` (`getExpiredExecutions`, `delete`), 1 neuer Test in
+`RouteAccessAnnotationsTest` (`ResetPasswordView` ist `@AnonymousAllowed`), 4 neue Tests in
+`TerminalWebSocketTest` (Fernwartungs-Vermittlung mit einem SIMULIERTEN WS-Client als
+Terminal-Gegenstelle – Log-/Neustart-Roundtrip, sofortiger Fehler bei nicht verbundenem
+Standort, Timeout bei einem verbundenen, aber nicht antwortenden Terminal; bewusst in die
+bestehende Testklasse integriert statt einer eigenen, um keinen weiteren Spring-Kontext/
+Connection-Pool gegen den gemeinsam genutzten Test-Postgres-Cluster zu öffnen – das hatte in
+einer eigenen Klasse "too many clients" ausgelöst, siehe kb/05-migration-plan.md). Backend-Suite
+insgesamt **161/161** grün. Bewusst KEIN Test, der über einen echten eingebetteten
+Servlet-Container eine Vaadin-Route rendert (unverändertes Risiko aus AP1).
