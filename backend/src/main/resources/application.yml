@@ -97,6 +97,16 @@ elwasys:
     pushover:
       api-token: ${ELWASYS_PUSHOVER_API_TOKEN:}
 
+  # Passwort-Reset per Email (Phase 3 AP4, siehe kb/05-migration-plan.md und
+  # PasswordResetProperties-Javadoc). Anders als "notifications" oben DEFAULT AN: kein
+  # Doppelversand-Risiko, weil dieser Mailversand nur durch eine explizite interaktive
+  # Portal-Aktion ausgelöst wird (siehe PasswordResetProperties-Javadoc für die vollständige
+  # Begründung). Nutzt denselben spring.mail.*-Transport wie "notifications" oben.
+  password-reset:
+    enabled: ${ELWASYS_PASSWORD_RESET_ENABLED:true}
+    token-validity: ${ELWASYS_PASSWORD_RESET_TOKEN_VALIDITY:PT2H}
+    portal-base-url: ${ELWASYS_PORTAL_BASE_URL:http://localhost:8080}
+
 logging:
   level:
     root: INFO

@@ -22,6 +22,7 @@ import org.kabieror.elwasys.backend.domain.DiscountType;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
+import org.kabieror.elwasys.backend.auth.PasswordResetProperties;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 /**
@@ -63,7 +64,8 @@ class NotificationServicePushoverTest {
                 .setBaseUrl("http://localhost:" + this.server.getAddress().getPort() + "/1/messages.json");
 
         JavaMailSenderImpl mailSender = new JavaMailSenderImpl();
-        this.service = new NotificationService(this.properties, mailSender, new PushoverClient(this.properties));
+        this.service = new NotificationService(this.properties, mailSender, new PushoverClient(this.properties),
+                new PasswordResetProperties());
     }
 
     @AfterEach
