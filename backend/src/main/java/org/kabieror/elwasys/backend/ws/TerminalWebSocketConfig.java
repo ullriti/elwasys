@@ -39,14 +39,18 @@ public class TerminalWebSocketConfig implements WebSocketConfigurer {
 
     private final ObjectMapper objectMapper;
 
-    public TerminalWebSocketConfig(TerminalConnectionRegistry connectionRegistry, ObjectMapper objectMapper) {
+    private final TerminalMaintenanceService maintenanceService;
+
+    public TerminalWebSocketConfig(TerminalConnectionRegistry connectionRegistry, ObjectMapper objectMapper,
+            TerminalMaintenanceService maintenanceService) {
         this.connectionRegistry = connectionRegistry;
         this.objectMapper = objectMapper;
+        this.maintenanceService = maintenanceService;
     }
 
     @Bean
     public WebSocketHandler terminalWebSocketHandler() {
-        return new TerminalWebSocketHandler(this.connectionRegistry, this.objectMapper);
+        return new TerminalWebSocketHandler(this.connectionRegistry, this.objectMapper, this.maintenanceService);
     }
 
     @Override

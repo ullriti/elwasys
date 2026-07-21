@@ -1,9 +1,15 @@
 package org.kabieror.elwasys.backend.ui.admin;
 
+import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.icon.Icon;
+import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.FlexLayout;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
@@ -16,12 +22,18 @@ import java.text.NumberFormat;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
+import java.util.List;
 import java.util.Locale;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
+import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.service.DashboardService;
 import org.kabieror.elwasys.backend.service.DashboardService.DeviceStatus;
 import org.kabieror.elwasys.backend.service.DashboardService.LocationStatus;
 import org.kabieror.elwasys.backend.service.ExecutionService;
+import org.kabieror.elwasys.backend.ui.admin.dialog.LogViewerDialog;
+import org.kabieror.elwasys.backend.ws.TerminalMaintenanceService;
+import org.kabieror.elwasys.backend.ws.TerminalNotConnectedException;
+import org.kabieror.elwasys.backend.ws.TerminalRequestTimeoutException;
 
 /**
  * Admin-Dashboard (Phase 3 AP3, siehe kb/05-migration-plan.md) - fachlicher Nachfolger von
@@ -36,10 +48,16 @@ import org.kabieror.elwasys.backend.service.ExecutionService;
  * Live-Push zwischen Sessions ist laut Auftrag dieses Arbeitspakets nicht nötig und folgt in
  * AP5.
  *
- * <p>NICHT Teil dieser View (siehe kb/05-migration-plan.md Phase-3-Roadmap): die
- * Wartungsverbindungs-Toolbar des Alt-Dashboards (Log-Datei ansehen, Client neu starten,
- * Verbindungsstatus/IP) - das ist Teil der für AP4 geplanten Fernwartung über den neuen
- * Backend-Kanal.
+ * <p><b>Seit Phase 3 AP4</b>: je Standort eine Fernwartungs-Toolbar (Log anzeigen/Neustart)
+ * plus Verbindungsstatus - fachlicher Nachfolger der Wartungsverbindungs-Toolbar des
+ * Alt-Dashboards ({@code AdminDashboardLocationPanel#buildToolbar}/{@code #buildStatusInfo}),
+ * vermittelt über {@link TerminalMaintenanceService} statt des Alt-TCP-Protokolls (siehe
+ * kb/05-migration-plan.md, "Entscheidungen": das Alt-TCP-Protokoll wird NICHT portiert, das
+ * Alt-Portal bleibt dafür bis zum Cutover in Betrieb). Statt der Alt-"IP-Adresse" (obsolet,
+ * siehe kb/02-data-model.md: {@code client_ip}/{@code -port} entfallen mit der ausgehenden
+ * Verbindung) zeigt diese View "Verbunden seit". Da sich Alt-Terminals laut Roadmap ERST in
+ * Phase 4 über diesen Kanal verbinden, zeigt diese Toolbar in der Praxis i.d.R. "Nicht
+ * verbunden" - genau der laut Auftrag geforderte klare Zustand.
  */
 @Route(value = "admin", layout = AdminLayout.class)
 @PageTitle("Dashboard - Waschportal")
@@ -51,12 +69,15 @@ public class AdminDashboardView extends VerticalLayout {
 
     private final DashboardService dashboardService;
     private final ExecutionService executionService;
+    private final TerminalMaintenanceService maintenanceService;
 
     private final VerticalLayout locationsContainer = new VerticalLayout();
 
-    public AdminDashboardView(DashboardService dashboardService, ExecutionService executionService) {
+    public AdminDashboardView(DashboardService dashboardService, ExecutionService executionService,
+            TerminalMaintenanceService maintenanceService) {
         this.dashboardService = dashboardService;
         this.executionService = executionService;
+        this.maintenanceService = maintenanceService;
 
         setSizeFull();
         addClassName("admin-dashboard-view");
@@ -81,7 +102,7 @@ public class AdminDashboardView extends VerticalLayout {
         VerticalLayout panel = new VerticalLayout();
         panel.addClassName("dashboard-location-panel");
         panel.setPadding(false);
-        panel.add(new H3(locationStatus.location().getName()));
+        panel.add(buildLocationHeader(locationStatus.location()));
 
         FlexLayout devices = new FlexLayout();
         devices.addClassName("dashboard-device-list");
@@ -91,6 +112,88 @@ public class AdminDashboardView extends VerticalLayout {
         }
         panel.add(devices);
         return panel;
+    }
+
+    /**
+     * Kopfzeile eines Standort-Panels: Name, Verbindungsstatus ("Verbunden seit"/"Nicht
+     * verbunden") und die Fernwartungs-Knöpfe - fachlicher Nachfolger von
+     * {@code AdminDashboardLocationPanel#buildToolbar}/{@code #buildStatusInfo}.
+     */
+    private HorizontalLayout buildLocationHeader(LocationEntity location) {
+        HorizontalLayout header = new HorizontalLayout();
+        header.addClassName("dashboard-location-header");
+        header.setWidthFull();
+        header.setAlignItems(FlexComponent.Alignment.CENTER);
+        header.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
+
+        H3 title = new H3(location.getName());
+
+        boolean connected = this.maintenanceService.isConnected(location.getId());
+        Span connectionBadge = new Span(connected ? "Verbunden" : "Nicht verbunden");
+        connectionBadge.getElement().getThemeList().add("badge" + (connected ? " success" : " error"));
+        if (connected) {
+            this.maintenanceService.connectedSince(location.getId())
+                    .ifPresent(since -> connectionBadge.setTitle("Verbunden seit " + since));
+        }
+
+        Button btnLog = new Button("Log anzeigen", new Icon(VaadinIcon.FILE_TEXT),
+                e -> showLog(location));
+        btnLog.addThemeVariants(ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_SMALL);
+
+        Button btnRestart = new Button("Neustart", new Icon(VaadinIcon.POWER_OFF), e -> restart(location));
+        btnRestart.addThemeVariants(ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_ERROR);
+
+        HorizontalLayout leftGroup = new HorizontalLayout(title, connectionBadge);
+        leftGroup.setAlignItems(FlexComponent.Alignment.CENTER);
+
+        HorizontalLayout toolbar = new HorizontalLayout(btnLog, btnRestart);
+
+        header.add(leftGroup, toolbar);
+        return header;
+    }
+
+    /**
+     * Fordert den Log-Inhalt des Terminals an ({@link TerminalMaintenanceService#requestLog})
+     * und zeigt ihn in {@link LogViewerDialog} - fachlicher Nachfolger des Log-Knopfs im
+     * Alt-Dashboard. Für ein nicht verbundenes Terminal (aktuell der Regelfall, siehe
+     * Klassen-Javadoc) erscheint dieselbe Fehlermeldung wie im Alt-Code ("Keine Verbindung
+     * zum Client").
+     */
+    private void showLog(LocationEntity location) {
+        try {
+            List<String> lines = this.maintenanceService.requestLog(location.getId());
+            new LogViewerDialog(lines).open();
+        } catch (TerminalNotConnectedException e) {
+            showError("Keine Verbindung zum Client");
+        } catch (TerminalRequestTimeoutException e) {
+            showError("Der Client hat nicht rechtzeitig geantwortet.");
+        }
+    }
+
+    /**
+     * Fordert einen Neustart des Terminals an
+     * ({@link TerminalMaintenanceService#requestRestart}) - fachlicher Nachfolger des
+     * "Anwendung neu starten"-Menüpunkts im Alt-Dashboard.
+     */
+    private void restart(LocationEntity location) {
+        try {
+            this.maintenanceService.requestRestart(location.getId());
+            showSuccess("Der Neustart wurde in Auftrag gegeben.");
+        } catch (TerminalNotConnectedException e) {
+            showError("Keine Verbindung zum Standort.");
+        } catch (TerminalRequestTimeoutException e) {
+            showError("Der Client hat den Neustart nicht rechtzeitig bestätigt.");
+        }
+    }
+
+    private static void showError(String message) {
+        Notification notification = Notification.show(message, 5000, Notification.Position.MIDDLE);
+        notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
+    }
+
+    private static void showSuccess(String message) {
+        Notification notification = Notification.show(message, 4000, Notification.Position.MIDDLE);
+        notification.addThemeVariants(NotificationVariant.LUMO_SUCCESS);
     }
 
     private VerticalLayout buildDevicePanel(DeviceStatus deviceStatus) {

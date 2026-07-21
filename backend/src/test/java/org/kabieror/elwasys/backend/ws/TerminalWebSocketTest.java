@@ -8,12 +8,17 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.CharBuffer;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.kabieror.elwasys.backend.auth.terminal.IssuedTerminalToken;
 import org.kabieror.elwasys.backend.auth.terminal.TerminalTokenService;
@@ -58,6 +63,16 @@ class TerminalWebSocketTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private TerminalMaintenanceService maintenanceService;
+
+    private final ExecutorService executor = Executors.newCachedThreadPool();
+
+    @AfterEach
+    void tearDown() {
+        this.executor.shutdownNow();
+    }
 
     private URI wsUri() {
         return URI.create("ws://localhost:" + this.port + "/api/v1/terminal-ws");
@@ -173,6 +188,150 @@ class TerminalWebSocketTest {
 
             TerminalWsMessage response = this.objectMapper.readValue(listener.next(), TerminalWsMessage.class);
             assertThat(response.type()).isEqualTo(TerminalWsMessageType.ERROR);
+        } finally {
+            ws.abort();
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Phase 3 AP4 (siehe kb/05-migration-plan.md, Roadmap-Punkt "Fernwartung"): Tests der
+    // Portal-seitigen Fernwartungs-Vermittlung (TerminalMaintenanceService) - ergänzt HIER
+    // (statt in einer eigenen Testklasse) bewusst denselben RANDOM_PORT-Kontext wieder, um
+    // keinen weiteren, zusätzlichen Spring-Kontext (samt eigenem Connection-Pool) gegen den
+    // gemeinsam genutzten Test-Postgres-Cluster zu öffnen (in dieser Sandbox mit begrenzten
+    // max_connections beobachtet). "TerminalMaintenanceService" ist die Portal-seitige
+    // Vermittlung, KEIN echter Terminal-Handler - da sich Alt-Clients laut Roadmap ERST in
+    // Phase 4 über diesen Kanal verbinden, simuliert {@link SimulatedTerminal} hier die
+    // (noch nicht existierende) Terminal-Gegenstelle.
+    // ---------------------------------------------------------------------------------------
+
+    /**
+     * Simulierter Terminal-WS-Client: reicht jede eingehende Nachricht an eine Queue durch
+     * und kann - anders als der reine Beobachter {@link RecordingListener} oben - über
+     * {@link #reply} selbst Nachrichten zurücksenden.
+     */
+    private static class SimulatedTerminal implements WebSocket.Listener {
+        private final LinkedBlockingQueue<String> messages = new LinkedBlockingQueue<>();
+        private final StringBuilder buffer = new StringBuilder();
+
+        @Override
+        public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+            this.buffer.append(data);
+            if (last) {
+                this.messages.add(this.buffer.toString());
+                this.buffer.setLength(0);
+            }
+            webSocket.request(1);
+            return null;
+        }
+
+        String next() throws InterruptedException {
+            String message = this.messages.poll(5, TimeUnit.SECONDS);
+            assertThat(message).as("expected the server to send a request within 5s").isNotNull();
+            return message;
+        }
+    }
+
+    private WebSocket connectSimulatedTerminal(IssuedTerminalToken token, SimulatedTerminal listener)
+            throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        return client.newWebSocketBuilder().header("Authorization", "Bearer " + token.rawToken())
+                .buildAsync(wsUri(), listener).get(5, TimeUnit.SECONDS);
+    }
+
+    private void reply(WebSocket ws, TerminalWsMessage message) throws Exception {
+        ws.sendText(CharBuffer.wrap(this.objectMapper.writeValueAsString(message)), true).get(5, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void maintenanceRequestOnANotConnectedLocationFailsImmediatelyWithoutTimeout() {
+        LocationEntity location = this.locationRepository.save(new LocationEntity(Fixtures.unique("loc")));
+
+        long start = System.nanoTime();
+        assertThatThrownBy(() -> this.maintenanceService.requestLog(location.getId())).isInstanceOf(
+                TerminalNotConnectedException.class);
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+        assertThat(elapsedMs).as("must fail fast, not wait for the request timeout").isLessThan(2000);
+        assertThat(this.maintenanceService.isConnected(location.getId())).isFalse();
+
+        assertThatThrownBy(() -> this.maintenanceService.requestRestart(location.getId())).isInstanceOf(
+                TerminalNotConnectedException.class);
+    }
+
+    @Test
+    void requestLogReturnsTheLinesFromTheSimulatedTerminal() throws Exception {
+        LocationEntity location = this.locationRepository.save(new LocationEntity(Fixtures.unique("loc")));
+        IssuedTerminalToken token = this.terminalTokenService.createToken(location, null);
+
+        SimulatedTerminal terminal = new SimulatedTerminal();
+        WebSocket ws = connectSimulatedTerminal(token, terminal);
+        try {
+            assertThat(this.maintenanceService.isConnected(location.getId())).isTrue();
+
+            Future<List<String>> future = this.executor.submit(
+                    () -> this.maintenanceService.requestLog(location.getId()));
+
+            TerminalWsMessage request = this.objectMapper.readValue(terminal.next(), TerminalWsMessage.class);
+            assertThat(request.type()).isEqualTo(TerminalWsMessageType.LOG_REQUEST);
+
+            reply(ws, TerminalWsMessage.inReplyTo(request, TerminalWsMessageType.LOG_RESPONSE,
+                    Map.of("lines", List.of("line one", "line two"))));
+
+            List<String> lines = future.get(5, TimeUnit.SECONDS);
+            assertThat(lines).containsExactly("line one", "line two");
+        } finally {
+            ws.abort();
+        }
+    }
+
+    @Test
+    void requestRestartCompletesOnceTheSimulatedTerminalAcknowledges() throws Exception {
+        LocationEntity location = this.locationRepository.save(new LocationEntity(Fixtures.unique("loc")));
+        IssuedTerminalToken token = this.terminalTokenService.createToken(location, null);
+
+        SimulatedTerminal terminal = new SimulatedTerminal();
+        WebSocket ws = connectSimulatedTerminal(token, terminal);
+        try {
+            Future<?> future = this.executor.submit(() -> this.maintenanceService.requestRestart(location.getId()));
+
+            TerminalWsMessage request = this.objectMapper.readValue(terminal.next(), TerminalWsMessage.class);
+            assertThat(request.type()).isEqualTo(TerminalWsMessageType.RESTART_REQUEST);
+
+            reply(ws, TerminalWsMessage.inReplyTo(request, TerminalWsMessageType.RESTART_RESPONSE,
+                    Map.of("accepted", true)));
+
+            // Wirft nicht, wenn erfolgreich (get() gibt null zurück, da requestRestart void ist).
+            future.get(5, TimeUnit.SECONDS);
+        } finally {
+            ws.abort();
+        }
+    }
+
+    @Test
+    void requestLogTimesOutIfTheConnectedTerminalNeverReplies() throws Exception {
+        LocationEntity location = this.locationRepository.save(new LocationEntity(Fixtures.unique("loc")));
+        IssuedTerminalToken token = this.terminalTokenService.createToken(location, null);
+
+        SimulatedTerminal terminal = new SimulatedTerminal();
+        WebSocket ws = connectSimulatedTerminal(token, terminal);
+        try {
+            Future<List<String>> future = this.executor.submit(
+                    () -> this.maintenanceService.requestLog(location.getId()));
+
+            // Beweist, dass die Anfrage tatsächlich beim (simulierten) Terminal ankam - es
+            // antwortet nur absichtlich nicht (spielt den in Phase 3 realistischen Fall eines
+            // verbundenen, aber das Nachrichtenformat noch nicht implementierenden Terminals).
+            TerminalWsMessage request = this.objectMapper.readValue(terminal.next(), TerminalWsMessage.class);
+            assertThat(request.type()).isEqualTo(TerminalWsMessageType.LOG_REQUEST);
+
+            assertThatThrownBy(() -> {
+                try {
+                    future.get(15, TimeUnit.SECONDS);
+                } catch (ExecutionException e) {
+                    throw e.getCause();
+                }
+            }).isInstanceOf(TerminalRequestTimeoutException.class);
         } finally {
             ws.abort();
         }

@@ -78,6 +78,26 @@ public class TerminalConnectionRegistry {
         return connection != null && connection.session.isOpen();
     }
 
+    /**
+     * Sendet eine Nachricht an das aktuell verbundene Terminal eines Standorts - Grundlage
+     * für {@link TerminalMaintenanceService} (Phase 3 AP4, portal-initiierte Fernwartungs-
+     * Anfragen wie Log/Neustart). Kapselt den Zugriff auf {@link WebSocketSession} bewusst
+     * hier (statt die Session selbst nach außen zu geben), damit "eine Verbindung pro
+     * Standort" ein Implementierungsdetail dieser Klasse bleibt.
+     *
+     * @return {@code true}, wenn eine offene Verbindung gefunden und die Nachricht
+     *         übergeben wurde; {@code false}, wenn der Standort nicht (mehr) verbunden ist
+     */
+    public boolean send(Integer locationId, org.springframework.web.socket.WebSocketMessage<?> message)
+            throws IOException {
+        Connection connection = this.connectionsByLocationId.get(locationId);
+        if (connection == null || !connection.session.isOpen()) {
+            return false;
+        }
+        connection.session.sendMessage(message);
+        return true;
+    }
+
     public Optional<Instant> connectedSince(Integer locationId) {
         return Optional.ofNullable(this.connectionsByLocationId.get(locationId)).map(c -> c.connectedSince);
     }
