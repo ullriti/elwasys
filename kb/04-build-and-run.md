@@ -162,6 +162,25 @@ Für einen echten produktiven Start mit funktionierendem Frontend-Bundle:
 `mvn -f backend/pom.xml package -Pproduction` (baut das Bundle, braucht npm/Internetzugang
 zum npm-Registry, aber KEINEN Vaadin-Lizenzcheck – der greift nur im Dev-Modus).
 
+**Wichtiger Fund (Phase 4 AP4, 2026-07-21)**: diese Einschränkung betrifft nicht nur den
+interaktiven Dev-Modus-Start, sondern JEDEN länger laufenden, real gestarteten Backend-
+Prozess ohne `-Pproduction` – auch einen, der zunächst erfolgreich hochfährt (Actuator-Health
+meldet „UP"). Der Dev-Modus-Lizenzcheck wird über Tomcats „deferred load-on-startup" erst
+NACH dem sichtbaren Start ausgelöst und hängt in dieser Sandbox mangels Netzwerkzugriff auf
+vaadin.com ca. 60 Sekunden fest, bevor er mit einer `LicenseException` den kompletten
+Spring-Kontext (Tomcat-Connector + Hikari-Pool) einreißt. Das hat konkret die
+Client-Raspi-Testharness getroffen: `Client-Raspi/ci-support/start-test-backend.sh` baute
+den Test-Backend-Jar ursprünglich ohne `-Pproduction`, wodurch `run-client-e2e.sh` ab der
+~7. Testklasse (kumulierte Laufzeit >60s) deterministisch mit „Backend nicht erreichbar"
+abbrach – siehe kb/05-migration-plan.md, Änderungslog „Phase 4 AP4" für die vollständige
+Ursachenanalyse. Fix: `start-test-backend.sh` baut jetzt ebenfalls mit `-Pproduction`
+(dieselbe Umgehung wie `backend/e2e/scripts/start-backend.sh`, siehe kb/06-ui-tests.md).
+**Merksatz für künftige Arbeitspakete**: jeder Testharness-/Deployment-Skript-Start eines
+echten, längere Zeit laufenden Backend-Prozesses in dieser Sandbox braucht `-Pproduction` –
+ein `mvn package -DskipTests` allein reicht nur für kurzlebige Aufrufe (z. B. `token-cli`,
+das sich nach wenigen Sekunden selbst beendet und daher nie in die Nähe des ~60s-Fensters
+kommt).
+
 **Backend-Tests seit AP4**: `backend/run-backend-tests.sh` führt jetzt **96/96** Tests aus (52
 aus AP1–AP3 + 44 neu aus AP4: Standort-Token-Auth, REST-API v1, WebSocket-Endpunkt – siehe
 kb/05-migration-plan.md Änderungslog).
@@ -203,7 +222,15 @@ kb/05-migration-plan.md.
 
 ### Client (`elwasys.properties`)
 Liegt neben dem JAR (bzw. unter `/opt/elwasys`). Siehe `Client-Raspi/elwasys.example.properties`.
-Pflicht: `database.*`, `location`, `portalUrl`. Gateway: entweder `deconz.*` oder `fhem.*`.
+
+**Seit Phase 4 AP4 (2026-07-21, Client-Cutover)**: Pflicht sind `backend.url` (Basis-URL des
+Backends) + `backend.token` (Standort-Token, erzeugt über `token-cli`, siehe „Standort-Tokens
+erzeugen/widerrufen" unten) statt Datenbank-Zugangsdaten. `database.*` bleibt weiterhin ein
+Pflicht-Key, aber **transitional** NUR noch für die Fernwartungs-Registrierung
+(`LocationManager`) genutzt, bis Phase 4 AP5 die ausgehende WebSocket-Verbindung einführt.
+Weitere Keys: `location`, `portalUrl`. Gateway: entweder `deconz.*` oder `fhem.*`. Die zuvor
+hier dokumentierten `smtp.*`-Keys entfallen (Benachrichtigungsversand läuft seit AP4 zentral
+über das Backend, siehe kb/03-modules.md „Benachrichtigungsdienst").
 
 Start (aus `setup.sh`, `run.sh`):
 ```bash
@@ -228,9 +255,13 @@ Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).
   ```bash
   bash <(curl -s https://raw.githubusercontent.com/kabieror/elwasys/master/Client-Raspi/setup.sh)
   ```
-  `setup.sh` installiert Java 17 (BellSoft armhf), UFW-Firewall, deCONZ, lädt das neueste
-  Release-JAR, schreibt `elwasys.properties`/`logback.xml`/`run.sh`, richtet Autostart über
-  `~/.xsession` ein.
+  `setup.sh` installiert Java 21 (BellSoft armhf, `bellsoft-java21-runtime-full`, siehe
+  „Bekannte Build-Risiken" unten), UFW-Firewall, deCONZ, lädt das neueste Release-JAR,
+  schreibt `elwasys.properties`/`logback.xml`/`run.sh`, richtet Autostart über
+  `~/.xsession` ein. **Seit Phase 4 AP4**: fragt interaktiv Backend-URL + Standort-Token
+  statt Datenbank-/SMTP-Zugangsdaten ab (Datenbankzugang bleibt als transitionale Zusatzfrage
+  für die Fernwartungs-Registrierung bestehen, siehe „Client" oben und
+  kb/05-migration-plan.md).
 - **Portal**: WAR auf Servlet-Container/Jetty deployen; `elwaportal.properties` bereitstellen.
 - **Backend** (seit Phase 2 AP6, siehe kb/05-migration-plan.md): Container-Image
   (`backend/Dockerfile`), Betrieb per docker-compose oder Kubernetes/Helm - siehe unten.

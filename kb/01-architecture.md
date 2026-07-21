@@ -41,10 +41,10 @@
   (`StandardWebSocketClient`)
 - deCONZ-REST/Event-API: `java.net.http` (JDK, kein Fremd-Client) – unirest/HttpComponents
   wurden hierfür entgegen einer älteren Annahme nie gebraucht, siehe kb/03-modules.md
-- Gson `2.10.1` – auch für den (seit AP2 auf `java.net.http` migrierten) elwaApp-Push-Zweig
-  in `ExecutionFinisher`
-- Pushover-Client `1.0.0` – Push-Benachrichtigungen
-- Commons Email `1.5` – E-Mail
+- Gson `2.10.1` – JSON für die REST-API v1 (`api/ApiClient`, seit Phase 4 AP4 der primäre
+  Datenzugriffspfad, siehe kb/03-modules.md)
+- ~~Pushover-Client, Commons Email~~ – entfernt (Phase 4 AP4): Benachrichtigungsversand
+  läuft jetzt zentral über das Backend, siehe kb/05-migration-plan.md
 - Logback `1.5.38` / SLF4J `2.0.18` *(Phase 4 AP2: 1.2.9/1.7.12 → 1.5.38/2.0.18)*
 - Test: JUnit 5 (Jupiter) + TestFX/Xvfb *(seit Phase 1; JUnit4/TestNG-Mischbetrieb aufgelöst)*
 - Build: `maven-assembly-plugin` → fat-jar (`jar-with-dependencies`), Main-Class
@@ -83,8 +83,10 @@ Ohne Flag wird die Displaygröße automatisch anhand der Bildschirmbreite erkann
 Zentrale Komponenten:
 
 - **`ElwaManager`** (Singleton) – zentraler Manager, hält Verweise auf Configuration,
-  DataManager/Retriever, ExecutionManager, MainFormController, Location; koordiniert Start/
-  Stop.
+  `ApiClient` (seit Phase 4 AP4 der primäre Datenzugriffspfad, siehe kb/03-modules.md),
+  ExecutionManager, MainFormController, Location; ein zusätzlicher `DataManager` bleibt
+  transitional bis Phase 4 AP5 nur noch für die Fernwartungs-Registrierung
+  (`LocationManager`) bestehen; koordiniert Start/Stop.
 - **UI** (`ui/`): zwei Varianten, `small` (320×240) und `medium` (800×480). Medium ist die
   Hauptvariante. FXML + Controller pro View.
   - **State-Machine**: `MainFormState` (Enum) + `MainFormStateManager` +
@@ -146,30 +148,44 @@ Portal weiß, wie es ihn erreicht.
 
 ## Kommunikationswege (Zusammenfassung)
 
-1. **Client ⇄ DB** (PostgreSQL, User `elwaclient1`, eingeschränkte Rechte)
+**Stand seit Phase 4 AP4 (2026-07-21, Terminal-Cutover)**: Weg 1 unten ist beim
+Client-Raspi-Terminal keine Datenzugriffsschicht mehr, sondern NUR noch für die transitional
+verbliebene Fernwartungs-Registrierung (`LocationManager`) genutzt (bis AP5); alle übrigen
+Terminal-Datenzugriffe laufen über Weg 8 (siehe unten). Wege 5/6 (Client → SMTP/Pushover)
+sind mit dem Cutover entfallen – der Client verschickt keine Benachrichtigungen mehr selbst
+(siehe kb/05-migration-plan.md, Änderungslog „Phase 4 AP4“).
+
+1. **Client ⇄ DB** (PostgreSQL, User `elwaclient1`, eingeschränkte Rechte) – seit Phase 4 AP4
+   NUR noch für die Fernwartungs-Registrierung, siehe oben.
 2. **Portal ⇄ DB** (PostgreSQL, User `elwaportal`, volle CRUD-Rechte außer credit_accounting-
    Änderungen)
-3. **Portal ⇄ Client** (Maintenance-WebSocket, für Fernwartung)
+3. **Portal ⇄ Client** (Maintenance-WebSocket, für Fernwartung) – bleibt bis Phase 4 AP5 in
+   Betrieb (siehe kb/05-migration-plan.md, „Entscheidungen“)
 4. **Client ⇄ deCONZ** (REST + WebSocket-Events, für Schalten & Leistungsmessung)
-5. **Client → SMTP** (E-Mail-Benachrichtigung)
-6. **Client → Pushover** (Push-Benachrichtigung)
+5. ~~**Client → SMTP** (E-Mail-Benachrichtigung)~~ – entfallen seit Phase 4 AP4, Backend
+   versendet zentral (siehe Weg 8, `NotificationService`)
+6. ~~**Client → Pushover** (Push-Benachrichtigung)~~ – entfallen seit Phase 4 AP4, siehe oben
 7. **elwaapi**-DB-User (in DB-Schema angelegt) – vermutlich für eine mobile App
    (`app_id`/`access_key`/`auth_key` in `users`, Tabelle `reservations`), App-Code nicht in
    diesem Repo.
 
-## Neues Backend: Terminal-API/WebSocket (seit Phase 2 AP4)
+## Neues Backend: Terminal-API/WebSocket (seit Phase 2 AP4, produktiv genutzt seit Phase 4 AP4)
 
 Zusätzlich zu den obigen (Alt-Code-)Kommunikationswegen, die bis zum jeweiligen Cutover
-(Phase 3 Portal, Phase 4 Terminal) unverändert weiterlaufen, bietet das neue Backend seit AP4
-zwei neue, parallele Wege an (noch von niemandem produktiv genutzt, siehe kb/05-migration-
-plan.md, Rahmenbedingungen):
+(Phase 3 Portal, Phase 4 Terminal) unverändert weiterliefen, bietet das neue Backend seit
+Phase 2 AP4 zwei neue, parallele Wege an. **Seit Phase 4 AP4 ist Weg 8 der primäre
+Datenzugriffspfad des Terminals** (Weg 1 oben ist auf die Fernwartungs-Registrierung
+geschrumpft); Weg 9 wird erst mit der Fernwartungs-Umkehr in AP5 tatsächlich vom Terminal
+ausgehend verbunden.
 
 8. **Terminal ⇄ Backend REST** (`/api/v1/**`, Standort-Token im `Authorization: Bearer`-
-   Header) – Kartenlogin, Geräte-/Programmliste, Execution-Lebenszyklus, Guthaben. Ersetzt
-   künftig (Phase 4) den Direkt-DB-Zugriff des Client-Raspi.
+   Header) – Kartenlogin, Geräte-/Programmliste, Execution-Lebenszyklus, Guthaben. Seit
+   Phase 4 AP4 der primäre Datenzugriffspfad des Client-Raspi (`api/ApiClient` in
+   `Client-Raspi/.../api/`, siehe kb/03-modules.md).
 9. **Terminal ⇄ Backend WebSocket** (`/api/v1/terminal-ws`, dasselbe Standort-Token beim
    Handshake) – Kanal-Fundament für Ereignis-Push und die künftige Fernwartung (Status/Logs/
-   Restart, fachliche Referenz `Common.maintenance.*`); ersetzt langfristig Weg 3
-   (`Portal ⇄ Client`-Maintenance-WebSocket) durch eine vom Terminal ausgehende Verbindung.
+   Restart, fachliche Referenz `Common.maintenance.*`); ersetzt ab AP5 Weg 3
+   (`Portal ⇄ Client`-Maintenance-WebSocket) durch eine vom Terminal ausgehende Verbindung -
+   bis dahin verbindet sich der Client hier noch nicht.
 
 Vollständige Endpunkt-/Nachrichtenreferenz: kb/03-modules.md (Abschnitt Backend, AP4).

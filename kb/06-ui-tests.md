@@ -141,6 +141,53 @@ Auftraggeber im Einsatz (kb/05) und bekommt jetzt eine Smoke-Test-Klasse.
   beiden Panes; alle anderen `fx:id`s ohne expliziten `id=`-Override funktionieren wie
   erwartet als Lookup-Selektor.
 
+## Client (JavaFX) – Testharness startet seit Phase 4 AP4 ein echtes Backend
+
+Seit dem Terminal-Cutover (Phase 4 AP4, 2026-07-21, siehe kb/05-migration-plan.md) sprechen
+die `*E2ETest`-Klassen über die REST-API v1 statt direkt mit der Datenbank. Alle drei
+Client-Harness-Skripte (`run-ui-tests.sh`, `run-client-e2e.sh`, `run-cross-component-e2e.sh`)
+bringen dafür jetzt ein echtes, laufendes Backend mit:
+
+- **`Client-Raspi/ci-support/start-test-backend.sh`** (neu, `source`d von allen drei
+  Skripten): baut den Backend-Jar, startet EIN Backend-Prozess für den gesamten Testlauf
+  (Flyway migriert dieselbe Test-Datenbank, die `database-init.sql` initialisiert hat),
+  seedet per `token-cli` genau einen Standort-Token für „Default" und exportiert
+  `ELWASYS_TEST_BACKEND_URL`/`ELWASYS_TEST_BACKEND_TOKEN` (gelesen von
+  `application.TestBackend`, siehe dortiger Klassen-Javadoc). Ein `EXIT`-Trap stoppt das
+  Backend und löscht dessen Log wieder, wenn das Skript endet.
+- **Kernproblem gefunden und behoben**: das Skript baute den Test-Backend-Jar ursprünglich mit
+  einem einfachen `mvn package -DskipTests` (ohne `-Pproduction`). Damit lief Vaadin im
+  Entwicklungsmodus, dessen `VaadinServlet#init()` einen ONLINE-Lizenzcheck gegen vaadin.com
+  auslöst (siehe kb/04-build-and-run.md „Achtung seit Phase 3 AP1" für die Grundlagen dieses
+  Sandbox-Befunds). Der Check hängt hier mangels Netzwerkzugriffs fest und wirft nach **~60
+  Sekunden** eine `LicenseException`, die den kompletten Spring-Kontext (Tomcat-Connector +
+  Hikari-Pool) einreißt – **ca. 60-70 Sekunden, NACHDEM** der Actuator-Health-Endpunkt schon
+  „UP" gemeldet hatte. Das erklärte exakt das beobachtete Symptom: `run-client-e2e.sh` (28
+  Tests in 16 Klassen) brach ab der 7. Testklasse (`ClientSmallUiSmokeE2ETest`, kumulierte
+  Laufzeit knapp unter der 60s-Marke) deterministisch mit `ApiException: Das Backend ist
+  nicht erreichbar` ab – jede Klasse davor lief noch gegen das (kurzzeitig) lebende Backend,
+  jede danach traf auf ein bereits abgestürztes. **Kein Speicherleck, kein Ressourcenleck,
+  keine Reihenfolge-Abhängigkeit** – eine reine Zeitbombe. Fix: `start_test_backend()` baut
+  jetzt mit `-Pproduction` (dieselbe bereits für `backend/e2e/scripts/start-backend.sh`
+  etablierte Umgehung – im Produktionsmodus loggt Vaadin beim Start nur eine
+  `MissingLicenseKeyException`, bricht aber nicht ab). Verifiziert: `run-client-e2e.sh` 2×
+  hintereinander vollständig grün (28/28).
+- **`run-cross-component-e2e.sh`** brauchte einen eigenen Nachzieh-Fix: `ElwaManager#initiate()`
+  verdrahtet seit dem Cutover IMMER einen `ApiClient` (auch wenn `ClientMaintenanceConnectionE2ETest`
+  inhaltlich nur den transitional auf dem Alt-DB-Pfad verbliebenen Maintenance-Kanal prüft) –
+  das Skript seedete aber nie einen Token. Nachgezogen (`source
+  ci-support/start-test-backend.sh` wie in den beiden anderen Skripten).
+- **Bekannter, isoliert reproduzierbarer Timing-Flake**: `InactivitySchedulerTest` (Timer-
+  basierte Charakterisierungstests, unabhängig vom Backend-Cutover) ist in einem vollen
+  `run-ui-tests.sh`-Lauf vereinzelt mit einem `testMultipleExecutions`-Fehlschlag aufgetreten;
+  im isolierten Einzellauf (`./run-ui-tests.sh InactivitySchedulerTest`) sofort wieder 4/4
+  grün. Kein Zusammenhang mit dem Backend-Cutover, keine Regression – bereits vor AP4 als
+  gelegentlicher Timing-Flake bekannt (siehe Phase-4-AP2-Änderungslog-Eintrag).
+
+**Aktuelle Testzahlen (Phase 4 AP4, 2026-07-21)**: `run-client-e2e.sh` **28/28** (2×
+reproduziert), `run-ui-tests.sh` **46/46** (18 Unit-/Charakterisierungstests + 28 E2E),
+`run-cross-component-e2e.sh` **3/3**.
+
 ## Alt-Portal (Vaadin 7) – Playwright E2E ⚠️ STILLGELEGT (Phase 3 AP6, 2026-07-21)
 
 > **Stillgelegt.** Diese Suite (`Portal/e2e/`) war der Maßstab für P1–P20 und lief bis Phase 3
@@ -350,3 +397,10 @@ nutzen). Bis dahin: ElwaManager-freie Views zuerst testen.
       (erste E2E-Abdeckung für `ui/small`, 320×240) – Client-Suite **37/37 → 46/46**
       (`run-ui-tests.sh`), **19/19 → 28/28** (`run-client-e2e.sh`), Cross-Component
       unverändert 3/3
+- [x] **Phase 4 AP4**: Client-Cutover auf die REST-API abgeschlossen, Testharness aller drei
+      Skripte startet jetzt ein echtes Backend mit (`ci-support/start-test-backend.sh`, siehe
+      „Testharness startet seit Phase 4 AP4 ein echtes Backend" oben) – dabei den eigentlichen
+      Grund für das anfängliche Wegbrechen der vollen `run-client-e2e.sh`-Suite gefunden und
+      behoben (Vaadin-Dev-Modus-Lizenzcheck ohne `-Pproduction`, siehe dort). Client-Suite
+      weiterhin **46/46**/**28/28**/**3/3**, Backend-Suite **198/198**, Root-Reactor-Build
+      grün

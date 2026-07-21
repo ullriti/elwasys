@@ -22,11 +22,30 @@ Nachrichtenklassen, `MaintenanceServer`/`MaintenanceClient`, Handler-Interfaces,
 
 ## Client-Raspi (`org.kabieror.elwasys.raspiclient`)
 
-JavaFX-Terminal, fat-jar. Java 16. 89 Java-Dateien.
+JavaFX-Terminal, fat-jar. Java 16.
+
+**Datenzugriff seit Phase 4 AP4 (2026-07-21, Client-Cutover) umgestellt**: `Common.DataManager`
+ist als primärer Datenzugriffspfad raus, ersetzt durch die REST-API v1 des Backends
+(`api/ApiClient`). Ein `DataManager` bleibt transitional bestehen, aber NUR noch für die
+Fernwartungs-Registrierung (`configuration/LocationManager`) bis Phase 4 AP5 die ausgehende
+WebSocket-Verbindung übernimmt – siehe kb/05-migration-plan.md, Änderungslog „Phase 4 AP4“.
 
 **Pakete** (siehe 01-architecture.md für Details):
-- `application/` – `Main`, `ElwaManager` (Singleton), `MaintenanceServerManager`,
+- `application/` – `Main`, `ElwaManager` (Singleton, verdrahtet seit AP4 einen `ApiClient` +
+  den transitional verbliebenen `DataManager`), `MaintenanceServerManager`,
   `SingleInstanceManager`, `ActionContainer`, `ApplicationInterfaceType`, Close-Listener
+- `api/` – **neu (Phase 4 AP4)**: `ApiClient` (schlanke REST-Schicht auf `java.net.http`,
+  Standort-Token als `Authorization: Bearer`, `Idempotency-Key`-Header für
+  Execution-Endpunkte), `ApiException`, `dto/` (Records: `CardLoginRequest`,
+  `CreditResponse`, `DeviceDto`, `DeviceOverviewDto`, `ExecutionDto`,
+  `ExecutionEndRequest`/`-StartRequest`, `LocationDto`, `ProgramDto`,
+  `UpdateDeconzUuidRequest`, `UserDto`) – 1:1 an die Backend-REST-API v1 angelehnt (siehe
+  kb/03, Abschnitt „REST-API v1“ weiter unten)
+- `model/` – **neu (Phase 4 AP4)**: `ClientDevice`/`ClientExecution`/`ClientProgram`/
+  `ClientUser` – bilden über den `ApiClient` befüllte Adapterklassen, die den
+  Identitäts-Cache nachbilden, den `Common.DataManager` intern führte (wichtig für
+  konsistente Objektidentität über mehrere `ElwaManager#getManagedDevices()`-Aufrufe hinweg,
+  siehe `ElwaManager`-Javadoc)
 - `ui/` – State-Machine + zwei UI-Größen:
   - `ui/small/` – 320×240 (`MainFormController`, `MainFormStateManager`, `ProgramListItem`)
   - `ui/medium/` – 800×480 (Haupt-UI): `MainFormController`, `MainFormStateManager`,
@@ -34,11 +53,13 @@ JavaFX-Terminal, fat-jar. Java 16. 89 Java-Dateien.
     Toolbar, UserSettings, Wait, Copyright), `state/` (ErrorState, ToolbarState, Listener)
   - `ui/scheduler/` – `InactivityScheduler`, `InactivityJob/Future`, `BacklightManager`
   - `ui/` gemeinsam: `MainFormState`, `Icons`, `UiUtilities`, `AbstractMainFormController`
-- `executions/` – `ExecutionManager`, `ExecutionFinisher`, Listener, `FhemException`
+- `executions/` – `ExecutionManager`, `ExecutionFinisher` (Benachrichtigungsversand seit AP4
+  entfernt, siehe unten), Listener, `FhemException`
 - `devices/` – `deconz/` (Service, ApiAdapter, EventListener, PowerManager,
   RegistrationService, `model/`), `FhemDevicePowerManager`, Interfaces, `DevicePowerState`
 - `io/` – `CardReader`, `TelnetClient`, Card-Events
-- `configuration/` – `WashguardConfiguration`, `LocationManager`
+- `configuration/` – `WashguardConfiguration` (liest seit AP4 `backend.url`/`backend.token`
+  statt DB-Zugangsdaten, siehe unten), `LocationManager` (transitional, s. o.)
 - `util/` – `BlockingMap`
 
 **FXML** (unter `ui/small/` und `ui/medium/components/`): MainForm + DevicePane, WaitPane,
@@ -51,11 +72,16 @@ Phase 4 AP1 – `deconzsimulator/` (`DeconzSimulator`/`DeconzWebSocketServer`/`S
 fake deCONZ über REST + einen selbst geschriebenen minimalen WebSocket-Server, JDK-only,
 keine neue Abhängigkeit) als austauschbare Gateway-Doubles für die `Client*E2ETest`-Klassen.
 
-**Konfiguration**: `elwasys.properties` (Beispiel: `elwasys.example.properties`).
-Wichtige Keys: `database.*`, `location`, `displayTimeout`, `startupDelay`,
-`sessionTimeout`, `portalUrl`, `deconz.*` **oder** `fhem.*`, `smtp.*`, `maintenance.port`.
+**Konfiguration** (Stand Phase 4 AP4, 2026-07-21): `elwasys.properties` (Beispiel:
+`elwasys.example.properties`). Wichtige Keys: `backend.url`/`backend.token` (**neu, primärer
+Datenzugriffspfad** – Backend-Basis-URL + Standort-Token statt DB-Zugangsdaten, siehe
+kb/04-build-and-run.md), `database.*` (**transitional**, nur noch für die
+Fernwartungs-Registrierung, bis Phase 4 AP5), `location`, `displayTimeout`, `startupDelay`,
+`sessionTimeout`, `portalUrl`, `deconz.*` **oder** `fhem.*`, `maintenance.port`. Die zuvor
+hier dokumentierten `smtp.*`/`pushover.*`-Keys **entfallen** – der Client verschickt seit AP4
+keine Benachrichtigungen mehr selbst (siehe unten).
 
-**Abhängigkeiten (Stand Phase 4 AP2, 2026-07-21)**: `javafx-controls`/`-fxml`/`-web`
+**Abhängigkeiten (Stand Phase 4 AP4, 2026-07-21)**: `javafx-controls`/`-fxml`/`-web`
 **23.0.2** (zuvor 20 – die höchste über Maven Central verfügbare stabile JavaFX-Version,
 deren Bytecode [Klassendatei-Major 65] noch auf dem festgelegten Java-21-Client-Runtime
 läuft; JavaFX 24+ verlangt bereits JDK 22+ und würde den Client-Start brechen, siehe
@@ -66,8 +92,12 @@ versionierte Dependencies in `Client-Raspi/pom.xml` gesetzt (überschreiben die 
 Common/Portal bleiben unangetastet auf den alten Versionen). `com.mashape.unirest:
 unirest-java:1.4.9`, `org.apache.httpcomponents:httpclient:4.5.13`/`httpasyncclient:4.0.2`/
 `httpmime:4.3.6` sowie `org.json:json` sind **entfernt** (siehe „HTTP-Client-Umstellung“
-unten). `pi4j-core`, `spring-boot-starter-websocket`, `gson`, `pushover-client`,
-`commons-email` unverändert.
+unten). **Seit AP4 zusätzlich entfernt**: `pushover-client` und `commons-email` (Client
+verschickt keine Benachrichtigungen mehr selbst, das Backend übernimmt zentral – siehe
+kb/03-modules.md, Abschnitt „Benachrichtigungsdienst“ weiter unten und
+kb/05-migration-plan.md, Änderungslog „Phase 4 AP4“). `pi4j-core`,
+`spring-boot-starter-websocket`, `gson` (jetzt primär für `api/ApiClient`s JSON-(De-)
+Serialisierung genutzt) unverändert.
 
 **HTTP-Client-Umstellung auf `java.net.http` (Phase 4 AP2)**: die Roadmap-Annahme, `devices/
 deconz/` nutze noch unirest/HttpComponents für REST, traf beim Nachprüfen **nicht mehr zu** –
@@ -88,9 +118,11 @@ JSON-Body-Format über Gson statt `org.json`, gleiche Statuscode-Schwelle `> 299
 weiterhin lokal geloggt und geschluckt statt propagiert) auf `java.net.http` umgestellt – damit
 ließen sich `unirest-java`, alle drei `httpcomponents`-Artefakte und `org.json` vollständig aus
 `Client-Raspi/pom.xml` entfernen (verifiziert per `mvn dependency:tree`: kein Client-Code
-referenziert sie mehr; `pushover-client` bringt weiterhin transitiv eine eigene, ältere
-`httpcomponents:httpclient:4.2.1` mit – außerhalb des Auftrags, da `pushover-client` selbst
-nicht angefasst werden sollte).
+referenziert sie mehr; `pushover-client` brachte zu diesem Zeitpunkt noch transitiv eine
+eigene, ältere `httpcomponents:httpclient:4.2.1` mit – außerhalb des AP2-Auftrags, da
+`pushover-client` selbst damals nicht angefasst werden sollte. **Update AP4**:
+`pushover-client` ist inzwischen komplett aus `Client-Raspi/pom.xml` entfernt [siehe oben],
+diese transitive Altlast ist damit ebenfalls weg).
 
 ## Portal (`org.kabieror.elwasys.webportal`) – ⚠️ STILLGELEGT (Phase 3 AP6, 2026-07-21)
 
@@ -439,6 +471,13 @@ Lücken sind additiv geschlossen (2 neue Endpunkte `GET /api/v1/devices/overview
 /api/v1/snapshot`, 2 DTO-Erweiterungen, Idempotenz-Mechanik, Original-Zeitstempel,
 Notification-Anbindung). Kein bestehender Endpunkt-Vertrag geändert.
 
+**Status Phase 4 AP4 (2026-07-21): alle 12 REST-abgedeckten Zeilen dieser Tabelle sind jetzt
+tatsächlich UMGESTELLT** – der Client ruft die jeweiligen Endpunkte über die neue
+`api/ApiClient`-Schicht auf (`ElwaManager`/`ExecutionManager`/`ExecutionFinisher`/die
+UI-Controller nutzen `Common.DataManager` dafür nicht mehr, siehe oben „Client-Raspi").
+Nur die eine planmäßig ausgenommene Zeile (`registerClient`/`releaseLocation`, Fernwartungs-
+Registrierung) bleibt wie vorgesehen bis Phase 4 AP5 auf dem Alt-DB-Pfad.
+
 **Anonyme Geräteübersicht** (`GET /api/v1/devices/overview`, `DeviceOverviewDto`, Methode
 `DeviceController#overview`): bewusst ein NEUER Pfad statt `userId` auf dem bestehenden `GET
 /api/v1/devices` optional zu machen - der bestehende 400-Vertrag bei fehlendem `userId` bleibt
@@ -642,20 +681,26 @@ lassen). Nutzt denselben `spring.mail.*`-Transport wie oben.
   priority`, `url`/`url_title` sind wie im Alt-Aufruf fest verdrahtet, nicht konfigurierbar).
 
 **Scharfschaltung (kritisch, Doppelversand-Risiko)**: `elwasys.notifications.enabled`
-(Env `ELWASYS_NOTIFICATIONS_ENABLED`) ist per Default **aus**. **Seit Phase 4 AP3 ist der
-Dienst an den API-Execution-Lebenszyklus angebunden**: `ExecutionController#finish`/`#abort`
+(Env `ELWASYS_NOTIFICATIONS_ENABLED`) ist per Default **aus**. Seit Phase 4 AP3 ist der
+Dienst an den API-Execution-Lebenszyklus angebunden: `ExecutionController#finish`/`#abort`
 rufen `NotificationService#notifyExecutionFinished`/`#notifyExecutionAborted` bedingungslos
 auf (der Controller kennt den Schalter nicht, das Gating bleibt vollständig in
-`NotificationService#dispatch` gekapselt) - solange das Flag AUS bleibt (weiterhin der Default
-und der Zustand in jeder Umgebung, bis der AP4-Client-Cutover den Alt-Versand tatsächlich
-abschaltet), bleibt jeder Aufruf ein wirkungsloser No-Op, siehe `dispatch`-Javadoc. Client-Raspi
-verschickt im Parallelbetrieb (Phase 2–4) weiterhin selbst Benachrichtigungen für JEDEN
-Programmende - ein zusätzliches Scharfschalten dieses Flags VOR dem AP4-Cutover (der den
-Alt-Versand aus `ExecutionFinisher` entfernt) würde also Doppelversand auslösen. Bei einem
-idempotenten Replay derselben Execution-Meldung (siehe „API-Erweiterungen (AP3)" oben) wird die
-Benachrichtigung NICHT erneut ausgelöst, weil die komplette fachliche Aktion (inkl.
-Benachrichtigung) bei einem Replay gar nicht erst erneut ausgeführt wird. Analog zu
-`elwasys.auth.rehash-on-login` (AP3 der Auth, nicht zu verwechseln mit dieser Phase-4-AP3).
+`NotificationService#dispatch` gekapselt) - solange das Flag AUS bleibt, bleibt jeder Aufruf
+ein wirkungsloser No-Op, siehe `dispatch`-Javadoc. **Update AP4 (2026-07-21, Client-Cutover
+abgeschlossen)**: der Alt-Versandcode ist jetzt tatsächlich aus `ExecutionFinisher` entfernt
+(Commons-Email/Pushover-Client-Deps raus aus `Client-Raspi/pom.xml`, siehe
+kb/05-migration-plan.md, Änderungslog „Phase 4 AP4“) - das vormals beschriebene
+Doppelversand-Risiko besteht damit nicht mehr. Das Backend-Flag selbst bleibt trotzdem
+bewusst per Code-Default AUS (abgesichert durch `NotificationsPropertiesDefaultTest`); das
+tatsächliche Scharfschalten (`ELWASYS_NOTIFICATIONS_ENABLED=true` in der jeweiligen
+Deployment-Konfiguration, z. B. `deploy/compose/.env`) ist ein **operativer** Schritt, der
+laut Roadmap erst bei der eigentlichen Produktivumschaltung (Phase 6) ansteht, wenn reale
+Terminals im Feld auf den neuen Unterbau umgestellt werden - in dieser
+Entwicklungs-/Sandbox-Umgebung bleibt es aus. Bei einem idempotenten Replay derselben
+Execution-Meldung (siehe „API-Erweiterungen (AP3)" oben) wird die Benachrichtigung NICHT
+erneut ausgelöst, weil die komplette fachliche Aktion (inkl. Benachrichtigung) bei einem
+Replay gar nicht erst erneut ausgeführt wird. Analog zu `elwasys.auth.rehash-on-login`
+(AP3 der Auth, nicht zu verwechseln mit dieser Phase-4-AP3).
 
 **Actuator-Nebenwirkung**: `spring-boot-starter-mail` auf dem Klassenpfad aktiviert
 automatisch einen Mail-Health-Indikator, der ohne konfigurierten SMTP-Server den
