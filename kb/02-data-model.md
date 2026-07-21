@@ -121,6 +121,24 @@ kb/05-migration-plan.md). Vom Alt-Code unbenutzt/unbekannt.
 - Mehrere aktive Tokens pro Standort zulässig (Rotation ohne Ausfallfenster: neues Token
   anlegen, Terminal umstellen, dann altes per `revoked_at` widerrufen)
 
+### terminal_idempotency_keys *(neu, seit Phase 4 AP3)*
+Dedupliziert terminal-gemeldete Execution-Ereignisse (Start/Ende/Abbruch/Reset über
+`/api/v1/executions/**`, siehe kb/03-modules.md „Idempotenz + Replay" und
+kb/05-migration-plan.md). Additive Migration `V4__create_terminal_idempotency_keys.sql`. Vom
+Alt-Code unbenutzt/unbekannt.
+- `id`, `location_id` → locations (`ON DELETE CASCADE`, rein informativ)
+- `idempotency_key` (VARCHAR(64), unique) – die vom Terminal erzeugte UUID; ein Schlüssel
+  identifiziert GENAU EIN fachliches Ereignis, unabhängig vom HTTP-Pfad
+- `operation` (VARCHAR(50)) – z. B. `execution-start`/`-finish`/`-abort`/`-reset`, rein
+  informativ/für Diagnose
+- `response_status`, `response_body` (TEXT) – die beim ERSTEN, erfolgreichen Aufruf tatsächlich
+  gelieferte Antwort; ein Replay liefert sie unverändert erneut aus, ohne die fachliche Aktion
+  erneut auszuführen
+- `created_at`
+- Nur ERFOLGREICHE Aufrufe werden abgelegt (siehe `IdempotencyService`-Javadoc) – ein
+  fehlgeschlagener Erstversuch „friert" nicht dauerhaft ein, ein erneuter Versuch mit demselben
+  Schlüssel führt die Aktion normal erneut aus
+
 ## DB-Rollen & Rechte
 
 - **Gruppe `elwaclients`**, User `elwaclient1` (PW `elwaclient1`):
@@ -205,6 +223,11 @@ Zusammenfassung:
   Rein additiv (neue Tabelle, keine Änderung an Bestandstabellen) – der Alt-Code bekommt
   davon nichts mit. Details/Entscheidungen (Hash statt Klartext, Rotation über mehrere
   aktive Tokens) siehe kb/05-migration-plan.md.
+- **`V4__create_terminal_idempotency_keys.sql`** (Phase 4 AP3, 2026-07-21): neue Tabelle
+  `terminal_idempotency_keys` (siehe „Tabellen“ oben) für die Deduplizierung terminal-gemeldeter
+  Execution-Ereignisse. Rein additiv (neue Tabelle, keine Änderung an Bestandstabellen) – der
+  Alt-Code bekommt davon nichts mit. Details siehe kb/03-modules.md „Idempotenz + Replay“ und
+  kb/05-migration-plan.md.
 
 ## JPA-Entities (seit Phase 2 AP2, 2026-07-20)
 

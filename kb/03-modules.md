@@ -393,18 +393,113 @@ der AP3-Catch-all-Kette, also login-pflichtig).
 |---|---|---|---|---|
 | `POST` | `/api/v1/card-login` | Kartenlogin (`CardLoginRequest{cardId}` → `UserDto` inkl. Guthaben), 1:1 `MainFormController#onCardDetected` | `200` | `404 card-not-found`, `403 user-blocked`, `403 location-not-allowed` |
 | `GET` | `/api/v1/locations/me` | Standort des Tokens (`LocationDto`) | `200` | – |
-| `GET` | `/api/v1/devices?userId=` | Geräteliste des Standorts, je Gerät `usableByUser`/`occupied`/gefilterte `programs` (`PermissionService`) | `200` | `400` (userId fehlt), `404 user-not-found` |
+| `GET` | `/api/v1/devices?userId=` | Geräteliste des Standorts, je Gerät `usableByUser`/`occupied`/gefilterte `programs` (`PermissionService`); seit AP3 zusätzlich mit Gateway-Konfigurationsfeldern (`fhemName`/`fhemSwitchName`/`fhemPowerName`/`deconzUuid`/`autoEndPowerThreashold`/`autoEndWaitTimeSeconds`) | `200` | `400` (userId fehlt), `404 user-not-found` |
 | `GET` | `/api/v1/devices/{id}?userId=` | Einzelgerät (Standort-Scope) | `200` | `404 device-not-found`, `404 user-not-found` |
-| `POST` | `/api/v1/executions` | Execution anlegen+starten (`ExecutionStartRequest{userId,deviceId,programId}`) | `201 ExecutionDto` | `404 device/program/user-not-found`, `403 user-blocked/location-not-allowed/device-not-usable/program-not-available`, `409 device-occupied`, `402 insufficient-credit` |
+| `GET` | `/api/v1/devices/overview` | **NEU (AP3)**: anonyme Geräteübersicht des Standorts OHNE `userId` (`DeviceOverviewDto`: Gateway-Konfiguration, `occupied`, `runningExecutionId`, `lastUserId`/`lastUserName`) - siehe „API-Erweiterungen (AP3)" unten | `200` | – |
+| `POST` | `/api/v1/executions` | Execution anlegen+starten (`ExecutionStartRequest{userId,deviceId,programId,clientTimestamp}`, `clientTimestamp` seit AP3 optional); akzeptiert seit AP3 optional den Header `Idempotency-Key` | `201 ExecutionDto` | `404 device/program/user-not-found`, `403 user-blocked/location-not-allowed/device-not-usable/program-not-available`, `409 device-occupied`, `402 insufficient-credit` |
 | `GET` | `/api/v1/executions/{id}` | Aktueller Stand einer Ausführung | `200` | `404 execution-not-found` |
-| `POST` | `/api/v1/executions/{id}/finish` | Reguläres Ende (bezahlt) | `200` | `404`, `409 execution-already-finished` |
-| `POST` | `/api/v1/executions/{id}/abort` | Vorzeitiger Abbruch (persistenzseitig identisch zu `finish`, eigener Endpunkt für API-Klarheit) | `200` | wie `finish` |
-| `POST` | `/api/v1/executions/{id}/reset` | Zurücksetzen ohne Abrechnung (Alt-Code: Steckdose ließ sich nach Anlegen nicht einschalten) | `200` | `404` |
+| `POST` | `/api/v1/executions/{id}/finish` | Reguläres Ende (bezahlt); seit AP3 optionaler Rumpf `ExecutionEndRequest{clientTimestamp}` + optionaler `Idempotency-Key`-Header; löst seit AP3 `NotificationService#notifyExecutionFinished` aus | `200` | `404`, `409 execution-already-finished` |
+| `POST` | `/api/v1/executions/{id}/abort` | Vorzeitiger Abbruch (persistenzseitig identisch zu `finish`, eigener Endpunkt für API-Klarheit); seit AP3 wie `finish` mit optionalem Rumpf/Header, löst `NotificationService#notifyExecutionAborted` aus | `200` | wie `finish` |
+| `POST` | `/api/v1/executions/{id}/reset` | Zurücksetzen ohne Abrechnung (Alt-Code: Steckdose ließ sich nach Anlegen nicht einschalten); seit AP3 optionaler `Idempotency-Key`-Header | `200` | `404` |
 | `GET` | `/api/v1/users/{id}/credit` | Guthabenabfrage (NICHT standortgebunden – Guthaben ist personenbezogen, siehe `UserController`-Javadoc) | `200 CreditResponse` | `404 user-not-found` |
+| `GET` | `/api/v1/snapshot` | **NEU (AP3)**: Standort-Snapshot für die Offline-Buchungs-Vorbereitung (`SnapshotDto`) - siehe „API-Erweiterungen (AP3)" unten | `200` | – |
 
 Alle Endpunkte (außer der reinen Standort-Selbstauskunft) prüfen Berechtigungen 1:1 über die
 AP2-Services (`PermissionService`, `PricingService`, `CreditService`, `ExecutionService`) –
 keine Duplikation der Fachlogik in der API-Schicht.
+
+#### API-Erweiterungen (AP3, Phase 4, 2026-07-21, additiv)
+
+Vorbereitung des Terminal-Cutovers (AP4): Inventur aller `DataManager`-/Direkt-DB-Aufrufe des
+Client-Alt-Codes (`ExecutionManager`/`ExecutionFinisher`/`LocationManager`/UI-Controller,
+`ui/medium`+`ui/small`) gegen die bestehende REST-API v1 (AP4-Stand oben) abgeglichen.
+
+**Inventur-Tabelle** (Client-Aufruf → vorhandener Endpunkt/DTO-Feld bzw. Lücke):
+
+| Client-Aufruf (Alt-Code) | Zweck | Abdeckung |
+|---|---|---|
+| `DataManager#getLocation(name)` (`ElwaManager#initiate`, `LocationManager`) | eigenen Standort auflösen | ✅ `GET /api/v1/locations/me` |
+| `DataManager#getUserByCardId` (`MainFormController#onCardDetected`) | Kartenlogin | ✅ `POST /api/v1/card-login` |
+| `DataManager#getDevicesToDisplay`/`#getDevicesToDisplayXs` (`ElwaManager#getManagedDevices`, beide UI-Größen im Zustand `SELECT_DEVICE`, **VOR** jedem Kartenlogin) | Geräteliste anzeigen | ⚠️ Lücke bis AP3: `GET /api/v1/devices` verlangt `userId` (400 ohne) - in `SELECT_DEVICE` ist aber noch kein Benutzer bekannt (Karten-Scan kann jederzeit unabhängig erfolgen, siehe `MainFormController#onCardDetected`, das in JEDEM Nicht-Fehler-Zustand reagiert). **Behoben**: neuer, anonymer `GET /api/v1/devices/overview` (siehe unten) - der bestehende Vertrag von `GET /api/v1/devices` bleibt unverändert (weiterhin `400` ohne `userId`, siehe `DeviceControllerTest#missingUserIdParameterIsRejectedWith400`) |
+| Gerät-Objekt-Felder `fhemName`/`fhemSwitchName`/`fhemPowerName`/`deconzUuid`/`autoEndPowerThreashold`/`autoEndWaitTimeSeconds` (von `devices/deconz/`, `FhemDevicePowerManager`, `ExecutionManager`s 20s-Hintergrundabgleich ALLER verwalteten Geräte genutzt) | Gateway-Ansteuerung/Auto-Ende | ⚠️ Lücke bis AP3: weder `DeviceDto` noch ein anderer Endpunkt lieferten diese Felder. **Behoben**: additive Felder auf `DeviceDto` + `DeviceOverviewDto` |
+| `DataManager#getRunningExecution(Device)` je Gerät (`ElwaManager#initiate`, Wiederaufnahme-Scan, Testfall C13) | unterbrochene Ausführung beim Start fortsetzen | ⚠️ Lücke bis AP3: kein Endpunkt lieferte die laufende Execution-Id ohne bereits bekannten Benutzer. **Behoben**: `DeviceOverviewDto#runningExecutionId` (der Client ruft anschließend `GET /api/v1/executions/{id}` für die vollen Details) |
+| `DataManager#getLastUser(Device)` (`DeviceListEntry#onStart`/`ui/small`, „letzter Benutzer"-Anzeige je Gerätekachel) | UI-Hinweis | ⚠️ Lücke bis AP3. **Behoben**: `DeviceOverviewDto#lastUserId`/`#lastUserName` (kein eigener Endpunkt nötig) |
+| `DataManager#newExecution` + `ExecutionManager#startExecution` (Buchung/Programmstart) | Execution anlegen+starten | ✅ `POST /api/v1/executions` (bereits AP4) |
+| `Execution#reset()` (`ExecutionManager#startExecution`, catch-Block bei Steckdosenfehler) | Ausführung zurücksetzen | ✅ `POST /api/v1/executions/{id}/reset` (bereits AP4) |
+| `Execution#stop()` + `User#payExecution()` (`ExecutionFinisher#executeAction`, regulär/Abbruch) | Ende/Abbruch + Abrechnung | ✅ `POST /api/v1/executions/{id}/finish`/`/abort` (bereits AP4); seit AP3 zusätzlich an `NotificationService` angebunden (siehe unten) |
+| E-Mail/Pushover-Versand in `ExecutionFinisher#executeAction` | Benachrichtigung bei Ende/Abbruch | ⚠️ Lücke bis AP3: `NotificationService` existierte (Phase 2 AP5), war aber an keinen produktiven Ablauf angebunden. **Behoben**: Anbindung an `finish`/`abort` (siehe unten), weiterhin hinter `elwasys.notifications.enabled` (Default AUS) |
+| `Location#registerClient(uid)`/`#releaseLocation()` (`LocationManager`, IP-Registry für die Alt-Fernwartung) | Standort-„Erreichbarkeit" melden | **Kein REST-Äquivalent nötig** - laut Roadmap (AP5) wird dieser Mechanismus durch eine ausgehende WebSocket-Verbindung ersetzt (`TerminalConnectionRegistry`, bereits seit Phase 2 AP4 vorhanden), nicht durch einen REST-Endpunkt |
+| Execution-Start/Ende/Abbruch: keine Wiederholungssicherheit im Alt-Code (Direkt-DB, keine Netzwerk-Retries nötig) | Robustheit bei Netzwerkfehlern zwischen Terminal und Backend | ⚠️ Lücke bis AP3 (durch die Umstellung auf REST erst relevant). **Behoben**: Idempotenz-Schlüssel + Original-Zeitstempel (siehe unten) |
+| Standort-Daten für Offline-Buchungen (Konzeptskizze, noch kein Alt-Code-Äquivalent - komplett neue Anforderung) | Offline-Buchungs-Vorbereitung (AP6) | ⚠️ Lücke bis AP3. **Behoben**: `GET /api/v1/snapshot` (siehe unten) |
+
+**Ergebnis**: 13 identifizierte Client-Zugriffspunkte. 5 bereits über die AP4-API abgedeckt
+(Zeilen 1/2/7/8/9), 1 braucht laut Roadmap explizit KEIN REST-Äquivalent (`registerClient`/
+`releaseLocation`, wird durch AP5s ausgehende WS-Verbindung ersetzt), die verbleibenden 7
+Lücken sind additiv geschlossen (2 neue Endpunkte `GET /api/v1/devices/overview` + `GET
+/api/v1/snapshot`, 2 DTO-Erweiterungen, Idempotenz-Mechanik, Original-Zeitstempel,
+Notification-Anbindung). Kein bestehender Endpunkt-Vertrag geändert.
+
+**Anonyme Geräteübersicht** (`GET /api/v1/devices/overview`, `DeviceOverviewDto`, Methode
+`DeviceController#overview`): bewusst ein NEUER Pfad statt `userId` auf dem bestehenden `GET
+/api/v1/devices` optional zu machen - der bestehende 400-Vertrag bei fehlendem `userId` bleibt
+dadurch unangetastet (siehe Inventur-Tabelle). Liefert je Gerät die Gateway-Konfiguration
+(fhem/deCONZ), `occupied`, `runningExecutionId` (für den Wiederaufnahme-Scan, Testfall C13) und
+`lastUserId`/`lastUserName` (fachlicher Nachfolger von `DataManager#getLastUser`). Enthält
+bewusst KEINE `programs`/`usableByUser`-Felder (die setzen einen bekannten Benutzer voraus) -
+nach einem Kartenlogin ruft der Client wie bisher `GET /api/v1/devices?userId=...` auf.
+
+**Idempotenz + Replay** (Package `backend/.../api/idempotency/`, siehe Konzeptskizze
+„Offline-Buchungen am Terminal" Punkt 3+4 „Persistentes Ereignis-Journal"/„Nachmeldung"):
+`IdempotencyService#execute` dedupliziert terminal-gemeldete Execution-Ereignisse über den
+optionalen Header `Idempotency-Key` (eine vom Terminal erzeugte UUID pro fachlichem Ereignis) -
+`POST /api/v1/executions`, `.../finish`, `.../abort`, `.../reset` akzeptieren ihn alle. Wird
+derselbe Schlüssel erneut gesendet (z.B. nach einem Verbindungsabbruch vor Erhalt der Antwort),
+liefert der Endpunkt die ZUERST berechnete Antwort erneut aus, OHNE die fachliche Aktion
+(Abrechnung, Execution-Anlage, Benachrichtigung) ein zweites Mal auszulösen. Speicherung in der
+additiven Tabelle `terminal_idempotency_keys` (Migration `V4`, siehe kb/02-data-model.md):
+Schlüssel, Standort (informativ), Vorgangsart, HTTP-Status + JSON-Antwortkörper der ERSTEN
+erfolgreichen Ausführung. Fehlt der Header (Default-Fall, bestehende Aufrufer ohne Header),
+verhalten sich alle vier Endpunkte exakt wie vor AP3 - vollständig additiv/abwärtskompatibel.
+**Wichtiger Fallstrick** (im Code als Regressionstest festgehalten, siehe
+`ExecutionControllerNotificationTest#executionAlreadyFinishedIsCheckedInsideTheIdempotencyBranch`):
+der „bereits beendet"-Wächter von `finish`/`abort` (409 `execution-already-finished`) MUSS
+innerhalb des Idempotenz-Zweigs geprüft werden - eine Prüfung davor hätte einen Replay (die
+Ausführung ist durch den ERSTEN Aufruf bereits `finished=true`) fälschlich mit `409` statt der
+gespeicherten `200`-Antwort beendet (beim ersten Implementierungsversuch tatsächlich so
+aufgetreten, per Test aufgedeckt und behoben). Analog wandern bei `start` alle fachlichen
+Prüfungen (blockiert/Standort/Nutzbarkeit/Programm/Belegung/Guthaben) in den Idempotenz-Zweig,
+damit ein sich zwischenzeitlich ändernder Zustand (z.B. der Benutzer wird nach einem
+erfolgreichen Erstversuch gesperrt) einen Replay nicht fälschlich scheitern lässt. **Bekannte,
+dokumentierte Grenze**: keine verteilte Sperre - zwei tatsächlich GLEICHZEITIGE Anfragen mit
+demselben Schlüssel können die fachliche Aktion beide einmal auslösen, bevor der zweite Insert
+an der Unique-Constraint scheitert (siehe `IdempotencyService`-Javadoc); in der Praxis meldet
+ein einzelnes Terminal ein Ereignis sequenziell, das Risiko ist gering.
+
+**Original-Zeitstempel**: `ExecutionStartRequest#clientTimestamp`/`ExecutionEndRequest#clientTimestamp`
+(beide optional, Typ `LocalDateTime`) lassen das Terminal den tatsächlichen Ereigniszeitpunkt
+mitschicken statt der Serverzeit beim Empfang - Vorbereitung für die Offline-Nachmeldung aus
+AP6 (Konzeptskizze Punkt 4: „Backend verbucht nachträglich ... mit Original-Zeitstempeln").
+`ExecutionService#startExecution`/`#stopExecution`/`#finishExecution` haben dafür neue
+Überladungen mit einem `clientTimestamp`-Parameter bekommen (Verhalten bei `null` unverändert
+zu vorher: `LocalDateTime.now()`). Uhren-Drift-Toleranz/Ablehnung zu alter Zeitstempel ist
+laut den vorläufigen Festlegungen zu den Offline-Detailfragen (kb/05-migration-plan.md) erst
+für AP6 vorgesehen - AP3 nimmt den Zeitstempel unverändert entgegen.
+
+**Standort-Snapshot** (`GET /api/v1/snapshot`, `SnapshotController`, `SnapshotDto` + vier
+Teil-DTOs in `api/dto/`, siehe Konzeptskizze „Offline-Buchungen am Terminal" Punkt 1 „Lokaler
+Daten-Snapshot"): liefert Nutzer (Kartennummern, Guthaben, Sperr-Status, Gruppen-Id), Geräte
+(inkl. Gateway-Konfiguration wie `DeviceOverviewDto`, zulässige Gruppen-Ids, Programm-Ids),
+Programme (Preisfelder, zulässige Gruppen-Ids) und Benutzergruppen (Rabattregel) des Standorts
+mit Zeitstempel. **Enthält bewusst KEINE Passwort-Hashes** (siehe `SnapshotUserDto`-Javadoc).
+**Scope-Entscheidung**: `users`/`userGroups` sind auf Benutzer/Gruppen beschränkt, die an DIESEM
+Standort zugelassen sind (`location.getValidUserGroups()`), statt ALLE Benutzer des Systems
+auszuliefern - ein Terminal muss offline nur wissen, wer bei ihm einchecken darf; eine Karte
+eines an diesem Standort nicht zugelassenen Nutzers würde offline wie eine unbekannte Karte
+behandelt (nicht wie das spezifischere „an diesem Standort nicht erlaubt") - eine bewusst
+konservative Vereinfachung im Sinne der Konzeptskizze Punkt 2 („Regeln bewusst konservativ").
+Dieses Arbeitspaket liefert nur die DATEN aus - die eigentliche Offline-Entscheidungslogik
+(Kartenlogin/Berechtigungs-/Guthabenprüfung gegen den Snapshot, Ereignis-Journal, Replay) bleibt
+laut Roadmap AP6 vorbehalten.
 
 #### WebSocket-Endpunkt (`/api/v1/terminal-ws`, Package `backend/.../ws/`)
 
@@ -547,12 +642,20 @@ lassen). Nutzt denselben `spring.mail.*`-Transport wie oben.
   priority`, `url`/`url_title` sind wie im Alt-Aufruf fest verdrahtet, nicht konfigurierbar).
 
 **Scharfschaltung (kritisch, Doppelversand-Risiko)**: `elwasys.notifications.enabled`
-(Env `ELWASYS_NOTIFICATIONS_ENABLED`) ist per Default **aus** und wird von **keinem**
-produktiven Ablauf aufgerufen – Client-Raspi verschickt im Parallelbetrieb (Phase 2–4)
-weiterhin selbst. Verdrahtung mit echten Ereignissen (Terminal meldet „Programm beendet"/
-„abgebrochen" über die API) sowie das Abschalten des Alt-Versands kommen in Phase 4,
-danach kann das Flag scharfgeschaltet werden. Analog zu `elwasys.auth.rehash-on-login`
-(AP3).
+(Env `ELWASYS_NOTIFICATIONS_ENABLED`) ist per Default **aus**. **Seit Phase 4 AP3 ist der
+Dienst an den API-Execution-Lebenszyklus angebunden**: `ExecutionController#finish`/`#abort`
+rufen `NotificationService#notifyExecutionFinished`/`#notifyExecutionAborted` bedingungslos
+auf (der Controller kennt den Schalter nicht, das Gating bleibt vollständig in
+`NotificationService#dispatch` gekapselt) - solange das Flag AUS bleibt (weiterhin der Default
+und der Zustand in jeder Umgebung, bis der AP4-Client-Cutover den Alt-Versand tatsächlich
+abschaltet), bleibt jeder Aufruf ein wirkungsloser No-Op, siehe `dispatch`-Javadoc. Client-Raspi
+verschickt im Parallelbetrieb (Phase 2–4) weiterhin selbst Benachrichtigungen für JEDEN
+Programmende - ein zusätzliches Scharfschalten dieses Flags VOR dem AP4-Cutover (der den
+Alt-Versand aus `ExecutionFinisher` entfernt) würde also Doppelversand auslösen. Bei einem
+idempotenten Replay derselben Execution-Meldung (siehe „API-Erweiterungen (AP3)" oben) wird die
+Benachrichtigung NICHT erneut ausgelöst, weil die komplette fachliche Aktion (inkl.
+Benachrichtigung) bei einem Replay gar nicht erst erneut ausgeführt wird. Analog zu
+`elwasys.auth.rehash-on-login` (AP3 der Auth, nicht zu verwechseln mit dieser Phase-4-AP3).
 
 **Actuator-Nebenwirkung**: `spring-boot-starter-mail` auf dem Klassenpfad aktiviert
 automatisch einen Mail-Health-Indikator, der ohne konfigurierten SMTP-Server den
