@@ -37,7 +37,10 @@ sudo -u postgres psql -q -c "ALTER USER postgres WITH PASSWORD 'postgres';"
 #    aggregator parent POM into the local repo, which a plain
 #    "mvn -f Common/pom.xml install" does not.
 mvn -q -B -f "$REPO_ROOT/pom.xml" install -pl Common -am -DskipTests
-source "$(dirname "$0")/ci-support/start-test-backend.sh"
+# Already in the script directory (cd above), so source relative to it - using
+# "$(dirname "$0")" again here would double-nest the path when the script is invoked
+# with a path prefix (e.g. CI's `bash Client-Raspi/run-client-e2e.sh`).
+source ci-support/start-test-backend.sh
 start_test_backend
 
 # 4. Run the E2E tests headlessly.

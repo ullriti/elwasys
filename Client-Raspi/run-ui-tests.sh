@@ -45,7 +45,10 @@ mvn -q -B -f "$REPO_ROOT/pom.xml" install -pl Common -am -DskipTests
 
 # 4. Build+start the backend jar and seed a terminal token (exports
 #    ELWASYS_TEST_BACKEND_URL/-TOKEN, stops the backend on exit).
-source "$(dirname "$0")/ci-support/start-test-backend.sh"
+# Already in the script directory (cd above), so source relative to it - using
+# "$(dirname "$0")" again here would double-nest the path when the script is invoked
+# with a path prefix (e.g. CI's `bash Client-Raspi/run-ui-tests.sh`).
+source ci-support/start-test-backend.sh
 start_test_backend
 
 TEST_ARG=()
