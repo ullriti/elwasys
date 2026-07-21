@@ -1,5 +1,6 @@
 package org.kabieror.elwasys.raspiclient.devices.deconz;
 
+import org.apache.commons.lang3.StringUtils;
 import org.kabieror.elwasys.raspiclient.model.ClientDevice;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
 import org.kabieror.elwasys.raspiclient.devices.DevicePowerState;
@@ -48,13 +49,28 @@ public class DeconzDevicePowerManager implements IDevicePowerManager {
     @Override
     public void setDevicePowerState(ClientDevice device, DevicePowerState newState)
             throws IOException, InterruptedException, FhemException {
+        // Verteidigung gegen ein Gerät ohne (oder mit leerer) deCONZ-Id (Phase 4
+        // CI-Stabilität, siehe kb/05-migration-plan.md, Änderungslog "Phase 4
+        // CI-Stabilität (deCONZ)"): ohne diese Prüfung würde ein solches Gerät hier
+        // gegen einen aus einer leeren Id gebildeten (und damit auf keinen deCONZ-
+        // Endpunkt routenden) Pfad laufen - eine wenig aussagekräftige Fehlerkette
+        // ("Kommunikationsfehler" nach mehreren sinnlosen Wiederholungen) statt eines
+        // klaren Fehlers. {@link #getState} prüfte bereits auf {@code null}, aber nicht
+        // auf einen leeren String (die DB speichert "kein deCONZ-Gerät" als leeren
+        // String, nicht NULL) - dieselbe {@code isNotBlank}-Prüfung wie in
+        // {@link DeconzRegistrationService#isDeviceRegistered} deckt beide Fälle ab.
+        if (StringUtils.isBlank(device.getDeconzUuid())) {
+            throw new DeconzException(
+                    "Gerät %s ist nicht bei deCONZ registriert (keine deCONZ-Id konfiguriert).".formatted(
+                            device.getName()));
+        }
         deconzService.setDeviceState(device.getDeconzUuid(),
                 newState == DevicePowerState.SET_ON || newState == DevicePowerState.ON);
     }
 
     @Override
     public DevicePowerState getState(ClientDevice device) throws InterruptedException, FhemException, IOException {
-        if (device.getDeconzUuid() == null) {
+        if (StringUtils.isBlank(device.getDeconzUuid())) {
             logger.warn("No deCONZ device registered for device %s".formatted(device.getId()));
             return DevicePowerState.UNKNOWN;
         }

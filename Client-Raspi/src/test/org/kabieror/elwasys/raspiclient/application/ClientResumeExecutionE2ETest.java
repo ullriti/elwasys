@@ -85,6 +85,52 @@ public class ClientResumeExecutionE2ETest {
         if (fhem != null) {
             fhem.stop();
         }
+        cleanupFixtures();
+    }
+
+    /**
+     * Phase 4 CI-Stabilität (siehe kb/05-migration-plan.md, Änderungslog "Phase 4
+     * CI-Stabilität (deCONZ)"): dieser Test seedet absichtlich eine DAUERHAFT unfertige
+     * Ausführung ({@code finished=FALSE}, siehe {@link #seedFixtures()}), um den
+     * Wiederaufnahme-Pfad (Testfall C13) zu prüfen - ohne Aufräumen überlebt dieser
+     * Datensatz das Testende. {@code ElwaManager#initiate()} scannt beim Start ALLE Geräte
+     * am Standort (nicht nur die des jeweils eigenen Tests) nach unfertigen Ausführungen,
+     * um sie automatisch fortzusetzen (dasselbe Testfall-C13-Verhalten, das dieser Test
+     * selbst prüft) - eine JEDE SPÄTER in DERSELBEN {@code mvn test}-Ausführung startende
+     * Testklasse würde diesen Datensatz also ebenfalls "wiederaufnehmen" wollen. Andere
+     * Testklassen räumen ihre eigenen Fixtures nur beim NÄCHSTEN eigenen Lauf auf (per
+     * {@code LIKE}-Muster im jeweiligen {@code seedFixtures()}), decken dieses Gerät aber
+     * nicht zwingend ab - insbesondere die drei {@code *Deconz*}-Testklassen, deren
+     * engeres {@code LIKE 'E2E-Deconz-%'}-Muster diesen Gerätenamen nicht trifft. Da
+     * Surefire die Klassenreihenfolge NICHT alphabetisch, sondern dateisystemabhängig
+     * wählt (lokal reproduzierbar anders als in CI - siehe Änderungslog), konnte dieser
+     * Datensatz in CI (aber nie lokal) direkt vor {@code ClientAutoEndDeconzE2ETest} zu
+     * liegen kommen: dessen Start-Restore-Schleife versuchte daraufhin, dieses (rein
+     * fhem-basierte, {@code deconz_uuid=''}) Gerät über den für DIESEN Client aktiven
+     * deCONZ-Gateway einzuschalten - eine leere deCONZ-Id lässt sich auf keinen
+     * Simulator-Pfad routen (404), was nach den konfigurierten Wiederholungen die gesamte
+     * Initialisierung von {@code ClientAutoEndDeconzE2ETest} zum Absturz brachte, obwohl
+     * der eigentliche Fehler gar nichts mit dessen eigenen Fixtures zu tun hatte. Fix: die
+     * einzige Testklasse im Baum, die bewusst eine dauerhaft unfertige Ausführung seedet,
+     * räumt sie jetzt selbst auf, statt sich auf eine zufällige spätere Testklasse mit
+     * passendem {@code LIKE}-Muster zu verlassen.
+     */
+    private static void cleanupFixtures() {
+        try (Connection c = DriverManager.getConnection(DB_URL, "postgres", "postgres");
+                Statement s = c.createStatement()) {
+            s.executeUpdate("DELETE FROM credit_accounting WHERE execution_id IN "
+                    + "(SELECT id FROM executions WHERE device_id IN "
+                    + "(SELECT id FROM devices WHERE name = '" + DEVICE_NAME + "'))");
+            s.executeUpdate(
+                    "DELETE FROM executions WHERE device_id IN (SELECT id FROM devices WHERE name = '" + DEVICE_NAME
+                            + "')");
+            s.executeUpdate("DELETE FROM devices WHERE name = '" + DEVICE_NAME + "'");
+            s.executeUpdate("DELETE FROM programs WHERE name = '" + PROGRAM_NAME + "'");
+        } catch (Exception e) {
+            // Best effort: ein nicht aufgeräumtes Fixture ist ein Test-Hygiene-Problem,
+            // aber kein Grund, die (bereits erfolgreich geprüften) Assertions dieses
+            // Tests nachträglich scheitern zu lassen.
+        }
     }
 
     @Test
