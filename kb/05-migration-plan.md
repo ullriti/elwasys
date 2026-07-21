@@ -376,6 +376,40 @@ Ziel: gleicher Bedienfluss, neuer Unterbau; kein Direkt-DB-Zugriff mehr vom Rasp
 - [ ] TestFX-/E2E-Suite (C1–C16, P21/P22) gegen den neuen Unterbau grün → Abnahmekriterium
 - [ ] `setup.sh` aktualisieren (fragt Backend-URL/Token; kein DB/SMTP-Setup mehr)
 
+#### Arbeitspakete Phase 4 (Planung 2026-07-21)
+
+Aufteilung der Roadmap-Punkte in sechs **sequenzielle** Arbeitspakete; die Reihenfolge
+folgt dem Leitgedanken „erst absichern, dann umbauen“ (AP1 verstärkt das Sicherheitsnetz,
+bevor AP2–AP6 den Unterbau umbauen). Umsetzung durch Implementierungs-Agenten, QA-Review
+am Phasenende; Befunde gehen als Fix-Aufträge zurück an Implementierungs-Agenten.
+
+| AP | Inhalt | Roadmap-Punkte |
+|---|---|---|
+| AP1 | **Sicherheitsnetz ausbauen** (noch gegen den unveränderten Ist-Stand): deCONZ-Simulator für die Testharness; E2E-Kernszenarien mit **beiden** Gateway-Simulatoren (fhem-Sim existiert); Smoke-Tests für `ui/small` (320×240) | deCONZ-Sim/beide Gateways im E2E; `ui/small` |
+| AP2 | **Client-Unterbau modernisieren**: aktuelles JavaFX (Java 21 schon seit Phase 1) + Logback; deCONZ- **und** fhem-Gateway auf `java.net.http` umstellen (unirest 1.x + HttpComponents 4.x raus); Suite mit beiden Simulatoren grün | JavaFX; Gateway-HTTP |
+| AP3 | **Backend-Vorbereitung (additiv, API v1)**: Inventur aller `DataManager`-/Direkt-DB-Aufrufe des Clients → fehlende Terminal-Endpunkte ergänzen; Idempotenz-Schlüssel für Execution-Meldungen + Replay mit Original-Zeitstempeln; Snapshot-Endpunkt für die Standort-Daten (Vorbereitung Offline-Buchungen); Benachrichtigungen an den API-Execution-Lebenszyklus anbinden (weiterhin hinter `elwasys.notifications.enabled`, scharf erst mit dem AP4-Cutover – kein Doppelversand mit dem Alt-Client) | API-Erweiterungen (Konzeptskizze Punkt 4); Benachrichtigungen (Backend-Seite) |
+| AP4 | **Client-Cutover (Kernstück)**: Datenzugriff auf REST-API (`DataManager`-Nutzung raus), Konfiguration Backend-URL + Terminal-Token statt DB-Credentials, Benachrichtigungsversand aus dem Client entfernen (Zielbetrieb: `elwasys.notifications.enabled` AN), `setup.sh` anpassen; Testharness (`run-ui-tests.sh`/`run-client-e2e.sh`) startet künftig das Backend mit; TestFX-/E2E-Suite C1–C16 gegen den neuen Unterbau grün = Abnahmekriterium | Datenzugriff/Konfig; Benachrichtigungen (Client-Seite); `setup.sh`; Suite |
+| AP5 | **Fernwartung umdrehen**: ausgehende WS-Verbindung des Terminals zum Backend (bestehendes Protokoll HELLO/PING/STATUS_REQUEST/LOG_REQUEST/RESTART_REQUEST bedienen), `MaintenanceServerManager` + IP-Registrierung in `locations` stilllegen; Cross-Component-Suite P21/P22 durch Nachfolgetests über den Backend-Kanal ersetzen | Maintenance |
+| AP6 | **Offline-Robustheit**: laufende Executions bei Backend-Ausfall lokal zu Ende führen und nachmelden; Offline-Buchungen laut Konzeptskizze (Snapshot, Journal, Replay, Zeitfenster); Tests für die Offline-Szenarien (C15-Nachfolger) | Robustheit/Offline-Buchungen |
+
+**Vorläufige Festlegungen zu den offenen Offline-Detailfragen** (Koordinationsentscheidung
+2026-07-21, vom Auftraggeber zu bestätigen – spätestens vor AP6-Beginn):
+
+- `offline.max-duration`: Default **60 Minuten**; danach keine neuen Buchungen (Fehlerbild
+  wie heute C15), laufende Vorgänge werden weiterhin lokal beendet.
+- **Kein Sicherheitsabschlag** aufs gecachte Guthaben (einfachste Regel; durch
+  Offline-Buchungen negativ gewordene Salden werden beim Replay normal verbucht, wie im
+  Konzept vorgesehen).
+- Zwischenzeitlich gesperrte Nutzer: der **Snapshot-Stand gilt** während des Zeitfensters
+  (Sperren sind selten, Schaden begrenzt; konservativere Alternativen verworfen).
+- Snapshot/Journal liegen **unverschlüsselt** auf dem Gerät (keine Passwort-Hashes
+  enthalten; das Terminal-Dateisystem gilt wie bisher als vertrauenswürdig) –
+  dokumentiertes Restrisiko.
+- Benachrichtigungen zu nachgemeldeten Ereignissen versendet das Backend beim Replay;
+  Ereignisse, die älter sind als die maximale Offline-Dauer, werden ohne Versand verbucht.
+- Uhren-Drift: Terminals laufen mit NTP (Raspbian-Default); das Backend akzeptiert
+  Original-Zeitstempel innerhalb Zeitfenster + Toleranz, sonst Server-Zeit + Protokollhinweis.
+
 ### Phase 5 – Ablösung, Härtung, Aufräumen
 - [ ] Alt-Portal-Modul und `Common.DataManager`/Maintenance-Altprotokoll entfernen;
       Common auf das Nötigste schrumpfen oder auflösen
