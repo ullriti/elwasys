@@ -8,9 +8,10 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 import java.util.concurrent.ScheduledFuture;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import org.apache.commons.mail.EmailException;
-import org.json.JSONArray;
-import org.json.JSONObject;
 import org.kabieror.elwasys.common.Execution;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
 import org.kabieror.elwasys.raspiclient.devices.DevicePowerState;
@@ -18,10 +19,10 @@ import org.kabieror.elwasys.raspiclient.devices.IDevicePowerManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.mashape.unirest.http.HttpResponse;
-import com.mashape.unirest.http.JsonNode;
-import com.mashape.unirest.http.Unirest;
-import com.mashape.unirest.http.exceptions.UnirestException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 
 import net.pushover.client.MessagePriority;
 import net.pushover.client.PushoverException;
@@ -41,6 +42,10 @@ class ExecutionFinisher implements Runnable {
     private final ExecutionManager executionManager;
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
+
+    private final Gson gson = new Gson();
+
+    private final HttpClient httpClient = HttpClient.newHttpClient();
 
     private final Object lock = new Object();
 
@@ -210,26 +215,30 @@ class ExecutionFinisher implements Runnable {
                 && this.e.getUser().getPushIonicId() != null
                 && !this.e.getUser().getPushIonicId().isEmpty()) {
             try {
-                HttpResponse<JsonNode> jsonResponse = Unirest.post("https://api.ionic.io/push/notifications")
+                JsonObject notification = new JsonObject();
+                notification.addProperty("title", notificationTitle);
+                notification.addProperty("message", notificationMessageShort);
+                JsonArray userIds = new JsonArray();
+                userIds.add(this.e.getUser().getPushIonicId());
+                JsonObject requestBody = new JsonObject();
+                requestBody.add("user_ids", userIds);
+                requestBody.addProperty("profile", "dev");
+                requestBody.add("notification", notification);
+
+                HttpRequest request = HttpRequest.newBuilder(URI.create("https://api.ionic.io/push/notifications"))
                         .header("PROFILE_TAG", "dev")
                         .header("Authorization", "Bearer " + ElwaManager.instance.getConfigurationManager().getIonicApiToken())
                         .header("Content-Type", "application/json")
-                        .body(new JSONObject()
-                                .put("user_ids", new JSONArray().put(this.e.getUser().getPushIonicId()))
-                                .put("profile", "dev")
-                                .put("notification", new JSONObject()
-                                        .put("title", notificationTitle)
-                                        .put("message", notificationMessageShort))
-                        )
-                        .asJson();
-                if (jsonResponse.getStatus() > 299) {
-                    this.logger.error("Could not send ionic notification. Status: " + jsonResponse.getStatus() + " "
-                            + jsonResponse.getStatusText() + "\n" + jsonResponse.getBody().toString());
+                        .POST(HttpRequest.BodyPublishers.ofString(this.gson.toJson(requestBody)))
+                        .build();
+                HttpResponse<String> jsonResponse = this.httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                if (jsonResponse.statusCode() > 299) {
+                    this.logger.error("Could not send ionic notification. Status: " + jsonResponse.statusCode() +
+                            "\n" + jsonResponse.body());
                 } else {
-                    this.logger.debug("Sent ionic notification. "
-                            + jsonResponse.getStatus() + " " + jsonResponse.getStatusText());
+                    this.logger.debug("Sent ionic notification. " + jsonResponse.statusCode());
                 }
-            } catch (UnirestException e) {
+            } catch (final IOException | InterruptedException e) {
                 this.logger.error("Could not send ionic notification.", e);
             }
         }
