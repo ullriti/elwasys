@@ -27,4 +27,22 @@ public interface UserRepository extends JpaRepository<UserEntity, Integer> {
     Optional<UserEntity> findByCardId(@Param("cardId") String cardId);
 
     Optional<UserEntity> findByUsernameIgnoreCaseAndDeletedFalse(String username);
+
+    /**
+     * Entspricht {@code DataManager#getUserByEmail} (Alt-Portal
+     * {@code PasswordForgotWindow}, Testfall P19): Suche eines nicht gelöschten Benutzers per
+     * Email-Adresse, case-insensitiv (E-Mail-Adressen werden allgemein als
+     * case-insensitiv im lokalen Teil/Domain-Teil behandelt - der Alt-Code selbst vergleicht
+     * SQL-seitig ohnehin ohne explizite Case-Sensitivität, siehe {@code DataManager}).
+     */
+    Optional<UserEntity> findByEmailIgnoreCaseAndDeletedFalse(String email);
+
+    /**
+     * Für die öffentliche Passwort-Reset-Ansicht ({@code ResetPasswordView}, siehe
+     * {@code PasswordResetService#resetPassword}): findet den Benutzer, dem gerade ein
+     * bestimmter Reset-Schlüssel zugeordnet ist (Spalte {@code password_reset_key}, seit der
+     * Alt-Bestandsdatenbank vorhanden - siehe {@code common.User#generatePasswordResetKey}/
+     * {@code #passwordResetKeyIsValid}, hier wiederverwendet statt einer neuen Spalte/Tabelle).
+     */
+    Optional<UserEntity> findByPasswordResetKeyAndDeletedFalse(String passwordResetKey);
 }

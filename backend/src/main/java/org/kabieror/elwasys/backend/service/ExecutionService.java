@@ -9,7 +9,9 @@ import org.kabieror.elwasys.backend.domain.DeviceEntity;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
+import org.kabieror.elwasys.backend.events.ExecutionChangedEvent;
 import org.kabieror.elwasys.backend.repository.ExecutionRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,12 +29,28 @@ public class ExecutionService {
     private final ExecutionRepository executionRepository;
     private final PricingService pricingService;
     private final CreditService creditService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ExecutionService(ExecutionRepository executionRepository, PricingService pricingService,
-            CreditService creditService) {
+            CreditService creditService, ApplicationEventPublisher eventPublisher) {
         this.executionRepository = executionRepository;
         this.pricingService = pricingService;
         this.creditService = creditService;
+        this.eventPublisher = eventPublisher;
+    }
+
+    /**
+     * Veröffentlicht ein {@link ExecutionChangedEvent} für die gegebene Ausführung (Phase 3
+     * AP5, siehe kb/05-migration-plan.md) - gemeinsame Hilfsmethode für alle
+     * lebenszyklus-verändernden Methoden dieser Klasse. Bewusst NICHT in {@link
+     * #stopExecution}, weil diese Methode ausschließlich intern von {@link #finishExecution}
+     * aufgerufen wird (siehe deren Javadoc) - ein zweites Ereignis für denselben Aufruf wäre
+     * redundant.
+     */
+    private void publishChanged(ExecutionEntity execution) {
+        Integer deviceId = execution.getDevice() == null ? null : execution.getDevice().getId();
+        Integer userId = execution.getUser() == null ? null : execution.getUser().getId();
+        this.eventPublisher.publishEvent(new ExecutionChangedEvent(execution.getId(), deviceId, userId));
     }
 
     /**
@@ -43,7 +61,9 @@ public class ExecutionService {
      */
     @Transactional
     public ExecutionEntity createExecution(DeviceEntity device, ProgramEntity program, UserEntity user) {
-        return this.executionRepository.save(new ExecutionEntity(device, program, user));
+        ExecutionEntity execution = this.executionRepository.save(new ExecutionEntity(device, program, user));
+        publishChanged(execution);
+        return execution;
     }
 
     /**
@@ -57,7 +77,9 @@ public class ExecutionService {
             return execution;
         }
         execution.setStart(LocalDateTime.now());
-        return this.executionRepository.save(execution);
+        execution = this.executionRepository.save(execution);
+        publishChanged(execution);
+        return execution;
     }
 
     /**
@@ -87,6 +109,7 @@ public class ExecutionService {
         ExecutionEntity stopped = stopExecution(execution);
         BigDecimal price = getPrice(stopped);
         this.creditService.payExecution(stopped, price);
+        publishChanged(stopped);
         return stopped;
     }
 
@@ -108,7 +131,9 @@ public class ExecutionService {
         execution.setStart(null);
         execution.setStop(null);
         execution.setFinished(true);
-        return this.executionRepository.save(execution);
+        execution = this.executionRepository.save(execution);
+        publishChanged(execution);
+        return execution;
     }
 
     /**
@@ -163,6 +188,34 @@ public class ExecutionService {
     @Transactional(readOnly = true)
     public boolean hasExpiredExecutions(UserEntity user) {
         return getNotFinishedExecutions(user).stream().anyMatch(this::isExpired);
+    }
+
+    /**
+     * 1:1-Portierung des Filters im Konstruktor von
+     * {@code Portal/.../components/ExpiredExecutionsWindow} (Alt-Portal, Phase 3 AP4, siehe
+     * kb/05-migration-plan.md): alle nicht abgerechneten Ausführungen eines Benutzers,
+     * eingeschränkt auf tatsächlich abgelaufene (die reine "läuft noch, ist aber noch nicht
+     * abgelaufen"-Menge aus {@link #getNotFinishedExecutions} wird dort zusätzlich
+     * herausgefiltert).
+     */
+    @Transactional(readOnly = true)
+    public List<ExecutionEntity> getExpiredExecutions(UserEntity user) {
+        return getNotFinishedExecutions(user).stream().filter(this::isExpired).toList();
+    }
+
+    /**
+     * 1:1-Portierung von {@code common.Execution#delete()} (dort zusätzlich gegen
+     * Mehrfachaufruf/virtuelle Ausführungen [{@code id < 0}] geschützt - beides in der Praxis
+     * nicht erreichbar für Ausführungen, die über {@link #getExpiredExecutions} aufgelistet
+     * wurden, siehe {@code ExpiredExecutionsWindow}s "Löschen"-Knopf).
+     */
+    @Transactional
+    public void delete(ExecutionEntity execution) {
+        Integer executionId = execution.getId();
+        Integer deviceId = execution.getDevice() == null ? null : execution.getDevice().getId();
+        Integer userId = execution.getUser() == null ? null : execution.getUser().getId();
+        this.executionRepository.delete(execution);
+        this.eventPublisher.publishEvent(new ExecutionChangedEvent(executionId, deviceId, userId));
     }
 
     /**

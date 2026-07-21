@@ -13,6 +13,7 @@ import org.kabieror.elwasys.backend.domain.DiscountType;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
+import org.kabieror.elwasys.backend.auth.PasswordResetProperties;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 /**
@@ -51,7 +52,8 @@ class NotificationServiceEmailTest {
         mailSender.setPort(ServerSetupTest.SMTP.getPort());
         mailSender.setDefaultEncoding("UTF-8");
 
-        this.service = new NotificationService(this.properties, mailSender, new PushoverClient(this.properties));
+        this.service = new NotificationService(this.properties, mailSender, new PushoverClient(this.properties),
+                new PasswordResetProperties());
     }
 
     private static UserEntity userWithEmail(String email) {

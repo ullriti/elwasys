@@ -40,7 +40,13 @@ Benutzergruppen mit Rabattregel.
   SHA1- als auch Argon2id-kodierte Hashes, siehe „Flyway-Baseline“ unten und
   kb/05-migration-plan.md), `is_admin`
 - `email_notification`, `push_notification`, `pushover_user_key`
-- `password_reset_key`, `password_reset_timeout`
+- `password_reset_key`, `password_reset_timeout` – seit Phase 3 AP4 aktiv vom Backend
+  genutzt (`UserEntity#passwordResetKey`/`#passwordResetTimeout`, Service
+  `PasswordResetService`): fachlicher Nachfolger des Alt-`PasswordForgotWindow`/
+  `ResetPasswordWindow`-Flows, bewusst dieselben Bestandsspalten wiederverwendet statt einer
+  neuen Migration/Tabelle (additiv im Sinne der Rahmenbedingung – Alt-Code liest/schreibt
+  dieselben Spalten weiterhin unverändert, kein Konflikt bei Parallelbetrieb, siehe
+  kb/05-migration-plan.md, „Entscheidungen“)
 - `deleted`, `last_login`, `group_id` → user_groups (Default 1)
 - App-Anbindung: `app_id`, `access_key`, `auth_key` (Trigger `user_authkey_trigger`
   generiert `auth_key` beim INSERT über `generate_user_authkey()`)

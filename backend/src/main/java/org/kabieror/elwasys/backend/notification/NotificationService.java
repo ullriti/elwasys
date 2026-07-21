@@ -3,6 +3,7 @@ package org.kabieror.elwasys.backend.notification;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
+import org.kabieror.elwasys.backend.auth.PasswordResetProperties;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.slf4j.Logger;
@@ -83,11 +84,14 @@ public class NotificationService {
 
     private final PushoverClient pushoverClient;
 
+    private final PasswordResetProperties passwordResetProperties;
+
     public NotificationService(NotificationsProperties properties, JavaMailSender mailSender,
-            PushoverClient pushoverClient) {
+            PushoverClient pushoverClient, PasswordResetProperties passwordResetProperties) {
         this.properties = properties;
         this.mailSender = mailSender;
         this.pushoverClient = pushoverClient;
+        this.passwordResetProperties = passwordResetProperties;
     }
 
     /**
@@ -194,5 +198,62 @@ public class NotificationService {
         } catch (Exception e) {
             this.logger.error("Could not send push notification.", e);
         }
+    }
+
+    /**
+     * 1:1-Portierung von {@code PasswordForgotWindow#execute} (Alt-Portal, Testfall P19,
+     * Phase 3 AP4 - siehe {@code org.kabieror.elwasys.backend.service.PasswordResetService}):
+     * Betreff/Text wortgleich zum Alt-Code. Anders als {@link #dispatch} (Ausführungs-
+     * Benachrichtigungen, Fehler werden geloggt und geschluckt) wirft diese Methode einen
+     * Versandfehler WEITER - der Alt-Code zeigt bei einer {@code EmailException} ebenfalls
+     * einen Fehler im Dialog an, statt ihn stillschweigend zu verschlucken. Ob überhaupt
+     * versucht wird zu versenden, steuert
+     * {@link org.kabieror.elwasys.backend.auth.PasswordResetProperties#isEnabled()} (eigener
+     * Schalter, NICHT {@link NotificationsProperties#isEnabled()} - siehe dessen Javadoc für
+     * die Begründung des separaten Schalters).
+     */
+    public void sendPasswordResetEmail(UserEntity user, String resetUrl) {
+        if (!this.passwordResetProperties.isEnabled()) {
+            this.logger.debug("Passwort-Reset-Mailversand deaktiviert (elwasys.password-reset.enabled=false) - "
+                    + "Reset-Anfrage fuer Benutzer '{}' wird ignoriert.", user.getUsername());
+            return;
+        }
+        String message = "Hallo " + user.getName() + ",\n\n"
+                + "bitte besuche die folgende Webseite zum Setzen eines neuen Passworts.\n" + resetUrl
+                + "\n\n--\nWaschportal";
+        sendEmailOrThrow(user, "Passwort zurücksetzen", message);
+    }
+
+    /**
+     * 1:1-Portierung von {@code UserWindow#save} (Zweig {@code cbSendPassword}, Alt-Portal):
+     * Betreff/Text wortgleich zum Alt-Code. Siehe {@link #sendPasswordResetEmail} für die
+     * Fehlerbehandlungs-/Schalter-Semantik.
+     */
+    public void sendNewPasswordEmail(UserEntity user, String newPassword) {
+        if (!this.passwordResetProperties.isEnabled()) {
+            this.logger.debug("Passwort-Reset-Mailversand deaktiviert (elwasys.password-reset.enabled=false) - "
+                    + "Admin-Passwort-Reset fuer Benutzer '{}' wird ignoriert.", user.getUsername());
+            return;
+        }
+        String message = "Hallo " + user.getName() + ",\n\n"
+                + "hier ist dein neues Passwort für das Waschportal: " + newPassword + "\n"
+                + "Zusammen mit deinem Benutzernamen '" + user.getUsername()
+                + "' kannst du dich jetzt einloggen und dort dein Guthaben und abgebuchte Waschvorgänge ansehen.\n\n"
+                + "--\nWaschportal";
+        sendEmailOrThrow(user, "Waschportal - Neues Passwort", message);
+    }
+
+    /**
+     * Anders als {@link #sendEmail} (schluckt Fehler): wirft eine unchecked Exception weiter,
+     * damit der aufrufende Dialog (analog zum Alt-Code) einen Fehler anzeigen kann.
+     */
+    private void sendEmailOrThrow(UserEntity user, String subject, String content) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(user.getEmail());
+        message.setSubject(subject);
+        message.setText(content);
+        message.setFrom(this.properties.getSmtp().getSenderAddress());
+        this.mailSender.send(message);
+        this.logger.debug("Sent password reset/new-password mail to {}", user.getEmail());
     }
 }

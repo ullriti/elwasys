@@ -33,9 +33,13 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
 
     private final ObjectMapper objectMapper;
 
-    public TerminalWebSocketHandler(TerminalConnectionRegistry connectionRegistry, ObjectMapper objectMapper) {
+    private final TerminalMaintenanceService maintenanceService;
+
+    public TerminalWebSocketHandler(TerminalConnectionRegistry connectionRegistry, ObjectMapper objectMapper,
+            TerminalMaintenanceService maintenanceService) {
         this.connectionRegistry = connectionRegistry;
         this.objectMapper = objectMapper;
+        this.maintenanceService = maintenanceService;
     }
 
     @Override
@@ -66,6 +70,11 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
             case STATUS_RESPONSE ->
                     LOG.debug("Received STATUS_RESPONSE from location {} (session {}) - no handler wired up yet"
                             + " (Fernwartungs-Portierung folgt in Phase 3/4).", locationId(session), session.getId());
+            // Phase 3 AP4: Antworten des Terminals auf eine portal-initiierte
+            // LOG_REQUEST/RESTART_REQUEST (siehe TerminalMaintenanceService) - route sie an
+            // die wartende Anfrage zurück, statt sie (wie alles andere) mit "not-implemented"
+            // zu beantworten.
+            case LOG_RESPONSE, RESTART_RESPONSE -> this.maintenanceService.completeIfPending(incoming);
             default -> send(session, TerminalWsMessage.inReplyTo(incoming, TerminalWsMessageType.ERROR,
                     Map.of("reason", "not-implemented",
                             "detail", "Message type " + incoming.type() + " is not implemented in Phase 2 (AP4).")));

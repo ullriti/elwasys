@@ -36,3 +36,15 @@ Portal/jetty-run.log
 
 # Transient agent worktrees (Claude Code parallel-agent isolation)
 .claude/worktrees/
+
+# Vaadin Flow (Phase 3 AP1, backend module, see kb/05-migration-plan.md): auto-regenerated
+# frontend tooling output (from "vaadin:prepare-frontend"/"vaadin:build-frontend", bound to
+# the Maven build, see backend/pom.xml) - never hand-edited, always safe to delete/regenerate.
+backend/src/main/frontend/generated/
+backend/node_modules/
+backend/package.json
+backend/package-lock.json
+backend/pnpm-lock.yaml
+backend/types.d.ts
+backend/vite.generated.ts
+backend/tsconfig.json

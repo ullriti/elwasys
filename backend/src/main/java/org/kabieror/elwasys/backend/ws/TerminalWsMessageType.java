@@ -7,13 +7,26 @@ package org.kabieror.elwasys.backend.ws;
  * heute Portal-&gt;Client; das neue Protokoll läuft über dieselbe ausgehende
  * Terminal-&gt;Backend-Verbindung, die auch für den Kartenlogin/die Geräteliste genutzt wird).
  *
- * <p>Phase 2 (AP4) implementiert nur das Fundament: Verbindungsaufbau (HELLO/HELLO_ACK),
+ * <p>Phase 2 (AP4) implementierte nur das Fundament: Verbindungsaufbau (HELLO/HELLO_ACK),
  * Heartbeat (PING/PONG) und ein Status-Anfrage/Antwort-Paar als Gerüst
- * (STATUS_REQUEST/STATUS_RESPONSE). Log-/Restart-Nachrichten (fachliche Referenz:
- * {@code GetLogRequest}/{@code GetLogResponse}/{@code RestartAppRequest} in
- * {@code Common.maintenance}) folgen inhaltlich erst mit der vollen
- * Fernwartungs-Portierung in Phase 3/4, sind hier aber bereits als reservierte Typen
- * angelegt, damit das Nachrichtenformat nicht erneut brechend geändert werden muss.
+ * (STATUS_REQUEST/STATUS_RESPONSE); LOG_REQUEST/LOG_RESPONSE/RESTART_REQUEST waren dort noch
+ * rein reservierte Typen (jede Anfrage dieser Typen wurde serverseitig mit
+ * {@code ERROR{reason:"not-implemented"}} beantwortet).
+ *
+ * <p><b>Phase 3 AP4</b> (siehe kb/05-migration-plan.md, Roadmap-Punkt "Fernwartung"):
+ * {@code LOG_REQUEST}/{@code RESTART_REQUEST} werden jetzt tatsächlich verwendet - allerdings
+ * PORTAL-INITIIERT (Server fragt das Terminal, nicht umgekehrt), vermittelt über
+ * {@link TerminalMaintenanceService}. {@code LOG_RESPONSE} (fachliche Referenz
+ * {@code GetLogResponse}, Payload {@code {"lines": [...]}}) sowie das neue
+ * {@code RESTART_RESPONSE} (Bestätigung des Terminals, dass ein Neustart entgegengenommen
+ * wurde - im Alt-Protokoll gab es dafür keine Entsprechung, {@code RestartAppRequest} wurde
+ * dort "fire-and-forget" verschickt) werden vom {@link TerminalWebSocketHandler} an
+ * wartende Anfragen des {@link TerminalMaintenanceService} zurückgeroutet. Ein tatsächlicher
+ * Terminal-seitiger Handler für {@code LOG_REQUEST}/{@code RESTART_REQUEST} existiert noch
+ * nicht (Alt-Clients sprechen bis Phase 4 weiterhin das Alt-TCP-Protokoll, siehe
+ * kb/05-migration-plan.md) - eine Anfrage an ein nicht verbundenes Terminal schlägt daher
+ * bewusst SOFORT serverseitig fehl ({@link TerminalMaintenanceService}), ohne eine
+ * Nachricht zu senden.
  */
 public enum TerminalWsMessageType {
     /** Client (Terminal) -&gt; Server: Verbindungsaufbau, Client-Version/Metadaten. */
@@ -28,12 +41,14 @@ public enum TerminalWsMessageType {
     STATUS_REQUEST,
     /** Beide Richtungen: Antwort auf {@link #STATUS_REQUEST}. */
     STATUS_RESPONSE,
-    /** Reserviert für Phase 3/4 (fachliche Referenz: {@code GetLogRequest}). */
+    /** Server -&gt; Client (seit Phase 3 AP4): Bitte um den aktuellen Log-Inhalt. */
     LOG_REQUEST,
-    /** Reserviert für Phase 3/4 (fachliche Referenz: {@code GetLogResponse}). */
+    /** Client -&gt; Server (seit Phase 3 AP4): Antwort auf {@link #LOG_REQUEST}, Payload {@code {"lines": [...]}}. */
     LOG_RESPONSE,
-    /** Reserviert für Phase 3/4 (fachliche Referenz: {@code RestartAppRequest}). */
+    /** Server -&gt; Client (seit Phase 3 AP4): Bitte, die Anwendung neu zu starten. */
     RESTART_REQUEST,
+    /** Client -&gt; Server (seit Phase 3 AP4, neu): Bestätigung von {@link #RESTART_REQUEST}. */
+    RESTART_RESPONSE,
     /** Server -&gt; Client oder Client -&gt; Server: Protokoll-/Verarbeitungsfehler. */
     ERROR
 }
