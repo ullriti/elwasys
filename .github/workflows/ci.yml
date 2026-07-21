@@ -2,11 +2,11 @@ name: CI
 
 # Run the test suites on every pull request (and on pushes to master, so the
 # default branch stays green). Jobs mirror the documented local runner scripts (see
-# kb/06-ui-tests.md, kb/05-migration-plan.md "Phase 3 AP6"): common/client/backend build+test
-# their module, portal-legacy-build keeps the still-in-repo Alt-Portal module compiling
-# (Playwright E2E against it is STILLGELEGT - superseded by backend-e2e, see that job's
-# comment), backend-e2e is the new Playwright suite (P1-P20) against the Vaadin-Flow Portal.
-# The Cross-Component maintenance-channel suite (P21/P22) needs neither Portal module. Since
+# kb/06-ui-tests.md, kb/05-migration-plan.md "Phase 5 AP1"): common/client/backend build+test
+# their module, backend-e2e is the Playwright suite (P1-P20) against the Vaadin-Flow Portal
+# (the Alt-Portal module and its own Playwright suite were removed in Phase 5 AP1 - it had
+# been STILLGELEGT as an E2E target since Phase 3 AP6, superseded by backend-e2e). The
+# Cross-Component maintenance-channel suite (P21/P22) needs no Portal module either. Since
 # Phase 4 AP5 (Fernwartung umgedreht, see kb/05-migration-plan.md) it exercises the outgoing
 # terminal WebSocket channel instead of the retired Alt-TCP protocol: a real, packaged
 # Client-Raspi jar talks to a real backend Spring context (TerminalMaintenanceRealClientE2ETest,
@@ -38,9 +38,7 @@ jobs:
 
       # JDK 21, not 17: since Phase 1, Common/Client-Raspi compile at language
       # level 21 (maven.compiler.release=21 in the parent POM). Every job below
-      # builds Common first, so all of them need a >= 21 JDK, even
-      # portal-legacy-build (Portal itself still compiles at 1.8, but the
-      # runner JDK must satisfy Common's release level to build it at all).
+      # builds Common first, so all of them need a >= 21 JDK.
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -52,7 +50,7 @@ jobs:
         # Build via the root reactor (-pl Common -am) so the aggregator
         # parent POM is installed into the local repo too — a plain
         # "mvn -f Common/pom.xml install" would not install it, and the
-        # Client-Raspi/Portal jobs need it on the runner to resolve Common.
+        # Client-Raspi/backend jobs need it on the runner to resolve Common.
         run: mvn -B -f pom.xml install -pl Common -am
 
   # ---------------------------------------------------------------------------
@@ -117,41 +115,14 @@ jobs:
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
-  # Alt-Portal (Vaadin 7 WAR) – STILLGELEGT als Playwright-E2E-Ziel (Phase 3 AP6, siehe
-  # kb/05-migration-plan.md / kb/06-ui-tests.md): die alte Suite (Portal/e2e, P1-P20) ist durch
-  # backend/e2e (siehe unten) abgelöst und läuft hier nicht mehr. Das Alt-Portal-MODUL bleibt
-  # laut Roadmap bis Phase 5 im Repo und wird deshalb weiterhin gebaut - nicht weil die
-  # Cross-Component-Suite (P21/P22, "client"-Job oben) es bräuchte (sie hängt nur an Common's
-  # MaintenanceServer, siehe Client-Raspi/run-cross-component-e2e.sh - kein Portal-Bezug),
-  # sondern damit eine Portal-Regression trotzdem auffällt, solange der Code noch da ist.
-  # ---------------------------------------------------------------------------
-  portal-legacy-build:
-    name: Alt-Portal (Build, stillgelegt als E2E-Ziel)
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'liberica'
-          cache: maven
-
-      - name: Build Alt-Portal
-        # Via den Root-Reactor (-pl Portal -am), damit die Parent-POM + Common mit aufgelöst
-        # werden (siehe Kommentar im "common"-Job oben) - Tests laufen bewusst nicht mit (die
-        # fachliche Prüfung läuft jetzt über backend/e2e, siehe unten).
-        run: mvn -B -f pom.xml package -pl Portal -am -DskipTests
-
-  # ---------------------------------------------------------------------------
   # Backend Portal (Vaadin Flow) – Playwright E2E (Phase 3 AP6 Abnahmekriterium, siehe
   # kb/05-migration-plan.md / kb/06-ui-tests.md). backend/e2e/scripts/start-backend.sh boots
   # PostgreSQL, creates a fresh dedicated E2E database, builds the backend jar in production
   # mode (mvn package -Pproduction - the only build mode verified to run without a Vaadin
   # dev-mode license check, see kb/05-migration-plan.md "Phase 3 AP2") and runs it; the P1-P20
   # test plan (kb/08-test-plan.md) is exercised against it in Chromium. Fachlicher Nachfolger
-  # des ehemaligen "portal"-Jobs oben.
+  # des Alt-Portal-Playwright-Ziels (Portal/e2e, Vaadin 7), das mitsamt dem Alt-Portal-Modul in
+  # Phase 5 AP1 entfernt wurde.
   # ---------------------------------------------------------------------------
   backend-e2e:
     name: Backend Portal (Playwright E2E)

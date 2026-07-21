@@ -2,23 +2,25 @@
 
 ## Common (`org.kabieror.elwasys.common`)
 
-Gemeinsame Bibliothek (JAR), Dependency von Client & Portal. Java 8.
+Gemeinsame Bibliothek (JAR), Dependency von Client-Raspi (`backend` bezieht sie nur noch
+test-scope, für die Auth-Parity-Tests). Java-Sprachlevel folgt seit Phase 1 dem
+Parent-POM-Default (21).
 
-**Datenmodell-Klassen** (Domain + DB-Mapping):
-`User`, `UserGroup`, `Device`, `Location`, `Program`, `ProgramType`, `Execution`,
-`CreditAccountingEntry`, `DiscountType`.
+**In Phase 5 AP1 (2026-07-21) auf das Nötigste geschrumpft**: `DataManager` (zentraler
+Alt-DB-Zugriff), die Alt-Domänenklassen (`User`, `UserGroup`, `Device`, `Location`, `Program`,
+`Execution`, `CreditAccountingEntry`), `DiscountType`, `NotEnoughCreditException` sowie das
+komplette `maintenance/`-Paket (Alt-TCP-Fernwartungsprotokoll) wurden entfernt – sie waren seit
+dem Client-Cutover (Phase 4 AP4/AP5) bzw. mit dem Alt-Portal-Modul (unten) ungenutzt. Details/
+Testzahlen siehe kb/05-migration-plan.md, Änderungslog „Phase 5 AP1".
 
-**Infrastruktur**:
+**Verbliebene Klassen** (`src/main/java/org/kabieror/elwasys/common/`):
 - `ConfigurationManager` – Basis-Konfigurationsverwaltung
-- `DataManager` – zentraler DB-Zugriff (Connection, Laden/Speichern der Entitäten)
-- `FormatUtilities`, `Utilities` (enthält `APP_VERSION`)
-- Exceptions: `NotEnoughCreditException`, `LocationOccupiedException`, `NoDataFoundException`
+- `Utilities` (enthält `APP_VERSION`, Passwort-Hilfsfunktionen inkl. `sha1`), `FormatUtilities`
+- `ProgramType` – Enum, von Client-Raspi weiterhin genutzt
+- Exceptions: `LocationOccupiedException`, `NoDataFoundException`
 
-**maintenance/** – Fernwartungsprotokoll (siehe 01-architecture.md):
-Nachrichtenklassen, `MaintenanceServer`/`MaintenanceClient`, Handler-Interfaces,
-`data/InterfaceStatus`, `data/BacklightStatus`.
-
-**resources/**: `database-init.sql`, `database-upgrade/*.sql`, ISO-Warn-SVGs.
+**resources/** (unverändert, weiterhin Seed-Quelle der Test-Harnesses):
+`database-init.sql`, `database-upgrade/*.sql`, ISO-Warn-SVGs.
 
 ## Client-Raspi (`org.kabieror.elwasys.raspiclient`)
 
@@ -194,43 +196,20 @@ eigene, ältere `httpcomponents:httpclient:4.2.1` mit – außerhalb des AP2-Auf
 `pushover-client` ist inzwischen komplett aus `Client-Raspi/pom.xml` entfernt [siehe oben],
 diese transitive Altlast ist damit ebenfalls weg).
 
-## Portal (`org.kabieror.elwasys.webportal`) – ⚠️ STILLGELEGT (Phase 3 AP6, 2026-07-21)
+## Portal (`org.kabieror.elwasys.webportal`) – ⚠️ ENTFERNT (Phase 5 AP1, 2026-07-21)
 
 > **Fachlich abgelöst** durch das neue, ins Backend eingebettete Portal
-> (`backend/.../ui/`, Vaadin Flow – siehe „Portal-UI (Vaadin Flow)" weiter unten).
-> Feature-Parität ist über die neue Playwright-Suite (`backend/e2e/`, P1–P20, siehe
-> kb/06-ui-tests.md) nachgewiesen; die alte Playwright-Suite (`Portal/e2e/`) läuft nicht mehr
-> in der CI. **Der Code dieses Moduls bleibt laut Roadmap bis Phase 5 im Repo** (siehe
-> kb/05-migration-plan.md) – nicht gelöscht, nur nicht mehr Teil des E2E-Abnahmepfads. Die CI
-> baut das Modul weiterhin (Job `portal-legacy-build` in `.github/workflows/ci.yml`), damit
-> Regressionen am liegengebliebenen Code trotzdem auffallen, solange er existiert. Die
-> Fernwartungsverbindung (`MaintenanceConnectionManager`, Testfälle P21/P22) ist seit Phase 4
-> AP5 (2026-07-21) fachlich TOT: der Client-Raspi spricht das dafür nötige Alt-TCP-Protokoll
-> nicht mehr (siehe kb/01-architecture.md „Maintenance-Protokoll (Common)"). Der Code dieses
-> Moduls (inkl. `MaintenanceConnectionManager`) bleibt trotzdem unverändert bis Phase 5 im
-> Repo (Rahmenbedingung „Portal/ nicht anfassen"). Die alte Cross-Component-E2E-Suite
-> (`Client-Raspi/run-cross-component-e2e.sh`, Testplan P21/P22) ist durch eine neue Suite über
-> den Backend-WS-Kanal ersetzt (siehe kb/06-ui-tests.md) – sie hängt an `backend/` statt an
-> diesem Modul.
-
-Vaadin-7-Webanwendung (WAR). Java 8. 36 Java-Dateien.
-
-**Struktur** (siehe 01-architecture.md):
-- Einstieg `WaschportalUI`, Layouts (Public/User/Administrator)
-- `views/` – Dashboards & Listenansichten
-- `components/` – modale CRUD-Fenster & Hilfskomponenten
-- Manager: `WashportalManager`, `SessionManager`, `MaintenanceConnectionManager`
-- `events/` – Update-Listener-Interfaces
-- `WashportalConfiguration`, `WashportalUtilities`
-
-**Ressourcen**: `MyAppWidgetset.gwt.xml`, `defaultconfig.properties`,
-`webapp/VAADIN/themes/waschportal/` (SCSS-Theme, Bilder, favicon).
-
-**Konfiguration**: `/etc/elwaportal/elwaportal.properties` (Beispiel:
-`elwaportal.example.properties`). Keys: `database.*`, `smtp.*`, `maintenance.timeout`.
-
-**Build/Run**: `mvn install` (Common zuerst) → `mvn jetty:run` (Port 8080).
-Achtung: Vaadin-/GWT-Widgetset-Compilation ist langsam und ressourcenintensiv.
+> (`backend/.../ui/`, Vaadin Flow – siehe „Portal-UI (Vaadin Flow)" weiter unten), bereits seit
+> Phase 3 AP6 (2026-07-21) mit voller Feature-Parität (nachgewiesen über `backend/e2e/`,
+> P1–P20, siehe kb/06-ui-tests.md). Das Alt-Portal-Modul war seither nur noch als reines
+> CI-Build-Ziel im Repo (`portal-legacy-build`-Job) und ist **in Phase 5 AP1 vollständig aus
+> dem Repository entfernt worden** (Vaadin-7-WAR, `Common.DataManager`-basiert, ~36
+> Java-Dateien, Manager `WashportalManager`/`SessionManager`/`MaintenanceConnectionManager`).
+> Die alte Fernwartungsverbindung (`MaintenanceConnectionManager`, Testfälle P21/P22) war
+> bereits seit Phase 4 AP5 fachlich tot (Client-Raspi spricht das dafür nötige Alt-TCP-Protokoll
+> nicht mehr); ihr Nachfolger läuft über den Backend-WS-Kanal (siehe kb/06-ui-tests.md,
+> `Client-Raspi/run-cross-component-e2e.sh`) und ist von dieser Entfernung nicht betroffen.
+> Details/Testzahlen zur Entfernung: kb/05-migration-plan.md, Änderungslog „Phase 5 AP1".
 
 ## Backend (`org.kabieror.elwasys.backend`) – seit Phase 2 AP1
 

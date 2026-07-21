@@ -3,13 +3,13 @@
 ## Build-Reihenfolge
 
 Seit Phase 1 (2026-07-20) gibt es ein **Aggregator-/Parent-POM** (`/pom.xml`,
-`packaging=pom`, Module `Common`/`Client-Raspi`/`Portal`, gemeinsame Version
+`packaging=pom`, Module `Common`/`Client-Raspi`/`backend`, gemeinsame Version
 `0.0.0-local-development`, zentrale `dependencyManagement` für
 postgresql/logback/slf4j-api/commons-email, `maven.compiler.release=21` als
 Default). Wichtig: Ein isoliertes `mvn -f Common/pom.xml install` installiert
 **nur** das `common`-Artefakt ins lokale Repo, **nicht** die Parent-POM selbst –
 andere Module, die `common` später als Dependency auflösen (Client-Raspi,
-Portal), scheitern dann mit `Could not find artifact
+backend), scheitern dann mit `Could not find artifact
 org.kabieror.elwasys:elwasys-parent:pom:...`. Deshalb immer über den
 Root-Reactor bauen, wenn Common isoliert installiert werden soll:
 
@@ -22,82 +22,32 @@ mvn -f pom.xml install -pl Common -am -DskipTests
 mvn -f Client-Raspi/pom.xml package
 #   → target/raspi-client-<version>-jar-with-dependencies.jar
 
-# 2b. Portal bauen (WAR) bzw. lokal starten
-mvn -f Portal/pom.xml package      # → target/*.war
-#   oder Entwicklungsserver:
-mvn -f Portal/pom.xml jetty:run    # http://localhost:8080
-
-# 2c. Backend bauen (Spring-Boot-Jar, seit Phase 2 AP1) – der main-Code hat keinen
+# 2b. Backend bauen (Spring-Boot-Jar, seit Phase 2 AP1) – der main-Code hat keinen
 #     Common-Bezug, daher reicht für "package"/"package -DskipTests" ein direkter
 #     Aufruf ohne -am. Für "mvn test -pl backend" wird Common vorher benötigt (seit AP2
-#     test-scope-Dependency für Alt-vs-Neu-Vergleichstests, siehe unten).
+#     test-scope-Dependency für Auth-Parity-Tests, siehe unten).
 mvn -f pom.xml package -pl backend
 #   → target/elwasys-backend.jar (ausführbar: java -jar backend/target/elwasys-backend.jar)
 
-# Alternative: kompletter Reactor-Build aller vier Module in einem Aufruf
+# Alternative: kompletter Reactor-Build aller drei Module in einem Aufruf
 mvn install   # von der Repo-Wurzel aus
 ```
 
-Portal friert sein javac-Sprachlevel weiterhin explizit auf 1.8
-(`project.source.version`/`-target.version` in `Portal/pom.xml`) ein –
-unabhängig vom `maven.compiler.release=21`-Default des Parents (Vaadin 7/GWT 2.7
-ist nicht für neuere Sprachlevel getestet). Der Build-JDK selbst ist weiterhin 21.
-
-> ✅ Portal-Build in der Remote-Umgebung repariert (2026-07-19), siehe unten.
-
-### Portal-Build: durchgeführte Reparaturen (2026-07-19)
-
-Der Portal-Build war mehrfach kaputt. Behoben in `Portal/pom.xml` +
-`WaschportalUI.java` + `DeviceWindow.java`:
-
-1. **Versionskonflikt**: `common`-Dependency `0.3.4-SNAPSHOT` → `0.0.0-local-development`
-   (wie von Common/Client/CI verwendet).
-2. **Tote HTTP-Repos entfernt**: `vaadin-addons` (http, von Maven 3.9 geblockt),
-   `vaadin-snapshots` (403), `codehaus-snapshots` (http, tot). Alle benötigten Vaadin-7-
-   Artefakte liegen auf Maven Central.
-3. **Widgetset-Kompilation entfernt**: `vaadin-maven-plugin` + `gwt-maven-plugin`-Blöcke
-   raus. Die App nutzt nur `com.vaadin.DefaultWidgetSet` (vorkompiliert in
-   `vaadin-client-compiled`); `MyAppWidgetset` erbt nur davon, keine Add-ons. Servlet in
-   `WaschportalUI` auf `com.vaadin.DefaultWidgetSet` gestellt. → kein langsamer GWT-Compile.
-4. **`maven-war-plugin` 2.3 → 3.4.0**: 2.3 ist mit JDK 21 inkompatibel
-   (`module java.base does not "opens java.util"`).
-5. **PostgreSQL-Treiber `9.3-1103` → `42.6.0`**: der alte Treiber kann kein
-   SCRAM-SHA-256 (Default-Auth bei PostgreSQL ≥ 14).
-6. **API-Drift behoben**: `DeviceWindow` gegen die aktuelle `Common.Device`-API
-   aktualisiert (deCONZ-UUID-Feld ergänzt: Formularfeld + create/modify/edit).
-7. **Jetty-Plugin `9.2.3` → `9.4.53`**: JDK-21-tauglich, weiterhin `javax.servlet`
-   (passt zu Vaadin 7).
-
-**Verifiziert**: `mvn package` erzeugt das WAR; `mvn jetty:run` liefert die Vaadin-Login-
-Seite (HTTP 200, Titel „Waschportal", DefaultWidgetSet, DB-Verbindung ok).
-
-### Portal lokal starten (Remote-Umgebung)
-
-```bash
-# 1. PostgreSQL starten & DB initialisieren
-sudo pg_ctlcluster 16 main start
-sudo -u postgres psql -f Common/resources/database-init.sql
-sudo -u postgres psql -c "ALTER USER elwaportal WITH PASSWORD 'elwaportal';"
-
-# 2. Config bereitstellen (/etc/elwaportal/elwaportal.properties)
-#    database.user=elwaportal, database.password=elwaportal, database.name=elwasys
-
-# 3. Common (+ Parent-POM) installieren, Portal starten
-mvn -f pom.xml install -pl Common -am -DskipTests
-mvn -f Portal/pom.xml jetty:run        # http://localhost:8080  (Login: admin/admin)
-```
+> **Phase 5 AP1 (2026-07-21)**: das Alt-Portal-Modul (`Portal/`, Vaadin 7 WAR) wurde
+> komplett aus dem Repo entfernt (war seit Phase 3 AP6 nur noch als CI-Build-Ziel ohne
+> eigenes E2E vorhanden, siehe kb/03-modules.md). Root-Reactor jetzt 3 statt 4 Module.
 
 ### Backend bauen, testen, lokal starten (seit Phase 2 AP1, JPA/Services seit AP2, REST-API/WS seit AP4)
 
 Neues Modul `backend/` (Spring Boot 3.x, siehe kb/01-architecture.md, kb/03-modules.md).
-Läuft zur Laufzeit weiterhin unabhängig von Common/Client-Raspi/Portal (eigenes
-Datenmodell, keine Laufzeit-Abhängigkeit) – seit AP2 hat es aber eine **test-scope**-
-Abhängigkeit auf `common` (Alt-vs-Neu-Vergleichstests, siehe kb/05-migration-plan.md), die
+Läuft zur Laufzeit unabhängig von Common/Client-Raspi (eigenes Datenmodell, keine
+Laufzeit-Abhängigkeit) – seit AP2 hat es aber eine **test-scope**-Abhängigkeit auf `common`
+(seit Phase 5 AP1 nur noch für die Auth-Parity-Tests, siehe kb/05-migration-plan.md), die
 für den Testklassenpfad in der lokalen Maven-Repo verfügbar sein muss:
 
 ```bash
 # Common (+ Parent-POM) erst installieren, sonst schlägt "mvn test -pl backend" beim
-# Auflösen der test-scope-Abhängigkeit auf common fehl (Muster wie bei Client-Raspi/Portal):
+# Auflösen der test-scope-Abhängigkeit auf common fehl (Muster wie bei Client-Raspi):
 mvn -f pom.xml install -pl Common -am -DskipTests
 
 # Bauen (nur kompilieren/packen, ohne Tests) - reicht ohne obigen Schritt, da main-Code
@@ -249,10 +199,6 @@ java -Djavafx.platform=gtk \
 4 AP5 entfallen – er diente ausschließlich der Verifikation des TLS-Zertifikats der jetzt
 entfallenen Datenbankverbindung.)
 
-### Portal (`/etc/elwaportal/elwaportal.properties`)
-Siehe `Portal/elwaportal.example.properties`. Keys: `database.*`, `smtp.*`,
-`maintenance.timeout`.
-
 ### Datenbank
 PostgreSQL, initialisiert über `Common/resources/database-init.sql` (legt DB `elwasys`,
 Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).
@@ -270,7 +216,6 @@ Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).
   statt Datenbank-/SMTP-Zugangsdaten ab (Datenbankzugang bleibt als transitionale Zusatzfrage
   für die Fernwartungs-Registrierung bestehen, siehe „Client" oben und
   kb/05-migration-plan.md).
-- **Portal**: WAR auf Servlet-Container/Jetty deployen; `elwaportal.properties` bereitstellen.
 - **Backend** (seit Phase 2 AP6, siehe kb/05-migration-plan.md): Container-Image
   (`backend/Dockerfile`), Betrieb per docker-compose oder Kubernetes/Helm - siehe unten.
 
@@ -285,8 +230,8 @@ Multi-Stage: Maven-Build (Root-Reactor, zwei Aufrufe wie oben dokumentiert: erst
 `install -pl Common -am -DskipTests`, dann `package -pl backend -DskipTests`) → schlankes
 `eclipse-temurin:21-jre-jammy`-Runtime-Image, non-root User (UID/GID 1000), `HEALTHCHECK`
 gegen `/actuator/health`. `.dockerignore` an der Repo-Wurzel hält den Build-Kontext klein
-(Client-Raspi/Portal-Quellcode wird für den Backend-Build nicht gebraucht, nur deren
-`pom.xml`, damit Maven den Reactor parsen kann).
+(Client-Raspi-Quellcode wird für den Backend-Build nicht gebraucht, nur dessen `pom.xml`,
+damit Maven den Reactor parsen kann).
 
 ### Backend: docker-compose
 
@@ -365,30 +310,25 @@ Das Klartext-Token erscheint GENAU EINMAL in der Ausgabe.
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` *(seit 2026-07-20, JDK-Version am 2026-07-20 im
-Phase-1-QA-Review korrigiert; Backend-Job seit Phase 2 AP1, 2026-07-20; Portal/Backend-E2E-Jobs
-seit Phase 3 AP6, 2026-07-21 – siehe kb/05-migration-plan.md, kb/06-ui-tests.md)*:
+Phase-1-QA-Review korrigiert; Backend-Job seit Phase 2 AP1, 2026-07-20; backend-e2e-Job seit
+Phase 3 AP6, 2026-07-21; das frühere `portal-legacy-build`-Job mitsamt dem Alt-Portal-Modul
+in Phase 5 AP1, 2026-07-21 entfernt – siehe kb/05-migration-plan.md, kb/06-ui-tests.md)*:
 - Trigger: jeder Pull Request + Pushes auf `master`
-- 5 parallele Jobs: **common** / **client** (inkl. Cross-Component-Suite P21/P22) /
-  **portal-legacy-build** / **backend-e2e** / **backend** – Build + Tests, spiegeln die
+- 4 parallele Jobs: **common** / **client** (inkl. Cross-Component-Suite P21/P22) /
+  **backend-e2e** / **backend** – Build + Tests, spiegeln die
   lokalen Runner-Skripte (`run-ui-tests.sh` etc., siehe kb/06) bzw. für Backend
   `backend/run-backend-tests.sh` als lokales Analogon.
-- **JDK 21** (Liberica) in **allen fünf** Jobs – nicht mehr JDK 17: Seit Phase 1
-  verlangt der Parent-POM-Default `maven.compiler.release=21` für Common/
-  Client-Raspi; ein JDK 17 kann `--release 21` nicht bedienen
-  (`invalid target release: 21`). Jeder Job baut Common zuerst
-  (`mvn -f pom.xml install -pl Common -am`), braucht also ein >= 21-JDK, obwohl Portal selbst
-  weiterhin mit Sprachlevel 1.8 kompiliert.
-- **portal-legacy-build** (seit Phase 3 AP6, 2026-07-21, ersetzt den früheren `portal`-Job):
-  baut NUR noch das Alt-Portal-Modul (`mvn package -pl Portal -am -DskipTests`), OHNE
-  Playwright-E2E dagegen laufen zu lassen – die Alt-Suite (`Portal/e2e/`) ist als E2E-Ziel
-  stillgelegt (Code bleibt bis Phase 5 im Repo, siehe kb/03-modules.md). Zweck: eine
-  Regression am liegengebliebenen Alt-Portal-Code fällt trotzdem auf, solange er existiert.
+- **JDK 21** (Liberica) in **allen vier** Jobs – nicht mehr JDK 17: Seit Phase 1
+  verlangt der Parent-POM-Default `maven.compiler.release=21` für alle Module. Ein JDK 17
+  kann `--release 21` nicht bedienen (`invalid target release: 21`). Jeder Job baut Common
+  zuerst (`mvn -f pom.xml install -pl Common -am`), braucht also ein >= 21-JDK.
 - **backend-e2e** (seit Phase 3 AP6, 2026-07-21, fachlicher Nachfolger des früheren
-  `portal`-Jobs): Playwright-E2E (P1–P20) gegen das neue, ins Backend eingebettete
-  Vaadin-Flow-Portal – `backend/e2e/scripts/start-backend.sh` baut das Backend-Jar im
-  Produktionsmodus (`mvn package -Pproduction`, kein Vaadin-Lizenzcheck-Show-Stopper, siehe
-  unten) und startet es gegen eine frische, dedizierte PostgreSQL-Datenbank. Details/
-  Selektor-Strategie/Test-Status in kb/06-ui-tests.md.
+  `portal`-Jobs bzw. des seit Phase 5 AP1 entfernten Alt-Portal-Moduls): Playwright-E2E
+  (P1–P20) gegen das neue, ins Backend eingebettete Vaadin-Flow-Portal –
+  `backend/e2e/scripts/start-backend.sh` baut das Backend-Jar im Produktionsmodus
+  (`mvn package -Pproduction`, kein Vaadin-Lizenzcheck-Show-Stopper, siehe unten) und startet
+  es gegen eine frische, dedizierte PostgreSQL-Datenbank. Details/Selektor-Strategie/
+  Test-Status in kb/06-ui-tests.md.
 - **backend-Job**: nutzt **Testcontainers** (nicht den Local-PG-Ansatz der Client-/
   backend-e2e-Jobs), weil GitHub-Actions-`ubuntu-24.04`-Runner einen Docker-Daemon mitbringen
   (anders als diese Sandbox-Entwicklungsumgebung, siehe kb/07-cloud-init.md) – das ist der von
