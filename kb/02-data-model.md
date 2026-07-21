@@ -56,7 +56,14 @@ Benutzergruppen mit Rabattregel.
 ### locations
 Ein Standort = ein Client-Terminal.
 - `id`, `name` (unique)
-- `client_uid`, `client_ip`, `client_port`, `client_last_seen` (vom Client gepflegt)
+- `client_uid`, `client_ip`, `client_port`, `client_last_seen` – **obsolet seit Phase 4 AP5**
+  (2026-07-21): dienten der Alt-IP-Registrierung für die Fernwartung (`LocationManager`, siehe
+  kb/01-architecture.md „Maintenance-Protokoll (Common)“) – der Client schreibt/liest diese
+  Spalten nicht mehr (die Fernwartung läuft jetzt über eine vom Terminal ausgehende
+  WebSocket-Verbindung, `TerminalConnectionRegistry` im Backend hält die Erreichbarkeit rein
+  in-memory, siehe kb/03-modules.md). Die Spalten bleiben laut Roadmap **bis Phase 5**
+  bestehen (KEINE Migration entfernt Bestandsspalten in Phase 4) – Entfall per additiver
+  Migration ist für Phase 5 vorgesehen.
 - Seed: `Default`
 
 ### locations_valid_user_groups

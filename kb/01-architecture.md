@@ -37,8 +37,10 @@
   *(Phase 4 AP2, 2026-07-21: 20 → 23.0.2, höchste stabile Version, die noch auf dem
   festgelegten Java-21-Client läuft – siehe kb/05-migration-plan.md)*
 - **pi4j 1.0** – GPIO-Zugriff auf dem Raspberry Pi
-- **Spring Boot Starter WebSocket 3.1.0** – für Maintenance-Verbindung und den deCONZ-WS-Client
-  (`StandardWebSocketClient`)
+- **Spring Boot Starter WebSocket 3.1.0** – für die ausgehende Terminal-WebSocket-Verbindung
+  zum Backend (`ws/TerminalWebSocketClient`, seit Phase 4 AP5 – Fernwartung: Status/Log/
+  Restart, siehe unten) und den deCONZ-WS-Client (`StandardWebSocketClient`), beide über
+  dasselbe Muster (`StandardWebSocketClient`/`TextWebSocketHandler`)
 - deCONZ-REST/Event-API: `java.net.http` (JDK, kein Fremd-Client) – unirest/HttpComponents
   wurden hierfür entgegen einer älteren Annahme nie gebraucht, siehe kb/03-modules.md
 - Gson `2.10.1` – JSON für die REST-API v1 (`api/ApiClient`, seit Phase 4 AP4 der primäre
@@ -83,10 +85,11 @@ Ohne Flag wird die Displaygröße automatisch anhand der Bildschirmbreite erkann
 Zentrale Komponenten:
 
 - **`ElwaManager`** (Singleton) – zentraler Manager, hält Verweise auf Configuration,
-  `ApiClient` (seit Phase 4 AP4 der primäre Datenzugriffspfad, siehe kb/03-modules.md),
-  ExecutionManager, MainFormController, Location; ein zusätzlicher `DataManager` bleibt
-  transitional bis Phase 4 AP5 nur noch für die Fernwartungs-Registrierung
-  (`LocationManager`) bestehen; koordiniert Start/Stop.
+  `ApiClient` (seit Phase 4 AP4 der primäre und – seit Phase 4 AP5 – EINZIGE
+  Datenzugriffspfad, siehe kb/03-modules.md), `ws/TerminalWebSocketClient` (seit Phase 4
+  AP5: die ausgehende Fernwartungs-Verbindung zum Backend, ersetzt den ehemaligen
+  `DataManager`/`LocationManager`/`MaintenanceServerManager`-Pfad – kein Direkt-DB-Zugriff
+  mehr im Terminal), ExecutionManager, MainFormController, Location; koordiniert Start/Stop.
 - **UI** (`ui/`): zwei Varianten, `small` (320×240) und `medium` (800×480). Medium ist die
   Hauptvariante. FXML + Controller pro View.
   - **State-Machine**: `MainFormState` (Enum) + `MainFormStateManager` +
@@ -106,10 +109,15 @@ Zentrale Komponenten:
   - Interfaces: `IDevicePowerManager`, `IDeviceRegistrationService`,
     `IDevicePowerMeasurementHandler`, `DevicePowerState`.
 - **`io/`**: `CardReader` (RFID über `TelnetClient`), Card-Events.
-- **`configuration/`**: `WashguardConfiguration`, `LocationManager` – liest
-  `elwasys.properties`.
-- **`application/MaintenanceServerManager`** – stellt die serverseitige Maintenance-
-  Verbindung bereit (Gegenstelle zum Portal).
+- **`configuration/`**: `WashguardConfiguration` – liest `elwasys.properties`. (Das ehemalige
+  `LocationManager` – Direkt-DB-Registrierung des Standorts – ist seit Phase 4 AP5 entfernt,
+  siehe unten.)
+- **`ws/TerminalWebSocketClient`** *(neu, Phase 4 AP5)* – die ausgehende WebSocket-Verbindung
+  zum Backend (`/api/v1/terminal-ws`, dasselbe Standort-Token wie `ApiClient`); bedient
+  HELLO/PING sowie die portal-initiierten Fernwartungs-Anfragen STATUS_REQUEST/LOG_REQUEST/
+  RESTART_REQUEST. Ersetzt das ehemalige `application/MaintenanceServerManager` (serverseitige
+  Maintenance-Verbindung, Gegenstelle zum Portal über das Alt-TCP-Protokoll) – die Richtung
+  ist umgedreht, siehe „Kommunikationswege“ unten und kb/03-modules.md.
 
 ## Portal-Architektur (Vaadin)
 
@@ -129,9 +137,9 @@ Zentrale Komponenten:
 - **Konfiguration**: `WashportalConfiguration` liest
   `/etc/elwaportal/elwaportal.properties`.
 
-## Maintenance-Protokoll (Common)
+## Maintenance-Protokoll (Common) – ⚠️ STILLGELEGT für den Client (Phase 4 AP5, 2026-07-21)
 
-Package `common.maintenance`: Nachrichtenbasiertes Protokoll mit
+Package `common.maintenance`: Nachrichtenbasiertes Alt-TCP-Protokoll mit
 `MaintenanceMessage`/`MaintenanceRequest`/`MaintenanceResponse` und konkreten Nachrichten:
 - Connection: `ConnectionRequest/Response`, `CloseConnectionMessage`,
   `CheckConnectionRequest/Response`
@@ -141,26 +149,46 @@ Package `common.maintenance`: Nachrichtenbasiertes Protokoll mit
   `IClientConnection`, `IMaintenanceMessageHandler`
 - Datenobjekte (`data/`): `InterfaceStatus`, `BacklightStatus`
 
-Der Client startet einen `MaintenanceServer` (Port aus `maintenance.port`, Default 3591),
-das Portal verbindet sich als `MaintenanceClient`. Der Client registriert in der DB-Tabelle
-`locations` seine `client_ip`, `client_port`, `client_uid`, `client_last_seen`, damit das
-Portal weiß, wie es ihn erreicht.
+Bis Phase 4 AP5 startete der Client einen `MaintenanceServer` (Port aus `maintenance.port`,
+Default 3591), das Portal verband sich als `MaintenanceClient`; der Client registrierte in der
+DB-Tabelle `locations` seine `client_ip`, `client_port`, `client_uid`, `client_last_seen`,
+damit das Portal wusste, wie es ihn erreicht.
+
+**Seit Phase 4 AP5 spricht der Client-Raspi dieses Protokoll nicht mehr** (`application/
+MaintenanceServerManager` und `configuration/LocationManager` sind aus `Client-Raspi/src/main`
+entfernt) – die Fernwartung läuft jetzt über die vom Terminal ausgehende
+Backend-WebSocket-Verbindung, siehe `ws/TerminalWebSocketClient` oben und „Kommunikationswege“
+unten. Der Package-Code selbst (`Common.maintenance.*`) bleibt laut Roadmap **bis Phase 5** im
+Repo – das Alt-Portal (`Portal/`, bis Phase 5 unverändert im Repo, siehe kb/03-modules.md)
+nutzt `MaintenanceClient`/`MaintenanceConnectionManager` weiterhin in seinem eigenen,
+unangetasteten Code, spricht damit aber seit AP5 fachlich ins Leere (kein Client hört mehr
+zu) – dasselbe Bild wie bereits seit Phase 3 AP6 für das übrige Alt-Portal (stillgelegt als
+E2E-/Produktivziel, Code bleibt bestehen). Die Spalten `client_ip`/`client_port`/`client_uid`/
+`client_last_seen` in `locations` werden **nicht mehr beschrieben/gelesen**, aber laut Roadmap
+**nicht** per Migration entfernt (siehe kb/02-data-model.md, Entfall erst Phase 5).
 
 ## Kommunikationswege (Zusammenfassung)
 
-**Stand seit Phase 4 AP4 (2026-07-21, Terminal-Cutover)**: Weg 1 unten ist beim
-Client-Raspi-Terminal keine Datenzugriffsschicht mehr, sondern NUR noch für die transitional
-verbliebene Fernwartungs-Registrierung (`LocationManager`) genutzt (bis AP5); alle übrigen
-Terminal-Datenzugriffe laufen über Weg 8 (siehe unten). Wege 5/6 (Client → SMTP/Pushover)
-sind mit dem Cutover entfallen – der Client verschickt keine Benachrichtigungen mehr selbst
-(siehe kb/05-migration-plan.md, Änderungslog „Phase 4 AP4“).
+**Stand seit Phase 4 AP5 (2026-07-21, Fernwartung umgedreht)**: der Client-Raspi hat **keinen
+Direkt-DB-Zugriff mehr** (Weg 1 unten ist vollständig entfallen, nicht nur geschrumpft) – alle
+Terminal-Datenzugriffe (Fachdaten UND Fernwartung) laufen über die Backend-Wege 8/9 (siehe
+unten). Weg 3 (`Portal ⇄ Client`-Maintenance-WebSocket, Alt-TCP-Protokoll) ist damit fachlich
+tot (kein Client hört mehr zu), der Code (Alt-Portal + `Common.maintenance.*`) bleibt aber laut
+Roadmap bis Phase 5 im Repo. Wege 5/6 (Client → SMTP/Pushover) sind bereits mit dem AP4-Cutover
+entfallen – der Client verschickt keine Benachrichtigungen mehr selbst (siehe
+kb/05-migration-plan.md, Änderungslog „Phase 4 AP4“).
 
-1. **Client ⇄ DB** (PostgreSQL, User `elwaclient1`, eingeschränkte Rechte) – seit Phase 4 AP4
-   NUR noch für die Fernwartungs-Registrierung, siehe oben.
+1. ~~**Client ⇄ DB**~~ (PostgreSQL, User `elwaclient1`) – **entfallen seit Phase 4 AP5**: die
+   letzte verbliebene Nutzung (Fernwartungs-Registrierung über `LocationManager`) ist mit der
+   Umstellung auf Weg 9 (unten) weggefallen; der DB-User `elwaclient1` und die dazugehörigen
+   `elwasys.properties`-Schlüssel (`database.*`) werden vom Client nicht mehr gebraucht (siehe
+   kb/04-build-and-run.md). `Common.DataManager` ist damit vollständig aus dem
+   Client-Raspi-Produktivcode raus (kein `DataManager`/JDBC-Import mehr in `src/main`).
 2. **Portal ⇄ DB** (PostgreSQL, User `elwaportal`, volle CRUD-Rechte außer credit_accounting-
    Änderungen)
-3. **Portal ⇄ Client** (Maintenance-WebSocket, für Fernwartung) – bleibt bis Phase 4 AP5 in
-   Betrieb (siehe kb/05-migration-plan.md, „Entscheidungen“)
+3. ~~**Portal ⇄ Client** (Maintenance-WebSocket/Alt-TCP-Protokoll)~~ – **fachlich tot seit
+   Phase 4 AP5** (siehe „Maintenance-Protokoll (Common)“ oben); Code bleibt bis Phase 5 im
+   Repo, wird aber von keinem Client mehr bedient.
 4. **Client ⇄ deCONZ** (REST + WebSocket-Events, für Schalten & Leistungsmessung)
 5. ~~**Client → SMTP** (E-Mail-Benachrichtigung)~~ – entfallen seit Phase 4 AP4, Backend
    versendet zentral (siehe Weg 8, `NotificationService`)
@@ -169,23 +197,27 @@ sind mit dem Cutover entfallen – der Client verschickt keine Benachrichtigunge
    (`app_id`/`access_key`/`auth_key` in `users`, Tabelle `reservations`), App-Code nicht in
    diesem Repo.
 
-## Neues Backend: Terminal-API/WebSocket (seit Phase 2 AP4, produktiv genutzt seit Phase 4 AP4)
+## Neues Backend: Terminal-API/WebSocket (seit Phase 2 AP4, vollständig produktiv seit Phase 4 AP5)
 
 Zusätzlich zu den obigen (Alt-Code-)Kommunikationswegen, die bis zum jeweiligen Cutover
 (Phase 3 Portal, Phase 4 Terminal) unverändert weiterliefen, bietet das neue Backend seit
 Phase 2 AP4 zwei neue, parallele Wege an. **Seit Phase 4 AP4 ist Weg 8 der primäre
-Datenzugriffspfad des Terminals** (Weg 1 oben ist auf die Fernwartungs-Registrierung
-geschrumpft); Weg 9 wird erst mit der Fernwartungs-Umkehr in AP5 tatsächlich vom Terminal
-ausgehend verbunden.
+Datenzugriffspfad des Terminals**; **seit Phase 4 AP5 ist Weg 9 zusätzlich der einzige
+Fernwartungsweg** – zusammen sind das jetzt ALLE Terminal-Datenzugriffe (kein Weg 1 mehr, siehe
+oben).
 
 8. **Terminal ⇄ Backend REST** (`/api/v1/**`, Standort-Token im `Authorization: Bearer`-
    Header) – Kartenlogin, Geräte-/Programmliste, Execution-Lebenszyklus, Guthaben. Seit
    Phase 4 AP4 der primäre Datenzugriffspfad des Client-Raspi (`api/ApiClient` in
    `Client-Raspi/.../api/`, siehe kb/03-modules.md).
 9. **Terminal ⇄ Backend WebSocket** (`/api/v1/terminal-ws`, dasselbe Standort-Token beim
-   Handshake) – Kanal-Fundament für Ereignis-Push und die künftige Fernwartung (Status/Logs/
-   Restart, fachliche Referenz `Common.maintenance.*`); ersetzt ab AP5 Weg 3
-   (`Portal ⇄ Client`-Maintenance-WebSocket) durch eine vom Terminal ausgehende Verbindung -
-   bis dahin verbindet sich der Client hier noch nicht.
+   Handshake, dauerhaft vom Terminal ausgehend gehalten) – Ereignis-Push-Fundament UND, seit
+   Phase 4 AP5, der tatsächliche Fernwartungskanal (Status/Log/Restart – fachlicher Nachfolger
+   von `Common.maintenance.*`/Weg 3): der Client (`ws/TerminalWebSocketClient`) bedient
+   portal-initiierte STATUS_REQUEST/LOG_REQUEST/RESTART_REQUEST-Nachrichten, die das Backend
+   (`TerminalMaintenanceService`) auf Anfrage der Portal-Admin-UI über GENAU diese Verbindung
+   verschickt – ersetzt damit vollständig Weg 3 (`Portal ⇄ Client`-Maintenance-WebSocket) samt
+   der IP-Registrierung in `locations` (`client_ip`/`-port`/`-uid`/`-last_seen`, jetzt obsolet,
+   siehe kb/02-data-model.md).
 
-Vollständige Endpunkt-/Nachrichtenreferenz: kb/03-modules.md (Abschnitt Backend, AP4).
+Vollständige Endpunkt-/Nachrichtenreferenz: kb/03-modules.md (Abschnitt Backend, AP4/AP5).

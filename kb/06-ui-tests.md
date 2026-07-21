@@ -184,9 +184,50 @@ bringen dafür jetzt ein echtes, laufendes Backend mit:
   grün. Kein Zusammenhang mit dem Backend-Cutover, keine Regression – bereits vor AP4 als
   gelegentlicher Timing-Flake bekannt (siehe Phase-4-AP2-Änderungslog-Eintrag).
 
-**Aktuelle Testzahlen (Phase 4 AP4, 2026-07-21)**: `run-client-e2e.sh` **28/28** (2×
+**Testzahlen Phase 4 AP4 (2026-07-21, historisch)**: `run-client-e2e.sh` **28/28** (2×
 reproduziert), `run-ui-tests.sh` **46/46** (18 Unit-/Charakterisierungstests + 28 E2E),
-`run-cross-component-e2e.sh` **3/3**.
+`run-cross-component-e2e.sh` (Alt-TCP-Protokoll, `ClientMaintenanceConnectionE2ETest`) **3/3**.
+
+## Client (JavaFX) – Cross-Component-/Fernwartungs-Suite umgestellt (Phase 4 AP5, 2026-07-21)
+
+Mit der Fernwartungs-Umkehr (siehe kb/05-migration-plan.md „Arbeitspakete Phase 4" AP5,
+kb/03-modules.md „Ausgehende Fernwartungs-Verbindung") spricht der Client-Raspi das Alt-TCP-
+Protokoll nicht mehr – `application/MaintenanceServerManager` und `configuration/
+LocationManager` sind aus `Client-Raspi/src/main` entfernt, damit auch der bisherige
+Cross-Component-Test `ClientMaintenanceConnectionE2ETest` (verband sich gegen einen echten
+`Common.MaintenanceServer` als „Portal"): **entfernt**, ersetzt durch
+`backend/src/test/java/.../ws/TerminalMaintenanceRealClientE2ETest.java` (siehe
+kb/03-modules.md für die volle Beschreibung des Testaufbaus – Backend-Spring-Kontext mit
+echter `TerminalMaintenanceService`-Bean als „Portal", ein echter, gepackter Client-Raspi-Jar
+als Subprozess als „Terminal", Status/Log/Restart-Roundtrips über den echten WS-Kanal).
+
+**Auswirkung auf die bestehenden Client-Zahlen**: da die 3 alten Cross-Component-Tests
+(Log/Status/Restart) aus `Client-Raspi/src/test` (Klassenname endete auf `E2ETest`, daher
+sowohl in `run-ui-tests.sh`s ungefiltertem `mvn test` als auch in `run-client-e2e.sh`s
+`-Dtest='*E2ETest'`-Filter mitgezählt) ersatzlos entfernt sind (ihr Nachfolger lebt jetzt im
+`backend`-Modul, einem eigenen Testlauf), sinken beide Zahlen um 3:
+- `run-ui-tests.sh`: **46 → 43/43** grün (keine sonstige Änderung – 18 Unit-/
+  Charakterisierungstests + 25 E2E).
+- `run-client-e2e.sh`: **28 → 25/25** grün (2× reproduziert).
+- Neue, eigenständige Suite: `Client-Raspi/run-cross-component-e2e.sh` (gleicher Dateiname/
+  Pfad, komplett neuer Inhalt – siehe unten) treibt jetzt `TerminalMaintenanceRealClientE2ETest`
+  im `backend`-Modul an: **3/3** grün (Status/Log/Restart), 2× reproduziert.
+
+**`run-cross-component-e2e.sh` (Phase 4 AP5, neuer Inhalt)**: installiert Common, baut den
+Client-Raspi-Jar (`mvn package -DskipTests`, KEIN Backend-Jar-Build/-Start nötig – der
+Backend-Spring-Kontext wird vom JUnit-Test selbst über `@SpringBootTest(webEnvironment=
+RANDOM_PORT)` gestartet, siehe kb/03-modules.md), löst die JavaFX-Plattform-Module aus dem
+lokalen Maven-Repo auf (`--module-path`/`--add-modules javafx.controls,javafx.fxml,
+javafx.web` – ein Standard-JDK kann ein `java -jar` dieses Application-Subclass-Fat-Jars sonst
+nicht starten: `Error: JavaFX runtime components are missing`, siehe Skript-Kommentar für die
+volle Begründung), bereitet eine frische, leere Postgres-Testdatenbank vor (analog zu
+`backend/run-backend-tests.sh` – Flyway migriert sie über den Testkontext, kein
+`database-init.sql`-Seeding nötig, der Test legt Standort/Token selbst über die echten
+Repositories an) und startet die Suite unter `xvfb-run` (`mvn -f backend/pom.xml test
+-Dtest=TerminalMaintenanceRealClientE2ETest`) – der reale Client-Subprozess braucht ein
+Display, `-Dtest=...` überschreibt gezielt den in `backend/pom.xml` konfigurierten
+Standard-Ausschluss dieser Testklasse aus dem normalen `mvn test`-Lauf (siehe
+kb/03-modules.md).
 
 ## Alt-Portal (Vaadin 7) – Playwright E2E ⚠️ STILLGELEGT (Phase 3 AP6, 2026-07-21)
 
@@ -388,8 +429,10 @@ nutzen). Bis dahin: ElwaManager-freie Views zuerst testen.
 - [x] **Backend-(Vaadin-Flow-)Portal-E2E mit Playwright** – P1–P20 vollständig (inkl. neu
       ergänztem P11), siehe „Backend (Vaadin Flow)" oben (Phase 3 AP6, 2026-07-21,
       Abnahmekriterium für Phase 3 erfüllt)
-- [x] Cross-Component-E2E (P21/P22, Wartungsverbindung) – läuft weiterhin gegen das Alt-TCP-
-      Protokoll bis Phase 4 (siehe kb/05-migration-plan.md), Teil des „client"-CI-Jobs
+- [x] Cross-Component-E2E (P21/P22, Wartungsverbindung) – lief gegen das Alt-TCP-Protokoll bis
+      Phase 4 AP4; **seit Phase 4 AP5 (2026-07-21) ersetzt** durch
+      `TerminalMaintenanceRealClientE2ETest` (Backend-Modul, echter WS-Kanal), siehe „Client
+      (JavaFX) – Cross-Component-/Fernwartungs-Suite umgestellt" oben
 - [x] **Phase 4 AP1**: `DeconzSimulator` (REST+WebSocket, siehe „deCONZ-Simulator + beide
       Gateways im E2E" oben) + drei deCONZ-Pendants zu bestehenden fhem-Kernszenario-Tests
       (`ClientUsageDeconzE2ETest`/`ClientAutoEndDeconzE2ETest`/
@@ -404,3 +447,13 @@ nutzen). Bis dahin: ElwaManager-freie Views zuerst testen.
       behoben (Vaadin-Dev-Modus-Lizenzcheck ohne `-Pproduction`, siehe dort). Client-Suite
       weiterhin **46/46**/**28/28**/**3/3**, Backend-Suite **198/198**, Root-Reactor-Build
       grün
+- [x] **Phase 4 AP5**: Fernwartung umgedreht (ausgehende Terminal-WebSocket-Verbindung,
+      `MaintenanceServerManager`/`LocationManager` entfernt), Cross-Component-Suite auf den
+      echten Backend-WS-Kanal umgestellt (siehe „Client (JavaFX) – Cross-Component-/
+      Fernwartungs-Suite umgestellt" oben). Client-Suite **46/46 → 43/43**
+      (`run-ui-tests.sh`), **28/28 → 25/25** (`run-client-e2e.sh`, 2× reproduziert) – Rückgang
+      um jeweils 3 durch den Wegfall von `ClientMaintenanceConnectionE2ETest`, siehe oben für
+      die Begründung. Neue, eigenständige Cross-Component-Suite (`backend`-Modul) **3/3** grün,
+      2× reproduziert. Backend-Suite **198/198 → 199/199** (1 neuer `requestStatus`-Unit-Test
+      in `TerminalWebSocketTest`; `TerminalMaintenanceRealClientE2ETest` läuft separat, siehe
+      oben, und zählt NICHT in dieser Zahl). Root-Reactor-Build grün.

@@ -24,16 +24,20 @@ Nachrichtenklassen, `MaintenanceServer`/`MaintenanceClient`, Handler-Interfaces,
 
 JavaFX-Terminal, fat-jar. Java 16.
 
-**Datenzugriff seit Phase 4 AP4 (2026-07-21, Client-Cutover) umgestellt**: `Common.DataManager`
-ist als primärer Datenzugriffspfad raus, ersetzt durch die REST-API v1 des Backends
-(`api/ApiClient`). Ein `DataManager` bleibt transitional bestehen, aber NUR noch für die
-Fernwartungs-Registrierung (`configuration/LocationManager`) bis Phase 4 AP5 die ausgehende
-WebSocket-Verbindung übernimmt – siehe kb/05-migration-plan.md, Änderungslog „Phase 4 AP4“.
+**Datenzugriff seit Phase 4 AP5 (2026-07-21, Fernwartung umgedreht) vollständig umgestellt**:
+`Common.DataManager` ist komplett aus `Client-Raspi/src/main` raus (kein `DataManager`-/JDBC-
+Import mehr) – die REST-API v1 des Backends (`api/ApiClient`, seit Phase 4 AP4) und die neue,
+vom Terminal ausgehende WebSocket-Verbindung (`ws/TerminalWebSocketClient`, seit Phase 4 AP5)
+sind jetzt die EINZIGEN Datenzugriffspfade. Der zuvor transitional verbliebene Zugriffspunkt
+(Fernwartungs-Registrierung über `configuration/LocationManager` + serverseitiges
+`application/MaintenanceServerManager`) ist ersatzlos entfernt – siehe
+kb/05-migration-plan.md, Änderungslog „Phase 4 AP5“.
 
 **Pakete** (siehe 01-architecture.md für Details):
-- `application/` – `Main`, `ElwaManager` (Singleton, verdrahtet seit AP4 einen `ApiClient` +
-  den transitional verbliebenen `DataManager`), `MaintenanceServerManager`,
-  `SingleInstanceManager`, `ActionContainer`, `ApplicationInterfaceType`, Close-Listener
+- `application/` – `Main`, `ElwaManager` (Singleton, verdrahtet einen `ApiClient` [AP4] + seit
+  AP5 einen `ws/TerminalWebSocketClient`), `SingleInstanceManager`, `ActionContainer`,
+  `ApplicationInterfaceType`, Close-Listener. (`MaintenanceServerManager` ist seit AP5
+  entfernt, s. u.)
 - `api/` – **neu (Phase 4 AP4)**: `ApiClient` (schlanke REST-Schicht auf `java.net.http`,
   Standort-Token als `Authorization: Bearer`, `Idempotency-Key`-Header für
   Execution-Endpunkte), `ApiException`, `dto/` (Records: `CardLoginRequest`,
@@ -41,6 +45,13 @@ WebSocket-Verbindung übernimmt – siehe kb/05-migration-plan.md, Änderungslog
   `ExecutionEndRequest`/`-StartRequest`, `LocationDto`, `ProgramDto`,
   `UpdateDeconzUuidRequest`, `UserDto`) – 1:1 an die Backend-REST-API v1 angelehnt (siehe
   kb/03, Abschnitt „REST-API v1“ weiter unten)
+- `ws/` – **neu (Phase 4 AP5)**: `TerminalWebSocketClient` (die ausgehende Fernwartungs-
+  Verbindung zum Backend, `/api/v1/terminal-ws`, dasselbe Standort-Token wie `api/ApiClient`;
+  Technologie: `org.springframework.web.socket.client.standard.StandardWebSocketClient`,
+  identisches Muster zu `devices/deconz/DeconzEventListener`), `TerminalWsMessage`/
+  `TerminalWsMessageType` (Client-seitiges Gegenstück zum Backend-Protokoll, siehe „WebSocket-
+  Endpunkt“ weiter unten) – siehe Abschnitt „Ausgehende Fernwartungs-Verbindung (AP5)“ weiter
+  unten für Details (Auth/Heartbeat/Reconnect/Fachfunktionen).
 - `model/` – **neu (Phase 4 AP4)**: `ClientDevice`/`ClientExecution`/`ClientProgram`/
   `ClientUser` – bilden über den `ApiClient` befüllte Adapterklassen, die den
   Identitäts-Cache nachbilden, den `Common.DataManager` intern führte (wichtig für
@@ -59,8 +70,53 @@ WebSocket-Verbindung übernimmt – siehe kb/05-migration-plan.md, Änderungslog
   RegistrationService, `model/`), `FhemDevicePowerManager`, Interfaces, `DevicePowerState`
 - `io/` – `CardReader`, `TelnetClient`, Card-Events
 - `configuration/` – `WashguardConfiguration` (liest seit AP4 `backend.url`/`backend.token`
-  statt DB-Zugangsdaten, siehe unten), `LocationManager` (transitional, s. o.)
+  statt DB-Zugangsdaten, siehe unten). (`LocationManager` ist seit AP5 entfernt, s. o.)
 - `util/` – `BlockingMap`
+
+### Ausgehende Fernwartungs-Verbindung (AP5, 2026-07-21, Package `ws/`)
+
+Ersetzt `application/MaintenanceServerManager` (Client lauschte als TCP-Server, Portal wählte
+über eine in `locations` registrierte IP an – NAT-/Firewall-unfreundlich, siehe
+kb/05-migration-plan.md „Zielarchitektur“ Punkt 3) durch eine **vom Terminal ausgehende**,
+dauerhafte WebSocket-Verbindung zum Backend – dieselbe Richtung wie bereits die REST-API v1
+(AP4).
+
+- **Transport/Technologie**: `org.springframework.web.socket.client.standard.
+  StandardWebSocketClient` + `TextWebSocketHandler` (`spring-boot-starter-websocket`, im
+  Client bereits Dependency, identisches Muster zu `devices/deconz/DeconzEventListener` – kein
+  neuer Client eingeführt).
+- **Auth**: derselbe Standort-Token wie `api/ApiClient`, als `Authorization: Bearer <token>`-
+  Header beim WebSocket-Handshake (geprüft von derselben `TerminalApiSecurityConfig`-Kette wie
+  die REST-Endpunkte, siehe kb/03 „Standort-Token-Auth“ oben). **Kein neuer Konfig-Schlüssel**
+  nötig – `backend.url`/`backend.token` bedienen jetzt REST UND WebSocket.
+- **Verbindungsaufbau**: `HELLO` (Payload `clientVersion`, `clientUid`) direkt nach
+  `afterConnectionEstablished`, Backend antwortet `HELLO_ACK`.
+- **Heartbeat**: rein reaktiv – das Backend sendet periodisch `PING`
+  (`TerminalHeartbeatScheduler`), der Client antwortet nur mit `PONG`; ein eigener,
+  Client-initiierter Heartbeat ist nicht nötig (das Backend erkennt eine tote Verbindung über
+  sein eigenes 90s-Timeout).
+- **Reconnect**: bei Verbindungsfehler/-abbruch automatischer Reconnect mit exponentiell
+  wachsender Wartezeit (5s bis max. 5min) – identisches Muster zu
+  `DeconzEventListener#scheduleReconnect`. Die Verbindung überlebt einen vom Portal
+  ausgelösten Neustart bewusst (`onClose(restart=true)` baut NICHT ab, s. u.).
+- **Fachfunktionen** (bedient dieselben drei Anfragen, die früher über das Alt-TCP-Protokoll
+  liefen):
+  - `STATUS_REQUEST` (portal-initiiert, additiv im Backend ergänzt – siehe „WebSocket-
+    Endpunkt“ unten): Antwort enthält `clientVersion`, `startupTime` und die Ids aller aktuell
+    laufenden Ausführungen (rein lokal aus `ExecutionManager#getRunningExecutions()`, kein
+    Netzwerkzugriff nötig) – fachlicher Nachfolger von `GetStatusRequest`/`GetStatusResponse`.
+    Ergänzt (nicht ersetzt) die bereits seit AP4 bestehende, roundtrip-freie
+    „Verbunden“/„Verbunden seit“-Anzeige im Admin-Dashboard (`TerminalConnectionRegistry
+    #isConnected`/`#connectedSince`) sowie die je Gerät bereits sichtbaren laufenden
+    Ausführungen (Testfall P20, seit Phase 3 AP3, unabhängig vom Maintenance-Kanal).
+  - `LOG_REQUEST`: aktueller Inhalt der Logdatei (`Utilities#getCurrentLogFile()`) – fachlicher
+    Nachfolger von `GetLogRequest`/`GetLogResponse`.
+  - `RESTART_REQUEST`: `ElwaManager#restart()` – anders als das Alt-Protokoll (dort
+    „fire-and-forget“) bestätigt der Client den Empfang zuerst mit `RESTART_RESPONSE`, bevor
+    der Neustart ausgeführt wird.
+- Alle drei Anfragen sind PORTAL-initiiert (Backend → Terminal, vermittelt über
+  `TerminalMaintenanceService`, siehe „WebSocket-Endpunkt“ unten) – der Client sendet nur
+  `HELLO` und Antworten, nie selbst eine Anfrage.
 
 **FXML** (unter `ui/small/` und `ui/medium/components/`): MainForm + DevicePane, WaitPane,
 ConfirmationPane, ToolbarPane, ErrorPane, AbortPane, UserSettingsPane, StartupPane,
@@ -72,14 +128,18 @@ Phase 4 AP1 – `deconzsimulator/` (`DeconzSimulator`/`DeconzWebSocketServer`/`S
 fake deCONZ über REST + einen selbst geschriebenen minimalen WebSocket-Server, JDK-only,
 keine neue Abhängigkeit) als austauschbare Gateway-Doubles für die `Client*E2ETest`-Klassen.
 
-**Konfiguration** (Stand Phase 4 AP4, 2026-07-21): `elwasys.properties` (Beispiel:
-`elwasys.example.properties`). Wichtige Keys: `backend.url`/`backend.token` (**neu, primärer
-Datenzugriffspfad** – Backend-Basis-URL + Standort-Token statt DB-Zugangsdaten, siehe
-kb/04-build-and-run.md), `database.*` (**transitional**, nur noch für die
-Fernwartungs-Registrierung, bis Phase 4 AP5), `location`, `displayTimeout`, `startupDelay`,
-`sessionTimeout`, `portalUrl`, `deconz.*` **oder** `fhem.*`, `maintenance.port`. Die zuvor
-hier dokumentierten `smtp.*`/`pushover.*`-Keys **entfallen** – der Client verschickt seit AP4
-keine Benachrichtigungen mehr selbst (siehe unten).
+**Konfiguration** (Stand Phase 4 AP5, 2026-07-21): `elwasys.properties` (Beispiel:
+`elwasys.example.properties`). Wichtige Keys: `backend.url`/`backend.token` (**einziger
+Datenzugriffspfad seit AP5** – Backend-Basis-URL + Standort-Token, bedient sowohl die REST-API
+als auch die ausgehende Fernwartungs-WebSocket-Verbindung, siehe kb/04-build-and-run.md),
+`location` (nur noch Anzeigename, z. B. in Fehlermeldungen), `displayTimeout`, `startupDelay`,
+`sessionTimeout`, `portalUrl`, `deconz.*` **oder** `fhem.*`. Die zuvor hier dokumentierten
+`smtp.*`/`pushover.*`-Keys sind seit AP4 entfallen (der Client verschickt keine
+Benachrichtigungen mehr selbst, siehe unten); **seit AP5 zusätzlich entfallen**: `database.*`
+(DB-Zugangsdaten, zuvor transitional für die Fernwartungs-Registrierung) und
+`maintenance.server`/`maintenance.port`/`maintenance.ip` (der Client lauscht nicht mehr als
+Server, siehe „Ausgehende Fernwartungs-Verbindung“ oben). `setup.sh` fragt entsprechend keine
+Datenbank-/Maintenance-Port-Werte mehr ab.
 
 **Abhängigkeiten (Stand Phase 4 AP4, 2026-07-21)**: `javafx-controls`/`-fxml`/`-web`
 **23.0.2** (zuvor 20 – die höchste über Maven Central verfügbare stabile JavaFX-Version,
@@ -95,9 +155,11 @@ unirest-java:1.4.9`, `org.apache.httpcomponents:httpclient:4.5.13`/`httpasynccli
 unten). **Seit AP4 zusätzlich entfernt**: `pushover-client` und `commons-email` (Client
 verschickt keine Benachrichtigungen mehr selbst, das Backend übernimmt zentral – siehe
 kb/03-modules.md, Abschnitt „Benachrichtigungsdienst“ weiter unten und
-kb/05-migration-plan.md, Änderungslog „Phase 4 AP4“). `pi4j-core`,
-`spring-boot-starter-websocket`, `gson` (jetzt primär für `api/ApiClient`s JSON-(De-)
-Serialisierung genutzt) unverändert.
+kb/05-migration-plan.md, Änderungslog „Phase 4 AP4“). `pi4j-core`, `gson` (jetzt primär für
+`api/ApiClient`s JSON-(De-)Serialisierung genutzt, seit AP5 auch für `ws/TerminalWsMessage`)
+unverändert. `spring-boot-starter-websocket` (bereits vor AP5 Dependency, für den
+deCONZ-WS-Client) wird seit AP5 zusätzlich tatsächlich für `ws/TerminalWebSocketClient`
+verwendet (kein neuer Dependency-Zugang nötig).
 
 **HTTP-Client-Umstellung auf `java.net.http` (Phase 4 AP2)**: die Roadmap-Annahme, `devices/
 deconz/` nutze noch unirest/HttpComponents für REST, traf beim Nachprüfen **nicht mehr zu** –
@@ -134,10 +196,14 @@ diese transitive Altlast ist damit ebenfalls weg).
 > kb/05-migration-plan.md) – nicht gelöscht, nur nicht mehr Teil des E2E-Abnahmepfads. Die CI
 > baut das Modul weiterhin (Job `portal-legacy-build` in `.github/workflows/ci.yml`), damit
 > Regressionen am liegengebliebenen Code trotzdem auffallen, solange er existiert. Die
-> Fernwartungsverbindung (`MaintenanceConnectionManager`, Testfälle P21/P22) bleibt bis Phase 4
-> in Betrieb (siehe kb/05-migration-plan.md, „Entscheidungen") – die Cross-Component-E2E-Suite
-> dafür läuft unverändert weiter (Teil des „client"-CI-Jobs, hängt nur an `Common`, nicht an
-> diesem Modul).
+> Fernwartungsverbindung (`MaintenanceConnectionManager`, Testfälle P21/P22) ist seit Phase 4
+> AP5 (2026-07-21) fachlich TOT: der Client-Raspi spricht das dafür nötige Alt-TCP-Protokoll
+> nicht mehr (siehe kb/01-architecture.md „Maintenance-Protokoll (Common)"). Der Code dieses
+> Moduls (inkl. `MaintenanceConnectionManager`) bleibt trotzdem unverändert bis Phase 5 im
+> Repo (Rahmenbedingung „Portal/ nicht anfassen"). Die alte Cross-Component-E2E-Suite
+> (`Client-Raspi/run-cross-component-e2e.sh`, Testplan P21/P22) ist durch eine neue Suite über
+> den Backend-WS-Kanal ersetzt (siehe kb/06-ui-tests.md) – sie hängt an `backend/` statt an
+> diesem Modul.
 
 Vaadin-7-Webanwendung (WAR). Java 8. 36 Java-Dateien.
 
@@ -565,8 +631,8 @@ zusätzliche Felder werden ignoriert (Vorwärtskompatibilität).
 | `HELLO_ACK` | Backend → Terminal | Payload `locationId`, `locationName`, `serverTime`, `protocolVersion` |
 | `PING` | beide Richtungen | Empfänger antwortet `PONG` (server-seitig; ein vom Backend gesendetes `PING`, siehe Heartbeat unten, erwartet ein `PONG` vom Terminal) |
 | `PONG` | beide Richtungen | Aktualisiert intern den „zuletzt gesehen“-Zeitstempel der Verbindung |
-| `STATUS_REQUEST` | beide Richtungen | Server antwortet `STATUS_RESPONSE` (Gerüst: `locationId`, `locationName`, `connectedSince`, `serverTime` – die volle Fernwartungs-Portierung [laufende Ausführungen, Backlight-/Interface-Status, fachliche Referenz `GetStatusResponse`] bleibt für eine spätere Vertiefung offen, siehe „Offene Punkte“ in kb/05) |
-| `STATUS_RESPONSE` | beide Richtungen | Phase 2: nur geloggt, kein Handler (die Portal-UI nutzt für den Verbindungsstatus stattdessen direkt `TerminalConnectionRegistry#isConnected`/`#connectedSince`, siehe AP4 unten – kein Bedarf für einen Roundtrip) |
+| `STATUS_REQUEST` | beide Richtungen | **Terminal → Backend** (Gerüst, seit AP4): Server antwortet SELBST `STATUS_RESPONSE` (`locationId`, `locationName`, `connectedSince`, `serverTime`) – reiner Verbindungsbeweis, kein echter Terminal-Status. **Backend → Terminal** (seit Phase 4 AP5, additiv): Portal-initiierte Anfrage (`TerminalMaintenanceService#requestStatus`), Antwort vom ECHTEN Terminal mit `clientVersion`/`startupTime`/`runningExecutionIds` (fachliche Referenz `GetStatusRequest`) |
+| `STATUS_RESPONSE` | beide Richtungen | Bis AP4: nur geloggt, kein Handler (die Portal-UI nutzt für den Verbindungsstatus stattdessen direkt `TerminalConnectionRegistry#isConnected`/`#connectedSince` – kein Bedarf für einen Roundtrip für die reine "Verbunden"-Anzeige). **Seit Phase 4 AP5** (additiv): wird, wenn vom Terminal als Antwort auf ein portal-initiiertes `STATUS_REQUEST` gesendet, wie `LOG_RESPONSE`/`RESTART_RESPONSE` über die Korrelations-`id` an die wartende Anfrage zurückgeroutet (fachliche Referenz `GetStatusResponse`) |
 | `LOG_REQUEST` | **Backend → Terminal** (seit Phase 3 AP4) | Portal-initiierte Anfrage (`TerminalMaintenanceService#requestLog`, Admin-Dashboard „Log anzeigen“), kein Payload (fachliche Referenz `GetLogRequest`) |
 | `LOG_RESPONSE` | **Terminal → Backend** (seit Phase 3 AP4) | Antwort auf `LOG_REQUEST`, Payload `{"lines": [...]}` (fachliche Referenz `GetLogResponse`); wird über die Korrelations-`id` an die wartende Anfrage zurückgeroutet |
 | `RESTART_REQUEST` | **Backend → Terminal** (seit Phase 3 AP4) | Portal-initiierte Anfrage (`TerminalMaintenanceService#requestRestart`, Admin-Dashboard „Neustart“), kein Payload (fachliche Referenz `RestartAppRequest`) |
@@ -587,8 +653,10 @@ Die Vermittlungslogik selbst ist über einen SIMULIERTEN WS-Client in `TerminalW
 (JUnit, kein echter Terminal) bewiesen: erfolgreiches Log/Neustart-Roundtrip, sofortiger Fehler
 bei nicht verbundenem Standort, Timeout bei einem verbundenen, aber nicht antwortenden Terminal.
 **Bewusst NICHT portiert**: das Alt-TCP-Protokoll (`Common.maintenance.*`,
-`MaintenanceConnectionManager`/`-Server`) selbst – das Alt-Portal bleibt dafür bis zum Cutover
-in Betrieb (siehe kb/05-migration-plan.md, „Entscheidungen“).
+`MaintenanceConnectionManager`/`-Server`) selbst – dieser Cutover ist seit Phase 4 AP5
+vollzogen (der Client spricht das Protokoll nicht mehr, siehe unten), der Code bleibt aber
+laut Roadmap unverändert bis Phase 5 im Repo (siehe kb/05-migration-plan.md,
+„Entscheidungen“).
 
 **Verbindungsregistry**: `TerminalConnectionRegistry` (in-memory, `Map<locationId, Session>`)
 – ersetzt fachlich die alte `client_ip`/`client_port`-Registrierung in `locations` (siehe
@@ -608,6 +676,56 @@ kb/05-migration-plan.md ohnehin nutzen soll) gegen einen echten, per
 `@SpringBootTest(webEnvironment=RANDOM_PORT)` gestarteten Server: Handshake ohne/mit
 ungültigem Token wird abgelehnt, HELLO/HELLO_ACK, PING/PONG, STATUS_REQUEST/STATUS_RESPONSE
 und ein unimplementierter Typ (→ `ERROR`) sind grün.
+
+**Phase 4 AP5 (Fernwartung umgedreht, 2026-07-21, siehe kb/05-migration-plan.md)**: der
+Client-Raspi verbindet sich jetzt tatsächlich (`ws/TerminalWebSocketClient`, siehe
+kb/03-modules.md Abschnitt „Client-Raspi") und bedient `LOG_REQUEST`/`RESTART_REQUEST` sowie -
+additiv im Backend ergänzt - auch `STATUS_REQUEST` (`TerminalMaintenanceService#requestStatus`,
+neue Methode, analog zu `#requestLog`/`#requestRestart`; `TerminalWebSocketHandler` routet ein
+vom Terminal gesendetes `STATUS_RESPONSE` jetzt genauso wie `LOG_RESPONSE`/`RESTART_RESPONSE`
+über `completeIfPending` zurück, statt es nur zu loggen). Die Admin-Dashboard-Toolbar
+(„Verbunden"/„Verbunden seit", Log/Neustart-Knöpfe) ist dadurch unverändert (nutzt weiterhin
+direkt `isConnected`/`connectedSince`/`requestLog`/`requestRestart`) - `requestStatus` ist
+bewusst NICHT an einen neuen Portal-UI-Knopf angebunden (kein Auftrag dafür; „läuft der
+Client"/„laufende Ausführungen" sind über die bestehende Verbunden-Anzeige bzw. die
+Geräte-Panels des Admin-Dashboards - Testfall P20, seit Phase 3 AP3, unabhängig vom
+Maintenance-Kanal - bereits sichtbar), bleibt aber als getesteter, aufrufbarer Service für
+künftige Bedarfe verfügbar. Die eigentliche End-to-End-Abdeckung mit einem ECHTEN,
+verbundenen Client - inkl. eines echten Restart-Roundtrips - liefert die neue
+`TerminalMaintenanceRealClientE2ETest` (eigener Test, siehe „Nachfolger der
+Cross-Component-Suite" unten und kb/06-ui-tests.md); `TerminalWebSocketTest` bleibt mit einem
+zusätzlichen `requestStatus`-Test (SIMULIERTER Terminal, wie schon für Log/Restart) ergänzt.
+
+**Nachfolger der Cross-Component-Suite (Testplan P21/P22, Phase 4 AP5)**:
+`backend/src/test/java/.../ws/TerminalMaintenanceRealClientE2ETest.java` ersetzt
+`Client-Raspi/src/test/.../ClientMaintenanceConnectionE2ETest.java` (Alt-TCP-Protokoll,
+entfernt). Bootet den Backend-Spring-Kontext SELBST (`@SpringBootTest(webEnvironment=
+RANDOM_PORT)`, wie `TerminalWebSocketTest`), damit `TerminalMaintenanceService` als ECHTE,
+Spring-verwaltete Bean direkt aufgerufen werden kann - exakt die Portal-seitige Vermittlung,
+die `AdminDashboardView` im Produktivbetrieb verwendet, nur ohne Browser-UI-Umweg. Der
+"Client" ist dagegen kein Test-Double, sondern der ECHTE, gepackte
+`raspi-client-*-jar-with-dependencies.jar`, als Subprozess gestartet (`-dry`, kein Gateway
+nötig) und über `--module-path`/`--add-modules` mit den JavaFX-Plattform-Modulen aus dem
+lokalen Maven-Repo versorgt (ein reines `java -jar` scheitert auf einem Standard-JDK ohne das
+mit „JavaFX runtime components are missing" - anders als auf den produktiv eingesetzten
+`bellsoft-java21-runtime-full`-Installationen, die JavaFX bereits als Plattform-Modul
+mitbringen, siehe `Client-Raspi/run-cross-component-e2e.sh`; die Produktions-Main-Class/der
+Startmechanismus selbst ist davon unberührt). Drei Testfälle (Reihenfolge über
+`@TestMethodOrder`): Status, Log, Restart. Der Restart-Test verifiziert NUR die echte
+`RESTART_RESPONSE`-Bestätigung des Terminals plus dass die WebSocket-Verbindung den Neustart
+überlebt (`TerminalWebSocketClient#onClose` baut bei `restart=true` bewusst nicht ab) und
+danach weiterhin Anfragen beantwortet - er tötet den Subprozess NICHT und beobachtet keinen
+OS-Prozess-Neustart ("Neustart" bedeutet in dieser Anwendung seit jeher ein In-Prozess-
+Reinitialisieren des Hauptfensters, `ElwaManager#restart()`, kein Prozess-Neustart - identischer
+Prüfumfang wie die entfernte Alt-Suite). Harness: `Client-Raspi/run-cross-component-e2e.sh`
+(gleicher Dateiname/Pfad wie zuvor, komplett neuer Inhalt) baut Common + den Client-Jar,
+bereitet eine frische, leere Postgres-Datenbank vor (Flyway migriert sie über den Testkontext
+- kein manuelles Seeding wie zuvor nötig) und startet die Suite unter `xvfb-run` (der reale
+Client-Subprozess braucht ein Display). `TerminalMaintenanceRealClientE2ETest` ist über
+`<excludes>` in `backend/pom.xml` bewusst NICHT Teil des normalen `mvn test`/
+`run-backend-tests.sh`-Laufs (braucht den gepackten Client-Jar + Xvfb, analog dazu, wie
+`backend/e2e/` [Playwright] ebenfalls nicht Teil davon ist) - `-Dtest=...` in
+`run-cross-component-e2e.sh` überschreibt den Ausschluss gezielt.
 
 **Tests der REST-API/Token-Auth**: `TerminalApiSecurityTest` (401 bei fehlendem/unbekanntem/
 widerrufenem Token, 200 bei gültigem, Terminal-Token gewährt KEINEN Zugriff auf die
@@ -1102,11 +1220,15 @@ Verbindung entfällt, siehe kb/02-data-model.md) sowie den Knöpfen „Log anzei
 (`LogViewerDialog`, fachlicher Nachfolger von `LogViewerWindow`) und „Neustart“ – fachlicher
 Nachfolger der `AdminDashboardLocationPanel`-Toolbar. Beide Knöpfe rufen
 `TerminalMaintenanceService` auf und zeigen für einen NICHT verbundenen Standort denselben
-Fehlertext wie der Alt-Code („Keine Verbindung zum Client“/„...zum Standort.“) – der in dieser
-Phase (siehe Roadmap: Alt-Clients verbinden sich erst in Phase 4 über diesen Kanal) praktisch
-immer erwartbare Fall. **Bewusst NICHT portiert**: das Alt-TCP-Protokoll selbst
-(`MaintenanceConnectionManager`/`Common.maintenance.*`) – das Alt-Portal bleibt dafür bis zum
-Cutover in Betrieb, siehe kb/05-migration-plan.md, „Entscheidungen“.
+Fehlertext wie der Alt-Code („Keine Verbindung zum Client“/„...zum Standort.“) – zum
+Implementierungszeitpunkt (Phase 3 AP4, siehe Roadmap: Alt-Clients verbanden sich erst in
+Phase 4 über diesen Kanal) praktisch immer der erwartbare Fall; **seit Phase 4 AP5** verbindet
+sich der Client-Raspi tatsächlich (siehe „Ausgehende Fernwartungs-Verbindung“ oben), die
+Toolbar zeigt jetzt im Normalbetrieb „Verbunden“ und beide Knöpfe funktionieren gegen einen
+echten Terminal. **Bewusst NICHT portiert**: das Alt-TCP-Protokoll selbst
+(`MaintenanceConnectionManager`/`Common.maintenance.*`) – dieser Cutover ist mit AP5 vollzogen,
+der Alt-Code bleibt trotzdem unverändert bis Phase 5 im Repo, siehe kb/05-migration-plan.md,
+„Entscheidungen“.
 
 **Tests** (17 neu): `PasswordServiceTest` (4, inkl. Migration eines SHA1-Bestandshashes beim
 Ändern), `PasswordResetServiceTest` (6, mit echtem SMTP-Mock GreenMail durch den vollen

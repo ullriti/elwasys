@@ -108,7 +108,7 @@ z. B. zusätzlicher Nicht-Admin-Benutzer mit Passwort, Gruppen, Geräte, Program
 Cross-Component-Fall P21/P22 (Wartungsverbindung). Portal (Playwright, 18 Tests):
 P1–P20. **Alle geplanten Fälle sind umgesetzt.**
 
-**Cross-Component (P21/P22) — Umsetzung:**
+**Cross-Component (P21/P22) — Umsetzung (Stand bis Phase 4 AP4, Alt-TCP-Protokoll):**
 - Realisiert als Client-Test `ClientMaintenanceConnectionE2ETest` (läuft im bestehenden
   Client-CI-Job mit; eigenes Skript `Client-Raspi/run-cross-component-e2e.sh`).
 - Die *Portal-Seite* wird durch genau die Klasse `MaintenanceServer` (aus `Common`)
@@ -124,6 +124,14 @@ P1–P20. **Alle geplanten Fälle sind umgesetzt.**
   der UI-Verdrahtung, die Kern-Logik (der Socket-Kanal) ist hier bereits abgedeckt. Als
   optionaler Folgeschritt könnte man Portal + laufenden Client gemeinsam hochfahren und den
   Knopf per Playwright klicken.
+
+> **Update Phase 4 AP5 (2026-07-21)**: Die Fernwartung ist umgedreht (ausgehende
+> Terminal-WebSocket-Verbindung statt Alt-TCP-Protokoll, siehe kb/05-migration-plan.md/
+> kb/03-modules.md), `ClientMaintenanceConnectionE2ETest` ist entfernt. P21/P22 werden jetzt
+> durch `TerminalMaintenanceRealClientE2ETest` (Backend-Modul: Status/Log/Restart über den
+> echten WS-Kanal, echter Client-Subprozess + echte `TerminalMaintenanceService`-Bean) über
+> `Client-Raspi/run-cross-component-e2e.sh` abgedeckt – siehe kb/06-ui-tests.md für den vollen
+> Testaufbau. Der obige Abschnitt beschreibt den ABGELÖSTEN Alt-Stand, historisch belassen.
 
 **Hinweise zu den zuletzt ergänzten Fällen:**
 - **C13**: laufende Execution (start gesetzt, finished=false) vor App-Start seeden; nach

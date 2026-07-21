@@ -223,23 +223,28 @@ kb/05-migration-plan.md.
 ### Client (`elwasys.properties`)
 Liegt neben dem JAR (bzw. unter `/opt/elwasys`). Siehe `Client-Raspi/elwasys.example.properties`.
 
-**Seit Phase 4 AP4 (2026-07-21, Client-Cutover)**: Pflicht sind `backend.url` (Basis-URL des
+**Seit Phase 4 AP5 (2026-07-21, Fernwartung umgedreht)**: `backend.url` (Basis-URL des
 Backends) + `backend.token` (Standort-Token, erzeugt über `token-cli`, siehe „Standort-Tokens
-erzeugen/widerrufen" unten) statt Datenbank-Zugangsdaten. `database.*` bleibt weiterhin ein
-Pflicht-Key, aber **transitional** NUR noch für die Fernwartungs-Registrierung
-(`LocationManager`) genutzt, bis Phase 4 AP5 die ausgehende WebSocket-Verbindung einführt.
-Weitere Keys: `location`, `portalUrl`. Gateway: entweder `deconz.*` oder `fhem.*`. Die zuvor
-hier dokumentierten `smtp.*`-Keys entfallen (Benachrichtigungsversand läuft seit AP4 zentral
-über das Backend, siehe kb/03-modules.md „Benachrichtigungsdienst").
+erzeugen/widerrufen" unten) sind die **einzigen** Zugangsdaten, die der Client noch braucht –
+sie bedienen sowohl die REST-API v1 (seit Phase 4 AP4) als auch die ausgehende
+Fernwartungs-WebSocket-Verbindung (`ws/TerminalWebSocketClient`, seit Phase 4 AP5, siehe
+kb/03-modules.md). **`database.*` und `maintenance.server`/`maintenance.port`/
+`maintenance.ip` entfallen vollständig** – der Client hat keinen Direkt-DB-Zugriff mehr und
+lauscht nicht mehr als Server (bis Phase 4 AP4 galt `database.*` noch transitional für die
+mittlerweile entfernte Fernwartungs-Registrierung `LocationManager`). Weitere Keys: `location`
+(nur noch Anzeigename), `portalUrl`. Gateway: entweder `deconz.*` oder `fhem.*`. Die zuvor
+hier dokumentierten `smtp.*`-Keys entfallen ebenfalls (Benachrichtigungsversand läuft seit AP4
+zentral über das Backend, siehe kb/03-modules.md „Benachrichtigungsdienst").
 
 Start (aus `setup.sh`, `run.sh`):
 ```bash
 java -Djavafx.platform=gtk \
      -Dlogback.configurationFile=/opt/elwasys/logback.xml \
-     -Djavax.net.ssl.trustStore=/opt/elwasys/.truststore \
-     -Djavax.net.ssl.trustStorePassword=<pw> \
      -jar raspi-client.latest.jar -verbose
 ```
+(Der `-Djavax.net.ssl.trustStore*`-Flag samt Truststore-Erzeugung in `setup.sh` ist seit Phase
+4 AP5 entfallen – er diente ausschließlich der Verifikation des TLS-Zertifikats der jetzt
+entfallenen Datenbankverbindung.)
 
 ### Portal (`/etc/elwaportal/elwaportal.properties`)
 Siehe `Portal/elwaportal.example.properties`. Keys: `database.*`, `smtp.*`,
