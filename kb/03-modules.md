@@ -55,6 +55,43 @@ keine neue Abhängigkeit) als austauschbare Gateway-Doubles für die `Client*E2E
 Wichtige Keys: `database.*`, `location`, `displayTimeout`, `startupDelay`,
 `sessionTimeout`, `portalUrl`, `deconz.*` **oder** `fhem.*`, `smtp.*`, `maintenance.port`.
 
+**Abhängigkeiten (Stand Phase 4 AP2, 2026-07-21)**: `javafx-controls`/`-fxml`/`-web`
+**23.0.2** (zuvor 20 – die höchste über Maven Central verfügbare stabile JavaFX-Version,
+deren Bytecode [Klassendatei-Major 65] noch auf dem festgelegten Java-21-Client-Runtime
+läuft; JavaFX 24+ verlangt bereits JDK 22+ und würde den Client-Start brechen, siehe
+kb/05-migration-plan.md „Technologie-Entscheidungen“), `slf4j-api` **2.0.18** (zuvor
+1.7.12), `logback-classic`/`-core` **1.5.38** (zuvor 1.2.9) – alle drei als direkte,
+versionierte Dependencies in `Client-Raspi/pom.xml` gesetzt (überschreiben die ältere
+`elwasys-parent`-`dependencyManagement` für dieses Modul allein über Maven-„nearest wins“,
+Common/Portal bleiben unangetastet auf den alten Versionen). `com.mashape.unirest:
+unirest-java:1.4.9`, `org.apache.httpcomponents:httpclient:4.5.13`/`httpasyncclient:4.0.2`/
+`httpmime:4.3.6` sowie `org.json:json` sind **entfernt** (siehe „HTTP-Client-Umstellung“
+unten). `pi4j-core`, `spring-boot-starter-websocket`, `gson`, `pushover-client`,
+`commons-email` unverändert.
+
+**HTTP-Client-Umstellung auf `java.net.http` (Phase 4 AP2)**: die Roadmap-Annahme, `devices/
+deconz/` nutze noch unirest/HttpComponents für REST, traf beim Nachprüfen **nicht mehr zu** –
+`DeconzApiAdapter` (REST) war bereits seit dem allerersten deCONZ-Commit (2023,
+`26f91ab`/`625946c`, vor dieser Modernisierung) auf `java.net.http` implementiert, ebenso
+alle übrigen `devices/deconz/*`-Klassen (`DeconzService`, `DeconzRegistrationService` bauen
+`java.net.http.HttpRequest`s, die `DeconzApiAdapter#request` verschickt); der WebSocket-Teil
+(`DeconzEventListener`) nutzte schon vorher Springs `StandardWebSocketClient` – für deCONZ war
+also **keine Codeänderung nötig**. `devices/FhemDevicePowerManager` nutzt gar kein HTTP,
+sondern ausschließlich das Telnet-Protokoll über `io/TelnetClient` (rohe `java.net.Socket`) –
+auch hier gibt es keinen HTTP-Client zu migrieren; die Roadmap-Formulierung „Gateway-HTTP“ war
+für den fhem-Pfad irreführend. Der **einzige** tatsächliche Fund von unirest/HttpComponents/
+`org.json` in `src/main` war `executions/ExecutionFinisher` – dort verschickt der (laut
+kb/03 „Benachrichtigungsdienst“-Inventar ohnehin nicht mehr genutzte, für Phase 5 zum Entfernen
+vorgesehene) elwaApp/Ionic-Push-Zweig eine JSON-POST-Anfrage über `Unirest.post(...)`. Dieser
+Zweig wurde 1:1 (gleiche URL, Header `PROFILE_TAG`/`Authorization`/`Content-Type`, gleiches
+JSON-Body-Format über Gson statt `org.json`, gleiche Statuscode-Schwelle `> 299`, Fehler
+weiterhin lokal geloggt und geschluckt statt propagiert) auf `java.net.http` umgestellt – damit
+ließen sich `unirest-java`, alle drei `httpcomponents`-Artefakte und `org.json` vollständig aus
+`Client-Raspi/pom.xml` entfernen (verifiziert per `mvn dependency:tree`: kein Client-Code
+referenziert sie mehr; `pushover-client` bringt weiterhin transitiv eine eigene, ältere
+`httpcomponents:httpclient:4.2.1` mit – außerhalb des Auftrags, da `pushover-client` selbst
+nicht angefasst werden sollte).
+
 ## Portal (`org.kabieror.elwasys.webportal`) – ⚠️ STILLGELEGT (Phase 3 AP6, 2026-07-21)
 
 > **Fachlich abgelöst** durch das neue, ins Backend eingebettete Portal

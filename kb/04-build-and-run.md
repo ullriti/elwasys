@@ -385,7 +385,11 @@ JDK-Version am 2026-07-20 im Phase-1-QA-Review korrigiert)*:
 
 - Vaadin 7 / GWT 2.7 Widgetset-Compilation: langsam, speicherhungrig, alte Repos
   (`maven.vaadin.com`, teils `http://`), ggf. nicht mehr erreichbar.
-- Alte Plugin-/Dependency-Versionen (Postgres 9.3-Treiber im Portal, unirest 1.x).
+- Alte Plugin-/Dependency-Versionen (Postgres 9.3-Treiber im Portal). Client-Raspi:
+  unirest 1.x/HttpComponents 4.x sind seit Phase 4 AP2 entfernt (siehe
+  kb/05-migration-plan.md); `pushover-client` bringt weiterhin transitiv eine eigene,
+  ältere `httpcomponents:httpclient:4.2.1` mit (außerhalb des AP2-Auftrags, nicht
+  angefasst).
 - **Raspi-Terminal-Laufzeit vs. Build-Sprachlevel**: `setup.sh` installiert seit
   Phase 1 `bellsoft-java21-runtime-full` (armhf) statt `-java17-`, weil das
   Client-Raspi-fat-jar seit dem Java-21-Sprachlevel-Sprung (s.o.) Bytecode

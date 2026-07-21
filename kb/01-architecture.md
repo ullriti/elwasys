@@ -33,16 +33,20 @@
 - JUnit 4.12
 
 ### Client-Raspi
-- **JavaFX 20** (`javafx-controls`, `javafx-fxml`, `javafx-web`) – UI über FXML
+- **JavaFX 23.0.2** (`javafx-controls`, `javafx-fxml`, `javafx-web`) – UI über FXML
+  *(Phase 4 AP2, 2026-07-21: 20 → 23.0.2, höchste stabile Version, die noch auf dem
+  festgelegten Java-21-Client läuft – siehe kb/05-migration-plan.md)*
 - **pi4j 1.0** – GPIO-Zugriff auf dem Raspberry Pi
-- **Spring Boot Starter WebSocket 3.1.0** – für Maintenance-Verbindung
-- Apache HttpComponents (httpclient `4.5.13`, httpasyncclient, httpmime), `org.json`,
-  **unirest-java 1.4.9** – für deCONZ-REST/Event-API
-- Gson `2.10.1`
+- **Spring Boot Starter WebSocket 3.1.0** – für Maintenance-Verbindung und den deCONZ-WS-Client
+  (`StandardWebSocketClient`)
+- deCONZ-REST/Event-API: `java.net.http` (JDK, kein Fremd-Client) – unirest/HttpComponents
+  wurden hierfür entgegen einer älteren Annahme nie gebraucht, siehe kb/03-modules.md
+- Gson `2.10.1` – auch für den (seit AP2 auf `java.net.http` migrierten) elwaApp-Push-Zweig
+  in `ExecutionFinisher`
 - Pushover-Client `1.0.0` – Push-Benachrichtigungen
 - Commons Email `1.5` – E-Mail
-- Logback `1.2.9`
-- Test: JUnit 4.13.1 **und** TestNG (gemischt)
+- Logback `1.5.38` / SLF4J `2.0.18` *(Phase 4 AP2: 1.2.9/1.7.12 → 1.5.38/2.0.18)*
+- Test: JUnit 5 (Jupiter) + TestFX/Xvfb *(seit Phase 1; JUnit4/TestNG-Mischbetrieb aufgelöst)*
 - Build: `maven-assembly-plugin` → fat-jar (`jar-with-dependencies`), Main-Class
   `org.kabieror.elwasys.raspiclient.application.Main`
 
