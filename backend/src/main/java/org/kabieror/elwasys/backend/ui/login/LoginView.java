@@ -11,6 +11,7 @@ import com.vaadin.flow.router.BeforeEnterObserver;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
+import org.kabieror.elwasys.backend.service.PasswordResetService;
 
 /**
  * Öffentlicher Login-Bildschirm (Phase 3 AP1, siehe kb/05-migration-plan.md) - Nachfolger von
@@ -29,6 +30,11 @@ import com.vaadin.flow.server.auth.AnonymousAllowed;
  * Meldung "Login fehlgeschlagen" mit demselben Hinweistext wie im Alt-Portal. Nach
  * erfolgreichem Login landet der Benutzer über {@link org.kabieror.elwasys.backend.ui.RootView}
  * je nach Rolle im Admin- oder Benutzer-Dashboard (siehe deren Javadoc).
+ *
+ * <p><b>Phase 3 AP4</b>: der "Passwort vergessen?"-Knopf (bis AP4 über
+ * {@code setForgotPasswordButtonVisible(false)} deaktiviert, siehe Änderungslog "Phase 3
+ * AP1") ist jetzt aktiv und öffnet {@link PasswordForgotDialog} - fachlicher Nachfolger von
+ * {@code Portal/.../components/PasswordForgotWindow} (Testfall P19).
  */
 @Route("login")
 @PageTitle("Login - Waschportal")
@@ -37,7 +43,7 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
 
     private final LoginForm loginForm = new LoginForm();
 
-    public LoginView() {
+    public LoginView(PasswordResetService passwordResetService) {
         addClassName("login-view");
         setSizeFull();
         setAlignItems(Alignment.CENTER);
@@ -45,7 +51,8 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
 
         this.loginForm.setAction("login");
         this.loginForm.setI18n(buildGermanI18n());
-        this.loginForm.setForgotPasswordButtonVisible(false);
+        this.loginForm.setForgotPasswordButtonVisible(true);
+        this.loginForm.addForgotPasswordListener(e -> new PasswordForgotDialog(passwordResetService).open());
 
         add(new H2("Waschportal"), this.loginForm);
     }

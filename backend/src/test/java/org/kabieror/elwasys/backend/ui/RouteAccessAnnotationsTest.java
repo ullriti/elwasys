@@ -12,6 +12,7 @@ import org.kabieror.elwasys.backend.ui.admin.AdminProgramsView;
 import org.kabieror.elwasys.backend.ui.admin.AdminUserGroupsView;
 import org.kabieror.elwasys.backend.ui.admin.AdminUsersView;
 import org.kabieror.elwasys.backend.ui.login.LoginView;
+import org.kabieror.elwasys.backend.ui.login.ResetPasswordView;
 import org.kabieror.elwasys.backend.ui.user.UserDashboardView;
 
 /**
@@ -43,6 +44,15 @@ class RouteAccessAnnotationsTest {
     void loginViewAllowsAnonymousAccess() {
         assertThat(LoginView.class.isAnnotationPresent(com.vaadin.flow.server.auth.AnonymousAllowed.class))
                 .as("LoginView muss ohne Anmeldung erreichbar sein").isTrue();
+    }
+
+    @Test
+    void resetPasswordViewAllowsAnonymousAccess() {
+        // Phase 3 AP4 (siehe kb/05-migration-plan.md, Testfall P19): die öffentliche
+        // Passwort-Reset-Ansicht muss - wie LoginView - ohne Anmeldung erreichbar sein, sonst
+        // könnte ein Nutzer den per Email verschickten Link nie öffnen.
+        assertThat(ResetPasswordView.class.isAnnotationPresent(com.vaadin.flow.server.auth.AnonymousAllowed.class))
+                .as("ResetPasswordView muss ohne Anmeldung erreichbar sein").isTrue();
     }
 
     @Test

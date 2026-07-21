@@ -7,6 +7,8 @@ import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.sidenav.SideNav;
 import com.vaadin.flow.component.sidenav.SideNavItem;
 import com.vaadin.flow.spring.security.AuthenticationContext;
+import org.kabieror.elwasys.backend.service.PasswordService;
+import org.kabieror.elwasys.backend.service.UserService;
 import org.kabieror.elwasys.backend.ui.component.UserMenuBar;
 
 /**
@@ -28,13 +30,14 @@ import org.kabieror.elwasys.backend.ui.component.UserMenuBar;
  */
 public class AdminLayout extends AppLayout {
 
-    public AdminLayout(AuthenticationContext authenticationContext) {
+    public AdminLayout(AuthenticationContext authenticationContext, UserService userService,
+            PasswordService passwordService) {
         DrawerToggle toggle = new DrawerToggle();
 
         H1 title = new H1("Waschportal");
         title.addClassName("admin-layout-title");
 
-        addToNavbar(toggle, title, new UserMenuBar(authenticationContext));
+        addToNavbar(toggle, title, new UserMenuBar(authenticationContext, userService, passwordService));
 
         SideNav nav = new SideNav();
         nav.addItem(new SideNavItem("Dashboard", AdminDashboardView.class, VaadinIcon.DASHBOARD.create()));

@@ -18,10 +18,13 @@ import java.util.Locale;
 import org.kabieror.elwasys.backend.auth.ElwasysUserPrincipal;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.service.CreditService;
+import org.kabieror.elwasys.backend.service.ExecutionService;
+import org.kabieror.elwasys.backend.service.PasswordResetService;
 import org.kabieror.elwasys.backend.service.UserGroupService;
 import org.kabieror.elwasys.backend.service.UserService;
 import org.kabieror.elwasys.backend.ui.admin.dialog.CreditHistoryDialog;
 import org.kabieror.elwasys.backend.ui.admin.dialog.CreditTopUpDialog;
+import org.kabieror.elwasys.backend.ui.admin.dialog.ExpiredExecutionsDialog;
 import org.kabieror.elwasys.backend.ui.admin.dialog.UserFormDialog;
 import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
 
@@ -35,10 +38,11 @@ import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
  * werden; die vollständige, unveränderliche Buchungshistorie ist über
  * {@link CreditHistoryDialog} ("Umsätze ansehen", fachlicher Nachfolger von
  * {@code CreditAccountingWindow}) einsehbar - siehe {@code Portal/.../views/UsersView} für die
- * Alt-Anordnung dieser beiden Knöpfe neben "Bearbeiten"/"Löschen". Nicht Teil dieser View
- * (siehe kb/05-migration-plan.md Phase-3-Roadmap, AP4): der Admin-Passwort-Reset und die
- * Warnung bei nicht abgerechneten Programmausführungen ({@code ExpiredExecutionsWindow},
- * Alt-Icon-Spalte).
+ * Alt-Anordnung dieser beiden Knöpfe neben "Bearbeiten"/"Löschen". <b>Seit Phase 3 AP4</b>
+ * zusätzlich: der Admin-Passwort-Reset (Teil von {@link UserFormDialog}, siehe dort) und die
+ * Warnung bei nicht abgerechneten Programmausführungen (Icon-Spalte, öffnet
+ * {@link ExpiredExecutionsDialog} - fachlicher Nachfolger von {@code ExpiredExecutionsWindow}
+ * bzw. der Warn-Icon-Logik in {@code Portal/.../views/UsersView#fillItemWithUserData}).
  */
 @Route(value = "admin/users", layout = AdminLayout.class)
 @PageTitle("Benutzer - Waschportal")
@@ -48,15 +52,20 @@ public class AdminUsersView extends VerticalLayout {
     private final UserService userService;
     private final UserGroupService userGroupService;
     private final CreditService creditService;
+    private final ExecutionService executionService;
+    private final PasswordResetService passwordResetService;
     private final String actingAdminName;
 
     private final Grid<UserEntity> grid = new Grid<>();
 
     public AdminUsersView(UserService userService, UserGroupService userGroupService, CreditService creditService,
+            ExecutionService executionService, PasswordResetService passwordResetService,
             AuthenticationContext authenticationContext) {
         this.userService = userService;
         this.userGroupService = userGroupService;
         this.creditService = creditService;
+        this.executionService = executionService;
+        this.passwordResetService = passwordResetService;
         this.actingAdminName = authenticationContext.getAuthenticatedUser(ElwasysUserPrincipal.class)
                 .map(ElwasysUserPrincipal::getName).orElse(authenticationContext.getPrincipalName().orElse(""));
 
@@ -90,6 +99,7 @@ public class AdminUsersView extends VerticalLayout {
         this.grid.addColumn(this::formatCardIds).setHeader("Kartennummer");
         this.grid.addColumn(this::formatCredit).setHeader("Guthaben");
         this.grid.addComponentColumn(this::statusBadge).setHeader("Status");
+        this.grid.addComponentColumn(this::expiredExecutionsWarning).setHeader("").setFlexGrow(0).setWidth("50px");
         this.grid.addComponentColumn(this::actionButtons).setHeader("").setFlexGrow(0).setWidth("190px");
     }
 
@@ -110,6 +120,28 @@ public class AdminUsersView extends VerticalLayout {
         Span badge = new Span(user.isBlocked() ? "Gesperrt" : "Aktiv");
         badge.getElement().getThemeList().add("badge" + (user.isBlocked() ? " error" : " success"));
         return badge;
+    }
+
+    /**
+     * 1:1-Portierung der Warn-Icon-Logik aus
+     * {@code Portal/.../views/UsersView#fillItemWithUserData}: ein gesperrter Benutzer zeigt
+     * (dort vorrangig) ein eigenes Sperr-Icon - das übernimmt hier bereits
+     * {@link #statusBadge} als "Gesperrt"-Badge, deshalb zeigt diese Spalte NUR das
+     * Warndreieck für nicht gesperrte Benutzer mit nicht abgerechneten Ausführungen (öffnet
+     * {@link ExpiredExecutionsDialog}, fachlicher Nachfolger von
+     * {@code ExpiredExecutionsWindow}); für alle anderen Benutzer bleibt die Zelle leer (1:1
+     * wie das Alt-"normale Benutzer"-Icon, das keine Aktion auslöst).
+     */
+    private Span expiredExecutionsWarning(UserEntity user) {
+        if (user.isBlocked() || !this.executionService.hasExpiredExecutions(user)) {
+            return new Span();
+        }
+        Button btn = new Button(new Icon(VaadinIcon.WARNING));
+        btn.addThemeVariants(ButtonVariant.LUMO_TERTIARY_INLINE, ButtonVariant.LUMO_ERROR);
+        btn.setTooltipText("Es gibt nicht abgerechnete Programmausführungen");
+        btn.addClickListener(e -> openExpiredExecutionsDialog(user));
+        Span wrapper = new Span(btn);
+        return wrapper;
     }
 
     private HorizontalLayout actionButtons(UserEntity user) {
@@ -134,11 +166,17 @@ public class AdminUsersView extends VerticalLayout {
     }
 
     private void openCreateDialog() {
-        new UserFormDialog(this.userService, this.userGroupService, null, this::loadData).open();
+        new UserFormDialog(this.userService, this.userGroupService, this.passwordResetService, null, this::loadData)
+                .open();
     }
 
     private void openEditDialog(UserEntity user) {
-        new UserFormDialog(this.userService, this.userGroupService, user, this::loadData).open();
+        new UserFormDialog(this.userService, this.userGroupService, this.passwordResetService, user, this::loadData)
+                .open();
+    }
+
+    private void openExpiredExecutionsDialog(UserEntity user) {
+        new ExpiredExecutionsDialog(this.executionService, user, this::loadData).open();
     }
 
     private void openCreditTopUpDialog(UserEntity user) {

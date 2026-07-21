@@ -214,6 +214,43 @@ class ExecutionServiceTest extends AbstractBackendIT {
     }
 
     @Test
+    void getExpiredExecutionsReturnsOnlyExpiredNotFinishedOnes() {
+        // 1:1-Portierung des Filters aus ExpiredExecutionsWindow (Alt-Portal, Phase 3 AP4).
+        UserEntity user = newUser();
+        DeviceEntity device = newDevice();
+        ProgramEntity expiredProgram = newProgram(0);
+        ProgramEntity runningProgram = newProgram(3600);
+
+        ExecutionEntity expired = this.executionService.startExecution(
+                this.executionService.createExecution(device, expiredProgram, user));
+        // Nicht abgelaufen (lange Maximaldauer) - darf nicht in der Liste erscheinen.
+        this.executionService.startExecution(this.executionService.createExecution(device, runningProgram, user));
+
+        List<ExecutionEntity> expiredExecutions = this.executionService.getExpiredExecutions(user);
+        assertThat(expiredExecutions).hasSize(1);
+        assertThat(expiredExecutions.get(0).getId()).isEqualTo(expired.getId());
+
+        this.executionService.finishExecution(expired);
+        assertThat(this.executionService.getExpiredExecutions(user)).as("finished executions are never expired")
+                .isEmpty();
+    }
+
+    @Test
+    void deleteRemovesTheExecution() {
+        UserEntity user = newUser();
+        DeviceEntity device = newDevice();
+        ProgramEntity program = newProgram(0);
+        ExecutionEntity execution = this.executionService.startExecution(
+                this.executionService.createExecution(device, program, user));
+        Integer id = execution.getId();
+        assertThat(this.executionRepository.findById(id)).isPresent();
+
+        this.executionService.delete(execution);
+
+        assertThat(this.executionRepository.findById(id)).isEmpty();
+    }
+
+    @Test
     void getExecutionsReturnsOnlyStartedOnesNewestFirst() {
         DeviceEntity device = newDevice();
         ProgramEntity program = newProgram(3600);

@@ -14,6 +14,7 @@ import com.vaadin.flow.component.textfield.TextField;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
 import org.kabieror.elwasys.backend.exception.DuplicateCardIdException;
+import org.kabieror.elwasys.backend.service.PasswordResetService;
 import org.kabieror.elwasys.backend.service.UserGroupService;
 import org.kabieror.elwasys.backend.service.UserService;
 
@@ -21,13 +22,14 @@ import org.kabieror.elwasys.backend.service.UserService;
  * Modaler Dialog zum Anlegen/Bearbeiten eines Benutzers - fachlicher Nachfolger von
  * {@code Portal/.../components/UserWindow} (Alt-Portal, Testfälle P6/P7). Die Felder
  * entsprechen 1:1 dem Alt-Fenster: Name, Username, Email, Kartennummern, Benutzergruppe,
- * Gesperrt. Der Admin-Passwort-Reset-Teil des Alt-Fensters ("Sende dem Benutzer per Email
- * ein neues Passwort") ist bewusst NICHT Teil dieses Dialogs (siehe Auftrag Phase 3 AP2 -
- * folgt mit AP4).
+ * Gesperrt. <b>Seit Phase 3 AP4</b> zusätzlich der Admin-Passwort-Reset-Teil des Alt-Fensters
+ * ("Sende dem Benutzer per Email ein neues Passwort", Checkbox {@code cbSendPassword}), der in
+ * AP2 bewusst ausgespart worden war - siehe {@link PasswordResetService#resetPasswordByAdminAndNotify}.
  */
 public class UserFormDialog extends Dialog {
 
     private final UserService userService;
+    private final PasswordResetService passwordResetService;
     private final UserEntity userToEdit;
 
     private final TextField tfName = new TextField("Name");
@@ -36,10 +38,12 @@ public class UserFormDialog extends Dialog {
     private final TextArea tfCardIds = new TextArea("Kartennummern");
     private final ComboBox<UserGroupEntity> cbUserGroup = new ComboBox<>("Benutzergruppe");
     private final Checkbox cbBlocked = new Checkbox("Gesperrt");
+    private final Checkbox cbSendPassword = new Checkbox("Sende dem Benutzer per Email ein neues Passwort");
 
-    public UserFormDialog(UserService userService, UserGroupService userGroupService, UserEntity userToEdit,
-            Runnable onSaved) {
+    public UserFormDialog(UserService userService, UserGroupService userGroupService,
+            PasswordResetService passwordResetService, UserEntity userToEdit, Runnable onSaved) {
         this.userService = userService;
+        this.passwordResetService = passwordResetService;
         this.userToEdit = userToEdit;
 
         boolean editMode = userToEdit != null;
@@ -69,8 +73,13 @@ public class UserFormDialog extends Dialog {
         this.cbUserGroup.setItemLabelGenerator(UserGroupEntity::getName);
         this.cbUserGroup.setWidthFull();
 
+        // 1:1 wie UserWindow: bei "Benutzer erstellen" standardmäßig angehakt (ein neuer
+        // Benutzer braucht ein initiales Passwort), bei "Benutzer bearbeiten" standardmäßig
+        // aus.
+        this.cbSendPassword.setValue(!editMode);
+
         FormLayout form = new FormLayout(this.tfName, this.tfUsername, this.tfEmail, this.tfCardIds,
-                this.cbUserGroup, this.cbBlocked);
+                this.cbUserGroup, this.cbBlocked, this.cbSendPassword);
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
         add(form);
 
@@ -115,7 +124,13 @@ public class UserFormDialog extends Dialog {
         }
 
         String email = this.tfEmail.getValue();
-        if (email != null && !email.isEmpty() && !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+        // 1:1 wie UserWindow#save (tfEmail.setRequired(cbSendPassword.getValue())): ist ein
+        // neues Passwort per Email zu versenden, wird zwingend eine Adresse benötigt.
+        if (this.cbSendPassword.getValue() && (email == null || email.isBlank())) {
+            this.tfEmail.setInvalid(true);
+            this.tfEmail.setErrorMessage("Für das Zusenden eines Passworts wird eine Email-Adresse benötigt.");
+            valid = false;
+        } else if (email != null && !email.isEmpty() && !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
             this.tfEmail.setInvalid(true);
             this.tfEmail.setErrorMessage("Das ist keine gültige Email-Adresse");
             valid = false;
@@ -146,13 +161,15 @@ public class UserFormDialog extends Dialog {
             return;
         }
 
+        UserEntity savedUser;
         try {
             if (this.userToEdit == null) {
-                this.userService.create(this.tfName.getValue(), this.tfUsername.getValue(), emptyToNull(email),
-                        cardIds, this.cbBlocked.getValue(), this.cbUserGroup.getValue());
-            } else {
-                this.userService.update(this.userToEdit, this.tfName.getValue(), this.tfUsername.getValue(),
+                savedUser = this.userService.create(this.tfName.getValue(), this.tfUsername.getValue(),
                         emptyToNull(email), cardIds, this.cbBlocked.getValue(), this.cbUserGroup.getValue());
+            } else {
+                savedUser = this.userService.update(this.userToEdit, this.tfName.getValue(),
+                        this.tfUsername.getValue(), emptyToNull(email), cardIds, this.cbBlocked.getValue(),
+                        this.cbUserGroup.getValue());
             }
         } catch (DuplicateCardIdException e) {
             this.tfCardIds.setInvalid(true);
@@ -163,8 +180,27 @@ public class UserFormDialog extends Dialog {
             return;
         }
 
+        // 1:1 wie UserWindow#save (Zweig cbSendPassword): NACH dem Speichern, damit ein neu
+        // angelegter Benutzer bereits eine gültige Id/gespeicherte Entity hat.
+        if (this.cbSendPassword.getValue()) {
+            try {
+                this.passwordResetService.resetPasswordByAdminAndNotify(savedUser);
+                showSuccess("Passwort wurde versandt");
+            } catch (RuntimeException e) {
+                showError("Konnte keine Email senden. " + e.getMessage());
+                // Speichern war bereits erfolgreich - Dialog trotzdem schließen, 1:1 wie im
+                // Alt-Code (UserWindow#save fängt die EmailException NACH dem Speichern ab,
+                // schließt das Fenster aber in jedem Fall).
+            }
+        }
+
         close();
         onSaved.run();
+    }
+
+    private static void showSuccess(String message) {
+        Notification notification = Notification.show(message, 4000, Notification.Position.MIDDLE);
+        notification.addThemeVariants(NotificationVariant.LUMO_SUCCESS);
     }
 
     private static String[] splitCardIds(String raw) {

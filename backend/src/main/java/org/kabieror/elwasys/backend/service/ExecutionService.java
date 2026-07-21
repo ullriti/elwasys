@@ -166,6 +166,30 @@ public class ExecutionService {
     }
 
     /**
+     * 1:1-Portierung des Filters im Konstruktor von
+     * {@code Portal/.../components/ExpiredExecutionsWindow} (Alt-Portal, Phase 3 AP4, siehe
+     * kb/05-migration-plan.md): alle nicht abgerechneten Ausführungen eines Benutzers,
+     * eingeschränkt auf tatsächlich abgelaufene (die reine "läuft noch, ist aber noch nicht
+     * abgelaufen"-Menge aus {@link #getNotFinishedExecutions} wird dort zusätzlich
+     * herausgefiltert).
+     */
+    @Transactional(readOnly = true)
+    public List<ExecutionEntity> getExpiredExecutions(UserEntity user) {
+        return getNotFinishedExecutions(user).stream().filter(this::isExpired).toList();
+    }
+
+    /**
+     * 1:1-Portierung von {@code common.Execution#delete()} (dort zusätzlich gegen
+     * Mehrfachaufruf/virtuelle Ausführungen [{@code id < 0}] geschützt - beides in der Praxis
+     * nicht erreichbar für Ausführungen, die über {@link #getExpiredExecutions} aufgelistet
+     * wurden, siehe {@code ExpiredExecutionsWindow}s "Löschen"-Knopf).
+     */
+    @Transactional
+    public void delete(ExecutionEntity execution) {
+        this.executionRepository.delete(execution);
+    }
+
+    /**
      * 1:1-Portierung von {@code DataManager#getRunningExecution(Device)}: die laufende,
      * NICHT abgelaufene Ausführung eines Geräts (abgelaufene Ausführungen werden wie im
      * Alt-Code übersprungen, nicht als "laufend" zurückgegeben).

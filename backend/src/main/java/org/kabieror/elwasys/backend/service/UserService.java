@@ -90,6 +90,24 @@ public class UserService {
         this.userRepository.save(user);
     }
 
+    /**
+     * Ändert die Selbstbedienungs-Einstellungen des angemeldeten Benutzers (Phase 3 AP4,
+     * Testfall P17) - fachlicher Nachfolger von
+     * {@code Portal/.../components/UserSettingsWindow#save}: dort werden ausschließlich
+     * Email-Adresse, Email-Benachrichtigungs-Opt-in und Pushover-Key geändert (Name,
+     * Username, Kartennummern, Gesperrt-Status, Admin-Flag, Benutzergruppe und das
+     * elwaApp-Push-Flag bleiben unangetastet - letzteres liest dieselbe DB-Spalte wie
+     * {@code emailNotification} NICHT, siehe {@code UserEntity#isPushNotification()}-Javadoc).
+     */
+    @Transactional
+    public UserEntity updateOwnSettings(UserEntity user, String email, boolean emailNotification,
+            String pushoverUserKey) {
+        user.setEmail(email);
+        user.setEmailNotification(emailNotification);
+        user.setPushoverUserKey(pushoverUserKey == null ? "" : pushoverUserKey);
+        return this.userRepository.save(user);
+    }
+
     private void assertCardIdsAreFree(String[] cardIds, UserEntity userBeingEdited) {
         for (String cardId : cardIds) {
             if (cardId == null || cardId.isEmpty()) {
