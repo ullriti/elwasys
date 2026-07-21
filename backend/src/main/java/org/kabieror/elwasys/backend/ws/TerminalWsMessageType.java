@@ -21,12 +21,22 @@ package org.kabieror.elwasys.backend.ws;
  * {@code RESTART_RESPONSE} (Bestätigung des Terminals, dass ein Neustart entgegengenommen
  * wurde - im Alt-Protokoll gab es dafür keine Entsprechung, {@code RestartAppRequest} wurde
  * dort "fire-and-forget" verschickt) werden vom {@link TerminalWebSocketHandler} an
- * wartende Anfragen des {@link TerminalMaintenanceService} zurückgeroutet. Ein tatsächlicher
- * Terminal-seitiger Handler für {@code LOG_REQUEST}/{@code RESTART_REQUEST} existiert noch
- * nicht (Alt-Clients sprechen bis Phase 4 weiterhin das Alt-TCP-Protokoll, siehe
- * kb/05-migration-plan.md) - eine Anfrage an ein nicht verbundenes Terminal schlägt daher
- * bewusst SOFORT serverseitig fehl ({@link TerminalMaintenanceService}), ohne eine
- * Nachricht zu senden.
+ * wartende Anfragen des {@link TerminalMaintenanceService} zurückgeroutet. Zu diesem
+ * Zeitpunkt existierte noch kein Terminal-seitiger Handler für diese Nachrichtentypen
+ * (Alt-Clients sprachen bis Phase 4 weiterhin das Alt-TCP-Protokoll) - eine Anfrage an ein
+ * nicht verbundenes Terminal schlägt daher bewusst SOFORT serverseitig fehl
+ * ({@link TerminalMaintenanceService}), ohne eine Nachricht zu senden.
+ *
+ * <p><b>Phase 4 AP5</b> (siehe kb/05-migration-plan.md, "Arbeitspakete Phase 4" AP5): das
+ * Terminal verbindet sich jetzt tatsächlich ausgehend ({@code TerminalWebSocketClient} im
+ * Client-Raspi-Modul) und bedient {@code HELLO}/{@code PING}/{@code LOG_REQUEST}/
+ * {@code RESTART_REQUEST} sowie - additiv ergänzt - auch das ebenfalls portal-initiierte
+ * {@code STATUS_REQUEST} ({@link TerminalMaintenanceService#requestStatus}, fachlicher
+ * Nachfolger von {@code GetStatusRequest}/{@code GetStatusResponse}: Client-Version, Ids
+ * laufender Ausführungen). {@code STATUS_RESPONSE} wird dafür - wie schon
+ * {@code LOG_RESPONSE}/{@code RESTART_RESPONSE} - vom {@link TerminalWebSocketHandler} an
+ * wartende Anfragen zurückgeroutet, wenn es vom Terminal (nicht vom Gerüst-Pfad unten)
+ * gesendet wird.
  */
 public enum TerminalWsMessageType {
     /** Client (Terminal) -&gt; Server: Verbindungsaufbau, Client-Version/Metadaten. */
