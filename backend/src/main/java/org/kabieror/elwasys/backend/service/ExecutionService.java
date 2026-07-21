@@ -73,10 +73,22 @@ public class ExecutionService {
      */
     @Transactional
     public ExecutionEntity startExecution(ExecutionEntity execution) {
+        return startExecution(execution, null);
+    }
+
+    /**
+     * Wie {@link #startExecution(ExecutionEntity)}, aber mit einem vom Terminal
+     * mitgelieferten Original-Zeitstempel (AP3, Phase 4, additiv - siehe
+     * {@code ExecutionStartRequest#clientTimestamp()}). Ist {@code clientTimestamp}
+     * {@code null} (der bisherige, einzige Aufrufpfad), verhält sich diese Methode exakt wie
+     * zuvor ({@code LocalDateTime.now()}).
+     */
+    @Transactional
+    public ExecutionEntity startExecution(ExecutionEntity execution, LocalDateTime clientTimestamp) {
         if (execution.getStart() != null) {
             return execution;
         }
-        execution.setStart(LocalDateTime.now());
+        execution.setStart(clientTimestamp != null ? clientTimestamp : LocalDateTime.now());
         execution = this.executionRepository.save(execution);
         publishChanged(execution);
         return execution;
@@ -90,8 +102,18 @@ public class ExecutionService {
      */
     @Transactional
     public ExecutionEntity stopExecution(ExecutionEntity execution) {
+        return stopExecution(execution, null);
+    }
+
+    /**
+     * Wie {@link #stopExecution(ExecutionEntity)}, aber mit einem vom Terminal
+     * mitgelieferten Original-Zeitstempel (AP3, Phase 4, additiv - siehe
+     * {@code ExecutionEndRequest#clientTimestamp()}).
+     */
+    @Transactional
+    public ExecutionEntity stopExecution(ExecutionEntity execution, LocalDateTime clientTimestamp) {
         execution.setFinished(true);
-        execution.setStop(LocalDateTime.now());
+        execution.setStop(clientTimestamp != null ? clientTimestamp : LocalDateTime.now());
         return this.executionRepository.save(execution);
     }
 
@@ -106,7 +128,16 @@ public class ExecutionService {
      */
     @Transactional
     public ExecutionEntity finishExecution(ExecutionEntity execution) {
-        ExecutionEntity stopped = stopExecution(execution);
+        return finishExecution(execution, null);
+    }
+
+    /**
+     * Wie {@link #finishExecution(ExecutionEntity)}, aber mit einem vom Terminal
+     * mitgelieferten Original-Zeitstempel (AP3, Phase 4, additiv).
+     */
+    @Transactional
+    public ExecutionEntity finishExecution(ExecutionEntity execution, LocalDateTime clientTimestamp) {
+        ExecutionEntity stopped = stopExecution(execution, clientTimestamp);
         BigDecimal price = getPrice(stopped);
         this.creditService.payExecution(stopped, price);
         publishChanged(stopped);

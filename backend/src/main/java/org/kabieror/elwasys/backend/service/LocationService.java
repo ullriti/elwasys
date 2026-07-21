@@ -26,6 +26,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class LocationService {
 
+    /**
+     * Default-Wert für {@code offline.max-duration} (Phase 4 AP6, Auftraggeber-Vorgabe -
+     * siehe kb/05-migration-plan.md). Entspricht dem Spalten-Default der additiven Migration
+     * {@code V5__add_offline_max_duration_to_locations.sql}.
+     */
+    public static final int DEFAULT_OFFLINE_MAX_DURATION_MINUTES = 60;
+
     private final LocationRepository locationRepository;
     private final DeviceRepository deviceRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -49,8 +56,19 @@ public class LocationService {
 
     @Transactional
     public LocationEntity create(String name, Set<UserGroupEntity> validUserGroups) {
+        return create(name, validUserGroups, DEFAULT_OFFLINE_MAX_DURATION_MINUTES);
+    }
+
+    /**
+     * Wie {@link #create(String, Set)}, mit zusätzlich einstellbarer
+     * {@code offline.max-duration} (Phase 4 AP6, additiv - siehe kb/05-migration-plan.md
+     * "Festlegungen zu den Offline-Detailfragen").
+     */
+    @Transactional
+    public LocationEntity create(String name, Set<UserGroupEntity> validUserGroups, int offlineMaxDurationMinutes) {
         LocationEntity location = new LocationEntity(name);
         location.getValidUserGroups().addAll(validUserGroups);
+        location.setOfflineMaxDurationMinutes(offlineMaxDurationMinutes);
         location = this.locationRepository.save(location);
         this.eventPublisher.publishEvent(new LocationChangedEvent(location.getId()));
         return location;
@@ -62,9 +80,22 @@ public class LocationService {
      */
     @Transactional
     public LocationEntity update(LocationEntity location, String name, Set<UserGroupEntity> validUserGroups) {
+        return update(location, name, validUserGroups,
+                location.getOfflineMaxDurationMinutes() != null ? location.getOfflineMaxDurationMinutes()
+                        : DEFAULT_OFFLINE_MAX_DURATION_MINUTES);
+    }
+
+    /**
+     * Wie {@link #update(LocationEntity, String, Set)}, mit zusätzlich einstellbarer
+     * {@code offline.max-duration} (Phase 4 AP6, additiv).
+     */
+    @Transactional
+    public LocationEntity update(LocationEntity location, String name, Set<UserGroupEntity> validUserGroups,
+            int offlineMaxDurationMinutes) {
         location.setName(name);
         location.getValidUserGroups().clear();
         location.getValidUserGroups().addAll(validUserGroups);
+        location.setOfflineMaxDurationMinutes(offlineMaxDurationMinutes);
         location = this.locationRepository.save(location);
         this.eventPublisher.publishEvent(new LocationChangedEvent(location.getId()));
         return location;

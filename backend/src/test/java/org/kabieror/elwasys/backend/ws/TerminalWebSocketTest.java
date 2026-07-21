@@ -305,6 +305,32 @@ class TerminalWebSocketTest {
     }
 
     @Test
+    void requestStatusReturnsThePayloadFromTheSimulatedTerminal() throws Exception {
+        LocationEntity location = this.locationRepository.save(new LocationEntity(Fixtures.unique("loc")));
+        IssuedTerminalToken token = this.terminalTokenService.createToken(location, null);
+
+        SimulatedTerminal terminal = new SimulatedTerminal();
+        WebSocket ws = connectSimulatedTerminal(token, terminal);
+        try {
+            awaitConnected(location.getId());
+
+            Future<Map<String, Object>> future = this.executor.submit(
+                    () -> this.maintenanceService.requestStatus(location.getId()));
+
+            TerminalWsMessage request = this.objectMapper.readValue(terminal.next(), TerminalWsMessage.class);
+            assertThat(request.type()).isEqualTo(TerminalWsMessageType.STATUS_REQUEST);
+
+            reply(ws, TerminalWsMessage.inReplyTo(request, TerminalWsMessageType.STATUS_RESPONSE,
+                    Map.of("clientVersion", "test-client-version", "runningExecutionIds", List.of())));
+
+            Map<String, Object> status = future.get(5, TimeUnit.SECONDS);
+            assertThat(status.get("clientVersion")).isEqualTo("test-client-version");
+        } finally {
+            ws.abort();
+        }
+    }
+
+    @Test
     void requestRestartCompletesOnceTheSimulatedTerminalAcknowledges() throws Exception {
         LocationEntity location = this.locationRepository.save(new LocationEntity(Fixtures.unique("loc")));
         IssuedTerminalToken token = this.terminalTokenService.createToken(location, null);

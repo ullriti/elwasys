@@ -101,6 +101,23 @@ public class TerminalMaintenanceService {
     }
 
     /**
+     * Fordert den aktuellen Status (Client-Version, Ids laufender Ausführungen) des Terminals
+     * eines Standorts an - fachlicher Nachfolger von {@code GetStatusRequest}/
+     * {@code GetStatusResponse} (Phase 4 AP5, siehe kb/05-migration-plan.md
+     * "Arbeitspakete Phase 4", AP5). Anders als {@link #isConnected}/{@link #connectedSince}
+     * (reine Verbindungspräsenz, das genügt der Portal-UI für die "Verbunden"-Anzeige, siehe
+     * {@code AdminDashboardView}) liefert dies echte, vom Terminal selbst gemeldete Daten - die
+     * Gegenstelle ist {@code TerminalWebSocketClient} im Client-Raspi-Modul.
+     *
+     * @throws TerminalNotConnectedException  wenn der Standort nicht verbunden ist
+     * @throws TerminalRequestTimeoutException wenn das Terminal nicht rechtzeitig antwortet
+     */
+    public Map<String, Object> requestStatus(Integer locationId) {
+        TerminalWsMessage response = sendAndAwait(locationId, TerminalWsMessageType.STATUS_REQUEST, Map.of());
+        return response.payload() == null ? Map.of() : response.payload();
+    }
+
+    /**
      * Fordert einen Neustart der Client-Anwendung am Standort an - fachlicher Nachfolger des
      * Neustart-Menüpunkts im Alt-Dashboard ({@code RestartAppRequest}). Anders als der
      * Alt-Code (dort "fire-and-forget", die Erfolgsmeldung wird sofort nach dem Verschicken

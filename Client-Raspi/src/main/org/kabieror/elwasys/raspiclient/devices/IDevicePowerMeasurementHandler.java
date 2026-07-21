@@ -1,7 +1,7 @@
 package org.kabieror.elwasys.raspiclient.devices;
 
-import org.kabieror.elwasys.common.Execution;
+import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 
 public interface IDevicePowerMeasurementHandler {
-    void onPowerMeasurementAvailable(Execution execution, double currentPowerConsumption);
+    void onPowerMeasurementAvailable(ClientExecution execution, double currentPowerConsumption);
 }

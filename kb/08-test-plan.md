@@ -108,7 +108,7 @@ z. B. zusätzlicher Nicht-Admin-Benutzer mit Passwort, Gruppen, Geräte, Program
 Cross-Component-Fall P21/P22 (Wartungsverbindung). Portal (Playwright, 18 Tests):
 P1–P20. **Alle geplanten Fälle sind umgesetzt.**
 
-**Cross-Component (P21/P22) — Umsetzung:**
+**Cross-Component (P21/P22) — Umsetzung (Stand bis Phase 4 AP4, Alt-TCP-Protokoll):**
 - Realisiert als Client-Test `ClientMaintenanceConnectionE2ETest` (läuft im bestehenden
   Client-CI-Job mit; eigenes Skript `Client-Raspi/run-cross-component-e2e.sh`).
 - Die *Portal-Seite* wird durch genau die Klasse `MaintenanceServer` (aus `Common`)
@@ -125,13 +125,35 @@ P1–P20. **Alle geplanten Fälle sind umgesetzt.**
   optionaler Folgeschritt könnte man Portal + laufenden Client gemeinsam hochfahren und den
   Knopf per Playwright klicken.
 
+> **Update Phase 4 AP5 (2026-07-21)**: Die Fernwartung ist umgedreht (ausgehende
+> Terminal-WebSocket-Verbindung statt Alt-TCP-Protokoll, siehe kb/05-migration-plan.md/
+> kb/03-modules.md), `ClientMaintenanceConnectionE2ETest` ist entfernt. P21/P22 werden jetzt
+> durch `TerminalMaintenanceRealClientE2ETest` (Backend-Modul: Status/Log/Restart über den
+> echten WS-Kanal, echter Client-Subprozess + echte `TerminalMaintenanceService`-Bean) über
+> `Client-Raspi/run-cross-component-e2e.sh` abgedeckt – siehe kb/06-ui-tests.md für den vollen
+> Testaufbau. Der obige Abschnitt beschreibt den ABGELÖSTEN Alt-Stand, historisch belassen.
+
 **Hinweise zu den zuletzt ergänzten Fällen:**
 - **C13**: laufende Execution (start gesetzt, finished=false) vor App-Start seeden; nach
   Boot prüfen, dass der `ExecutionManager` sie als laufend übernimmt
   (`ElwaManager.initiate` scannt beim Start unerledigte Executions).
 - **C15**: Client auf einen unerreichbaren DB-Port (localhost:5433) zeigen lassen; die App
   stürzt nicht ab, sondern landet über `AbstractMainFormController.tryInitiate` im
-  `ERROR`-Zustand (mit Retry-Aktion).
+  `ERROR`-Zustand (mit Retry-Aktion). Seit Phase 4 AP4 zeigt `ClientDatabaseErrorE2ETest`
+  denselben Fall gegen ein unerreichbares BACKEND (statt einer unerreichbaren DB); seit
+  Phase 4 AP6 gilt dieses Fehlerbild NUR NOCH, wenn zusätzlich kein nutzbarer (nicht
+  abgelaufener) Offline-Snapshot vorliegt - andernfalls startet der Client im Offline-Modus
+  (siehe „C15-Nachfolger (Offline-Robustheit, Phase 4 AP6)" unten).
+
+**C15-Nachfolger (Offline-Robustheit, Phase 4 AP6, siehe kb/05-migration-plan.md
+„Konzeptskizze: Offline-Buchungen am Terminal" und kb/06-ui-tests.md „Offline-Robustheit"):**
+
+| ID | Prio | Testfall | Kern-Assertion | Testklasse |
+|----|------|----------|-----------------|------------|
+| C15a | P3 | Backend fällt während einer laufenden Ausführung aus | Ausführung wird lokal beendet + im Journal hinterlegt; nach Wiederverbindung repliziert (`finished=true` beim Backend) | `ClientOfflineRobustnessE2ETest` |
+| C15b | P3 | Backend aus, neue Buchung innerhalb `offline.max-duration` | Buchung wird offline gegen den Snapshot akzeptiert, existiert beim Backend erst nach Replay | `ClientOfflineRobustnessE2ETest` |
+| C15c | P3 | Snapshot/Zeitfenster abgelaufen, Backend aus | Neue Buchung abgelehnt, exakt dasselbe Fehlerbild wie C15 (`ERROR`-Zustand) | `ClientOfflineRobustnessE2ETest` |
+| C15d | P3 | Journal-Replay wird wiederholt (Absturz zwischen Backend-Erfolg und Journal-Löschung bzw. zweiter, sich überschneidender Versuch) | Keine Doppelbuchung (Backend dedupliziert über den Idempotenz-Schlüssel) | `ClientOfflineReplayIdempotencyE2ETest` (bewusst kein TestFX, siehe dortiger Klassen-Javadoc) |
 - **P14**: Standort wird über das Zahnrad-Menü einer Standort-Kachel auf dem Admin-
   Dashboard („Bearbeiten") geöffnet; Name-Feld vorbelegt, unveränderter Save-Round-Trip
   hält den globalen Zustand (`Default`) für andere Tests stabil.

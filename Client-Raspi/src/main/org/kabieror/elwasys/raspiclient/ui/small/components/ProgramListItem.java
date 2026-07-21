@@ -4,8 +4,8 @@ import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.layout.GridPane;
-import org.kabieror.elwasys.common.Program;
-import org.kabieror.elwasys.common.User;
+
+import org.kabieror.elwasys.raspiclient.model.ClientProgram;
 import org.kabieror.elwasys.raspiclient.ui.Icons;
 
 import java.text.NumberFormat;
@@ -17,7 +17,7 @@ import java.text.NumberFormat;
  * @author Oliver Kabierschke
  *
  */
-public class ProgramListItem extends ListCell<Program> {
+public class ProgramListItem extends ListCell<ClientProgram> {
     private final Label icon;
     private final Label caption;
     private final Label price;
@@ -58,11 +58,10 @@ public class ProgramListItem extends ListCell<Program> {
     /**
      * Updates the contents of the fields.
      */
-    private void updateContents(Program program) {
+    private void updateContents(ClientProgram program) {
         this.icon.setText(Icons.ICON_SLIDERS);
         this.caption.setText(program.getName());
-        this.price.setText(NumberFormat.getCurrencyInstance()
-                .format(program.getPrice(program.getMaxDuration(), User.getAnonymous())));
+        this.price.setText(NumberFormat.getCurrencyInstance().format(program.getPriceAtMaxDuration()));
     }
 
     /**
@@ -75,7 +74,7 @@ public class ProgramListItem extends ListCell<Program> {
     }
 
     @Override
-    protected void updateItem(Program program, boolean empty) {
+    protected void updateItem(ClientProgram program, boolean empty) {
         super.updateItem(program, empty);
         this.generateLayout();
         this.setGraphic(this.grid);

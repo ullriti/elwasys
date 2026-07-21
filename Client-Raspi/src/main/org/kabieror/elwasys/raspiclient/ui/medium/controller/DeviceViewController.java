@@ -5,10 +5,14 @@ import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
-import org.kabieror.elwasys.common.*;
+import org.kabieror.elwasys.raspiclient.api.ApiException;
 import org.kabieror.elwasys.raspiclient.application.ActionContainer;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
 import org.kabieror.elwasys.raspiclient.executions.FhemException;
+import org.kabieror.elwasys.raspiclient.model.ClientDevice;
+import org.kabieror.elwasys.raspiclient.model.ClientExecution;
+import org.kabieror.elwasys.raspiclient.model.ClientProgram;
+import org.kabieror.elwasys.raspiclient.model.ClientUser;
 import org.kabieror.elwasys.raspiclient.ui.ComponentControlInstance;
 import org.kabieror.elwasys.raspiclient.ui.MainFormState;
 import org.kabieror.elwasys.raspiclient.ui.medium.IViewController;
@@ -21,7 +25,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URL;
-import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -34,7 +37,7 @@ public class DeviceViewController implements Initializable, IViewController, Bac
 
     private MainFormController mainFormController;
 
-    private Map<Device, ComponentControlInstance<DeviceListEntry>> devices = new HashMap<>();
+    private Map<ClientDevice, ComponentControlInstance<DeviceListEntry>> devices = new HashMap<>();
 
     @FXML
     private Pane devicesPane;
@@ -62,14 +65,14 @@ public class DeviceViewController implements Initializable, IViewController, Bac
         this.mainFormController = mfc;
 
         // Lade Geräte
-        List<Device> devices = null;
+        List<ClientDevice> devices;
         try {
             devices = ElwaManager.instance.getManagedDevices();
-        } catch (SQLException | NoDataFoundException e) {
+        } catch (ApiException e) {
             this.logger.error("Cannot get devices to display.", e);
             return;
         }
-        for (Device d : devices) {
+        for (ClientDevice d : devices) {
             ComponentControlInstance<DeviceListEntry> i = DeviceListEntry.createInstance();
             i.getController().setDevice(d);
             i.getController().setDeviceViewController(this);
@@ -95,7 +98,7 @@ public class DeviceViewController implements Initializable, IViewController, Bac
     }
 
     /**
-     * Synchronisiert die dargestellten Geräte mit der Datenbank
+     * Synchronisiert die dargestellten Geräte mit dem Backend
      */
     private void syncDevices() {
         if (this.mainFormController.getRegisteredUser() != null) {
@@ -109,26 +112,21 @@ public class DeviceViewController implements Initializable, IViewController, Bac
             return;
         }
 
-        // Starte Messung der Datenbank-Zeit
+        // Starte Messung der Backend-Zeit
         long startDb = System.currentTimeMillis();
 
-        List<Device> devices;
+        List<ClientDevice> devices;
         try {
             devices = ElwaManager.instance.getManagedDevices();
-        } catch (SQLException e) {
+        } catch (ApiException e) {
             this.logger.error("Could not load devices to display.", e);
             this.mainFormController
-                    .displayError("Datenbankfehler", e.getLocalizedMessage(), new ActionContainer(this::syncDevices),
+                    .displayError("Kommunikationsfehler", e.getLocalizedMessage(), new ActionContainer(this::syncDevices),
                             true);
-            return;
-        } catch (NoDataFoundException e) {
-            this.logger.error("Could not load devices to display.", e);
-            this.mainFormController.displayError("Allgemeiner Fehler", e.getLocalizedMessage(),
-                    new ActionContainer(this::syncDevices), true);
             return;
         }
 
-        // Ende der Messung der Datenbank-Zeit
+        // Ende der Messung der Backend-Zeit
         long endDb = System.currentTimeMillis();
 
         Platform.runLater(() -> {
@@ -137,7 +135,7 @@ public class DeviceViewController implements Initializable, IViewController, Bac
 
             // Suche nach neuen Geräten
             for (int i = 0; i < devices.size(); i++) {
-                Device cDev = devices.get(i);
+                ClientDevice cDev = devices.get(i);
                 if (!this.devices.containsKey(cDev)) {
                     // Neues Gerät gefunden
                     ComponentControlInstance<DeviceListEntry> inst = DeviceListEntry.createInstance();
@@ -157,8 +155,8 @@ public class DeviceViewController implements Initializable, IViewController, Bac
             }
 
             // Suche nach gelöschten Geräten
-            List<Device> currentDevs = new ArrayList<>(this.devices.keySet());
-            for (Device d : currentDevs) {
+            List<ClientDevice> currentDevs = new ArrayList<>(this.devices.keySet());
+            for (ClientDevice d : currentDevs) {
                 if (!devices.contains(d)) {
                     // Gelöschtes Gerät gefunden
                     if (d.getCurrentExecution() != null) {
@@ -175,7 +173,7 @@ public class DeviceViewController implements Initializable, IViewController, Bac
             long endGui = System.currentTimeMillis();
 
             this.logger.trace(String
-                    .format("Refreshed devices in %1dms (DB), (%2dms between), %3dms (GUI)", endDb - startDb,
+                    .format("Refreshed devices in %1dms (Backend), (%2dms between), %3dms (GUI)", endDb - startDb,
                             startGui - endDb, endGui - startGui));
         });
     }
@@ -226,18 +224,13 @@ public class DeviceViewController implements Initializable, IViewController, Bac
      *
      * @param device Das Gerät, dessen Tür geöffnet werden soll.
      */
-    void onOpenDoor(Device device) {
+    void onOpenDoor(ClientDevice device) {
         ActionContainer ac = new ActionContainer();
         ac.setAction(() -> {
             Thread t = new Thread(() -> {
                 try {
                     ElwaManager.instance.getExecutionManager().startExecution(
-                            Execution.getOfflineExecution(device, Program.getDoorOpenProgram(), User.getAnonymous()));
-                } catch (SQLException e) {
-                    this.logger.error("Could not switch on device.", e);
-                    this.mainFormController.displayError("Datenbankfehler",
-                            "Das Gerät konnte aufgrund eines Datenbankfehlers nicht geschaltet werden.\n" +
-                                    exceptionToString(e), ac, true);
+                            ClientExecution.offline(device, ClientProgram.doorOpen(), ClientUser.anonymous()));
                 } catch (IOException e) {
                     this.logger.error("Could not switch on device.", e);
                     this.mainFormController.displayError("Kommunikationsfehler",
@@ -268,7 +261,7 @@ public class DeviceViewController implements Initializable, IViewController, Bac
      *
      * @param device Das zu buchende Gerät.
      */
-    void onDeviceSelected(Device device) {
+    void onDeviceSelected(ClientDevice device) {
         this.mainFormController.onDeviceSelected(device);
     }
 

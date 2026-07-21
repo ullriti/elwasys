@@ -1,18 +1,17 @@
 package org.kabieror.elwasys.raspiclient.executions;
 
-import org.kabieror.elwasys.common.Device;
-import org.kabieror.elwasys.common.Execution;
-import org.kabieror.elwasys.common.NoDataFoundException;
+import org.kabieror.elwasys.raspiclient.api.ApiException;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
 import org.kabieror.elwasys.raspiclient.application.ICloseListener;
 import org.kabieror.elwasys.raspiclient.devices.DevicePowerState;
 import org.kabieror.elwasys.raspiclient.devices.IDevicePowerManager;
+import org.kabieror.elwasys.raspiclient.model.ClientDevice;
+import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.security.InvalidParameterException;
-import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,13 +46,13 @@ public class ExecutionManager implements ICloseListener {
      * Alle geplanten Operationen, die zum Ende einer Programmausführung
      * ausgeführt werden
      */
-    final Map<Execution, ExecutionFinisher> executionFinishers = new HashMap<>();
+    final Map<ClientExecution, ExecutionFinisher> executionFinishers = new HashMap<>();
 
     /**
      * Alle geplanten Beendigungen von Ausführungen aufgrund von geringer
      * Leistung.
      */
-    final Map<Execution, ScheduledFuture<?>> plannedStops = new HashMap<>();
+    final Map<ClientExecution, ScheduledFuture<?>> plannedStops = new HashMap<>();
 
     private IDevicePowerManager devicePowerManager;
 
@@ -74,7 +73,7 @@ public class ExecutionManager implements ICloseListener {
         this.executorService.scheduleAtFixedRate(() -> {
             // Plane Sicherung vor externer Aktivierung der Stromzufuhr von Geräten
             try {
-                for (Device d : ElwaManager.instance.getManagedDevices()) {
+                for (ClientDevice d : ElwaManager.instance.getManagedDevices()) {
                     this.logger.trace(String.format("[%1s] Checking power state", d.getName()));
                     synchronized (d) {
                         if (d.getCurrentExecution() == null) {
@@ -100,10 +99,8 @@ public class ExecutionManager implements ICloseListener {
                         }
                     }
                 }
-            } catch (SQLException e) {
+            } catch (ApiException e) {
                 this.logger.warn("Could not get managed devices.", e);
-            } catch (NoDataFoundException e) {
-                this.logger.warn("No devices found");
             }
         }, 20, 20, TimeUnit.SECONDS);
     }
@@ -112,10 +109,9 @@ public class ExecutionManager implements ICloseListener {
      * Startet die Ausführung eines Programms
      *
      * @param e Die zu startende Ausführung
-     * @throws SQLException
      * @throws IOException
      */
-    public void startExecution(Execution e) throws SQLException, IOException, InterruptedException, FhemException {
+    public void startExecution(ClientExecution e) throws IOException, InterruptedException, FhemException {
         synchronized (e.getDevice()) {
             this.logger.info("[" + e.getDevice().getName() + "] Starting execution " + e.getId());
 
@@ -123,21 +119,17 @@ public class ExecutionManager implements ICloseListener {
 
             this.executionFinishers.put(e, r);
 
-            // Startzeit setzen
-            try {
-                e.start();
-            } catch (final SQLException ex) {
-                this.executionFinishers.remove(e);
-                throw ex;
-            }
-            this.logger.debug("[" + e.getDevice().getName() + "] Database updated");
+            // Startzeit setzen (bei über die API angelegten Ausführungen bereits vom
+            // Server gesetzt - siehe ClientExecution#start()).
+            e.start();
+            this.logger.debug("[" + e.getDevice().getName() + "] Execution marked as started");
 
             // Strom freigeben
             try {
                 this.devicePowerManager.setDevicePowerState(e.getDevice(), DevicePowerState.ON);
             } catch (final Exception ex) {
                 this.executionFinishers.remove(e);
-                e.reset();
+                this.resetOnFailure(e);
                 throw ex;
             }
             this.logger.debug("[" + e.getDevice().getName() + "] Power enabled");
@@ -161,11 +153,37 @@ public class ExecutionManager implements ICloseListener {
     }
 
     /**
+     * Setzt eine Ausführung zurück, nachdem das Einschalten der Steckdose fehlgeschlagen ist -
+     * entspricht dem {@code e.reset()}-Aufruf im Alt-Code. Für virtuelle (offline)
+     * Ausführungen (Tür öffnen) rein lokal, für reale Ausführungen über die API (siehe
+     * {@link ClientExecution} Klassenkommentar).
+     * <p>
+     * Phase 4 AP6 (siehe kb/05-migration-plan.md): eine {@link ClientExecution#isOfflinePendingReplay()
+     * offline gebuchte} Ausführung hat noch keine echte Backend-Id - statt eines (unsinnigen)
+     * Live-Aufrufs mit einer Platzhalter-Id wird ihr bereits im Journal hinterlegter
+     * {@code START}-Eintrag wieder entfernt (sonst würde ein späterer Replay eine nie
+     * tatsächlich genutzte "Geister-Ausführung" beim Backend anlegen).
+     */
+    private void resetOnFailure(ClientExecution e) {
+        if (e.isOfflinePendingReplay()) {
+            ElwaManager.instance.getOfflineGateway().cancelPendingStart(e.getOfflinePendingIdempotencyKey());
+        } else if (!e.isVirtual()) {
+            try {
+                ElwaManager.instance.getApiClient().resetExecution(e.getId());
+            } catch (ApiException apiEx) {
+                this.logger.error("[" + e.getDevice().getName() + "] Could not reset the execution on the backend.",
+                        apiEx);
+            }
+        }
+        e.resetLocally();
+    }
+
+    /**
      * Bricht eine Programmausführung ab
      *
      * @param e Die abzubrechende Programmausführung
      */
-    public void abortExecution(Execution e) {
+    public void abortExecution(ClientExecution e) {
         final ExecutionFinisher finisher = this.executionFinishers.get(e);
         if (finisher == null) {
             throw new InvalidParameterException("The execution to abort is not running");
@@ -173,7 +191,7 @@ public class ExecutionManager implements ICloseListener {
         finisher.abort();
     }
 
-    private void autoEndExecution(Execution e) {
+    private void autoEndExecution(ClientExecution e) {
         final ExecutionFinisher finisher = this.executionFinishers.get(e);
         if (finisher == null) {
             throw new InvalidParameterException("The execution to abort is not running");
@@ -186,12 +204,11 @@ public class ExecutionManager implements ICloseListener {
      * Programmausführung.
      *
      * @param e Die Abzuschließende Programmausführung.
-     * @throws SQLException
      * @throws IOException
      * @throws InterruptedException
      */
-    public void retryFinishExecution(Execution e)
-            throws SQLException, IOException, InterruptedException, FhemException {
+    public void retryFinishExecution(ClientExecution e)
+            throws IOException, InterruptedException, FhemException {
         final ExecutionFinisher finisher = this.executionFinishers.get(e);
         if (finisher == null) {
             throw new InvalidParameterException("The execution to finish is already finished");
@@ -204,8 +221,8 @@ public class ExecutionManager implements ICloseListener {
      *
      * @return Eine Liste aller laufenden Ausführungen.
      */
-    public List<Execution> getRunningExecutions() {
-        return this.executionFinishers.keySet().stream().filter(Execution::isRunning)
+    public List<ClientExecution> getRunningExecutions() {
+        return this.executionFinishers.keySet().stream().filter(ClientExecution::isRunning)
                 .collect(Collectors.toCollection(Vector::new));
     }
 
@@ -216,8 +233,8 @@ public class ExecutionManager implements ICloseListener {
      * @param device Das Gerät, dessen laufende Ausführung gesucht ist.
      * @return Die laufende Ausführung, oder null, wenn das Gerät frei ist.
      */
-    public Execution getRunningExecution(Device device) {
-        for (final Execution e : this.executionFinishers.keySet()) {
+    public ClientExecution getRunningExecution(ClientDevice device) {
+        for (final ClientExecution e : this.executionFinishers.keySet()) {
             if (e.getDevice().equals(device)) {
                 return e;
             }
@@ -232,7 +249,7 @@ public class ExecutionManager implements ICloseListener {
      * @param execution Die Ausführung, zu der ein neuer Messwert verfügbar ist.
      * @param power     Die aktuelle Leistung des Geräts in Watt.
      */
-    public void onPowerMeasurementAvailable(Execution execution, double power) {
+    public void onPowerMeasurementAvailable(ClientExecution execution, double power) {
         this.logger.debug("[" + execution.getDevice().getName() + "] Power: " + power + "W");
         if (execution.getProgram().isAutoEnd()) {
             if (power < execution.getDevice().getAutoEndPowerThreashold()) {

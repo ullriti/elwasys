@@ -358,6 +358,15 @@
 					<systemPropertyVariables>
 						<vaadin.productionMode>true</vaadin.productionMode>
 					</systemPropertyVariables>
+					<!-- TerminalMaintenanceRealClientE2ETest (Phase 4 AP5) needs its own harness
+					     (a packaged Client-Raspi jar + Xvfb, since it launches a real headless
+					     JavaFX client subprocess) - like the Playwright suite (backend/e2e/), it
+					     is NOT part of the default "mvn test" run. Run it explicitly via
+					     Client-Raspi/run-cross-component-e2e.sh (-Dtest=... overrides this
+					     exclude, same pattern Client-Raspi/run-client-e2e.sh uses). -->
+					<excludes>
+						<exclude>**/TerminalMaintenanceRealClientE2ETest.java</exclude>
+					</excludes>
 				</configuration>
 			</plugin>
 		</plugins>

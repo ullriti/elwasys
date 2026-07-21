@@ -3,7 +3,9 @@ package org.kabieror.elwasys.backend.api;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import org.kabieror.elwasys.backend.api.dto.ExecutionDto;
+import org.kabieror.elwasys.backend.api.dto.ExecutionEndRequest;
 import org.kabieror.elwasys.backend.api.dto.ExecutionStartRequest;
 import org.kabieror.elwasys.backend.api.exception.DeviceNotUsableException;
 import org.kabieror.elwasys.backend.api.exception.DeviceOccupiedException;
@@ -14,11 +16,16 @@ import org.kabieror.elwasys.backend.api.exception.ProgramNotAvailableException;
 import org.kabieror.elwasys.backend.api.exception.ProgramNotFoundException;
 import org.kabieror.elwasys.backend.api.exception.UserBlockedException;
 import org.kabieror.elwasys.backend.api.exception.UserNotFoundException;
+import org.kabieror.elwasys.backend.api.idempotency.IdempotencyService;
+import org.kabieror.elwasys.backend.api.idempotency.IdempotentResult;
 import org.kabieror.elwasys.backend.auth.terminal.TerminalPrincipal;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
+import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
+import org.kabieror.elwasys.backend.notification.NotificationService;
+import org.kabieror.elwasys.backend.offline.ClientTimestampPolicy;
 import org.kabieror.elwasys.backend.repository.ProgramRepository;
 import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.kabieror.elwasys.backend.service.CreditService;
@@ -31,6 +38,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -48,10 +56,47 @@ import org.springframework.web.bind.annotation.RestController;
  * fehlschlägt (siehe {@code ExecutionManager#startExecution}, catch-Block).
  *
  * <p>Standort-Scope strikt durchgesetzt über {@link TerminalScopeGuard}.
+ *
+ * <p><b>Idempotenz (AP3, Phase 4, additiv)</b>: alle vier Endpunkte akzeptieren einen
+ * optionalen {@code Idempotency-Key}-Header (eine vom Terminal erzeugte UUID pro fachlichem
+ * Ereignis). Wird derselbe Schlüssel erneut gesendet (z.B. nach einem Verbindungsabbruch vor
+ * Erhalt der ursprünglichen Antwort), liefert {@link IdempotencyService} die zuerst
+ * berechnete Antwort erneut aus, OHNE die fachliche Aktion (Abrechnung, Benachrichtigung)
+ * ein zweites Mal auszulösen. Fehlt der Header, verhalten sich die Endpunkte exakt wie vor
+ * AP3 (siehe {@link IdempotencyService} Klassen-Javadoc).
+ *
+ * <p><b>Original-Zeitstempel (AP3, Phase 4, additiv)</b>: {@link ExecutionStartRequest#clientTimestamp()}
+ * bzw. {@link ExecutionEndRequest#clientTimestamp()} lassen das Terminal den tatsächlichen
+ * Ereigniszeitpunkt mitschicken (statt der Serverzeit beim Empfang) - Vorbereitung für die
+ * Offline-Nachmeldung aus AP6 (siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen
+ * am Terminal"). Fehlt das Feld, verwendet der Server wie bisher seine eigene Uhr.
+ *
+ * <p><b>Benachrichtigungen (AP3, Phase 4)</b>: ein reguläres Ende ({@link #finish}) bzw. ein
+ * Abbruch ({@link #abort}) löst {@link NotificationService#notifyExecutionFinished}
+ * bzw. {@link NotificationService#notifyExecutionAborted} aus - 1:1 am selben Auslösepunkt
+ * wie {@code ExecutionFinisher#executeAction()} im Client-Alt-Code. Der Versand bleibt
+ * strikt hinter {@code elwasys.notifications.enabled} (Default AUS, siehe
+ * {@link NotificationService} Klassen-Javadoc) - dieser Controller ruft den Dienst
+ * bedingungslos auf und überlässt das Gating vollständig {@link NotificationService}, analog
+ * zu {@code PasswordResetService}. Bei einem idempotenten Replay (siehe oben) wird die
+ * Benachrichtigung NICHT erneut ausgelöst, weil die fachliche Aktion (inkl. Benachrichtigung)
+ * dann gar nicht erst erneut ausgeführt wird.
+ *
+ * <p><b>Offline-Nachmeldung/Zeitstempel-Toleranz (AP6, Phase 4, additiv)</b>: ein
+ * {@code clientTimestamp}, der außerhalb des erlaubten Zeitfensters (Standort-
+ * {@code offline.max-duration} + Uhren-Drift-Toleranz) liegt, wird von
+ * {@link ClientTimestampPolicy#resolve} durch die Serverzeit ersetzt statt die Anfrage
+ * abzulehnen (Auftraggeber-Vorgabe: "Server-Zeit + Protokollhinweis"). Zusätzlich wird eine
+ * Benachrichtigung zu einem {@code finish}/{@code abort} unterdrückt, wenn das Ereignis
+ * selbst älter als {@code offline.max-duration} ist (siehe
+ * {@link ClientTimestampPolicy#isNotificationSuppressed}) - beides bewusst NACH der
+ * Idempotenz-Prüfung ausgeführt, da ein Replay ohnehin nichts erneut auslöst.
  */
 @RestController
 @RequestMapping("/api/v1/executions")
 public class ExecutionController {
+
+    private static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 
     private final ProgramRepository programRepository;
 
@@ -67,9 +112,16 @@ public class ExecutionController {
 
     private final TerminalScopeGuard scopeGuard;
 
+    private final IdempotencyService idempotencyService;
+
+    private final NotificationService notificationService;
+
+    private final ClientTimestampPolicy clientTimestampPolicy;
+
     public ExecutionController(ProgramRepository programRepository, UserRepository userRepository,
             PermissionService permissionService, PricingService pricingService, CreditService creditService,
-            ExecutionService executionService, TerminalScopeGuard scopeGuard) {
+            ExecutionService executionService, TerminalScopeGuard scopeGuard, IdempotencyService idempotencyService,
+            NotificationService notificationService, ClientTimestampPolicy clientTimestampPolicy) {
         this.programRepository = programRepository;
         this.userRepository = userRepository;
         this.permissionService = permissionService;
@@ -77,43 +129,60 @@ public class ExecutionController {
         this.creditService = creditService;
         this.executionService = executionService;
         this.scopeGuard = scopeGuard;
+        this.idempotencyService = idempotencyService;
+        this.notificationService = notificationService;
+        this.clientTimestampPolicy = clientTimestampPolicy;
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ExecutionDto start(@AuthenticationPrincipal TerminalPrincipal terminal,
+            @RequestHeader(value = IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey,
             @Valid @RequestBody ExecutionStartRequest request) {
+        // Entitäts-Auflösung (404-Fälle) bleibt bewusst AUSSERHALB des Idempotenz-Zweigs -
+        // sie liefert das device-Objekt, das idempotencyService.execute selbst für den
+        // Standort-Scope-Parameter braucht. Alle FACHLICHEN Prüfungen (blockiert/Standort/
+        // Nutzbarkeit/Programm/Belegung/Guthaben) laufen dagegen INNERHALB des
+        // Idempotenz-Zweigs (siehe finishOrAbort für dieselbe Überlegung): sie dürfen bei
+        // einem Replay NICHT erneut ausgeführt werden, sonst könnte ein zwischenzeitlich
+        // geänderter Zustand (z.B. der Benutzer wurde nach dem erfolgreichen Erstversuch
+        // gesperrt) einen eigentlich erfolgreichen Replay fälschlich scheitern lassen.
         DeviceEntity device = this.scopeGuard.requireDeviceInScope(request.deviceId(), terminal);
         ProgramEntity program = this.programRepository.findById(request.programId()).orElseThrow(
                 () -> new ProgramNotFoundException(request.programId()));
         UserEntity user = this.userRepository.findById(request.userId()).orElseThrow(
                 () -> new UserNotFoundException(request.userId()));
 
-        if (user.isBlocked()) {
-            throw new UserBlockedException(user.getId());
-        }
-        if (!this.permissionService.isUserAllowedAtLocation(user, device.getLocation())) {
-            throw new LocationNotAllowedException(user.getId(), device.getLocation().getName());
-        }
-        if (!this.permissionService.isDeviceUsableByUser(device, user)) {
-            throw new DeviceNotUsableException(device.getId(), user.getId());
-        }
-        if (!this.permissionService.isProgramAvailableForDeviceAndUser(device, program, user)) {
-            throw new ProgramNotAvailableException(program.getId(), device.getId(), user.getId());
-        }
-        if (this.executionService.getRunningExecution(device).isPresent()) {
-            throw new DeviceOccupiedException(device.getId());
-        }
-
-        BigDecimal maxPrice = this.pricingService.getPrice(program, Duration.ofSeconds(program.getMaxDurationSeconds()),
-                user);
-        if (!this.creditService.canAfford(user, maxPrice)) {
-            throw new InsufficientCreditException(user.getId(), maxPrice, this.creditService.getCredit(user));
-        }
-
-        ExecutionEntity execution = this.executionService.createExecution(device, program, user);
-        execution = this.executionService.startExecution(execution);
-        return toDto(execution);
+        IdempotentResult<ExecutionDto> result = this.idempotencyService.execute(idempotencyKey, device.getLocation(),
+                "execution-start", HttpStatus.CREATED.value(), ExecutionDto.class, () -> {
+                    if (user.isBlocked()) {
+                        throw new UserBlockedException(user.getId());
+                    }
+                    if (!this.permissionService.isUserAllowedAtLocation(user, device.getLocation())) {
+                        throw new LocationNotAllowedException(user.getId(), device.getLocation().getName());
+                    }
+                    if (!this.permissionService.isDeviceUsableByUser(device, user)) {
+                        throw new DeviceNotUsableException(device.getId(), user.getId());
+                    }
+                    if (!this.permissionService.isProgramAvailableForDeviceAndUser(device, program, user)) {
+                        throw new ProgramNotAvailableException(program.getId(), device.getId(), user.getId());
+                    }
+                    if (this.executionService.getRunningExecution(device).isPresent()) {
+                        throw new DeviceOccupiedException(device.getId());
+                    }
+                    BigDecimal maxPrice = this.pricingService.getPrice(program,
+                            Duration.ofSeconds(program.getMaxDurationSeconds()), user);
+                    if (!this.creditService.canAfford(user, maxPrice)) {
+                        throw new InsufficientCreditException(user.getId(), maxPrice,
+                                this.creditService.getCredit(user));
+                    }
+                    ExecutionEntity execution = this.executionService.createExecution(device, program, user);
+                    LocalDateTime resolvedTimestamp = this.clientTimestampPolicy.resolve(request.clientTimestamp(),
+                            device.getLocation(), "execution-start");
+                    execution = this.executionService.startExecution(execution, resolvedTimestamp);
+                    return toDto(execution);
+                });
+        return result.body();
     }
 
     @GetMapping("/{id}")
@@ -128,28 +197,57 @@ public class ExecutionController {
      * {@code ExecutionFinisher#executeAction()}.
      */
     @PostMapping("/{id}/finish")
-    public ExecutionDto finish(@AuthenticationPrincipal TerminalPrincipal terminal, @PathVariable Integer id) {
-        return finishOrAbort(terminal, id);
+    public ExecutionDto finish(@AuthenticationPrincipal TerminalPrincipal terminal, @PathVariable Integer id,
+            @RequestHeader(value = IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey,
+            @RequestBody(required = false) ExecutionEndRequest request) {
+        return finishOrAbort(terminal, id, idempotencyKey, request, "execution-finish", false);
     }
 
     /**
      * Vorzeitiger Abbruch durch den Benutzer. Persistenzseitig identisch zu {@link #finish}
      * (siehe {@link ExecutionService#finishExecution} Javadoc) - eigener Endpunkt für eine
-     * klare API-Semantik und künftige Erweiterbarkeit (z.B. abweichende
-     * Benachrichtigungstexte, die weiterhin im Terminal entstehen).
+     * klare API-Semantik (u.a. der Abbruch-Benachrichtigungstext, siehe Klassen-Javadoc
+     * "Benachrichtigungen") und künftige Erweiterbarkeit.
      */
     @PostMapping("/{id}/abort")
-    public ExecutionDto abort(@AuthenticationPrincipal TerminalPrincipal terminal, @PathVariable Integer id) {
-        return finishOrAbort(terminal, id);
+    public ExecutionDto abort(@AuthenticationPrincipal TerminalPrincipal terminal, @PathVariable Integer id,
+            @RequestHeader(value = IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey,
+            @RequestBody(required = false) ExecutionEndRequest request) {
+        return finishOrAbort(terminal, id, idempotencyKey, request, "execution-abort", true);
     }
 
-    private ExecutionDto finishOrAbort(TerminalPrincipal terminal, Integer id) {
+    private ExecutionDto finishOrAbort(TerminalPrincipal terminal, Integer id, String idempotencyKey,
+            ExecutionEndRequest request, String operation, boolean aborted) {
         ExecutionEntity execution = this.scopeGuard.requireExecutionInScope(id, terminal);
-        if (execution.isFinished()) {
-            throw new ExecutionAlreadyFinishedException(id);
-        }
-        execution = this.executionService.finishExecution(execution);
-        return toDto(execution);
+        LocalDateTime clientTimestamp = request == null ? null : request.clientTimestamp();
+        LocationEntity location = execution.getDevice().getLocation();
+
+        // Der "bereits beendet"-Wächter muss INNERHALB des Idempotenz-Zweigs geprüft werden
+        // (siehe IdempotencyService Javadoc): bei einem Replay ist die Ausführung durch den
+        // ERSTEN Aufruf bereits finished=true - ein Check VOR dem Idempotenz-Lookup würde
+        // einen Replay fälschlich mit 409 statt der gespeicherten 200-Antwort beenden.
+        IdempotentResult<ExecutionDto> result = this.idempotencyService.execute(idempotencyKey, location, operation,
+                HttpStatus.OK.value(), ExecutionDto.class, () -> {
+                    if (execution.isFinished()) {
+                        throw new ExecutionAlreadyFinishedException(id);
+                    }
+                    LocalDateTime resolvedTimestamp = this.clientTimestampPolicy.resolve(clientTimestamp, location,
+                            operation);
+                    ExecutionEntity finished = this.executionService.finishExecution(execution, resolvedTimestamp);
+                    // Benachrichtigungen zu einem stark verspätet nachgemeldeten Ereignis werden
+                    // unterdrueckt (Auftraggeber-Vorgabe, siehe ClientTimestampPolicy-Javadoc) -
+                    // die ORIGINAL-Zeitstempel-Angabe entscheidet, nicht der ggf. per Drift-Toleranz
+                    // ersetzte resolvedTimestamp.
+                    if (!this.clientTimestampPolicy.isNotificationSuppressed(clientTimestamp, location)) {
+                        if (aborted) {
+                            this.notificationService.notifyExecutionAborted(finished.getUser(), finished.getDevice());
+                        } else {
+                            this.notificationService.notifyExecutionFinished(finished.getUser(), finished.getDevice());
+                        }
+                    }
+                    return toDto(finished);
+                });
+        return result.body();
     }
 
     /**
@@ -160,10 +258,17 @@ public class ExecutionController {
      * Eigenheit, die hier bewusst 1:1 übernommen wird).
      */
     @PostMapping("/{id}/reset")
-    public ExecutionDto reset(@AuthenticationPrincipal TerminalPrincipal terminal, @PathVariable Integer id) {
+    public ExecutionDto reset(@AuthenticationPrincipal TerminalPrincipal terminal, @PathVariable Integer id,
+            @RequestHeader(value = IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey) {
         ExecutionEntity execution = this.scopeGuard.requireExecutionInScope(id, terminal);
-        execution = this.executionService.resetExecution(execution);
-        return toDto(execution);
+        LocationEntity location = execution.getDevice().getLocation();
+
+        IdempotentResult<ExecutionDto> result = this.idempotencyService.execute(idempotencyKey, location,
+                "execution-reset", HttpStatus.OK.value(), ExecutionDto.class, () -> {
+                    ExecutionEntity reset = this.executionService.resetExecution(execution);
+                    return toDto(reset);
+                });
+        return result.body();
     }
 
     private ExecutionDto toDto(ExecutionEntity execution) {

@@ -8,13 +8,17 @@ import javafx.scene.Node;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import org.kabieror.elwasys.common.FormatUtilities;
-import org.kabieror.elwasys.common.User;
+import org.kabieror.elwasys.raspiclient.model.ClientUser;
 import org.kabieror.elwasys.raspiclient.ui.medium.IViewController;
 import org.kabieror.elwasys.raspiclient.ui.medium.MainFormController;
 import org.kabieror.elwasys.raspiclient.ui.medium.state.ToolbarState;
 
 /**
  * Controller für die Anzeige der Benutzerdaten.
+ * <p>
+ * Die Auth-Key-Anzeige (elwaApp-Kopplung) zeigt seit Phase 4 AP4 immer den
+ * "nicht verbunden"-Hinweis - siehe {@link ConfirmationViewController} Klassenkommentar für
+ * die Begründung (App-Altlast, bewusst nicht ins neue Datenmodell gemappt).
  *
  * @author Oliver Kabierschke
  */
@@ -25,7 +29,7 @@ public class UserSettingsViewController implements IViewController {
     public HBox authKeyInfo;
     public HBox appConnectionInfo;
     private MainFormController mainFormController;
-    private ChangeListener<User> userChangedListener = (observable, oldValue, newValue) -> {
+    private ChangeListener<ClientUser> userChangedListener = (observable, oldValue, newValue) -> {
         this.mainFormController.hideUserSettings();
     };
     private ToolbarState toolbarState =
@@ -67,9 +71,9 @@ public class UserSettingsViewController implements IViewController {
         }
         this.userSettingsPane.setVisible(true);
         this.credit.set(FormatUtilities.formatCurrency(this.mainFormController.getRegisteredUser().getCredit()));
-        this.authKey.set(this.mainFormController.getRegisteredUser().getAuthKey());
-        this.authKeyInfo.setVisible(this.mainFormController.getRegisteredUser().getAuthKey() != null);
-        this.appConnectionInfo.setVisible(this.mainFormController.getRegisteredUser().getAuthKey() == null);
+        this.authKey.set(null);
+        this.authKeyInfo.setVisible(false);
+        this.appConnectionInfo.setVisible(true);
     }
 
     @Override
@@ -156,4 +160,3 @@ public class UserSettingsViewController implements IViewController {
         this.authKey.set(authKey);
     }
 }
-

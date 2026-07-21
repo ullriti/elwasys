@@ -12,7 +12,12 @@ import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
-import org.kabieror.elwasys.common.*;
+import org.kabieror.elwasys.common.FormatUtilities;
+import org.kabieror.elwasys.common.ProgramType;
+import org.kabieror.elwasys.raspiclient.api.ApiException;
+import org.kabieror.elwasys.raspiclient.model.ClientDevice;
+import org.kabieror.elwasys.raspiclient.model.ClientExecution;
+import org.kabieror.elwasys.raspiclient.model.ClientUser;
 import org.kabieror.elwasys.raspiclient.application.ActionContainer;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
 import org.kabieror.elwasys.raspiclient.devices.IDeviceRegistrationService;
@@ -31,7 +36,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URL;
-import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
@@ -62,7 +66,7 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
     /**
      * Das von dieser Komponente dargestellte Gerät
      */
-    private Device device;
+    private ClientDevice device;
 
     /**
      * Der Aktualisierungsvorgang der laufenden Ausführung
@@ -72,7 +76,7 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
     /**
      * Die aktuell laufende Programmausführung
      */
-    private Execution runningExecution = null;
+    private ClientExecution runningExecution = null;
 
     /**
      * Der aktuelle Fehler eines fehlgeschlagenen Programm-Abschlusses
@@ -133,7 +137,7 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
     /**
      * Listener für eine Änderung des angemeldeten Benutzers
      */
-    private ChangeListener<User> registeredUserChangedListener = (observable, oldValue, newValue) -> {
+    private ChangeListener<ClientUser> registeredUserChangedListener = (observable, oldValue, newValue) -> {
         this.applyUserStyle(newValue);
     };
 
@@ -178,15 +182,10 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
         this.mainFormController = mfc;
         this.registrationService = ElwaManager.instance.getDeviceRegistrationService();
 
-        // Lade letzten Benutzer
-        User lastUser = null;
-        try {
-            lastUser = ElwaManager.instance.getDataRetriever().getLastUser(this.device);
-        } catch (SQLException e) {
-            this.logger.error("Could not load last user", e);
-        }
-        if (lastUser != null) {
-            this.lastUserName.set(lastUser.getName());
+        // Letzter Benutzer (bereits Teil der Geräteübersicht, siehe
+        // DeviceOverviewDto#lastUserName - kein eigener Aufruf mehr nötig).
+        if (this.device.getLastUserName() != null) {
+            this.lastUserName.set(this.device.getLastUserName());
         }
 
         ElwaManager.instance.getExecutionManager().listenToExecutionStartedEvent(this);
@@ -252,7 +251,7 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
      * @param e Die gestartete Programmausführung.
      */
     @Override
-    public void onExecutionStarted(Execution e) {
+    public void onExecutionStarted(ClientExecution e) {
         if (e.getDevice() != this.device || updateFuture != null) {
             return;
         }
@@ -286,7 +285,7 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
     }
 
     @Override
-    public void onExecutionFinished(Execution e) {
+    public void onExecutionFinished(ClientExecution e) {
         if (e.getDevice() != this.device || updateFuture == null) {
             return;
         }
@@ -317,7 +316,7 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
     }
 
     @Override
-    public void onExecutionFailed(Execution execution, Exception exception) {
+    public void onExecutionFailed(ClientExecution execution, Exception exception) {
         if (execution == this.runningExecution) {
             Platform.runLater(() -> {
                 this.displayError(exception.getLocalizedMessage(), exception, () -> {
@@ -490,13 +489,13 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
      *
      * @param user Der angemeldete Benutzer.
      */
-    private void applyUserStyle(User user) {
+    private void applyUserStyle(ClientUser user) {
         if (this.state != DeviceListEntryState.FREE && this.state != DeviceListEntryState.FREE_AVAILABLE &&
                 this.state != DeviceListEntryState.FREE_BLOCKED) {
             // Keine Aktualisierung bei besetztem Gerät
             return;
         }
-        if (user != null && this.device.getValidUserGroups().contains(user.getGroup())) {
+        if (user != null && user.isDeviceUsable(this.device.getId())) {
             // Benutzer darf das Gerät benutzen
             this.state = DeviceListEntryState.FREE_AVAILABLE;
             this.refresh(false);
@@ -571,9 +570,6 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
             final Thread actionThread = new Thread(() -> {
                 try {
                     ElwaManager.instance.getExecutionManager().retryFinishExecution(this.runningExecution);
-                } catch (final SQLException e) {
-                    this.logger.error("Could not finish the execution " + this.runningExecution.getId(), e);
-                    this.mainFormController.displayError("Datenbankfehler", e.getLocalizedMessage(), ac, true);
                 } catch (final IOException e) {
                     this.logger.error("Could not finish the execution " + this.runningExecution.getId(), e);
                     this.mainFormController.displayError("Kommunikationsfehler", e.getLocalizedMessage(), ac, true);
@@ -587,10 +583,7 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
             this.mainFormController.beginWait();
             actionThread.start();
         });
-        if (this.currentException instanceof SQLException) {
-            this.mainFormController
-                    .displayError("Datenbankfehler", this.currentException.getLocalizedMessage(), ac, true);
-        } else if (this.currentException instanceof IOException) {
+        if (this.currentException instanceof IOException) {
             this.mainFormController
                     .displayError("Kommunikationsfehler", this.currentException.getLocalizedMessage(), ac, true);
         } else {
@@ -611,7 +604,7 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
         });
     }
 
-    public void setDevice(Device device) {
+    public void setDevice(ClientDevice device) {
         this.device = device;
     }
 

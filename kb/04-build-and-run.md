@@ -162,6 +162,25 @@ Für einen echten produktiven Start mit funktionierendem Frontend-Bundle:
 `mvn -f backend/pom.xml package -Pproduction` (baut das Bundle, braucht npm/Internetzugang
 zum npm-Registry, aber KEINEN Vaadin-Lizenzcheck – der greift nur im Dev-Modus).
 
+**Wichtiger Fund (Phase 4 AP4, 2026-07-21)**: diese Einschränkung betrifft nicht nur den
+interaktiven Dev-Modus-Start, sondern JEDEN länger laufenden, real gestarteten Backend-
+Prozess ohne `-Pproduction` – auch einen, der zunächst erfolgreich hochfährt (Actuator-Health
+meldet „UP"). Der Dev-Modus-Lizenzcheck wird über Tomcats „deferred load-on-startup" erst
+NACH dem sichtbaren Start ausgelöst und hängt in dieser Sandbox mangels Netzwerkzugriff auf
+vaadin.com ca. 60 Sekunden fest, bevor er mit einer `LicenseException` den kompletten
+Spring-Kontext (Tomcat-Connector + Hikari-Pool) einreißt. Das hat konkret die
+Client-Raspi-Testharness getroffen: `Client-Raspi/ci-support/start-test-backend.sh` baute
+den Test-Backend-Jar ursprünglich ohne `-Pproduction`, wodurch `run-client-e2e.sh` ab der
+~7. Testklasse (kumulierte Laufzeit >60s) deterministisch mit „Backend nicht erreichbar"
+abbrach – siehe kb/05-migration-plan.md, Änderungslog „Phase 4 AP4" für die vollständige
+Ursachenanalyse. Fix: `start-test-backend.sh` baut jetzt ebenfalls mit `-Pproduction`
+(dieselbe Umgehung wie `backend/e2e/scripts/start-backend.sh`, siehe kb/06-ui-tests.md).
+**Merksatz für künftige Arbeitspakete**: jeder Testharness-/Deployment-Skript-Start eines
+echten, längere Zeit laufenden Backend-Prozesses in dieser Sandbox braucht `-Pproduction` –
+ein `mvn package -DskipTests` allein reicht nur für kurzlebige Aufrufe (z. B. `token-cli`,
+das sich nach wenigen Sekunden selbst beendet und daher nie in die Nähe des ~60s-Fensters
+kommt).
+
 **Backend-Tests seit AP4**: `backend/run-backend-tests.sh` führt jetzt **96/96** Tests aus (52
 aus AP1–AP3 + 44 neu aus AP4: Standort-Token-Auth, REST-API v1, WebSocket-Endpunkt – siehe
 kb/05-migration-plan.md Änderungslog).
@@ -203,16 +222,32 @@ kb/05-migration-plan.md.
 
 ### Client (`elwasys.properties`)
 Liegt neben dem JAR (bzw. unter `/opt/elwasys`). Siehe `Client-Raspi/elwasys.example.properties`.
-Pflicht: `database.*`, `location`, `portalUrl`. Gateway: entweder `deconz.*` oder `fhem.*`.
+
+**Seit Phase 4 AP5 (2026-07-21, Fernwartung umgedreht)**: `backend.url` (Basis-URL des
+Backends) + `backend.token` (Standort-Token, erzeugt über `token-cli`, siehe „Standort-Tokens
+erzeugen/widerrufen" unten) sind die **einzigen** Zugangsdaten, die der Client noch braucht –
+sie bedienen sowohl die REST-API v1 (seit Phase 4 AP4) als auch die ausgehende
+Fernwartungs-WebSocket-Verbindung (`ws/TerminalWebSocketClient`, seit Phase 4 AP5, siehe
+kb/03-modules.md). **`database.*` und `maintenance.server`/`maintenance.port`/
+`maintenance.ip` entfallen vollständig** – der Client hat keinen Direkt-DB-Zugriff mehr und
+lauscht nicht mehr als Server (bis Phase 4 AP4 galt `database.*` noch transitional für die
+mittlerweile entfernte Fernwartungs-Registrierung `LocationManager`). Weitere Keys: `location`
+(nur noch Anzeigename), `portalUrl`. Gateway: entweder `deconz.*` oder `fhem.*`. Die zuvor
+hier dokumentierten `smtp.*`-Keys entfallen ebenfalls (Benachrichtigungsversand läuft seit AP4
+zentral über das Backend, siehe kb/03-modules.md „Benachrichtigungsdienst"). **Seit Phase 4
+AP6**: `offline.pollIntervalSeconds` (Default 20) steuert das Intervall des periodischen
+Offline-Abgleichs (Snapshot-Aktualisierung + Journal-Replay, siehe kb/03-modules.md
+„Offline-Robustheit (AP6)").
 
 Start (aus `setup.sh`, `run.sh`):
 ```bash
 java -Djavafx.platform=gtk \
      -Dlogback.configurationFile=/opt/elwasys/logback.xml \
-     -Djavax.net.ssl.trustStore=/opt/elwasys/.truststore \
-     -Djavax.net.ssl.trustStorePassword=<pw> \
      -jar raspi-client.latest.jar -verbose
 ```
+(Der `-Djavax.net.ssl.trustStore*`-Flag samt Truststore-Erzeugung in `setup.sh` ist seit Phase
+4 AP5 entfallen – er diente ausschließlich der Verifikation des TLS-Zertifikats der jetzt
+entfallenen Datenbankverbindung.)
 
 ### Portal (`/etc/elwaportal/elwaportal.properties`)
 Siehe `Portal/elwaportal.example.properties`. Keys: `database.*`, `smtp.*`,
@@ -228,9 +263,13 @@ Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).
   ```bash
   bash <(curl -s https://raw.githubusercontent.com/kabieror/elwasys/master/Client-Raspi/setup.sh)
   ```
-  `setup.sh` installiert Java 17 (BellSoft armhf), UFW-Firewall, deCONZ, lädt das neueste
-  Release-JAR, schreibt `elwasys.properties`/`logback.xml`/`run.sh`, richtet Autostart über
-  `~/.xsession` ein.
+  `setup.sh` installiert Java 21 (BellSoft armhf, `bellsoft-java21-runtime-full`, siehe
+  „Bekannte Build-Risiken" unten), UFW-Firewall, deCONZ, lädt das neueste Release-JAR,
+  schreibt `elwasys.properties`/`logback.xml`/`run.sh`, richtet Autostart über
+  `~/.xsession` ein. **Seit Phase 4 AP4**: fragt interaktiv Backend-URL + Standort-Token
+  statt Datenbank-/SMTP-Zugangsdaten ab (Datenbankzugang bleibt als transitionale Zusatzfrage
+  für die Fernwartungs-Registrierung bestehen, siehe „Client" oben und
+  kb/05-migration-plan.md).
 - **Portal**: WAR auf Servlet-Container/Jetty deployen; `elwaportal.properties` bereitstellen.
 - **Backend** (seit Phase 2 AP6, siehe kb/05-migration-plan.md): Container-Image
   (`backend/Dockerfile`), Betrieb per docker-compose oder Kubernetes/Helm - siehe unten.
@@ -385,7 +424,11 @@ JDK-Version am 2026-07-20 im Phase-1-QA-Review korrigiert)*:
 
 - Vaadin 7 / GWT 2.7 Widgetset-Compilation: langsam, speicherhungrig, alte Repos
   (`maven.vaadin.com`, teils `http://`), ggf. nicht mehr erreichbar.
-- Alte Plugin-/Dependency-Versionen (Postgres 9.3-Treiber im Portal, unirest 1.x).
+- Alte Plugin-/Dependency-Versionen (Postgres 9.3-Treiber im Portal). Client-Raspi:
+  unirest 1.x/HttpComponents 4.x sind seit Phase 4 AP2 entfernt (siehe
+  kb/05-migration-plan.md); `pushover-client` bringt weiterhin transitiv eine eigene,
+  ältere `httpcomponents:httpclient:4.2.1` mit (außerhalb des AP2-Auftrags, nicht
+  angefasst).
 - **Raspi-Terminal-Laufzeit vs. Build-Sprachlevel**: `setup.sh` installiert seit
   Phase 1 `bellsoft-java21-runtime-full` (armhf) statt `-java17-`, weil das
   Client-Raspi-fat-jar seit dem Java-21-Sprachlevel-Sprung (s.o.) Bytecode

@@ -142,49 +142,26 @@ public class WashguardConfiguration extends ConfigurationManager {
     }
 
     /**
-     * Der API-Token dieser Anwendung bei Pushover.
+     * Die Basis-URL des Backends (Phase 4 AP4, siehe kb/05-migration-plan.md
+     * "Client-Cutover"), z. B. {@code http://localhost:8080/}. Ersetzt die frühere
+     * Direkt-DB-Anbindung als primären Datenzugriffspfad des Terminals.
      *
-     * @return Den API-Token dieser Anwendung bei Pushover.
+     * @return Die Basis-URL des Backends.
      */
-    public String getPushoverApiToken() {
-        return "abgQotPcAEUncZEF9AsFy3T2M36jQ7";
-    }
-
-    public String getIonicApiToken() {
-        return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJkNzg1Yzg2Mi1hYzhmLTRiYTgtYjZmMi1mZDgwMGQzZDU3ZTUifQ.B0a4pnx_n7V2vR_Vxkv7urE2FCrvUG0-Glt0lhn-7Po";
-    }
-
-    /**
-     * Die IP-Adresse, über welche der Wartungsserver kontaktiert werden soll.
-     *
-     * @return Die IP-Adresse des Wartungsservers.
-     */
-    public String getMaintenanceServer() {
-        final String ip = this.props.getProperty("maintenance.server");
-        if (ip == null || ip.isEmpty()) {
-            return "";
-        } else if (!ip.matches("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}")) {
-            this.logger.warn("The configuration value 'maintenance.server' has an invalid format and cannot be used.");
-            return "";
-        }
-        return ip;
+    public String getBackendUrl() {
+        return this.props.getProperty("backend.url");
     }
 
     /**
-     * Der Port, auf welchem der Wartungsserver erreichbar ist.
+     * Der Standort-Token dieses Terminals für die Backend-API v1
+     * ({@code Authorization: Bearer <token>}, siehe {@code backend.auth.terminal
+     * .TerminalTokenService}) - ersetzt die frühere Anmeldung mit DB-Zugangsdaten. Erzeugt
+     * über {@code token-cli} (siehe kb/04-build-and-run.md).
      *
-     * @return Der Port, auf welchem der Wartungsserver erreichbar ist.
+     * @return Den Standort-Token dieses Terminals.
      */
-    public int getMaintenancePort() {
-        int port;
-        try {
-            port = Integer.parseInt(this.props.getProperty("maintenance.port"));
-        } catch (final NumberFormatException e) {
-            this.logger.warn("The configuration valid maintenance.port is not specified or has an invalid format. Using the default 3591 " +
-                    "instead.");
-            return 3591;
-        }
-        return port;
+    public String getBackendToken() {
+        return this.props.getProperty("backend.token");
     }
 
     /**
@@ -229,6 +206,27 @@ public class WashguardConfiguration extends ConfigurationManager {
             return "";
         }
         return url;
+    }
+
+    /**
+     * Wie oft (in Sekunden) der periodische Offline-Abgleich läuft (Snapshot aktualisieren +
+     * ausstehendes Ereignis-Journal nachmelden, sobald das Backend wieder erreichbar ist -
+     * Phase 4 AP6, siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
+     * Terminal"). Default 20s, wie der bestehende Hintergrundabgleich in
+     * {@code executions.ExecutionManager}; konfigurierbar, damit Tests das Intervall
+     * verkürzen können.
+     */
+    public int getOfflinePollIntervalSeconds() {
+        int seconds;
+        try {
+            seconds = Integer.parseInt(this.props.getProperty("offline.pollIntervalSeconds"));
+        } catch (final NumberFormatException e) {
+            this.logger.warn(
+                    "The configuration value 'offline.pollIntervalSeconds' has an invalid format. Using the "
+                            + "default value of 20 seconds instead.");
+            return 20;
+        }
+        return seconds;
     }
 
     /**

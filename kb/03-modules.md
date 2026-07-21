@@ -22,11 +22,44 @@ Nachrichtenklassen, `MaintenanceServer`/`MaintenanceClient`, Handler-Interfaces,
 
 ## Client-Raspi (`org.kabieror.elwasys.raspiclient`)
 
-JavaFX-Terminal, fat-jar. Java 16. 89 Java-Dateien.
+JavaFX-Terminal, fat-jar. Java 16.
+
+**Datenzugriff seit Phase 4 AP5 (2026-07-21, Fernwartung umgedreht) vollständig umgestellt**:
+`Common.DataManager` ist komplett aus `Client-Raspi/src/main` raus (kein `DataManager`-/JDBC-
+Import mehr) – die REST-API v1 des Backends (`api/ApiClient`, seit Phase 4 AP4) und die neue,
+vom Terminal ausgehende WebSocket-Verbindung (`ws/TerminalWebSocketClient`, seit Phase 4 AP5)
+sind jetzt die EINZIGEN Datenzugriffspfade. Der zuvor transitional verbliebene Zugriffspunkt
+(Fernwartungs-Registrierung über `configuration/LocationManager` + serverseitiges
+`application/MaintenanceServerManager`) ist ersatzlos entfernt – siehe
+kb/05-migration-plan.md, Änderungslog „Phase 4 AP5“.
 
 **Pakete** (siehe 01-architecture.md für Details):
-- `application/` – `Main`, `ElwaManager` (Singleton), `MaintenanceServerManager`,
-  `SingleInstanceManager`, `ActionContainer`, `ApplicationInterfaceType`, Close-Listener
+- `application/` – `Main`, `ElwaManager` (Singleton, verdrahtet einen `ApiClient` [AP4] + seit
+  AP5 einen `ws/TerminalWebSocketClient`), `SingleInstanceManager`, `ActionContainer`,
+  `ApplicationInterfaceType`, Close-Listener. (`MaintenanceServerManager` ist seit AP5
+  entfernt, s. u.)
+- `api/` – **neu (Phase 4 AP4)**: `ApiClient` (schlanke REST-Schicht auf `java.net.http`,
+  Standort-Token als `Authorization: Bearer`, `Idempotency-Key`-Header für
+  Execution-Endpunkte), `ApiException`, `dto/` (Records: `CardLoginRequest`,
+  `CreditResponse`, `DeviceDto`, `DeviceOverviewDto`, `ExecutionDto`,
+  `ExecutionEndRequest`/`-StartRequest`, `LocationDto`, `ProgramDto`,
+  `UpdateDeconzUuidRequest`, `UserDto`; seit Phase 4 AP6 zusätzlich `SnapshotDto` +
+  `SnapshotUserDto`/`SnapshotUserGroupDto`/`SnapshotDeviceDto`/`SnapshotProgramDto`/
+  `DiscountType`, Gegenstücke zu den gleichnamigen Backend-DTOs, siehe
+  `ApiClient#getSnapshot()`) – 1:1 an die Backend-REST-API v1 angelehnt (siehe kb/03,
+  Abschnitt „REST-API v1“ weiter unten)
+- `ws/` – **neu (Phase 4 AP5)**: `TerminalWebSocketClient` (die ausgehende Fernwartungs-
+  Verbindung zum Backend, `/api/v1/terminal-ws`, dasselbe Standort-Token wie `api/ApiClient`;
+  Technologie: `org.springframework.web.socket.client.standard.StandardWebSocketClient`,
+  identisches Muster zu `devices/deconz/DeconzEventListener`), `TerminalWsMessage`/
+  `TerminalWsMessageType` (Client-seitiges Gegenstück zum Backend-Protokoll, siehe „WebSocket-
+  Endpunkt“ weiter unten) – siehe Abschnitt „Ausgehende Fernwartungs-Verbindung (AP5)“ weiter
+  unten für Details (Auth/Heartbeat/Reconnect/Fachfunktionen).
+- `model/` – **neu (Phase 4 AP4)**: `ClientDevice`/`ClientExecution`/`ClientProgram`/
+  `ClientUser` – bilden über den `ApiClient` befüllte Adapterklassen, die den
+  Identitäts-Cache nachbilden, den `Common.DataManager` intern führte (wichtig für
+  konsistente Objektidentität über mehrere `ElwaManager#getManagedDevices()`-Aufrufe hinweg,
+  siehe `ElwaManager`-Javadoc)
 - `ui/` – State-Machine + zwei UI-Größen:
   - `ui/small/` – 320×240 (`MainFormController`, `MainFormStateManager`, `ProgramListItem`)
   - `ui/medium/` – 800×480 (Haupt-UI): `MainFormController`, `MainFormStateManager`,
@@ -34,25 +67,132 @@ JavaFX-Terminal, fat-jar. Java 16. 89 Java-Dateien.
     Toolbar, UserSettings, Wait, Copyright), `state/` (ErrorState, ToolbarState, Listener)
   - `ui/scheduler/` – `InactivityScheduler`, `InactivityJob/Future`, `BacklightManager`
   - `ui/` gemeinsam: `MainFormState`, `Icons`, `UiUtilities`, `AbstractMainFormController`
-- `executions/` – `ExecutionManager`, `ExecutionFinisher`, Listener, `FhemException`
+- `executions/` – `ExecutionManager`, `ExecutionFinisher` (Benachrichtigungsversand seit AP4
+  entfernt, siehe unten; seit AP6 fängt `ExecutionFinisher` einen reinen
+  Kommunikationsfehler beim Beenden/Abbrechen ab und journaliert lokal statt einen Fehler zu
+  melden, siehe „Offline-Robustheit (AP6)“ unten), Listener, `FhemException`
+- `offline/` – **neu (Phase 4 AP6)**: `OfflineSnapshotStore`, `OfflineJournal`(`Entry`),
+  `OfflinePricing`, `OfflineGateway`, `OfflineJsonSupport` – siehe „Offline-Robustheit (AP6)“
+  weiter unten für Details
 - `devices/` – `deconz/` (Service, ApiAdapter, EventListener, PowerManager,
   RegistrationService, `model/`), `FhemDevicePowerManager`, Interfaces, `DevicePowerState`
 - `io/` – `CardReader`, `TelnetClient`, Card-Events
-- `configuration/` – `WashguardConfiguration`, `LocationManager`
+- `configuration/` – `WashguardConfiguration` (liest seit AP4 `backend.url`/`backend.token`
+  statt DB-Zugangsdaten, siehe unten). (`LocationManager` ist seit AP5 entfernt, s. o.)
 - `util/` – `BlockingMap`
+
+### Ausgehende Fernwartungs-Verbindung (AP5, 2026-07-21, Package `ws/`)
+
+Ersetzt `application/MaintenanceServerManager` (Client lauschte als TCP-Server, Portal wählte
+über eine in `locations` registrierte IP an – NAT-/Firewall-unfreundlich, siehe
+kb/05-migration-plan.md „Zielarchitektur“ Punkt 3) durch eine **vom Terminal ausgehende**,
+dauerhafte WebSocket-Verbindung zum Backend – dieselbe Richtung wie bereits die REST-API v1
+(AP4).
+
+- **Transport/Technologie**: `org.springframework.web.socket.client.standard.
+  StandardWebSocketClient` + `TextWebSocketHandler` (`spring-boot-starter-websocket`, im
+  Client bereits Dependency, identisches Muster zu `devices/deconz/DeconzEventListener` – kein
+  neuer Client eingeführt).
+- **Auth**: derselbe Standort-Token wie `api/ApiClient`, als `Authorization: Bearer <token>`-
+  Header beim WebSocket-Handshake (geprüft von derselben `TerminalApiSecurityConfig`-Kette wie
+  die REST-Endpunkte, siehe kb/03 „Standort-Token-Auth“ oben). **Kein neuer Konfig-Schlüssel**
+  nötig – `backend.url`/`backend.token` bedienen jetzt REST UND WebSocket.
+- **Verbindungsaufbau**: `HELLO` (Payload `clientVersion`, `clientUid`) direkt nach
+  `afterConnectionEstablished`, Backend antwortet `HELLO_ACK`.
+- **Heartbeat**: rein reaktiv – das Backend sendet periodisch `PING`
+  (`TerminalHeartbeatScheduler`), der Client antwortet nur mit `PONG`; ein eigener,
+  Client-initiierter Heartbeat ist nicht nötig (das Backend erkennt eine tote Verbindung über
+  sein eigenes 90s-Timeout).
+- **Reconnect**: bei Verbindungsfehler/-abbruch automatischer Reconnect mit exponentiell
+  wachsender Wartezeit (5s bis max. 5min) – identisches Muster zu
+  `DeconzEventListener#scheduleReconnect`. Die Verbindung überlebt einen vom Portal
+  ausgelösten Neustart bewusst (`onClose(restart=true)` baut NICHT ab, s. u.).
+- **Fachfunktionen** (bedient dieselben drei Anfragen, die früher über das Alt-TCP-Protokoll
+  liefen):
+  - `STATUS_REQUEST` (portal-initiiert, additiv im Backend ergänzt – siehe „WebSocket-
+    Endpunkt“ unten): Antwort enthält `clientVersion`, `startupTime` und die Ids aller aktuell
+    laufenden Ausführungen (rein lokal aus `ExecutionManager#getRunningExecutions()`, kein
+    Netzwerkzugriff nötig) – fachlicher Nachfolger von `GetStatusRequest`/`GetStatusResponse`.
+    Ergänzt (nicht ersetzt) die bereits seit AP4 bestehende, roundtrip-freie
+    „Verbunden“/„Verbunden seit“-Anzeige im Admin-Dashboard (`TerminalConnectionRegistry
+    #isConnected`/`#connectedSince`) sowie die je Gerät bereits sichtbaren laufenden
+    Ausführungen (Testfall P20, seit Phase 3 AP3, unabhängig vom Maintenance-Kanal).
+  - `LOG_REQUEST`: aktueller Inhalt der Logdatei (`Utilities#getCurrentLogFile()`) – fachlicher
+    Nachfolger von `GetLogRequest`/`GetLogResponse`.
+  - `RESTART_REQUEST`: `ElwaManager#restart()` – anders als das Alt-Protokoll (dort
+    „fire-and-forget“) bestätigt der Client den Empfang zuerst mit `RESTART_RESPONSE`, bevor
+    der Neustart ausgeführt wird.
+- Alle drei Anfragen sind PORTAL-initiiert (Backend → Terminal, vermittelt über
+  `TerminalMaintenanceService`, siehe „WebSocket-Endpunkt“ unten) – der Client sendet nur
+  `HELLO` und Antworten, nie selbst eine Anfrage.
 
 **FXML** (unter `ui/small/` und `ui/medium/components/`): MainForm + DevicePane, WaitPane,
 ConfirmationPane, ToolbarPane, ErrorPane, AbortPane, UserSettingsPane, StartupPane,
 CopyrightBar, DeviceListEntry, ProgramListEntry.
 
-**Tests** (`src/test/...`): `AutoEndTest`, `DevicePowerStatisticsAnalyzer`,
-`fhemsimulator/` (FhemSimulator, SimulatedDevice, SwitchDevice, PowerMeasurementDevice,
-DeviceState), `MaintenanceConnectionTest`, `InactivitySchedulerTest` (liegt im main-Baum).
-→ gemischt JUnit/TestNG, kein CI-Lauf.
+**Tests** (`src/test/...`, JUnit 5 + TestFX/Xvfb, siehe kb/06-ui-tests.md für den
+vollständigen, aktuellen Stand): u. a. `fhemsimulator/` (fake fhem über Telnet) und – seit
+Phase 4 AP1 – `deconzsimulator/` (`DeconzSimulator`/`DeconzWebSocketServer`/`SimulatedLight`,
+fake deCONZ über REST + einen selbst geschriebenen minimalen WebSocket-Server, JDK-only,
+keine neue Abhängigkeit) als austauschbare Gateway-Doubles für die `Client*E2ETest`-Klassen.
 
-**Konfiguration**: `elwasys.properties` (Beispiel: `elwasys.example.properties`).
-Wichtige Keys: `database.*`, `location`, `displayTimeout`, `startupDelay`,
-`sessionTimeout`, `portalUrl`, `deconz.*` **oder** `fhem.*`, `smtp.*`, `maintenance.port`.
+**Konfiguration** (Stand Phase 4 AP5, 2026-07-21): `elwasys.properties` (Beispiel:
+`elwasys.example.properties`). Wichtige Keys: `backend.url`/`backend.token` (**einziger
+Datenzugriffspfad seit AP5** – Backend-Basis-URL + Standort-Token, bedient sowohl die REST-API
+als auch die ausgehende Fernwartungs-WebSocket-Verbindung, siehe kb/04-build-and-run.md),
+`location` (nur noch Anzeigename, z. B. in Fehlermeldungen), `displayTimeout`, `startupDelay`,
+`sessionTimeout`, `portalUrl`, `deconz.*` **oder** `fhem.*`. Die zuvor hier dokumentierten
+`smtp.*`/`pushover.*`-Keys sind seit AP4 entfallen (der Client verschickt keine
+Benachrichtigungen mehr selbst, siehe unten); **seit AP5 zusätzlich entfallen**: `database.*`
+(DB-Zugangsdaten, zuvor transitional für die Fernwartungs-Registrierung) und
+`maintenance.server`/`maintenance.port`/`maintenance.ip` (der Client lauscht nicht mehr als
+Server, siehe „Ausgehende Fernwartungs-Verbindung“ oben). `setup.sh` fragt entsprechend keine
+Datenbank-/Maintenance-Port-Werte mehr ab.
+
+**Abhängigkeiten (Stand Phase 4 AP4, 2026-07-21)**: `javafx-controls`/`-fxml`/`-web`
+**23.0.2** (zuvor 20 – die höchste über Maven Central verfügbare stabile JavaFX-Version,
+deren Bytecode [Klassendatei-Major 65] noch auf dem festgelegten Java-21-Client-Runtime
+läuft; JavaFX 24+ verlangt bereits JDK 22+ und würde den Client-Start brechen, siehe
+kb/05-migration-plan.md „Technologie-Entscheidungen“), `slf4j-api` **2.0.18** (zuvor
+1.7.12), `logback-classic`/`-core` **1.5.38** (zuvor 1.2.9) – alle drei als direkte,
+versionierte Dependencies in `Client-Raspi/pom.xml` gesetzt (überschreiben die ältere
+`elwasys-parent`-`dependencyManagement` für dieses Modul allein über Maven-„nearest wins“,
+Common/Portal bleiben unangetastet auf den alten Versionen). `com.mashape.unirest:
+unirest-java:1.4.9`, `org.apache.httpcomponents:httpclient:4.5.13`/`httpasyncclient:4.0.2`/
+`httpmime:4.3.6` sowie `org.json:json` sind **entfernt** (siehe „HTTP-Client-Umstellung“
+unten). **Seit AP4 zusätzlich entfernt**: `pushover-client` und `commons-email` (Client
+verschickt keine Benachrichtigungen mehr selbst, das Backend übernimmt zentral – siehe
+kb/03-modules.md, Abschnitt „Benachrichtigungsdienst“ weiter unten und
+kb/05-migration-plan.md, Änderungslog „Phase 4 AP4“). `pi4j-core`, `gson` (jetzt primär für
+`api/ApiClient`s JSON-(De-)Serialisierung genutzt, seit AP5 auch für `ws/TerminalWsMessage`)
+unverändert. `spring-boot-starter-websocket` (bereits vor AP5 Dependency, für den
+deCONZ-WS-Client) wird seit AP5 zusätzlich tatsächlich für `ws/TerminalWebSocketClient`
+verwendet (kein neuer Dependency-Zugang nötig).
+
+**HTTP-Client-Umstellung auf `java.net.http` (Phase 4 AP2)**: die Roadmap-Annahme, `devices/
+deconz/` nutze noch unirest/HttpComponents für REST, traf beim Nachprüfen **nicht mehr zu** –
+`DeconzApiAdapter` (REST) war bereits seit dem allerersten deCONZ-Commit (2023,
+`26f91ab`/`625946c`, vor dieser Modernisierung) auf `java.net.http` implementiert, ebenso
+alle übrigen `devices/deconz/*`-Klassen (`DeconzService`, `DeconzRegistrationService` bauen
+`java.net.http.HttpRequest`s, die `DeconzApiAdapter#request` verschickt); der WebSocket-Teil
+(`DeconzEventListener`) nutzte schon vorher Springs `StandardWebSocketClient` – für deCONZ war
+also **keine Codeänderung nötig**. `devices/FhemDevicePowerManager` nutzt gar kein HTTP,
+sondern ausschließlich das Telnet-Protokoll über `io/TelnetClient` (rohe `java.net.Socket`) –
+auch hier gibt es keinen HTTP-Client zu migrieren; die Roadmap-Formulierung „Gateway-HTTP“ war
+für den fhem-Pfad irreführend. Der **einzige** tatsächliche Fund von unirest/HttpComponents/
+`org.json` in `src/main` war `executions/ExecutionFinisher` – dort verschickt der (laut
+kb/03 „Benachrichtigungsdienst“-Inventar ohnehin nicht mehr genutzte, für Phase 5 zum Entfernen
+vorgesehene) elwaApp/Ionic-Push-Zweig eine JSON-POST-Anfrage über `Unirest.post(...)`. Dieser
+Zweig wurde 1:1 (gleiche URL, Header `PROFILE_TAG`/`Authorization`/`Content-Type`, gleiches
+JSON-Body-Format über Gson statt `org.json`, gleiche Statuscode-Schwelle `> 299`, Fehler
+weiterhin lokal geloggt und geschluckt statt propagiert) auf `java.net.http` umgestellt – damit
+ließen sich `unirest-java`, alle drei `httpcomponents`-Artefakte und `org.json` vollständig aus
+`Client-Raspi/pom.xml` entfernen (verifiziert per `mvn dependency:tree`: kein Client-Code
+referenziert sie mehr; `pushover-client` brachte zu diesem Zeitpunkt noch transitiv eine
+eigene, ältere `httpcomponents:httpclient:4.2.1` mit – außerhalb des AP2-Auftrags, da
+`pushover-client` selbst damals nicht angefasst werden sollte. **Update AP4**:
+`pushover-client` ist inzwischen komplett aus `Client-Raspi/pom.xml` entfernt [siehe oben],
+diese transitive Altlast ist damit ebenfalls weg).
 
 ## Portal (`org.kabieror.elwasys.webportal`) – ⚠️ STILLGELEGT (Phase 3 AP6, 2026-07-21)
 
@@ -64,10 +204,14 @@ Wichtige Keys: `database.*`, `location`, `displayTimeout`, `startupDelay`,
 > kb/05-migration-plan.md) – nicht gelöscht, nur nicht mehr Teil des E2E-Abnahmepfads. Die CI
 > baut das Modul weiterhin (Job `portal-legacy-build` in `.github/workflows/ci.yml`), damit
 > Regressionen am liegengebliebenen Code trotzdem auffallen, solange er existiert. Die
-> Fernwartungsverbindung (`MaintenanceConnectionManager`, Testfälle P21/P22) bleibt bis Phase 4
-> in Betrieb (siehe kb/05-migration-plan.md, „Entscheidungen") – die Cross-Component-E2E-Suite
-> dafür läuft unverändert weiter (Teil des „client"-CI-Jobs, hängt nur an `Common`, nicht an
-> diesem Modul).
+> Fernwartungsverbindung (`MaintenanceConnectionManager`, Testfälle P21/P22) ist seit Phase 4
+> AP5 (2026-07-21) fachlich TOT: der Client-Raspi spricht das dafür nötige Alt-TCP-Protokoll
+> nicht mehr (siehe kb/01-architecture.md „Maintenance-Protokoll (Common)"). Der Code dieses
+> Moduls (inkl. `MaintenanceConnectionManager`) bleibt trotzdem unverändert bis Phase 5 im
+> Repo (Rahmenbedingung „Portal/ nicht anfassen"). Die alte Cross-Component-E2E-Suite
+> (`Client-Raspi/run-cross-component-e2e.sh`, Testplan P21/P22) ist durch eine neue Suite über
+> den Backend-WS-Kanal ersetzt (siehe kb/06-ui-tests.md) – sie hängt an `backend/` statt an
+> diesem Modul.
 
 Vaadin-7-Webanwendung (WAR). Java 8. 36 Java-Dateien.
 
@@ -355,18 +499,214 @@ der AP3-Catch-all-Kette, also login-pflichtig).
 |---|---|---|---|---|
 | `POST` | `/api/v1/card-login` | Kartenlogin (`CardLoginRequest{cardId}` → `UserDto` inkl. Guthaben), 1:1 `MainFormController#onCardDetected` | `200` | `404 card-not-found`, `403 user-blocked`, `403 location-not-allowed` |
 | `GET` | `/api/v1/locations/me` | Standort des Tokens (`LocationDto`) | `200` | – |
-| `GET` | `/api/v1/devices?userId=` | Geräteliste des Standorts, je Gerät `usableByUser`/`occupied`/gefilterte `programs` (`PermissionService`) | `200` | `400` (userId fehlt), `404 user-not-found` |
+| `GET` | `/api/v1/devices?userId=` | Geräteliste des Standorts, je Gerät `usableByUser`/`occupied`/gefilterte `programs` (`PermissionService`); seit AP3 zusätzlich mit Gateway-Konfigurationsfeldern (`fhemName`/`fhemSwitchName`/`fhemPowerName`/`deconzUuid`/`autoEndPowerThreashold`/`autoEndWaitTimeSeconds`) | `200` | `400` (userId fehlt), `404 user-not-found` |
 | `GET` | `/api/v1/devices/{id}?userId=` | Einzelgerät (Standort-Scope) | `200` | `404 device-not-found`, `404 user-not-found` |
-| `POST` | `/api/v1/executions` | Execution anlegen+starten (`ExecutionStartRequest{userId,deviceId,programId}`) | `201 ExecutionDto` | `404 device/program/user-not-found`, `403 user-blocked/location-not-allowed/device-not-usable/program-not-available`, `409 device-occupied`, `402 insufficient-credit` |
+| `GET` | `/api/v1/devices/overview` | **NEU (AP3)**: anonyme Geräteübersicht des Standorts OHNE `userId` (`DeviceOverviewDto`: Gateway-Konfiguration, `occupied`, `runningExecutionId`, `lastUserId`/`lastUserName`) - siehe „API-Erweiterungen (AP3)" unten | `200` | – |
+| `POST` | `/api/v1/executions` | Execution anlegen+starten (`ExecutionStartRequest{userId,deviceId,programId,clientTimestamp}`, `clientTimestamp` seit AP3 optional); akzeptiert seit AP3 optional den Header `Idempotency-Key` | `201 ExecutionDto` | `404 device/program/user-not-found`, `403 user-blocked/location-not-allowed/device-not-usable/program-not-available`, `409 device-occupied`, `402 insufficient-credit` |
 | `GET` | `/api/v1/executions/{id}` | Aktueller Stand einer Ausführung | `200` | `404 execution-not-found` |
-| `POST` | `/api/v1/executions/{id}/finish` | Reguläres Ende (bezahlt) | `200` | `404`, `409 execution-already-finished` |
-| `POST` | `/api/v1/executions/{id}/abort` | Vorzeitiger Abbruch (persistenzseitig identisch zu `finish`, eigener Endpunkt für API-Klarheit) | `200` | wie `finish` |
-| `POST` | `/api/v1/executions/{id}/reset` | Zurücksetzen ohne Abrechnung (Alt-Code: Steckdose ließ sich nach Anlegen nicht einschalten) | `200` | `404` |
+| `POST` | `/api/v1/executions/{id}/finish` | Reguläres Ende (bezahlt); seit AP3 optionaler Rumpf `ExecutionEndRequest{clientTimestamp}` + optionaler `Idempotency-Key`-Header; löst seit AP3 `NotificationService#notifyExecutionFinished` aus | `200` | `404`, `409 execution-already-finished` |
+| `POST` | `/api/v1/executions/{id}/abort` | Vorzeitiger Abbruch (persistenzseitig identisch zu `finish`, eigener Endpunkt für API-Klarheit); seit AP3 wie `finish` mit optionalem Rumpf/Header, löst `NotificationService#notifyExecutionAborted` aus | `200` | wie `finish` |
+| `POST` | `/api/v1/executions/{id}/reset` | Zurücksetzen ohne Abrechnung (Alt-Code: Steckdose ließ sich nach Anlegen nicht einschalten); seit AP3 optionaler `Idempotency-Key`-Header | `200` | `404` |
 | `GET` | `/api/v1/users/{id}/credit` | Guthabenabfrage (NICHT standortgebunden – Guthaben ist personenbezogen, siehe `UserController`-Javadoc) | `200 CreditResponse` | `404 user-not-found` |
+| `GET` | `/api/v1/snapshot` | **NEU (AP3)**: Standort-Snapshot für die Offline-Buchungs-Vorbereitung (`SnapshotDto`) - siehe „API-Erweiterungen (AP3)" unten | `200` | – |
 
 Alle Endpunkte (außer der reinen Standort-Selbstauskunft) prüfen Berechtigungen 1:1 über die
 AP2-Services (`PermissionService`, `PricingService`, `CreditService`, `ExecutionService`) –
 keine Duplikation der Fachlogik in der API-Schicht.
+
+#### API-Erweiterungen (AP3, Phase 4, 2026-07-21, additiv)
+
+Vorbereitung des Terminal-Cutovers (AP4): Inventur aller `DataManager`-/Direkt-DB-Aufrufe des
+Client-Alt-Codes (`ExecutionManager`/`ExecutionFinisher`/`LocationManager`/UI-Controller,
+`ui/medium`+`ui/small`) gegen die bestehende REST-API v1 (AP4-Stand oben) abgeglichen.
+
+**Inventur-Tabelle** (Client-Aufruf → vorhandener Endpunkt/DTO-Feld bzw. Lücke):
+
+| Client-Aufruf (Alt-Code) | Zweck | Abdeckung |
+|---|---|---|
+| `DataManager#getLocation(name)` (`ElwaManager#initiate`, `LocationManager`) | eigenen Standort auflösen | ✅ `GET /api/v1/locations/me` |
+| `DataManager#getUserByCardId` (`MainFormController#onCardDetected`) | Kartenlogin | ✅ `POST /api/v1/card-login` |
+| `DataManager#getDevicesToDisplay`/`#getDevicesToDisplayXs` (`ElwaManager#getManagedDevices`, beide UI-Größen im Zustand `SELECT_DEVICE`, **VOR** jedem Kartenlogin) | Geräteliste anzeigen | ⚠️ Lücke bis AP3: `GET /api/v1/devices` verlangt `userId` (400 ohne) - in `SELECT_DEVICE` ist aber noch kein Benutzer bekannt (Karten-Scan kann jederzeit unabhängig erfolgen, siehe `MainFormController#onCardDetected`, das in JEDEM Nicht-Fehler-Zustand reagiert). **Behoben**: neuer, anonymer `GET /api/v1/devices/overview` (siehe unten) - der bestehende Vertrag von `GET /api/v1/devices` bleibt unverändert (weiterhin `400` ohne `userId`, siehe `DeviceControllerTest#missingUserIdParameterIsRejectedWith400`) |
+| Gerät-Objekt-Felder `fhemName`/`fhemSwitchName`/`fhemPowerName`/`deconzUuid`/`autoEndPowerThreashold`/`autoEndWaitTimeSeconds` (von `devices/deconz/`, `FhemDevicePowerManager`, `ExecutionManager`s 20s-Hintergrundabgleich ALLER verwalteten Geräte genutzt) | Gateway-Ansteuerung/Auto-Ende | ⚠️ Lücke bis AP3: weder `DeviceDto` noch ein anderer Endpunkt lieferten diese Felder. **Behoben**: additive Felder auf `DeviceDto` + `DeviceOverviewDto` |
+| `DataManager#getRunningExecution(Device)` je Gerät (`ElwaManager#initiate`, Wiederaufnahme-Scan, Testfall C13) | unterbrochene Ausführung beim Start fortsetzen | ⚠️ Lücke bis AP3: kein Endpunkt lieferte die laufende Execution-Id ohne bereits bekannten Benutzer. **Behoben**: `DeviceOverviewDto#runningExecutionId` (der Client ruft anschließend `GET /api/v1/executions/{id}` für die vollen Details) |
+| `DataManager#getLastUser(Device)` (`DeviceListEntry#onStart`/`ui/small`, „letzter Benutzer"-Anzeige je Gerätekachel) | UI-Hinweis | ⚠️ Lücke bis AP3. **Behoben**: `DeviceOverviewDto#lastUserId`/`#lastUserName` (kein eigener Endpunkt nötig) |
+| `DataManager#newExecution` + `ExecutionManager#startExecution` (Buchung/Programmstart) | Execution anlegen+starten | ✅ `POST /api/v1/executions` (bereits AP4) |
+| `Execution#reset()` (`ExecutionManager#startExecution`, catch-Block bei Steckdosenfehler) | Ausführung zurücksetzen | ✅ `POST /api/v1/executions/{id}/reset` (bereits AP4) |
+| `Execution#stop()` + `User#payExecution()` (`ExecutionFinisher#executeAction`, regulär/Abbruch) | Ende/Abbruch + Abrechnung | ✅ `POST /api/v1/executions/{id}/finish`/`/abort` (bereits AP4); seit AP3 zusätzlich an `NotificationService` angebunden (siehe unten) |
+| E-Mail/Pushover-Versand in `ExecutionFinisher#executeAction` | Benachrichtigung bei Ende/Abbruch | ⚠️ Lücke bis AP3: `NotificationService` existierte (Phase 2 AP5), war aber an keinen produktiven Ablauf angebunden. **Behoben**: Anbindung an `finish`/`abort` (siehe unten), weiterhin hinter `elwasys.notifications.enabled` (Default AUS) |
+| `Location#registerClient(uid)`/`#releaseLocation()` (`LocationManager`, IP-Registry für die Alt-Fernwartung) | Standort-„Erreichbarkeit" melden | **Kein REST-Äquivalent nötig** - laut Roadmap (AP5) wird dieser Mechanismus durch eine ausgehende WebSocket-Verbindung ersetzt (`TerminalConnectionRegistry`, bereits seit Phase 2 AP4 vorhanden), nicht durch einen REST-Endpunkt |
+| Execution-Start/Ende/Abbruch: keine Wiederholungssicherheit im Alt-Code (Direkt-DB, keine Netzwerk-Retries nötig) | Robustheit bei Netzwerkfehlern zwischen Terminal und Backend | ⚠️ Lücke bis AP3 (durch die Umstellung auf REST erst relevant). **Behoben**: Idempotenz-Schlüssel + Original-Zeitstempel (siehe unten) |
+| Standort-Daten für Offline-Buchungen (Konzeptskizze, noch kein Alt-Code-Äquivalent - komplett neue Anforderung) | Offline-Buchungs-Vorbereitung (AP6) | ⚠️ Lücke bis AP3. **Behoben**: `GET /api/v1/snapshot` (siehe unten) |
+
+**Ergebnis**: 13 identifizierte Client-Zugriffspunkte. 5 bereits über die AP4-API abgedeckt
+(Zeilen 1/2/7/8/9), 1 braucht laut Roadmap explizit KEIN REST-Äquivalent (`registerClient`/
+`releaseLocation`, wird durch AP5s ausgehende WS-Verbindung ersetzt), die verbleibenden 7
+Lücken sind additiv geschlossen (2 neue Endpunkte `GET /api/v1/devices/overview` + `GET
+/api/v1/snapshot`, 2 DTO-Erweiterungen, Idempotenz-Mechanik, Original-Zeitstempel,
+Notification-Anbindung). Kein bestehender Endpunkt-Vertrag geändert.
+
+**Status Phase 4 AP4 (2026-07-21): alle 12 REST-abgedeckten Zeilen dieser Tabelle sind jetzt
+tatsächlich UMGESTELLT** – der Client ruft die jeweiligen Endpunkte über die neue
+`api/ApiClient`-Schicht auf (`ElwaManager`/`ExecutionManager`/`ExecutionFinisher`/die
+UI-Controller nutzen `Common.DataManager` dafür nicht mehr, siehe oben „Client-Raspi").
+Nur die eine planmäßig ausgenommene Zeile (`registerClient`/`releaseLocation`, Fernwartungs-
+Registrierung) bleibt wie vorgesehen bis Phase 4 AP5 auf dem Alt-DB-Pfad.
+
+**Anonyme Geräteübersicht** (`GET /api/v1/devices/overview`, `DeviceOverviewDto`, Methode
+`DeviceController#overview`): bewusst ein NEUER Pfad statt `userId` auf dem bestehenden `GET
+/api/v1/devices` optional zu machen - der bestehende 400-Vertrag bei fehlendem `userId` bleibt
+dadurch unangetastet (siehe Inventur-Tabelle). Liefert je Gerät die Gateway-Konfiguration
+(fhem/deCONZ), `occupied`, `runningExecutionId` (für den Wiederaufnahme-Scan, Testfall C13) und
+`lastUserId`/`lastUserName` (fachlicher Nachfolger von `DataManager#getLastUser`). Enthält
+bewusst KEINE `programs`/`usableByUser`-Felder (die setzen einen bekannten Benutzer voraus) -
+nach einem Kartenlogin ruft der Client wie bisher `GET /api/v1/devices?userId=...` auf.
+
+**Idempotenz + Replay** (Package `backend/.../api/idempotency/`, siehe Konzeptskizze
+„Offline-Buchungen am Terminal" Punkt 3+4 „Persistentes Ereignis-Journal"/„Nachmeldung"):
+`IdempotencyService#execute` dedupliziert terminal-gemeldete Execution-Ereignisse über den
+optionalen Header `Idempotency-Key` (eine vom Terminal erzeugte UUID pro fachlichem Ereignis) -
+`POST /api/v1/executions`, `.../finish`, `.../abort`, `.../reset` akzeptieren ihn alle. Wird
+derselbe Schlüssel erneut gesendet (z.B. nach einem Verbindungsabbruch vor Erhalt der Antwort),
+liefert der Endpunkt die ZUERST berechnete Antwort erneut aus, OHNE die fachliche Aktion
+(Abrechnung, Execution-Anlage, Benachrichtigung) ein zweites Mal auszulösen. Speicherung in der
+additiven Tabelle `terminal_idempotency_keys` (Migration `V4`, siehe kb/02-data-model.md):
+Schlüssel, Standort (informativ), Vorgangsart, HTTP-Status + JSON-Antwortkörper der ERSTEN
+erfolgreichen Ausführung. Fehlt der Header (Default-Fall, bestehende Aufrufer ohne Header),
+verhalten sich alle vier Endpunkte exakt wie vor AP3 - vollständig additiv/abwärtskompatibel.
+**Wichtiger Fallstrick** (im Code als Regressionstest festgehalten, siehe
+`ExecutionControllerNotificationTest#executionAlreadyFinishedIsCheckedInsideTheIdempotencyBranch`):
+der „bereits beendet"-Wächter von `finish`/`abort` (409 `execution-already-finished`) MUSS
+innerhalb des Idempotenz-Zweigs geprüft werden - eine Prüfung davor hätte einen Replay (die
+Ausführung ist durch den ERSTEN Aufruf bereits `finished=true`) fälschlich mit `409` statt der
+gespeicherten `200`-Antwort beendet (beim ersten Implementierungsversuch tatsächlich so
+aufgetreten, per Test aufgedeckt und behoben). Analog wandern bei `start` alle fachlichen
+Prüfungen (blockiert/Standort/Nutzbarkeit/Programm/Belegung/Guthaben) in den Idempotenz-Zweig,
+damit ein sich zwischenzeitlich ändernder Zustand (z.B. der Benutzer wird nach einem
+erfolgreichen Erstversuch gesperrt) einen Replay nicht fälschlich scheitern lässt. **Bekannte,
+dokumentierte Grenze**: keine verteilte Sperre - zwei tatsächlich GLEICHZEITIGE Anfragen mit
+demselben Schlüssel können die fachliche Aktion beide einmal auslösen, bevor der zweite Insert
+an der Unique-Constraint scheitert (siehe `IdempotencyService`-Javadoc); in der Praxis meldet
+ein einzelnes Terminal ein Ereignis sequenziell, das Risiko ist gering.
+
+**Original-Zeitstempel**: `ExecutionStartRequest#clientTimestamp`/`ExecutionEndRequest#clientTimestamp`
+(beide optional, Typ `LocalDateTime`) lassen das Terminal den tatsächlichen Ereigniszeitpunkt
+mitschicken statt der Serverzeit beim Empfang - Vorbereitung für die Offline-Nachmeldung aus
+AP6 (Konzeptskizze Punkt 4: „Backend verbucht nachträglich ... mit Original-Zeitstempeln").
+`ExecutionService#startExecution`/`#stopExecution`/`#finishExecution` haben dafür neue
+Überladungen mit einem `clientTimestamp`-Parameter bekommen (Verhalten bei `null` unverändert
+zu vorher: `LocalDateTime.now()`). Uhren-Drift-Toleranz/Ablehnung zu alter Zeitstempel ist
+laut den vorläufigen Festlegungen zu den Offline-Detailfragen (kb/05-migration-plan.md) erst
+für AP6 vorgesehen - AP3 nimmt den Zeitstempel unverändert entgegen.
+
+**Standort-Snapshot** (`GET /api/v1/snapshot`, `SnapshotController`, `SnapshotDto` + vier
+Teil-DTOs in `api/dto/`, siehe Konzeptskizze „Offline-Buchungen am Terminal" Punkt 1 „Lokaler
+Daten-Snapshot"): liefert Nutzer (Kartennummern, Guthaben, Sperr-Status, Gruppen-Id), Geräte
+(inkl. Gateway-Konfiguration wie `DeviceOverviewDto`, zulässige Gruppen-Ids, Programm-Ids),
+Programme (Preisfelder, zulässige Gruppen-Ids) und Benutzergruppen (Rabattregel) des Standorts
+mit Zeitstempel. **Enthält bewusst KEINE Passwort-Hashes** (siehe `SnapshotUserDto`-Javadoc).
+**Scope-Entscheidung**: `users`/`userGroups` sind auf Benutzer/Gruppen beschränkt, die an DIESEM
+Standort zugelassen sind (`location.getValidUserGroups()`), statt ALLE Benutzer des Systems
+auszuliefern - ein Terminal muss offline nur wissen, wer bei ihm einchecken darf; eine Karte
+eines an diesem Standort nicht zugelassenen Nutzers würde offline wie eine unbekannte Karte
+behandelt (nicht wie das spezifischere „an diesem Standort nicht erlaubt") - eine bewusst
+konservative Vereinfachung im Sinne der Konzeptskizze Punkt 2 („Regeln bewusst konservativ").
+Dieses Arbeitspaket liefert nur die DATEN aus - die eigentliche Offline-Entscheidungslogik
+(Kartenlogin/Berechtigungs-/Guthabenprüfung gegen den Snapshot, Ereignis-Journal, Replay) wurde
+in AP6 umgesetzt (siehe unten).
+
+### Offline-Robustheit (Phase 4 AP6, siehe kb/05-migration-plan.md „Konzeptskizze:
+Offline-Buchungen am Terminal")
+
+Zwei Stufen: (A) laufende, online gestartete Ausführungen bei einem Backend-Ausfall lokal zu
+Ende führen + nachmelden; (B) während des Ausfalls komplett neu gebuchte Ausführungen
+(„Offline-Buchungen"), solange der Standort-Snapshot nicht älter als dessen
+`offline.max-duration` ist.
+
+**Backend-seitig additiv** (kein bestehender Endpunkt-Vertrag geändert):
+- `locations.offline_max_duration_minutes` (Migration V5, Default 60, siehe
+  kb/02-data-model.md) - pro Standort im Portal-Standorte-Dialog editierbar
+  (`LocationFormDialog`, Feld „Offline-Maximaldauer (Minuten)"; `LocationService#create`/
+  `#update` haben dafür eine 3-Arg-Überladung bekommen, die 2-Arg-Signaturen bleiben
+  unverändert bestehen) und über `SnapshotDto#offlineMaxDurationMinutes()` ans Terminal
+  ausgeliefert.
+- Neues Package `backend/.../offline/`: `ClientTimestampPolicy` (+ `OfflineProperties`,
+  Konfigurationsschlüssel `elwasys.offline.clock-drift-tolerance`, Default `PT5M`) prüft
+  einen vom Terminal mitgeschickten `clientTimestamp` (Execution-Start/-Ende/-Abbruch, siehe
+  AP3 oben) gegen das Fenster `[jetzt - (offline.max-duration + Toleranz), jetzt + Toleranz]`
+  - liegt er außerhalb, verwendet `ExecutionController` stattdessen die Serverzeit
+  (Protokollhinweis, kein Fehler). Zusätzlich unterdrückt `ClientTimestampPolicy
+  #isNotificationSuppressed` die `finish`/`abort`-Benachrichtigung, wenn das Ereignis selbst
+  älter als `offline.max-duration` ist (ohne die Toleranz) - beides Auftraggeber-Vorgabe (siehe
+  kb/05-migration-plan.md „Festlegungen zu den Offline-Detailfragen"). Das eigentliche
+  Deduplizieren wiederholter Meldungen läuft weiterhin unverändert über den seit AP3
+  bestehenden `Idempotency-Key`-Mechanismus (`IdempotencyService`) - AP6 ist der erste
+  produktive Konsument, der ihn für eine Nachmeldung nutzt, die tatsächlich Minuten/Stunden
+  später erfolgt.
+
+**Client-seitig, neues Package `Client-Raspi/.../offline/`** (Terminal spricht weiterhin
+ausschließlich über die bestehende REST-API v1 - keine neuen Endpunkte nötig):
+- `OfflineSnapshotStore`: persistiert den zuletzt geladenen `SnapshotDto` als JSON
+  (`offline-snapshot.json` im Arbeitsverzeichnis, wie `.client-uid`/`elwasys.properties`) -
+  neustartfest, unverschlüsselt (Auftraggeber-Entscheidung, keine Passwort-Hashes enthalten).
+- `OfflineJournal`: neustartfestes, append-only Ereignis-Journal
+  (`offline-journal.jsonl`, eine JSON-Zeile je `OfflineJournalEntry` - Start/Ende/Abbruch mit
+  Idempotenz-Schlüssel, Original-Zeitstempel, und bei Ende/Abbruch entweder einer bereits
+  echten Backend-Id [Stufe A] oder dem Idempotenz-Schlüssel des zugehörigen `START`-Eintrags
+  [Stufe B, die Ausführung wurde selbst offline angelegt]). `computeOfflineDebits()` leitet
+  das lokal aufgelaufene, vom gecachten Guthaben abzuziehende Offline-Delta direkt aus dem
+  Journal her (kein separates Ledger nötig) - jeder Ende/Abbruch-Eintrag trägt dafür den
+  lokal berechneten Preis (`chargedPrice`, rein informativ, nie an das Backend geschickt).
+- `OfflinePricing`: 1:1-Portierung von `PricingService` für die Offline-Preisberechnung
+  (Snapshot liefert Flagfall/Rate/Zeiteinheit/Rabattregel, siehe `SnapshotProgramDto`/
+  `SnapshotUserGroupDto`).
+- `OfflineGateway`: zentrale Offline-Entscheidungslogik + Journal-Replay.
+  - Kartenlogin/Geräte-Übersicht/Geräte-für-Benutzer/Buchen liefern JEWEILS dieselben
+    Wire-DTOs (`UserDto`/`DeviceOverviewDto`/`DeviceDto`) bzw. dasselbe Fehler-Vokabular
+    (`ApiException`-Status/Slug) wie der Online-Pfad - der komplette UI-/Modellcode
+    (`ClientUser.of`, `ClientDevice.updateFrom`, `ClientProgram.of`,
+    `MainFormController#onCardDetected`s Fehlerbehandlung) bleibt dadurch UNVERÄNDERT
+    nutzbar.
+  - Fehlt ein nutzbarer (nicht abgelaufener) Snapshot, wird die URSPRÜNGLICHE
+    `ApiException` (der Kommunikationsfehler) unverändert weitergereicht - kein neu
+    erfundenes Fehlerbild, sondern exakt das bestehende C15-Bild.
+  - `replay()`: überträgt das komplette Journal in Reihenfolge über die (bereits seit AP3
+    idempotenten) Execution-Endpunkte. Bricht bei JEDEM Fehler sofort ab und lässt das
+    Journal komplett UNVERÄNDERT (kein teilweises Abschneiden) - der nächste Versuch
+    beginnt wieder von vorn; das ist sicher, weil das Backend über den
+    `Idempotency-Key`-Header dedupliziert (ein erneuter Versuch eines bereits erfolgreich
+    verarbeiteten Eintrags liefert nur die gespeicherte Antwort erneut, siehe
+    `ExecutionControllerOfflineReplayTest`/`ClientOfflineReplayIdempotencyE2ETest`).
+- `ClientExecution#isOfflinePendingReplay()` (entkoppelt von `isVirtual()`, das weiterhin
+  ausschließlich die rein lokale „Tür öffnen"-Funktion markiert): eine offline gebuchte,
+  noch nicht nachgemeldete Ausführung referenziert ihren Journal-`START`-Eintrag über den
+  Idempotenz-Schlüssel statt einer echten Backend-Id - `ExecutionFinisher` journaliert ihr
+  Ende/Abbruch deshalb IMMER, ohne einen (unmöglichen) Live-Aufruf zu versuchen.
+- `application.ElwaManager#cardLogin`/`#getDevicesForUser`/`#createExecution` kapseln
+  Online-Pfad (`ApiClient`) + Offline-Fallback (`OfflineGateway`) hinter demselben
+  DTO-Vertrag - `ui/medium/MainFormController`, `ui/medium/.../ConfirmationViewController`
+  und `ui/small/MainFormController` rufen nur noch diese Methoden auf (Wechsel des
+  Zielobjekts, sonst unveränderte Aufrufstellen). `#getManagedDevices()` (zentral für die
+  Geräteliste, seit AP3/AP4) ist ebenso offline-fähig gemacht.
+- **Stufe A** (`executions/ExecutionFinisher#executeAction`): der Live-`finish`/`abort`-
+  Aufruf wird wie bisher versucht; scheitert er an einem reinen Kommunikationsfehler
+  (`ApiException#isCommunicationFailure()`), wird die Ausführung stattdessen lokal
+  abgeschlossen und im Journal hinterlegt (kein Fehler-/Retry-UX) - ein ECHTER fachlicher
+  Fehler (z. B. 409 „bereits beendet") löst weiterhin das bestehende Retry-UX aus.
+- **Periodischer Hintergrundabgleich** (`ElwaManager#initiate`, eigener
+  `ScheduledExecutorService`, Intervall `offline.pollIntervalSeconds` in
+  `elwasys.properties`, Default 20s wie der bestehende `ExecutionManager`-Loop):
+  aktualisiert den Snapshot und ruft `OfflineGateway#replay()` auf, sobald das Backend
+  erreichbar ist. Ist das Backend beim Terminal-Start nicht erreichbar, aber ein noch nicht
+  abgelaufener Snapshot vorhanden, bootet der Client im Offline-Modus statt in den
+  Fehlerzustand (C15) zu gehen (`ElwaManager#initiate`, Reachability-Check).
+
+**Restrisiko** (siehe Abschlussbericht/kb/05 „Risiken"): startet der Client selbst NEU,
+während er offline ist UND eine Ausführung gerade läuft, kann diese laufende Ausführung
+nicht wiederaufgenommen werden (der Wiederaufnahme-Scan, Testfall C13, braucht die
+Backend-Antwort auf `GET /api/v1/devices/overview`/`GET /api/v1/executions/{id}` - offline
+liefert der Snapshot dafür bewusst keine Belegungsdaten, siehe `OfflineGateway
+#getDevicesOverview` Javadoc). Das ist ein enger, dokumentierter Sonderfall (Terminal-Neustart
+UND Backend-Ausfall gleichzeitig), kein Verlust bereits gemeldeter Buchungsdaten.
 
 #### WebSocket-Endpunkt (`/api/v1/terminal-ws`, Package `backend/.../ws/`)
 
@@ -393,8 +733,8 @@ zusätzliche Felder werden ignoriert (Vorwärtskompatibilität).
 | `HELLO_ACK` | Backend → Terminal | Payload `locationId`, `locationName`, `serverTime`, `protocolVersion` |
 | `PING` | beide Richtungen | Empfänger antwortet `PONG` (server-seitig; ein vom Backend gesendetes `PING`, siehe Heartbeat unten, erwartet ein `PONG` vom Terminal) |
 | `PONG` | beide Richtungen | Aktualisiert intern den „zuletzt gesehen“-Zeitstempel der Verbindung |
-| `STATUS_REQUEST` | beide Richtungen | Server antwortet `STATUS_RESPONSE` (Gerüst: `locationId`, `locationName`, `connectedSince`, `serverTime` – die volle Fernwartungs-Portierung [laufende Ausführungen, Backlight-/Interface-Status, fachliche Referenz `GetStatusResponse`] bleibt für eine spätere Vertiefung offen, siehe „Offene Punkte“ in kb/05) |
-| `STATUS_RESPONSE` | beide Richtungen | Phase 2: nur geloggt, kein Handler (die Portal-UI nutzt für den Verbindungsstatus stattdessen direkt `TerminalConnectionRegistry#isConnected`/`#connectedSince`, siehe AP4 unten – kein Bedarf für einen Roundtrip) |
+| `STATUS_REQUEST` | beide Richtungen | **Terminal → Backend** (Gerüst, seit AP4): Server antwortet SELBST `STATUS_RESPONSE` (`locationId`, `locationName`, `connectedSince`, `serverTime`) – reiner Verbindungsbeweis, kein echter Terminal-Status. **Backend → Terminal** (seit Phase 4 AP5, additiv): Portal-initiierte Anfrage (`TerminalMaintenanceService#requestStatus`), Antwort vom ECHTEN Terminal mit `clientVersion`/`startupTime`/`runningExecutionIds` (fachliche Referenz `GetStatusRequest`) |
+| `STATUS_RESPONSE` | beide Richtungen | Bis AP4: nur geloggt, kein Handler (die Portal-UI nutzt für den Verbindungsstatus stattdessen direkt `TerminalConnectionRegistry#isConnected`/`#connectedSince` – kein Bedarf für einen Roundtrip für die reine "Verbunden"-Anzeige). **Seit Phase 4 AP5** (additiv): wird, wenn vom Terminal als Antwort auf ein portal-initiiertes `STATUS_REQUEST` gesendet, wie `LOG_RESPONSE`/`RESTART_RESPONSE` über die Korrelations-`id` an die wartende Anfrage zurückgeroutet (fachliche Referenz `GetStatusResponse`) |
 | `LOG_REQUEST` | **Backend → Terminal** (seit Phase 3 AP4) | Portal-initiierte Anfrage (`TerminalMaintenanceService#requestLog`, Admin-Dashboard „Log anzeigen“), kein Payload (fachliche Referenz `GetLogRequest`) |
 | `LOG_RESPONSE` | **Terminal → Backend** (seit Phase 3 AP4) | Antwort auf `LOG_REQUEST`, Payload `{"lines": [...]}` (fachliche Referenz `GetLogResponse`); wird über die Korrelations-`id` an die wartende Anfrage zurückgeroutet |
 | `RESTART_REQUEST` | **Backend → Terminal** (seit Phase 3 AP4) | Portal-initiierte Anfrage (`TerminalMaintenanceService#requestRestart`, Admin-Dashboard „Neustart“), kein Payload (fachliche Referenz `RestartAppRequest`) |
@@ -415,8 +755,10 @@ Die Vermittlungslogik selbst ist über einen SIMULIERTEN WS-Client in `TerminalW
 (JUnit, kein echter Terminal) bewiesen: erfolgreiches Log/Neustart-Roundtrip, sofortiger Fehler
 bei nicht verbundenem Standort, Timeout bei einem verbundenen, aber nicht antwortenden Terminal.
 **Bewusst NICHT portiert**: das Alt-TCP-Protokoll (`Common.maintenance.*`,
-`MaintenanceConnectionManager`/`-Server`) selbst – das Alt-Portal bleibt dafür bis zum Cutover
-in Betrieb (siehe kb/05-migration-plan.md, „Entscheidungen“).
+`MaintenanceConnectionManager`/`-Server`) selbst – dieser Cutover ist seit Phase 4 AP5
+vollzogen (der Client spricht das Protokoll nicht mehr, siehe unten), der Code bleibt aber
+laut Roadmap unverändert bis Phase 5 im Repo (siehe kb/05-migration-plan.md,
+„Entscheidungen“).
 
 **Verbindungsregistry**: `TerminalConnectionRegistry` (in-memory, `Map<locationId, Session>`)
 – ersetzt fachlich die alte `client_ip`/`client_port`-Registrierung in `locations` (siehe
@@ -436,6 +778,56 @@ kb/05-migration-plan.md ohnehin nutzen soll) gegen einen echten, per
 `@SpringBootTest(webEnvironment=RANDOM_PORT)` gestarteten Server: Handshake ohne/mit
 ungültigem Token wird abgelehnt, HELLO/HELLO_ACK, PING/PONG, STATUS_REQUEST/STATUS_RESPONSE
 und ein unimplementierter Typ (→ `ERROR`) sind grün.
+
+**Phase 4 AP5 (Fernwartung umgedreht, 2026-07-21, siehe kb/05-migration-plan.md)**: der
+Client-Raspi verbindet sich jetzt tatsächlich (`ws/TerminalWebSocketClient`, siehe
+kb/03-modules.md Abschnitt „Client-Raspi") und bedient `LOG_REQUEST`/`RESTART_REQUEST` sowie -
+additiv im Backend ergänzt - auch `STATUS_REQUEST` (`TerminalMaintenanceService#requestStatus`,
+neue Methode, analog zu `#requestLog`/`#requestRestart`; `TerminalWebSocketHandler` routet ein
+vom Terminal gesendetes `STATUS_RESPONSE` jetzt genauso wie `LOG_RESPONSE`/`RESTART_RESPONSE`
+über `completeIfPending` zurück, statt es nur zu loggen). Die Admin-Dashboard-Toolbar
+(„Verbunden"/„Verbunden seit", Log/Neustart-Knöpfe) ist dadurch unverändert (nutzt weiterhin
+direkt `isConnected`/`connectedSince`/`requestLog`/`requestRestart`) - `requestStatus` ist
+bewusst NICHT an einen neuen Portal-UI-Knopf angebunden (kein Auftrag dafür; „läuft der
+Client"/„laufende Ausführungen" sind über die bestehende Verbunden-Anzeige bzw. die
+Geräte-Panels des Admin-Dashboards - Testfall P20, seit Phase 3 AP3, unabhängig vom
+Maintenance-Kanal - bereits sichtbar), bleibt aber als getesteter, aufrufbarer Service für
+künftige Bedarfe verfügbar. Die eigentliche End-to-End-Abdeckung mit einem ECHTEN,
+verbundenen Client - inkl. eines echten Restart-Roundtrips - liefert die neue
+`TerminalMaintenanceRealClientE2ETest` (eigener Test, siehe „Nachfolger der
+Cross-Component-Suite" unten und kb/06-ui-tests.md); `TerminalWebSocketTest` bleibt mit einem
+zusätzlichen `requestStatus`-Test (SIMULIERTER Terminal, wie schon für Log/Restart) ergänzt.
+
+**Nachfolger der Cross-Component-Suite (Testplan P21/P22, Phase 4 AP5)**:
+`backend/src/test/java/.../ws/TerminalMaintenanceRealClientE2ETest.java` ersetzt
+`Client-Raspi/src/test/.../ClientMaintenanceConnectionE2ETest.java` (Alt-TCP-Protokoll,
+entfernt). Bootet den Backend-Spring-Kontext SELBST (`@SpringBootTest(webEnvironment=
+RANDOM_PORT)`, wie `TerminalWebSocketTest`), damit `TerminalMaintenanceService` als ECHTE,
+Spring-verwaltete Bean direkt aufgerufen werden kann - exakt die Portal-seitige Vermittlung,
+die `AdminDashboardView` im Produktivbetrieb verwendet, nur ohne Browser-UI-Umweg. Der
+"Client" ist dagegen kein Test-Double, sondern der ECHTE, gepackte
+`raspi-client-*-jar-with-dependencies.jar`, als Subprozess gestartet (`-dry`, kein Gateway
+nötig) und über `--module-path`/`--add-modules` mit den JavaFX-Plattform-Modulen aus dem
+lokalen Maven-Repo versorgt (ein reines `java -jar` scheitert auf einem Standard-JDK ohne das
+mit „JavaFX runtime components are missing" - anders als auf den produktiv eingesetzten
+`bellsoft-java21-runtime-full`-Installationen, die JavaFX bereits als Plattform-Modul
+mitbringen, siehe `Client-Raspi/run-cross-component-e2e.sh`; die Produktions-Main-Class/der
+Startmechanismus selbst ist davon unberührt). Drei Testfälle (Reihenfolge über
+`@TestMethodOrder`): Status, Log, Restart. Der Restart-Test verifiziert NUR die echte
+`RESTART_RESPONSE`-Bestätigung des Terminals plus dass die WebSocket-Verbindung den Neustart
+überlebt (`TerminalWebSocketClient#onClose` baut bei `restart=true` bewusst nicht ab) und
+danach weiterhin Anfragen beantwortet - er tötet den Subprozess NICHT und beobachtet keinen
+OS-Prozess-Neustart ("Neustart" bedeutet in dieser Anwendung seit jeher ein In-Prozess-
+Reinitialisieren des Hauptfensters, `ElwaManager#restart()`, kein Prozess-Neustart - identischer
+Prüfumfang wie die entfernte Alt-Suite). Harness: `Client-Raspi/run-cross-component-e2e.sh`
+(gleicher Dateiname/Pfad wie zuvor, komplett neuer Inhalt) baut Common + den Client-Jar,
+bereitet eine frische, leere Postgres-Datenbank vor (Flyway migriert sie über den Testkontext
+- kein manuelles Seeding wie zuvor nötig) und startet die Suite unter `xvfb-run` (der reale
+Client-Subprozess braucht ein Display). `TerminalMaintenanceRealClientE2ETest` ist über
+`<excludes>` in `backend/pom.xml` bewusst NICHT Teil des normalen `mvn test`/
+`run-backend-tests.sh`-Laufs (braucht den gepackten Client-Jar + Xvfb, analog dazu, wie
+`backend/e2e/` [Playwright] ebenfalls nicht Teil davon ist) - `-Dtest=...` in
+`run-cross-component-e2e.sh` überschreibt den Ausschluss gezielt.
 
 **Tests der REST-API/Token-Auth**: `TerminalApiSecurityTest` (401 bei fehlendem/unbekanntem/
 widerrufenem Token, 200 bei gültigem, Terminal-Token gewährt KEINEN Zugriff auf die
@@ -509,12 +901,26 @@ lassen). Nutzt denselben `spring.mail.*`-Transport wie oben.
   priority`, `url`/`url_title` sind wie im Alt-Aufruf fest verdrahtet, nicht konfigurierbar).
 
 **Scharfschaltung (kritisch, Doppelversand-Risiko)**: `elwasys.notifications.enabled`
-(Env `ELWASYS_NOTIFICATIONS_ENABLED`) ist per Default **aus** und wird von **keinem**
-produktiven Ablauf aufgerufen – Client-Raspi verschickt im Parallelbetrieb (Phase 2–4)
-weiterhin selbst. Verdrahtung mit echten Ereignissen (Terminal meldet „Programm beendet"/
-„abgebrochen" über die API) sowie das Abschalten des Alt-Versands kommen in Phase 4,
-danach kann das Flag scharfgeschaltet werden. Analog zu `elwasys.auth.rehash-on-login`
-(AP3).
+(Env `ELWASYS_NOTIFICATIONS_ENABLED`) ist per Default **aus**. Seit Phase 4 AP3 ist der
+Dienst an den API-Execution-Lebenszyklus angebunden: `ExecutionController#finish`/`#abort`
+rufen `NotificationService#notifyExecutionFinished`/`#notifyExecutionAborted` bedingungslos
+auf (der Controller kennt den Schalter nicht, das Gating bleibt vollständig in
+`NotificationService#dispatch` gekapselt) - solange das Flag AUS bleibt, bleibt jeder Aufruf
+ein wirkungsloser No-Op, siehe `dispatch`-Javadoc. **Update AP4 (2026-07-21, Client-Cutover
+abgeschlossen)**: der Alt-Versandcode ist jetzt tatsächlich aus `ExecutionFinisher` entfernt
+(Commons-Email/Pushover-Client-Deps raus aus `Client-Raspi/pom.xml`, siehe
+kb/05-migration-plan.md, Änderungslog „Phase 4 AP4“) - das vormals beschriebene
+Doppelversand-Risiko besteht damit nicht mehr. Das Backend-Flag selbst bleibt trotzdem
+bewusst per Code-Default AUS (abgesichert durch `NotificationsPropertiesDefaultTest`); das
+tatsächliche Scharfschalten (`ELWASYS_NOTIFICATIONS_ENABLED=true` in der jeweiligen
+Deployment-Konfiguration, z. B. `deploy/compose/.env`) ist ein **operativer** Schritt, der
+laut Roadmap erst bei der eigentlichen Produktivumschaltung (Phase 6) ansteht, wenn reale
+Terminals im Feld auf den neuen Unterbau umgestellt werden - in dieser
+Entwicklungs-/Sandbox-Umgebung bleibt es aus. Bei einem idempotenten Replay derselben
+Execution-Meldung (siehe „API-Erweiterungen (AP3)" oben) wird die Benachrichtigung NICHT
+erneut ausgelöst, weil die komplette fachliche Aktion (inkl. Benachrichtigung) bei einem
+Replay gar nicht erst erneut ausgeführt wird. Analog zu `elwasys.auth.rehash-on-login`
+(AP3 der Auth, nicht zu verwechseln mit dieser Phase-4-AP3).
 
 **Actuator-Nebenwirkung**: `spring-boot-starter-mail` auf dem Klassenpfad aktiviert
 automatisch einen Mail-Health-Indikator, der ohne konfigurierten SMTP-Server den
@@ -916,11 +1322,15 @@ Verbindung entfällt, siehe kb/02-data-model.md) sowie den Knöpfen „Log anzei
 (`LogViewerDialog`, fachlicher Nachfolger von `LogViewerWindow`) und „Neustart“ – fachlicher
 Nachfolger der `AdminDashboardLocationPanel`-Toolbar. Beide Knöpfe rufen
 `TerminalMaintenanceService` auf und zeigen für einen NICHT verbundenen Standort denselben
-Fehlertext wie der Alt-Code („Keine Verbindung zum Client“/„...zum Standort.“) – der in dieser
-Phase (siehe Roadmap: Alt-Clients verbinden sich erst in Phase 4 über diesen Kanal) praktisch
-immer erwartbare Fall. **Bewusst NICHT portiert**: das Alt-TCP-Protokoll selbst
-(`MaintenanceConnectionManager`/`Common.maintenance.*`) – das Alt-Portal bleibt dafür bis zum
-Cutover in Betrieb, siehe kb/05-migration-plan.md, „Entscheidungen“.
+Fehlertext wie der Alt-Code („Keine Verbindung zum Client“/„...zum Standort.“) – zum
+Implementierungszeitpunkt (Phase 3 AP4, siehe Roadmap: Alt-Clients verbanden sich erst in
+Phase 4 über diesen Kanal) praktisch immer der erwartbare Fall; **seit Phase 4 AP5** verbindet
+sich der Client-Raspi tatsächlich (siehe „Ausgehende Fernwartungs-Verbindung“ oben), die
+Toolbar zeigt jetzt im Normalbetrieb „Verbunden“ und beide Knöpfe funktionieren gegen einen
+echten Terminal. **Bewusst NICHT portiert**: das Alt-TCP-Protokoll selbst
+(`MaintenanceConnectionManager`/`Common.maintenance.*`) – dieser Cutover ist mit AP5 vollzogen,
+der Alt-Code bleibt trotzdem unverändert bis Phase 5 im Repo, siehe kb/05-migration-plan.md,
+„Entscheidungen“.
 
 **Tests** (17 neu): `PasswordServiceTest` (4, inkl. Migration eines SHA1-Bestandshashes beim
 Ändern), `PasswordResetServiceTest` (6, mit echtem SMTP-Mock GreenMail durch den vollen

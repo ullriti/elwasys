@@ -1,6 +1,6 @@
 package org.kabieror.elwasys.raspiclient.application;
 
-import org.kabieror.elwasys.common.Execution;
+import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -33,7 +33,7 @@ public class AutoEndTest {
             }
 
             final Double value = Double.parseDouble(input);
-            final List<Execution> executions = ElwaManager.instance.getExecutionManager().getRunningExecutions();
+            final List<ClientExecution> executions = ElwaManager.instance.getExecutionManager().getRunningExecutions();
             if (executions.isEmpty()) {
                 System.out.println("Keine laufende Ausführung.");
             } else {
