@@ -45,10 +45,11 @@ JavaFX-Terminal, fat-jar. Java 16. 89 Java-Dateien.
 ConfirmationPane, ToolbarPane, ErrorPane, AbortPane, UserSettingsPane, StartupPane,
 CopyrightBar, DeviceListEntry, ProgramListEntry.
 
-**Tests** (`src/test/...`): `AutoEndTest`, `DevicePowerStatisticsAnalyzer`,
-`fhemsimulator/` (FhemSimulator, SimulatedDevice, SwitchDevice, PowerMeasurementDevice,
-DeviceState), `MaintenanceConnectionTest`, `InactivitySchedulerTest` (liegt im main-Baum).
-→ gemischt JUnit/TestNG, kein CI-Lauf.
+**Tests** (`src/test/...`, JUnit 5 + TestFX/Xvfb, siehe kb/06-ui-tests.md für den
+vollständigen, aktuellen Stand): u. a. `fhemsimulator/` (fake fhem über Telnet) und – seit
+Phase 4 AP1 – `deconzsimulator/` (`DeconzSimulator`/`DeconzWebSocketServer`/`SimulatedLight`,
+fake deCONZ über REST + einen selbst geschriebenen minimalen WebSocket-Server, JDK-only,
+keine neue Abhängigkeit) als austauschbare Gateway-Doubles für die `Client*E2ETest`-Klassen.
 
 **Konfiguration**: `elwasys.properties` (Beispiel: `elwasys.example.properties`).
 Wichtige Keys: `database.*`, `location`, `displayTimeout`, `startupDelay`,

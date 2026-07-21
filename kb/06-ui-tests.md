@@ -57,6 +57,90 @@ machte aus einem leeren Wert `"http://"` (nicht blank) → `ElwaManager.initiate
 **immer** deCONZ, der dokumentierte fhem-Fallback war toter Code (zudem NPE bei fehlendem
 Key). Fix: leer bleibt leer. Damit ist der fhem-Pfad wieder erreichbar und testbar.
 
+## Client (JavaFX) – deCONZ-Simulator + beide Gateways im E2E ✅ (Phase 4 AP1, 2026-07-21)
+
+Bis Phase 4 AP1 lief die komplette Client-E2E-Suite ausschließlich gegen den fhem-Pfad
+(`FhemSimulator`). Da laut Auftraggeber-Entscheidung (2026-07-20, siehe kb/05
+„Entscheidungen") **beide Gateways** (fhem und deCONZ) im Einsatz bleiben, braucht die
+Testharness einen deCONZ-Gegenpart und muss die wichtigsten Szenarien mit **beiden**
+Simulatoren nachweisen.
+
+### `DeconzSimulator` (`src/test/.../application/deconzsimulator/`)
+
+Fachliches Gegenstück zu `FhemSimulator`, bildet aber statt eines Telnet-Protokolls die
+**REST+WebSocket**-Architektur von deCONZ nach (siehe `Client-Raspi/.../devices/deconz/`
+und `doc/deconz`):
+
+- **REST-API** über `com.sun.net.httpserver.HttpServer` (Teil der JDK, keine neue
+  Abhängigkeit): `POST /api` (Authentifizierung, liefert ein festes Fake-Token),
+  `GET/PUT /api/{token}/config` (WebSocket-Port melden bzw. Pairing/Registrierung –
+  Letzteres nur als Stub, siehe unten), `GET/PUT /api/{token}/lights/{id}[/state]`
+  (Zustand lesen/schalten). Die JSON-(De-)Serialisierung nutzt bewusst direkt die
+  **Produktions-Model-Records** aus `devices/deconz/model/` (statt eigener Test-DTOs), damit
+  das Wire-Format garantiert mit dem echten Client-Code übereinstimmt.
+- **WebSocket-Server** (`DeconzWebSocketServer`, package-privat): eine minimale, selbst
+  geschriebene RFC-6455-Implementierung (Handshake + unmaskierte Text-Frames), **keine neue
+  Abhängigkeit** – geprüft wurde, dass für einen reinen WebSocket-*Client* (den der
+  Produktionscode über `StandardWebSocketClient`/Tomcats eingebettete WS-Client-
+  Implementierung nutzt, transitiv über `spring-boot-starter-websocket` →
+  `tomcat-embed-websocket` vorhanden) kein zusätzlicher Server-Unterbau im Projekt existiert;
+  da der Client auf dieser Verbindung nie selbst sendet, genügt Handshake + Senden.
+- **Geräte**: vier vorregistrierte Lampen `wm1`..`wm4` (Namens-Analogie zu `FhemSimulator`s
+  `wm1sw`..`wm4sw`), deren Id zugleich der in `devices.deconz_uuid` zu seedende Wert ist.
+- **Leistungsmessung**: nicht automatisch – ein Test ruft `sendPowerMeasurement(uuid, watt)`
+  gezielt auf (sendet ein `sensors`-WebSocket-Event mit `uniqueid = uuid + "-power"`, passend
+  zum `startsWith`-Präfixvergleich in `DeconzDevicePowerManager`).
+- **Geräte-Registrierung**: laut Auftrag nur so weit modelliert, wie es der Buchungs-/
+  Auto-Ende-Ablauf braucht – das ist **gar nicht**, da Registrierung ein separater,
+  manueller Admin-Vorgang ist (`DeviceListEntry`-Zahnrad), der in keinem der vier
+  Pflichtszenarien auftritt. `PUT config` (Pairing) ist daher nur ein Stub (200 OK, kein
+  Geräte-Scan); `sendDeviceAddedEvent(uuid)` steht für einen künftigen, dedizierten Test von
+  `DeconzRegistrationService` bereit, wird aber von AP1 nicht genutzt.
+
+### Drei neue E2E-Testklassen (deCONZ-Pendants zu bestehenden fhem-Tests)
+
+**Organisationsentscheidung**: statt die bestehenden fhem-Tests zu parametrisieren, gibt es
+**eigene Testklassen** je Pflichtszenario – dieselbe reale Anwendungslogik
+(`ElwaManager`/`DeconzApiAdapter`/`DeconzEventListener`/`DeconzDevicePowerManager`, gewählt
+von `ElwaManager.initiate()`, sobald `deconz.server` gesetzt ist) wird durchlaufen, aber die
+bewährte fhem-Suite bleibt unangetastet und ein gatewayspezifischer Regressionsfall schlägt
+gezielt nur in einer der beiden Klassen fehl:
+
+| Test | fhem-Pendant | Testplan | Deckt |
+|---|---|---|---|
+| `ClientUsageDeconzE2ETest` | `ClientUsageE2ETest` | C2–C5 | Karten-Login, Geräteliste, Gerät buchen, Programmstart – inkl. Assertion, dass die simulierte deCONZ-Lampe tatsächlich eingeschaltet wurde |
+| `ClientAutoEndDeconzE2ETest` | `ClientAutoEndE2ETest` | C11 | Auto-Ende – geht über das fhem-Pendant hinaus: statt sich nur auf den eingebauten „0 W beim Start"-Fallback zu verlassen, schickt der Test einen echten **Über-Schwellwert**-Messwert (muss den geplanten Auto-Stopp abbrechen – verifiziert durch Warten über die Wartezeit hinaus, Ausführung muss noch laufen) und danach einen echten **Unter-Schwellwert**-Messwert (muss das tatsächliche Ende auslösen) – beweist die volle `DeconzEventListener → DeconzDevicePowerManager → ExecutionManager`-Pipeline für „sensors"-Events |
+| `ClientAbortExecutionDeconzE2ETest` | `ClientAbortExecutionE2ETest` | C12 | Abbruch – inkl. Assertion, dass die simulierte Lampe beim Abbruch wieder ausgeschaltet wird |
+
+Alle drei grün, siehe „Fortschritt“ unten für die Gesamt-Testzahlen.
+
+### `ClientSmallUiSmokeE2ETest` – erste Abdeckung für `ui/small` (320×240)
+
+Bis AP1 deckte die E2E-Suite ausschließlich `ui/medium` (800×480) ab. `ui/small` bleibt laut
+Auftraggeber im Einsatz (kb/05) und bekommt jetzt eine Smoke-Test-Klasse.
+
+- **UI-Größenwahl**: `Main#start` prüft `Main.applicationInterfaceType` (falls nicht via
+  CLI-Schalter `-xsDisplay`/`-mdDisplay` gesetzt, wird die Bildschirmbreite der primären
+  `Screen` herangezogen: `< 500px` → klein). Der Test setzt das **statische Feld direkt**
+  vor `FxToolkit.setupApplication(Main.class)`, um unabhängig von der tatsächlichen
+  Xvfb-Auflösung zuverlässig die kleine UI zu erzwingen.
+- **Getestet**: App startet mit 320×240-Szene und erreicht `SELECT_DEVICE`; ein Gerät lässt
+  sich anwählen; ein Karten-Scan schließt den Login ab und erreicht
+  `CONFIRMATION_READY`.
+- **Befund (dokumentiert, kein Bug, keine Code-Änderung)**: `ui/small` hat einen
+  **umgekehrten Ablauf** gegenüber `ui/medium`: dort meldet man sich per Karte an und wählt
+  danach ein Gerät; in `ui/small` wählt man **zuerst** ein Gerät (`onDeviceSelected` prüft
+  nur `Device#isEnabled`, keinen angemeldeten Benutzer) und scannt **danach** die Karte auf
+  der Bestätigungsseite (`onCardDetected` reagiert nur in den
+  `CONFIRMATION_*`-Zwischenzuständen). Der Test bildet diesen tatsächlichen Ablauf ab, statt
+  ihn an `ui/medium` anzugleichen.
+- **Fallstrick beim Schreiben des Tests**: `MainForm.fxml` (small) setzt bei zwei Panes ein
+  explizites `id="..."` (`confirmation-pane`, `program-pane`), das vom sonst aus `fx:id`
+  automatisch abgeleiteten CSS-Id **überschrieben** wird – `lookup("#confirmationPane")`
+  liefert dadurch `null`, richtig ist `lookup("#confirmation-pane")`. Betrifft nur diese
+  beiden Panes; alle anderen `fx:id`s ohne expliziten `id=`-Override funktionieren wie
+  erwartet als Lookup-Selektor.
+
 ## Alt-Portal (Vaadin 7) – Playwright E2E ⚠️ STILLGELEGT (Phase 3 AP6, 2026-07-21)
 
 > **Stillgelegt.** Diese Suite (`Portal/e2e/`) war der Maßstab für P1–P20 und lief bis Phase 3
@@ -259,3 +343,10 @@ nutzen). Bis dahin: ElwaManager-freie Views zuerst testen.
       Abnahmekriterium für Phase 3 erfüllt)
 - [x] Cross-Component-E2E (P21/P22, Wartungsverbindung) – läuft weiterhin gegen das Alt-TCP-
       Protokoll bis Phase 4 (siehe kb/05-migration-plan.md), Teil des „client"-CI-Jobs
+- [x] **Phase 4 AP1**: `DeconzSimulator` (REST+WebSocket, siehe „deCONZ-Simulator + beide
+      Gateways im E2E" oben) + drei deCONZ-Pendants zu bestehenden fhem-Kernszenario-Tests
+      (`ClientUsageDeconzE2ETest`/`ClientAutoEndDeconzE2ETest`/
+      `ClientAbortExecutionDeconzE2ETest`, C2–C5/C11/C12) sowie `ClientSmallUiSmokeE2ETest`
+      (erste E2E-Abdeckung für `ui/small`, 320×240) – Client-Suite **37/37 → 46/46**
+      (`run-ui-tests.sh`), **19/19 → 28/28** (`run-client-e2e.sh`), Cross-Component
+      unverändert 3/3
