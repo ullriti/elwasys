@@ -3,10 +3,12 @@ package org.kabieror.elwasys.backend.api;
 import java.time.Duration;
 import java.util.List;
 import org.kabieror.elwasys.backend.api.dto.DeviceDto;
+import org.kabieror.elwasys.backend.api.dto.DeviceOverviewDto;
 import org.kabieror.elwasys.backend.api.dto.ProgramDto;
 import org.kabieror.elwasys.backend.api.exception.UserNotFoundException;
 import org.kabieror.elwasys.backend.auth.terminal.TerminalPrincipal;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
+import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.repository.DeviceRepository;
@@ -71,6 +73,32 @@ public class DeviceController {
         DeviceEntity device = this.scopeGuard.requireDeviceInScope(id, terminal);
         UserEntity user = requireUser(userId);
         return toDto(device, user);
+    }
+
+    /**
+     * Anonyme Geräteübersicht des Standorts, OHNE {@code userId} (AP3, Phase 4, siehe
+     * {@link DeviceOverviewDto} Javadoc für die vollständige Begründung: Geräteauswahl vor
+     * dem Kartenlogin, Hintergrund-Steckdosenabgleich, "letzter Benutzer"-Anzeige,
+     * Wiederaufnahme-Scan/Testfall C13). Bewusst ein EIGENER Pfad statt {@code userId}
+     * optional zu machen: {@code GET /api/v1/devices} OHNE {@code userId} antwortet seit
+     * AP4 unverändert mit {@code 400} (siehe {@code DeviceControllerTest
+     * #missingUserIdParameterIsRejectedWith400}) - dieser bestehende Vertrag bleibt
+     * kompatibel, die neue Fähigkeit kommt rein additiv über einen neuen Pfad hinzu.
+     */
+    @GetMapping("/overview")
+    public List<DeviceOverviewDto> overview(@AuthenticationPrincipal TerminalPrincipal terminal) {
+        return this.deviceRepository.findByLocation_IdOrderByName(terminal.locationId()).stream()
+                .map(this::toOverviewDto).toList();
+    }
+
+    private DeviceOverviewDto toOverviewDto(DeviceEntity device) {
+        var runningExecution = this.executionService.getRunningExecution(device);
+        boolean occupied = runningExecution.isPresent();
+        Integer runningExecutionId = runningExecution.map(ExecutionEntity::getId).orElse(null);
+        var lastUser = this.executionService.getLastUser(device);
+        Integer lastUserId = lastUser.map(UserEntity::getId).orElse(null);
+        String lastUserName = lastUser.map(UserEntity::getName).orElse(null);
+        return DeviceOverviewDto.of(device, occupied, runningExecutionId, lastUserId, lastUserName);
     }
 
     private UserEntity requireUser(Integer userId) {

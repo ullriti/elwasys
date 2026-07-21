@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
 import org.kabieror.elwasys.backend.auth.terminal.IssuedTerminalToken;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
+import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
@@ -122,5 +123,97 @@ class DeviceControllerTest extends AbstractApiIT {
         this.mockMvc.perform(get("/api/v1/devices").header("Authorization", authHeader(token))
                 .param("userId", user.getId().toString())).andExpect(status().isOk()).andExpect(
                 jsonPath("$[0].occupied").value(true));
+    }
+
+    @Test
+    void deviceDtoIncludesGatewayConfigurationFieldsForTheTerminal() throws Exception {
+        LocationEntity location = newLocation();
+        IssuedTerminalToken token = newToken(location);
+        DeviceEntity device = newDevice(location);
+        device.setFhemName("wm1");
+        device.setFhemSwitchName("wm1sw");
+        device.setFhemPowerName("wm1pw");
+        device.setDeconzUuid("abc-123");
+        device.setAutoEndPowerThreashold(1.5f);
+        device.setAutoEndWaitTimeSeconds(42);
+        this.deviceRepository.save(device);
+        UserEntity user = newUser(newGroup());
+
+        this.mockMvc.perform(get("/api/v1/devices").header("Authorization", authHeader(token))
+                .param("userId", user.getId().toString())).andExpect(status().isOk()).andExpect(
+                jsonPath("$[0].fhemName").value("wm1")).andExpect(jsonPath("$[0].fhemSwitchName").value("wm1sw"))
+                .andExpect(jsonPath("$[0].fhemPowerName").value("wm1pw")).andExpect(
+                jsonPath("$[0].deconzUuid").value("abc-123")).andExpect(
+                jsonPath("$[0].autoEndPowerThreashold").value(1.5)).andExpect(
+                jsonPath("$[0].autoEndWaitTimeSeconds").value(42));
+    }
+
+    /**
+     * {@code GET /api/v1/devices/overview} (AP3, Phase 4, siehe {@link
+     * org.kabieror.elwasys.backend.api.dto.DeviceOverviewDto} Javadoc): die anonyme
+     * Geräteübersicht, die der Client vor einem Kartenlogin braucht (Zustand
+     * {@code SELECT_DEVICE}).
+     */
+    @Test
+    void overviewListsOwnLocationDevicesWithoutRequiringAUserId() throws Exception {
+        LocationEntity ownLocation = newLocation();
+        LocationEntity otherLocation = newLocation();
+        IssuedTerminalToken token = newToken(ownLocation);
+        DeviceEntity ownDevice = newDevice(ownLocation);
+        newDevice(otherLocation); // darf NICHT in der Antwort auftauchen
+
+        this.mockMvc.perform(get("/api/v1/devices/overview").header("Authorization", authHeader(token))).andExpect(
+                status().isOk()).andExpect(jsonPath("$.length()").value(1)).andExpect(
+                jsonPath("$[0].id").value(ownDevice.getId())).andExpect(jsonPath("$[0].occupied").value(false))
+                .andExpect(jsonPath("$[0].runningExecutionId").doesNotExist()).andExpect(
+                jsonPath("$[0].lastUserId").doesNotExist());
+    }
+
+    @Test
+    void overviewAnnotatesOccupiedDeviceWithTheRunningExecutionId() throws Exception {
+        LocationEntity location = newLocation();
+        IssuedTerminalToken token = newToken(location);
+        DeviceEntity device = newDevice(location);
+        ProgramEntity program = newFixedProgram(new BigDecimal("3.00"));
+        UserGroupEntity group = newGroup();
+        UserEntity user = newUser(group);
+        allow(location, device, program, group);
+        ExecutionEntity execution = this.executionService.startExecution(
+                this.executionService.createExecution(device, program, user));
+
+        this.mockMvc.perform(get("/api/v1/devices/overview").header("Authorization", authHeader(token))).andExpect(
+                status().isOk()).andExpect(jsonPath("$[0].occupied").value(true)).andExpect(
+                jsonPath("$[0].runningExecutionId").value(execution.getId()));
+    }
+
+    @Test
+    void overviewAnnotatesTheLastUserOfADevice() throws Exception {
+        LocationEntity location = newLocation();
+        IssuedTerminalToken token = newToken(location);
+        DeviceEntity device = newDevice(location);
+        ProgramEntity program = newFixedProgram(new BigDecimal("3.00"));
+        UserGroupEntity group = newGroup();
+        UserEntity user = newUser(group);
+        allow(location, device, program, group);
+        ExecutionEntity execution = this.executionService.finishExecution(
+                this.executionService.startExecution(this.executionService.createExecution(device, program, user)));
+        org.assertj.core.api.Assertions.assertThat(execution.isFinished()).isTrue();
+
+        this.mockMvc.perform(get("/api/v1/devices/overview").header("Authorization", authHeader(token))).andExpect(
+                status().isOk()).andExpect(jsonPath("$[0].occupied").value(false)).andExpect(
+                jsonPath("$[0].lastUserId").value(user.getId())).andExpect(
+                jsonPath("$[0].lastUserName").value(user.getName()));
+    }
+
+    @Test
+    void overviewIncludesGatewayConfigurationFieldsWithoutAUser() throws Exception {
+        LocationEntity location = newLocation();
+        IssuedTerminalToken token = newToken(location);
+        DeviceEntity device = newDevice(location);
+        device.setFhemSwitchName("wm2sw");
+        this.deviceRepository.save(device);
+
+        this.mockMvc.perform(get("/api/v1/devices/overview").header("Authorization", authHeader(token))).andExpect(
+                status().isOk()).andExpect(jsonPath("$[0].fhemSwitchName").value("wm2sw"));
     }
 }
