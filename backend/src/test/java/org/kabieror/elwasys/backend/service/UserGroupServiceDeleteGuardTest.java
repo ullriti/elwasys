@@ -17,6 +17,7 @@ import org.kabieror.elwasys.backend.repository.UserGroupRepository;
 import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * Reiner Unit-Test (Mockito, keine DB) für den in {@link UserGroupServiceTest} nicht
@@ -39,11 +40,13 @@ class UserGroupServiceDeleteGuardTest {
     private DeviceRepository deviceRepository;
     @Mock
     private ProgramRepository programRepository;
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @Test
     void deletingTheLastRemainingGroupThrowsAndDoesNotTouchUsersOrDeleteTheGroup() {
         UserGroupService service = new UserGroupService(this.userGroupRepository, this.userRepository,
-                this.locationRepository, this.deviceRepository, this.programRepository);
+                this.locationRepository, this.deviceRepository, this.programRepository, this.eventPublisher);
         UserGroupEntity onlyGroup = new UserGroupEntity("Only Group", DiscountType.NONE, 0);
 
         when(this.userGroupRepository.findFirstByIdNotOrderByIdAsc(onlyGroup.getId())).thenReturn(Optional.empty());

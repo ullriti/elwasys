@@ -9,9 +9,11 @@ import org.kabieror.elwasys.backend.domain.CreditAccountingEntryEntity;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
+import org.kabieror.elwasys.backend.events.CreditChangedEvent;
 import org.kabieror.elwasys.backend.exception.NotEnoughCreditException;
 import org.kabieror.elwasys.backend.repository.CreditAccountingEntryRepository;
 import org.kabieror.elwasys.backend.repository.ExecutionRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,12 +30,15 @@ public class CreditService {
     private final CreditAccountingEntryRepository creditAccountingEntryRepository;
     private final ExecutionRepository executionRepository;
     private final PricingService pricingService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public CreditService(CreditAccountingEntryRepository creditAccountingEntryRepository,
-            ExecutionRepository executionRepository, PricingService pricingService) {
+            ExecutionRepository executionRepository, PricingService pricingService,
+            ApplicationEventPublisher eventPublisher) {
         this.creditAccountingEntryRepository = creditAccountingEntryRepository;
         this.executionRepository = executionRepository;
         this.pricingService = pricingService;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -109,6 +114,7 @@ public class CreditService {
             this.creditAccountingEntryRepository.save(
                     new CreditAccountingEntryEntity(user, execution, price.negate(), LocalDateTime.now(),
                             description));
+            this.eventPublisher.publishEvent(new CreditChangedEvent(user.getId()));
         }
     }
 
@@ -117,8 +123,10 @@ public class CreditService {
      */
     @Transactional
     public CreditAccountingEntryEntity inpayment(UserEntity user, BigDecimal amount, String text) {
-        return this.creditAccountingEntryRepository.save(
+        CreditAccountingEntryEntity entry = this.creditAccountingEntryRepository.save(
                 new CreditAccountingEntryEntity(user, null, amount, LocalDateTime.now(), text));
+        this.eventPublisher.publishEvent(new CreditChangedEvent(user.getId()));
+        return entry;
     }
 
     /**
@@ -140,8 +148,10 @@ public class CreditService {
         if (getCredit(user).compareTo(amount) < 0) {
             throw new NotEnoughCreditException();
         }
-        return this.creditAccountingEntryRepository.save(
+        CreditAccountingEntryEntity entry = this.creditAccountingEntryRepository.save(
                 new CreditAccountingEntryEntity(user, null, amount.negate(), LocalDateTime.now(), text));
+        this.eventPublisher.publishEvent(new CreditChangedEvent(user.getId()));
+        return entry;
     }
 
     /**

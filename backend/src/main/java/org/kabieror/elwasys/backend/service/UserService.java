@@ -4,8 +4,10 @@ import java.util.List;
 import java.util.Optional;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
+import org.kabieror.elwasys.backend.events.UserChangedEvent;
 import org.kabieror.elwasys.backend.exception.DuplicateCardIdException;
 import org.kabieror.elwasys.backend.repository.UserRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,14 +16,22 @@ import org.springframework.transaction.annotation.Transactional;
  * Nachfolger von {@code Portal/.../components/UserWindow} (Anlegen/Bearbeiten, OHNE den
  * dortigen Admin-Passwort-Reset-Teil - das ist AP4) sowie des Lösch-Verhaltens aus
  * {@code Portal/.../views/UsersView#deleteUser}.
+ *
+ * <p>Seit Phase 3 AP5 (siehe kb/05-migration-plan.md, "Live-Updates zwischen Sessions")
+ * veröffentlicht jede erfolgreiche Änderung ein {@link UserChangedEvent} über
+ * {@link ApplicationEventPublisher} - die Ereignis-Auslösung liegt bewusst hier in der
+ * Service-Schicht statt in der UI, damit sie unabhängig vom Aufrufer (Portal-UI oder künftig
+ * die REST-API) immer feuert.
  */
 @Service
 public class UserService {
 
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public UserService(UserRepository userRepository) {
+    public UserService(UserRepository userRepository, ApplicationEventPublisher eventPublisher) {
         this.userRepository = userRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -49,7 +59,9 @@ public class UserService {
         user.setEmail(email);
         user.setCardIds(cardIds);
         user.setBlocked(blocked);
-        return this.userRepository.save(user);
+        user = this.userRepository.save(user);
+        this.eventPublisher.publishEvent(new UserChangedEvent(user.getId()));
+        return user;
     }
 
     /**
@@ -72,7 +84,9 @@ public class UserService {
         user.setCardIds(cardIds);
         user.setBlocked(blocked);
         user.setGroup(group);
-        return this.userRepository.save(user);
+        user = this.userRepository.save(user);
+        this.eventPublisher.publishEvent(new UserChangedEvent(user.getId()));
+        return user;
     }
 
     /**
@@ -87,7 +101,8 @@ public class UserService {
     public void delete(UserEntity user) {
         user.setUsername("#del" + user.getId() + "#" + user.getUsername());
         user.setDeleted(true);
-        this.userRepository.save(user);
+        user = this.userRepository.save(user);
+        this.eventPublisher.publishEvent(new UserChangedEvent(user.getId()));
     }
 
     /**
@@ -105,7 +120,9 @@ public class UserService {
         user.setEmail(email);
         user.setEmailNotification(emailNotification);
         user.setPushoverUserKey(pushoverUserKey == null ? "" : pushoverUserKey);
-        return this.userRepository.save(user);
+        user = this.userRepository.save(user);
+        this.eventPublisher.publishEvent(new UserChangedEvent(user.getId()));
+        return user;
     }
 
     private void assertCardIdsAreFree(String[] cardIds, UserEntity userBeingEdited) {

@@ -10,9 +10,11 @@ import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.ProgramType;
 import org.kabieror.elwasys.backend.domain.TimeUnitType;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
+import org.kabieror.elwasys.backend.events.ProgramChangedEvent;
 import org.kabieror.elwasys.backend.exception.EntityInUseException;
 import org.kabieror.elwasys.backend.repository.DeviceRepository;
 import org.kabieror.elwasys.backend.repository.ProgramRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,10 +27,13 @@ public class ProgramService {
 
     private final ProgramRepository programRepository;
     private final DeviceRepository deviceRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public ProgramService(ProgramRepository programRepository, DeviceRepository deviceRepository) {
+    public ProgramService(ProgramRepository programRepository, DeviceRepository deviceRepository,
+            ApplicationEventPublisher eventPublisher) {
         this.programRepository = programRepository;
         this.deviceRepository = deviceRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -48,7 +53,9 @@ public class ProgramService {
         ProgramEntity program = new ProgramEntity(name, type, (int) maxDuration.getSeconds());
         applyFields(program, flagfall, rate, timeUnit, freeDuration, autoEnd, earliestAutoEnd, enabled,
                 validUserGroups);
-        return this.programRepository.save(program);
+        program = this.programRepository.save(program);
+        this.eventPublisher.publishEvent(new ProgramChangedEvent(program.getId()));
+        return program;
     }
 
     @Transactional
@@ -60,7 +67,9 @@ public class ProgramService {
         program.setMaxDurationSeconds((int) maxDuration.getSeconds());
         applyFields(program, flagfall, rate, timeUnit, freeDuration, autoEnd, earliestAutoEnd, enabled,
                 validUserGroups);
-        return this.programRepository.save(program);
+        program = this.programRepository.save(program);
+        this.eventPublisher.publishEvent(new ProgramChangedEvent(program.getId()));
+        return program;
     }
 
     private void applyFields(ProgramEntity program, BigDecimal flagfall, BigDecimal rate, TimeUnitType timeUnit,
@@ -97,6 +106,8 @@ public class ProgramService {
                     "Das Programm " + program.getName() + " ist noch auf " + devicesUsingProgram.size()
                             + " Gerät(en) verfügbar.");
         }
+        Integer programId = program.getId();
         this.programRepository.delete(program);
+        this.eventPublisher.publishEvent(new ProgramChangedEvent(programId));
     }
 }

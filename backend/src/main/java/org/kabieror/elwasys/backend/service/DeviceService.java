@@ -8,7 +8,9 @@ import org.kabieror.elwasys.backend.domain.DeviceEntity;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
+import org.kabieror.elwasys.backend.events.DeviceChangedEvent;
 import org.kabieror.elwasys.backend.repository.DeviceRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,9 +27,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class DeviceService {
 
     private final DeviceRepository deviceRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public DeviceService(DeviceRepository deviceRepository) {
+    public DeviceService(DeviceRepository deviceRepository, ApplicationEventPublisher eventPublisher) {
         this.deviceRepository = deviceRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -60,7 +64,9 @@ public class DeviceService {
         DeviceEntity device = new DeviceEntity(name, position, location);
         applyFields(device, fhemName, fhemSwitchName, fhemPowerName, deconzUuid, autoEndPowerThreshold,
                 autoEndWaitTime, enabled, programs, validUserGroups);
-        return this.deviceRepository.save(device);
+        device = this.deviceRepository.save(device);
+        this.eventPublisher.publishEvent(new DeviceChangedEvent(device.getId()));
+        return device;
     }
 
     @Transactional
@@ -73,7 +79,9 @@ public class DeviceService {
         device.setLocation(location);
         applyFields(device, fhemName, fhemSwitchName, fhemPowerName, deconzUuid, autoEndPowerThreshold,
                 autoEndWaitTime, enabled, programs, validUserGroups);
-        return this.deviceRepository.save(device);
+        device = this.deviceRepository.save(device);
+        this.eventPublisher.publishEvent(new DeviceChangedEvent(device.getId()));
+        return device;
     }
 
     private void applyFields(DeviceEntity device, String fhemName, String fhemSwitchName, String fhemPowerName,
@@ -94,6 +102,8 @@ public class DeviceService {
 
     @Transactional
     public void delete(DeviceEntity device) {
+        Integer deviceId = device.getId();
         this.deviceRepository.delete(device);
+        this.eventPublisher.publishEvent(new DeviceChangedEvent(deviceId));
     }
 }

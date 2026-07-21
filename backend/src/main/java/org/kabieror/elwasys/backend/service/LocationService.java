@@ -6,9 +6,11 @@ import java.util.Set;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
+import org.kabieror.elwasys.backend.events.LocationChangedEvent;
 import org.kabieror.elwasys.backend.exception.EntityInUseException;
 import org.kabieror.elwasys.backend.repository.DeviceRepository;
 import org.kabieror.elwasys.backend.repository.LocationRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,10 +28,13 @@ public class LocationService {
 
     private final LocationRepository locationRepository;
     private final DeviceRepository deviceRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public LocationService(LocationRepository locationRepository, DeviceRepository deviceRepository) {
+    public LocationService(LocationRepository locationRepository, DeviceRepository deviceRepository,
+            ApplicationEventPublisher eventPublisher) {
         this.locationRepository = locationRepository;
         this.deviceRepository = deviceRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -46,7 +51,9 @@ public class LocationService {
     public LocationEntity create(String name, Set<UserGroupEntity> validUserGroups) {
         LocationEntity location = new LocationEntity(name);
         location.getValidUserGroups().addAll(validUserGroups);
-        return this.locationRepository.save(location);
+        location = this.locationRepository.save(location);
+        this.eventPublisher.publishEvent(new LocationChangedEvent(location.getId()));
+        return location;
     }
 
     /**
@@ -58,7 +65,9 @@ public class LocationService {
         location.setName(name);
         location.getValidUserGroups().clear();
         location.getValidUserGroups().addAll(validUserGroups);
-        return this.locationRepository.save(location);
+        location = this.locationRepository.save(location);
+        this.eventPublisher.publishEvent(new LocationChangedEvent(location.getId()));
+        return location;
     }
 
     /**
@@ -80,6 +89,8 @@ public class LocationService {
                     "Der Standort " + location.getName() + " wird noch von " + devicesAtLocation.size()
                             + " Gerät(en) verwendet.");
         }
+        Integer locationId = location.getId();
         this.locationRepository.delete(location);
+        this.eventPublisher.publishEvent(new LocationChangedEvent(locationId));
     }
 }

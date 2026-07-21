@@ -9,12 +9,15 @@ import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
+import org.kabieror.elwasys.backend.events.UserChangedEvent;
+import org.kabieror.elwasys.backend.events.UserGroupChangedEvent;
 import org.kabieror.elwasys.backend.exception.EntityInUseException;
 import org.kabieror.elwasys.backend.repository.DeviceRepository;
 import org.kabieror.elwasys.backend.repository.LocationRepository;
 import org.kabieror.elwasys.backend.repository.ProgramRepository;
 import org.kabieror.elwasys.backend.repository.UserGroupRepository;
 import org.kabieror.elwasys.backend.repository.UserRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,15 +43,17 @@ public class UserGroupService {
     private final LocationRepository locationRepository;
     private final DeviceRepository deviceRepository;
     private final ProgramRepository programRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public UserGroupService(UserGroupRepository userGroupRepository, UserRepository userRepository,
             LocationRepository locationRepository, DeviceRepository deviceRepository,
-            ProgramRepository programRepository) {
+            ProgramRepository programRepository, ApplicationEventPublisher eventPublisher) {
         this.userGroupRepository = userGroupRepository;
         this.userRepository = userRepository;
         this.locationRepository = locationRepository;
         this.deviceRepository = deviceRepository;
         this.programRepository = programRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -63,7 +68,9 @@ public class UserGroupService {
 
     @Transactional
     public UserGroupEntity create(String name, DiscountType discountType, double discountValue) {
-        return this.userGroupRepository.save(new UserGroupEntity(name, discountType, discountValue));
+        UserGroupEntity group = this.userGroupRepository.save(new UserGroupEntity(name, discountType, discountValue));
+        this.eventPublisher.publishEvent(new UserGroupChangedEvent(group.getId()));
+        return group;
     }
 
     @Transactional
@@ -72,7 +79,9 @@ public class UserGroupService {
         group.setName(name);
         group.setDiscountType(discountType);
         group.setDiscountValue(discountValue);
-        return this.userGroupRepository.save(group);
+        group = this.userGroupRepository.save(group);
+        this.eventPublisher.publishEvent(new UserGroupChangedEvent(group.getId()));
+        return group;
     }
 
     /**
@@ -98,12 +107,24 @@ public class UserGroupService {
             if (user.getGroup() != null && user.getGroup().equals(group)) {
                 user.setGroup(fallbackGroup);
                 this.userRepository.save(user);
+                this.eventPublisher.publishEvent(new UserChangedEvent(user.getId()));
             }
         }
 
+        Integer groupId = group.getId();
         this.userGroupRepository.delete(group);
+        this.eventPublisher.publishEvent(new UserGroupChangedEvent(groupId));
     }
 
+    /**
+     * Setzt, welche Standorte für diese Gruppe zugelassen sind - siehe Klassenkommentar für
+     * die "von der anderen Tabellenseite aus"-Modellierung. Veröffentlicht bewusst ein
+     * {@link UserGroupChangedEvent} (aus der Perspektive des Gruppen-Dialogs, der diese Methode
+     * aufruft, ist das Teil des Gruppe-Speicherns) - fachlich ändern sich zwar auch die
+     * betroffenen {@link LocationEntity}s, das ist aber keine für die
+     * Standort-Stammdaten-Ansicht sichtbare Änderung (die zeigt nur Name/Anzahl Gruppen, siehe
+     * {@code AdminLocationsView}, kein Live-relevanter Unterschied).
+     */
     @Transactional
     public void setValidLocations(UserGroupEntity group, Set<Integer> locationIds) {
         for (LocationEntity location : this.locationRepository.findAll()) {
@@ -117,8 +138,14 @@ public class UserGroupService {
                 this.locationRepository.save(location);
             }
         }
+        this.eventPublisher.publishEvent(new UserGroupChangedEvent(group.getId()));
     }
 
+    /**
+     * Siehe {@link #setValidLocations} Javadoc für die Begründung, warum hier nur ein
+     * {@link UserGroupChangedEvent} statt zusätzlicher {@code DeviceChangedEvent}s pro Gerät
+     * veröffentlicht wird.
+     */
     @Transactional
     public void setValidDevices(UserGroupEntity group, Set<Integer> deviceIds) {
         for (DeviceEntity device : this.deviceRepository.findAll()) {
@@ -132,8 +159,14 @@ public class UserGroupService {
                 this.deviceRepository.save(device);
             }
         }
+        this.eventPublisher.publishEvent(new UserGroupChangedEvent(group.getId()));
     }
 
+    /**
+     * Siehe {@link #setValidLocations} Javadoc für die Begründung, warum hier nur ein
+     * {@link UserGroupChangedEvent} statt zusätzlicher {@code ProgramChangedEvent}s pro
+     * Programm veröffentlicht wird.
+     */
     @Transactional
     public void setValidPrograms(UserGroupEntity group, Set<Integer> programIds) {
         for (ProgramEntity program : this.programRepository.findAll()) {
@@ -147,6 +180,7 @@ public class UserGroupService {
                 this.programRepository.save(program);
             }
         }
+        this.eventPublisher.publishEvent(new UserGroupChangedEvent(group.getId()));
     }
 
     @Transactional(readOnly = true)
