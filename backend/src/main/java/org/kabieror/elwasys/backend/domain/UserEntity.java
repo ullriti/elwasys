@@ -16,12 +16,12 @@ import java.util.Arrays;
  * Entspricht der Tabelle {@code users} (siehe kb/02-data-model.md) sowie
  * {@code org.kabieror.elwasys.common.User} im Alt-Code.
  *
- * <p>Bewusst NICHT gemappt (siehe kb/05-migration-plan.md, Rahmenbedingungen zu den
- * App-Relikt-Spalten): {@code app_id}, {@code access_key}, {@code auth_key}. Alle drei
- * sind nullable, für die AP2-Fachlogik (Abrechnung/Berechtigungen/Preisberechnung/
- * Execution-Lebenszyklus) irrelevant und werden in Phase 5 entfernt. {@code auth_key}
- * wird zusätzlich per DB-Trigger ({@code user_authkey_trigger}) bei jedem INSERT
- * automatisch befüllt - das passiert unabhängig davon, ob die Entity die Spalte kennt.
+ * <p>Die App-Relikt-Spalten {@code app_id}, {@code access_key}, {@code auth_key} waren
+ * bewusst NICHT gemappt (siehe kb/05-migration-plan.md, Rahmenbedingungen) - alle drei
+ * waren nullable und für die Fachlogik (Abrechnung/Berechtigungen/Preisberechnung/
+ * Execution-Lebenszyklus) irrelevant. Sie wurden inkl. des DB-Triggers
+ * {@code user_authkey_trigger} (befüllte {@code auth_key} bei jedem INSERT) in Phase 5
+ * AP4 (V10) entfernt.
  */
 @Entity
 @Table(name = "users")

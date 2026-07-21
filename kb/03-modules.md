@@ -249,10 +249,10 @@ absichern würde) – siehe kb/05-migration-plan.md (Änderungslog, AP2) für di
 Begründung. `spring.jpa.hibernate.ddl-auto=none` ist explizit gesetzt: das Schema kommt
 ausschließlich von Flyway.
 
-App-Relikt-Spalten (`app_id`/`access_key`/`auth_key` auf `users`; Tabellen
-`reservations`/`foreign_authkeys`) sind bewusst NICHT gemappt (Rahmenbedingung, siehe
-kb/05-migration-plan.md – werden in Phase 5 entfernt). Der DB-Trigger
-`user_authkey_trigger` befüllt `auth_key` unabhängig davon bei jedem INSERT automatisch.
+Die App-Relikt-Spalten (`app_id`/`access_key`/`auth_key` auf `users`; Tabellen
+`reservations`/`foreign_authkeys`; Trigger `user_authkey_trigger`) waren bewusst NICHT
+gemappt (Rahmenbedingung, siehe kb/05-migration-plan.md) und wurden in Phase 5 AP4 per
+`V10__drop_app_remnants.sql` entfernt.
 
 **Repositories** (`backend/.../repository/`): `UserGroupRepository`, `LocationRepository`,
 `DeviceRepository`, `ProgramRepository`, `UserRepository` (inkl. `findByCardId` –
@@ -839,7 +839,7 @@ aus. Vollständiges Alt-Inventar und Portierungsstand:
 | `ExecutionFinisher`: Programm regulär beendet | Pushover (`net.pushover.client`) | `user.getPushoverUserKey()` nicht leer (Spalte `pushover_user_key`) | **Ja** |
 | `ExecutionFinisher`: Ausführung abgebrochen | E-Mail | wie oben | **Ja** – `NotificationService#notifyExecutionAborted` |
 | `ExecutionFinisher`: Ausführung abgebrochen | Pushover | wie oben | **Ja** |
-| `ExecutionFinisher`: beide obigen Fälle | elwaApp-Push (`https://api.ionic.io/push/notifications`) | `user.isPushEnabled()` (Spalte `push_notification`, **nicht** `pushover_user_key`!) und `pushIonicId` gesetzt | **Nein** – mobile App laut Auftraggeber nicht relevant, Reste (`app_id`) fallen in Phase 5 weg; Auftrag ist zudem explizit auf „SMTP + Pushover" begrenzt |
+| `ExecutionFinisher`: beide obigen Fälle | elwaApp-Push (`https://api.ionic.io/push/notifications`) | `user.isPushEnabled()` (Spalte `push_notification`, **nicht** `pushover_user_key`!) und `pushIonicId` gesetzt | **Nein** – mobile App laut Auftraggeber nicht relevant, Reste (`app_id`) in Phase 5 AP4 entfernt; Auftrag ist zudem explizit auf „SMTP + Pushover" begrenzt |
 | Portal `PasswordForgotWindow`: „Passwort vergessen" | E-Mail (dieselbe `Utilities#sendEmail`) | Nutzer per E-Mail-Adresse gefunden | **Ja** (Phase 3 AP4) – `NotificationService#sendPasswordResetEmail`, aufgerufen von `PasswordResetService#requestReset`; eigener Schalter `elwasys.password-reset.enabled` (Default **AN**, siehe unten) statt `elwasys.notifications.enabled` |
 | Portal `UserWindow`: Admin setzt neues Passwort | E-Mail | Admin-Aktion im Nutzer-Fenster | **Ja** (Phase 3 AP4) – `NotificationService#sendNewPasswordEmail`, aufgerufen von `PasswordResetService#resetPasswordByAdminAndNotify` (Checkbox „Sende dem Benutzer per Email ein neues Passwort" im `UserFormDialog`); derselbe Schalter wie oben |
 

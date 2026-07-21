@@ -9,7 +9,6 @@ unten): `Common/resources/database-upgrade/upgrade_0.3.1_0.3.2.sql`, `upgrade_0.
 ```
 user_groups ─┬─< users >──┬─< credit_accounting
              │            │
-             │            └─< reservations >── devices
              ├─< locations_valid_user_groups >── locations ──< devices
              ├─< devices_valid_user_groups >── devices
              └─< programs_valid_user_groups >── programs
@@ -17,14 +16,16 @@ user_groups ─┬─< users >──┬─< credit_accounting
 devices ──< device_program_rel >── programs      │
 executions >── devices, programs, users ─────────┘
 ```
+(`reservations` – App-Relikt der mobilen App, in Phase 5 AP4 entfernt, siehe unten.)
 
 ## Tabellen
 
 ### config
 Schlüssel/Wert-Konfiguration.
 - `key` (unique), `value`
-- Seeds: `db.version=0.4.0`, `authkey.prefix` (2 Zufallszeichen),
-  `reservation.duration=900` (Sek.)
+- Seeds: `db.version=0.4.0`, ~~`authkey.prefix` (2 Zufallszeichen), `reservation.duration=900`
+  (Sek.)~~ *(entfernt in Phase 5 AP4, `V10__drop_app_remnants.sql` – App-Relikte, siehe
+  „App-Reste“ unten)*
 
 ### user_groups
 Benutzergruppen mit Rabattregel.
@@ -48,8 +49,12 @@ Benutzergruppen mit Rabattregel.
   dieselben Spalten weiterhin unverändert, kein Konflikt bei Parallelbetrieb, siehe
   kb/05-migration-plan.md, „Entscheidungen“)
 - `deleted`, `last_login`, `group_id` → user_groups (Default 1)
-- App-Anbindung: `app_id`, `access_key`, `auth_key` (Trigger `user_authkey_trigger`
-  generiert `auth_key` beim INSERT über `generate_user_authkey()`)
+- ~~App-Anbindung: `app_id`, `access_key`, `auth_key` (Trigger `user_authkey_trigger`
+  generiert `auth_key` beim INSERT über `generate_user_authkey()`)~~ *(entfernt in Phase 5
+  AP4, `V10__drop_app_remnants.sql`: Trigger + beide Funktionen
+  `user_authkey_trigger_function()`/`generate_user_authkey()` sowie die drei Spalten – die
+  mobile App (`elwaapi`) ist laut Auftraggeber nicht mehr relevant, siehe
+  kb/05-migration-plan.md „Entscheidungen“)*
 - Seed: `admin` / Passwort-Hash `d033e22ae348aeb5660fc2140aec35850c4da997`
   (= SHA1 von „admin“), `is_admin=TRUE`
 
@@ -115,14 +120,18 @@ Guthaben-Buchungen.
 - `id`, `user_id` → users, `execution_id` → executions (nullable)
 - `amount` (numeric, +Aufladung / −Verbrauch), `date`, `description`
 
-### foreign_authkeys
-Verzeichnis für Föderation mit anderen Servern.
-- `prefix` (Auth-Key-Prefix), `server_address`
+### ~~foreign_authkeys~~ *(entfernt in Phase 5 AP4)*
+~~Verzeichnis für Föderation mit anderen Servern.~~
+~~- `prefix` (Auth-Key-Prefix), `server_address`~~
+*(`V10__drop_app_remnants.sql` – App-Relikt, mobile App laut Auftraggeber nicht mehr
+relevant, siehe kb/05-migration-plan.md „Entscheidungen“)*
 
-### reservations
-Gerätereservierungen.
-- `id`, `user_id` → users, `device_id` → devices, `start_time`
-- Unique-Constraint (`user_id`, `device_id`)
+### ~~reservations~~ *(entfernt in Phase 5 AP4)*
+~~Gerätereservierungen.~~
+~~- `id`, `user_id` → users, `device_id` → devices, `start_time`~~
+~~- Unique-Constraint (`user_id`, `device_id`)~~
+*(`V10__drop_app_remnants.sql` – App-Relikt, mobile App laut Auftraggeber nicht mehr
+relevant)*
 
 ### terminal_tokens *(neu, seit Phase 2 AP4)*
 Standort-Tokens für die Terminal-REST-API/den WebSocket-Endpunkt (additive Migration
@@ -170,7 +179,8 @@ dokumentiert:
 - **User `elwaportal`**: volles SELECT/INSERT/UPDATE/DELETE, aber `REVOKE UPDATE, DELETE`
   auf `credit_accounting` (Buchungen sind unveränderlich). Unverändert seit V1.
 - ~~**User `elwaapi`** (PW `api1234`): SELECT auf alles; UPDATE auf `users`; INSERT/DELETE auf
-  `reservations` (für die mobile App).~~ *(entfernt, V6)*
+  `reservations` (für die mobile App).~~ *(DB-User entfernt in V6; die Tabelle `reservations`
+  selbst wurde zusätzlich in Phase 5 AP4 per `V10` gedroppt.)*
 
 **Cluster-weite Rollen im geteilten Test-Cluster**: `V6` läuft idempotent und fängt den Fall
 ab, dass eine Rolle in DIESER Datenbank noch Rechte besitzt, aber in einer ANDEREN Datenbank
@@ -285,11 +295,13 @@ und kb/05-migration-plan.md (Änderungslog, AP2). Für das Datenmodell relevante
   nicht per einfachem `@Enumerated(STRING)` gegen eine Postgres-ENUM-Spalte binden (Fehler
   „column is of type … but expression is of type character varying“) – die Entities nutzen
   dafür Hibernates `@JdbcTypeCode(SqlTypes.NAMED_ENUM)`.
-- **`auth_key`-Trigger bleibt wirksam**: die Spalte ist zwar bewusst nicht in `UserEntity`
+- ~~**`auth_key`-Trigger bleibt wirksam**: die Spalte ist zwar bewusst nicht in `UserEntity`
   gemappt (siehe Rahmenbedingungen zu den App-Relikt-Spalten), der DB-Trigger
   `user_authkey_trigger` (`BEFORE INSERT ON users`) befüllt sie bei jedem per JPA
   ausgeführten INSERT trotzdem automatisch – verifiziert (keine NOT-NULL-/Constraint-
-  Verletzung beim Anlegen eines `UserEntity` über den Backend-Testlauf).
+  Verletzung beim Anlegen eines `UserEntity` über den Backend-Testlauf).~~ *(Trigger +
+  Spalte in Phase 5 AP4 per `V10` entfernt; `UserEntity`-INSERTs laufen seither ohne
+  Trigger-Nebenwirkung.)*
 - **`credit_accounting.date`**: die Spalte hat einen `CURRENT_TIMESTAMP`-DB-Default, den
   der Alt-Code nie explizit überschreibt. `CreditAccountingEntryEntity` setzt den Wert
   stattdessen bewusst per Anwendungs-Uhr – siehe kb/05-migration-plan.md (Änderungslog,

@@ -51,10 +51,9 @@ import java.util.ResourceBundle;
  * jetzt zentral im Backend anhand der dort gespeicherten Benutzer-Einstellung. Die
  * Checkboxen/Hinweise bleiben (FXML unangetastet) sichtbar, wirken aber nicht mehr auf den
  * Versand - eine bewusste, explizit beauftragte Verhaltensänderung (Notification-Entfernung),
- * kein übersehener Rest. Die Auth-Key-Anzeige der elwaApp-Kopplung zeigt seit dem Cutover
- * immer den "nicht verbunden"-Hinweis (der Alt-Spalte {@code users.auth_key} entspricht eine
- * bewusst NICHT ins neue Datenmodell gemappte App-Altlast, siehe
- * {@code backend.domain.UserEntity} - Entfernung in Phase 5 vorgesehen).
+ * kein übersehener Rest. Die Auth-Key-Anzeige der elwaApp-Kopplung (Alt-Spalte
+ * {@code users.auth_key}, eine bewusst nicht ins neue Datenmodell gemappte App-Altlast,
+ * siehe {@code backend.domain.UserEntity}) wurde in Phase 5 AP4 (V10) entfernt.
  */
 public class ConfirmationViewController implements Initializable, IViewController {
 
@@ -70,7 +69,6 @@ public class ConfirmationViewController implements Initializable, IViewControlle
     private StringProperty titleText = new SimpleStringProperty();
     private StringProperty maxPrice = new SimpleStringProperty();
     private StringProperty userCredit = new SimpleStringProperty();
-    private StringProperty authKey = new SimpleStringProperty();
     private StringProperty remainingCredit = new SimpleStringProperty();
     private StringProperty latestEnd = new SimpleStringProperty();
     private StringProperty emailNotificationText = new SimpleStringProperty();
@@ -179,9 +177,6 @@ public class ConfirmationViewController implements Initializable, IViewControlle
         if (this.mfc.getRegisteredUser() != null) {
             this.registeredUserUserName.set(this.mfc.getRegisteredUser().getUsername());
         }
-        // Elwa-App-Kopplung (auth_key) ist eine App-Altlast, die das neue Datenmodell
-        // bewusst nicht mehr führt (siehe Klassenkommentar) - immer "nicht verbunden".
-        this.authKey.set("");
     }
 
     /**
@@ -405,21 +400,6 @@ public class ConfirmationViewController implements Initializable, IViewControlle
 
     public StringProperty remainingCreditProperty() {
         return remainingCredit;
-    }
-
-    /**
-     * Property: authKey
-     */
-    public String getAuthKey() {
-        return authKey.get();
-    }
-
-    public StringProperty authKeyProperty() {
-        return authKey;
-    }
-
-    public void setAuthKey(String authKey) {
-        this.authKey.set(authKey);
     }
 
     /**
