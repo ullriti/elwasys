@@ -25,9 +25,15 @@ Benachrichtigungsdienst hinter Konfig-Flag, Deployment mit Docker/Helm) ist abge
 abgeschlossen**: das neue Portal hat volle Feature-Parität zum Alt-Portal, nachgewiesen durch
 die portierte Playwright-Suite `backend/e2e/` (P1–P20, 20/20 grün, mehrfach reproduziert).
 Das Alt-Portal-Modul (`Portal/`) ist als E2E-Ziel stillgelegt (Code bleibt bis Phase 5 im
-Repo, CI baut es weiterhin), die Cross-Component-Wartungsverbindung (P21/P22) läuft
-unverändert weiter. **Nächster Schritt: Phase 4** (Terminal-Modernisierung) – siehe Roadmap
-in kb/05.
+Repo, CI baut es weiterhin). **Phase 4 (Terminal-Modernisierung) ist bis AP5 abgeschlossen**
+(AP1 Sicherheitsnetz/deCONZ-Sim/ui-small-Smoke, AP2 JavaFX 23/`java.net.http`, AP3 Backend-
+API-Erweiterungen [Idempotenz/Snapshot], AP4 Client-Cutover auf REST-API+Token [kein Direkt-
+DB-Zugriff mehr für Daten], AP5 Fernwartung umgedreht [ausgehende WS-Verbindung des Terminals,
+`MaintenanceServerManager`/IP-Registrierung stillgelegt – **letzter Direkt-DB-Zugriff des
+Clients entfällt**]). Die Cross-Component-Wartungsverbindung (P21/P22) läuft seit AP5 über den
+neuen Backend-WS-Kanal (Nachfolgesuite im `backend`-Modul, `run-cross-component-e2e.sh`
+umgestellt). **Nächster Schritt: Phase 4 AP6** (Offline-Robustheit: laufende Executions lokal
+zu Ende führen + Offline-Buchungen), danach QA-Review der Phase – siehe Roadmap in kb/05.
 
 ## Arbeitsregeln
 
@@ -56,7 +62,7 @@ mvn -f Portal/pom.xml package
 Client-Raspi/run-ui-tests.sh              # alle
 Client-Raspi/run-ui-tests.sh <TestClass>  # einzelne Klasse
 Client-Raspi/run-client-e2e.sh
-Client-Raspi/run-cross-component-e2e.sh   # Wartungsverbindung Alt-Portal⇄Client (bis Phase 4)
+Client-Raspi/run-cross-component-e2e.sh   # Fernwartung über Backend-WS-Kanal (seit Phase 4 AP5; Nachfolger der Alt-Portal⇄Client-TCP-Verbindung)
 
 # Backend: JUnit-Suite (Testcontainers bzw. lokales PostgreSQL, siehe kb/04/kb/07)
 backend/run-backend-tests.sh
