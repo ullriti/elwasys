@@ -6,9 +6,12 @@ name: CI
 # their module, portal-legacy-build keeps the still-in-repo Alt-Portal module compiling
 # (Playwright E2E against it is STILLGELEGT - superseded by backend-e2e, see that job's
 # comment), backend-e2e is the new Playwright suite (P1-P20) against the Vaadin-Flow Portal.
-# The Cross-Component maintenance-channel suite (P21/P22) needs neither Portal module - it
-# runs as part of "client" (plain `mvn test` there picks up
-# ClientMaintenanceConnectionE2ETest, which only depends on Common's MaintenanceServer).
+# The Cross-Component maintenance-channel suite (P21/P22) needs neither Portal module. Since
+# Phase 4 AP5 (Fernwartung umgedreht, see kb/05-migration-plan.md) it exercises the outgoing
+# terminal WebSocket channel instead of the retired Alt-TCP protocol: a real, packaged
+# Client-Raspi jar talks to a real backend Spring context (TerminalMaintenanceRealClientE2ETest,
+# backend module) - it runs as an extra step in "client" (which already has Xvfb + a local
+# PostgreSQL for run-ui-tests.sh), see Client-Raspi/run-cross-component-e2e.sh.
 on:
   pull_request:
   push:
@@ -89,12 +92,28 @@ jobs:
       - name: Run Client tests (headless via Xvfb)
         run: bash Client-Raspi/run-ui-tests.sh
 
+      - name: Run Cross-Component maintenance E2E (headless via Xvfb)
+        # Successor of the old P21/P22 suite (Phase 4 AP5, see kb/05-migration-plan.md /
+        # kb/06-ui-tests.md): a real, packaged Client-Raspi jar talks to a real backend Spring
+        # context over the outgoing terminal WebSocket channel. Lives in the backend module's
+        # test sources but is excluded from backend's own default "mvn test" run (see
+        # backend/pom.xml) - this script is the only place that runs it.
+        run: bash Client-Raspi/run-cross-component-e2e.sh
+
       - name: Upload Surefire reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: client-surefire-reports
           path: Client-Raspi/target/surefire-reports/
+          if-no-files-found: ignore
+
+      - name: Upload Cross-Component Surefire reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cross-component-surefire-reports
+          path: backend/target/surefire-reports/
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
