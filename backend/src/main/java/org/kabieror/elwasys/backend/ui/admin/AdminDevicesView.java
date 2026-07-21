@@ -1,5 +1,7 @@
 package org.kabieror.elwasys.backend.ui.admin;
 
+import com.vaadin.flow.component.AttachEvent;
+import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.grid.Grid;
@@ -11,18 +13,25 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.shared.Registration;
 import jakarta.annotation.security.RolesAllowed;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
+import org.kabieror.elwasys.backend.events.DeviceChangedEvent;
 import org.kabieror.elwasys.backend.service.DeviceService;
 import org.kabieror.elwasys.backend.service.LocationService;
 import org.kabieror.elwasys.backend.service.ProgramService;
 import org.kabieror.elwasys.backend.service.UserGroupService;
 import org.kabieror.elwasys.backend.ui.admin.dialog.DeviceFormDialog;
 import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
+import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
 /**
  * Geräteverwaltung (Phase 3 AP2, siehe kb/05-migration-plan.md) - fachlicher Nachfolger von
  * {@code Portal/.../views/DevicesView} (Alt-Portal, Testfälle P10/P11).
+ *
+ * <p><b>Seit Phase 3 AP5</b> (siehe kb/05-migration-plan.md, "Live-Updates zwischen Sessions"):
+ * die Liste lädt sich über den {@link UiBroadcaster} automatisch neu, wenn irgendeine Session
+ * ein Gerät anlegt, bearbeitet oder löscht.
  */
 @Route(value = "admin/devices", layout = AdminLayout.class)
 @PageTitle("Geräte - Waschportal")
@@ -33,15 +42,19 @@ public class AdminDevicesView extends VerticalLayout {
     private final LocationService locationService;
     private final ProgramService programService;
     private final UserGroupService userGroupService;
+    private final UiBroadcaster broadcaster;
 
     private final Grid<DeviceEntity> grid = new Grid<>();
 
+    private Registration broadcasterRegistration;
+
     public AdminDevicesView(DeviceService deviceService, LocationService locationService,
-            ProgramService programService, UserGroupService userGroupService) {
+            ProgramService programService, UserGroupService userGroupService, UiBroadcaster broadcaster) {
         this.deviceService = deviceService;
         this.locationService = locationService;
         this.programService = programService;
         this.userGroupService = userGroupService;
+        this.broadcaster = broadcaster;
 
         setSizeFull();
         addClassName("admin-devices-view");
@@ -61,6 +74,25 @@ public class AdminDevicesView extends VerticalLayout {
         setFlexGrow(1, this.grid);
 
         loadData();
+    }
+
+    @Override
+    protected void onAttach(AttachEvent attachEvent) {
+        super.onAttach(attachEvent);
+        this.broadcasterRegistration = this.broadcaster.register(attachEvent.getUI(), event -> {
+            if (event instanceof DeviceChangedEvent) {
+                loadData();
+            }
+        });
+    }
+
+    @Override
+    protected void onDetach(DetachEvent detachEvent) {
+        if (this.broadcasterRegistration != null) {
+            this.broadcasterRegistration.remove();
+            this.broadcasterRegistration = null;
+        }
+        super.onDetach(detachEvent);
     }
 
     private void configureGrid() {

@@ -1,5 +1,7 @@
 package org.kabieror.elwasys.backend.ui.admin;
 
+import com.vaadin.flow.component.AttachEvent;
+import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.grid.Grid;
@@ -12,21 +14,28 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.shared.Registration;
 import jakarta.annotation.security.RolesAllowed;
 import java.text.NumberFormat;
 import java.util.Locale;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.ProgramType;
+import org.kabieror.elwasys.backend.events.ProgramChangedEvent;
 import org.kabieror.elwasys.backend.exception.EntityInUseException;
 import org.kabieror.elwasys.backend.service.ProgramService;
 import org.kabieror.elwasys.backend.service.UserGroupService;
 import org.kabieror.elwasys.backend.ui.admin.dialog.ProgramFormDialog;
 import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
+import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
 /**
  * Programmverwaltung (Phase 3 AP2, siehe kb/05-migration-plan.md) - fachlicher Nachfolger
  * von {@code Portal/.../views/ProgramsView} (Alt-Portal, Testfall P12) inkl. des
  * Lösch-Wächters ("Programm ist noch auf N Gerät(en) verfügbar").
+ *
+ * <p><b>Seit Phase 3 AP5</b> (siehe kb/05-migration-plan.md, "Live-Updates zwischen Sessions"):
+ * die Liste lädt sich über den {@link UiBroadcaster} automatisch neu, wenn irgendeine Session
+ * ein Programm anlegt, bearbeitet oder löscht.
  */
 @Route(value = "admin/programs", layout = AdminLayout.class)
 @PageTitle("Programme - Waschportal")
@@ -35,12 +44,17 @@ public class AdminProgramsView extends VerticalLayout {
 
     private final ProgramService programService;
     private final UserGroupService userGroupService;
+    private final UiBroadcaster broadcaster;
 
     private final Grid<ProgramEntity> grid = new Grid<>();
 
-    public AdminProgramsView(ProgramService programService, UserGroupService userGroupService) {
+    private Registration broadcasterRegistration;
+
+    public AdminProgramsView(ProgramService programService, UserGroupService userGroupService,
+            UiBroadcaster broadcaster) {
         this.programService = programService;
         this.userGroupService = userGroupService;
+        this.broadcaster = broadcaster;
 
         setSizeFull();
         addClassName("admin-programs-view");
@@ -60,6 +74,25 @@ public class AdminProgramsView extends VerticalLayout {
         setFlexGrow(1, this.grid);
 
         loadData();
+    }
+
+    @Override
+    protected void onAttach(AttachEvent attachEvent) {
+        super.onAttach(attachEvent);
+        this.broadcasterRegistration = this.broadcaster.register(attachEvent.getUI(), event -> {
+            if (event instanceof ProgramChangedEvent) {
+                loadData();
+            }
+        });
+    }
+
+    @Override
+    protected void onDetach(DetachEvent detachEvent) {
+        if (this.broadcasterRegistration != null) {
+            this.broadcasterRegistration.remove();
+            this.broadcasterRegistration = null;
+        }
+        super.onDetach(detachEvent);
     }
 
     private void configureGrid() {

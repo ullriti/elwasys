@@ -1,5 +1,7 @@
 package org.kabieror.elwasys.backend.ui.admin;
 
+import com.vaadin.flow.component.AttachEvent;
+import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.grid.Grid;
@@ -11,12 +13,16 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.shared.Registration;
 import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 import java.text.NumberFormat;
 import java.util.Locale;
 import org.kabieror.elwasys.backend.auth.ElwasysUserPrincipal;
 import org.kabieror.elwasys.backend.domain.UserEntity;
+import org.kabieror.elwasys.backend.events.CreditChangedEvent;
+import org.kabieror.elwasys.backend.events.ExecutionChangedEvent;
+import org.kabieror.elwasys.backend.events.UserChangedEvent;
 import org.kabieror.elwasys.backend.service.CreditService;
 import org.kabieror.elwasys.backend.service.ExecutionService;
 import org.kabieror.elwasys.backend.service.PasswordResetService;
@@ -27,6 +33,7 @@ import org.kabieror.elwasys.backend.ui.admin.dialog.CreditTopUpDialog;
 import org.kabieror.elwasys.backend.ui.admin.dialog.ExpiredExecutionsDialog;
 import org.kabieror.elwasys.backend.ui.admin.dialog.UserFormDialog;
 import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
+import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
 /**
  * Benutzerverwaltung (Phase 3 AP2/AP3, siehe kb/05-migration-plan.md) - fachlicher Nachfolger
@@ -43,6 +50,12 @@ import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
  * Warnung bei nicht abgerechneten Programmausführungen (Icon-Spalte, öffnet
  * {@link ExpiredExecutionsDialog} - fachlicher Nachfolger von {@code ExpiredExecutionsWindow}
  * bzw. der Warn-Icon-Logik in {@code Portal/.../views/UsersView#fillItemWithUserData}).
+ *
+ * <p><b>Seit Phase 3 AP5</b> (siehe kb/05-migration-plan.md, "Live-Updates zwischen Sessions"):
+ * die Liste lädt sich über den {@link UiBroadcaster} automatisch neu, wenn IRGENDEINE Session -
+ * das Portal-UI oder (bei Guthaben-/Ausführungs-Ereignissen) ein Terminal über die REST-API -
+ * einen Benutzer ändert, ein Guthaben bucht oder eine Ausführung ändert (letztere beiden
+ * beeinflussen die angezeigten Spalten "Guthaben"/Warndreieck).
  */
 @Route(value = "admin/users", layout = AdminLayout.class)
 @PageTitle("Benutzer - Waschportal")
@@ -54,18 +67,22 @@ public class AdminUsersView extends VerticalLayout {
     private final CreditService creditService;
     private final ExecutionService executionService;
     private final PasswordResetService passwordResetService;
+    private final UiBroadcaster broadcaster;
     private final String actingAdminName;
 
     private final Grid<UserEntity> grid = new Grid<>();
 
+    private Registration broadcasterRegistration;
+
     public AdminUsersView(UserService userService, UserGroupService userGroupService, CreditService creditService,
-            ExecutionService executionService, PasswordResetService passwordResetService,
+            ExecutionService executionService, PasswordResetService passwordResetService, UiBroadcaster broadcaster,
             AuthenticationContext authenticationContext) {
         this.userService = userService;
         this.userGroupService = userGroupService;
         this.creditService = creditService;
         this.executionService = executionService;
         this.passwordResetService = passwordResetService;
+        this.broadcaster = broadcaster;
         this.actingAdminName = authenticationContext.getAuthenticatedUser(ElwasysUserPrincipal.class)
                 .map(ElwasysUserPrincipal::getName).orElse(authenticationContext.getPrincipalName().orElse(""));
 
@@ -87,6 +104,26 @@ public class AdminUsersView extends VerticalLayout {
         setFlexGrow(1, this.grid);
 
         loadData();
+    }
+
+    @Override
+    protected void onAttach(AttachEvent attachEvent) {
+        super.onAttach(attachEvent);
+        this.broadcasterRegistration = this.broadcaster.register(attachEvent.getUI(), event -> {
+            if (event instanceof UserChangedEvent || event instanceof CreditChangedEvent
+                    || event instanceof ExecutionChangedEvent) {
+                loadData();
+            }
+        });
+    }
+
+    @Override
+    protected void onDetach(DetachEvent detachEvent) {
+        if (this.broadcasterRegistration != null) {
+            this.broadcasterRegistration.remove();
+            this.broadcasterRegistration = null;
+        }
+        super.onDetach(detachEvent);
     }
 
     private void configureGrid() {

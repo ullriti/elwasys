@@ -1,5 +1,7 @@
 package org.kabieror.elwasys.backend.ui.admin;
 
+import com.vaadin.flow.component.AttachEvent;
+import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.grid.Grid;
@@ -16,21 +18,30 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.shared.Registration;
 import jakarta.annotation.security.RolesAllowed;
 import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
+import org.kabieror.elwasys.backend.events.DeviceChangedEvent;
+import org.kabieror.elwasys.backend.events.DomainEvent;
+import org.kabieror.elwasys.backend.events.ExecutionChangedEvent;
+import org.kabieror.elwasys.backend.events.LocationChangedEvent;
 import org.kabieror.elwasys.backend.service.DashboardService;
 import org.kabieror.elwasys.backend.service.DashboardService.DeviceStatus;
 import org.kabieror.elwasys.backend.service.DashboardService.LocationStatus;
+import org.kabieror.elwasys.backend.service.DeviceService;
 import org.kabieror.elwasys.backend.service.ExecutionService;
 import org.kabieror.elwasys.backend.ui.admin.dialog.LogViewerDialog;
+import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 import org.kabieror.elwasys.backend.ws.TerminalMaintenanceService;
 import org.kabieror.elwasys.backend.ws.TerminalNotConnectedException;
 import org.kabieror.elwasys.backend.ws.TerminalRequestTimeoutException;
@@ -44,9 +55,16 @@ import org.kabieror.elwasys.backend.ws.TerminalRequestTimeoutException;
  * Alt-{@code AdminDashboardLocationPanel} inkl. Hervorhebung laufender/abgelaufener Zeilen.
  *
  * <p>Die eigentliche Datenbeschaffung liegt in {@link DashboardService} (siehe dessen
- * Klassenkommentar) - diese View aktualisiert beim Seitenaufruf ({@link #loadData()}), ein
- * Live-Push zwischen Sessions ist laut Auftrag dieses Arbeitspakets nicht nötig und folgt in
- * AP5.
+ * Klassenkommentar) - diese View aktualisiert beim Seitenaufruf ({@link #loadData()}).
+ *
+ * <p><b>Seit Phase 3 AP5</b> (siehe kb/05-migration-plan.md, "Live-Updates zwischen Sessions"):
+ * die View meldet sich in {@link #onAttach} beim {@link UiBroadcaster} an und in {@link
+ * #onDetach} wieder ab. Bei einem {@link DeviceChangedEvent}/{@link ExecutionChangedEvent}
+ * eines Geräts, das gerade auf dieser Seite angezeigt wird, lädt {@link #refreshDevice} GEZIELT
+ * nur das eine betroffene Geräte-Panel neu (über {@link DashboardService#getDeviceStatus}, das
+ * genau dafür entworfen wurde, siehe dessen Javadoc) statt die gesamte Seite neu aufzubauen; ein
+ * {@link LocationChangedEvent} oder ein Ereignis für ein (noch) nicht angezeigtes Gerät (z.B.
+ * gerade neu angelegt) löst einen vollständigen {@link #loadData()} aus.
  *
  * <p><b>Seit Phase 3 AP4</b>: je Standort eine Fernwartungs-Toolbar (Log anzeigen/Neustart)
  * plus Verbindungsstatus - fachlicher Nachfolger der Wartungsverbindungs-Toolbar des
@@ -68,16 +86,24 @@ public class AdminDashboardView extends VerticalLayout {
             FormatStyle.SHORT).withLocale(Locale.GERMANY);
 
     private final DashboardService dashboardService;
+    private final DeviceService deviceService;
     private final ExecutionService executionService;
     private final TerminalMaintenanceService maintenanceService;
+    private final UiBroadcaster broadcaster;
 
     private final VerticalLayout locationsContainer = new VerticalLayout();
+    private final Map<Integer, VerticalLayout> devicePanelsByDeviceId = new HashMap<>();
 
-    public AdminDashboardView(DashboardService dashboardService, ExecutionService executionService,
-            TerminalMaintenanceService maintenanceService) {
+    private Registration broadcasterRegistration;
+
+    public AdminDashboardView(DashboardService dashboardService, DeviceService deviceService,
+            ExecutionService executionService, TerminalMaintenanceService maintenanceService,
+            UiBroadcaster broadcaster) {
         this.dashboardService = dashboardService;
+        this.deviceService = deviceService;
         this.executionService = executionService;
         this.maintenanceService = maintenanceService;
+        this.broadcaster = broadcaster;
 
         setSizeFull();
         addClassName("admin-dashboard-view");
@@ -91,8 +117,57 @@ public class AdminDashboardView extends VerticalLayout {
         loadData();
     }
 
+    @Override
+    protected void onAttach(AttachEvent attachEvent) {
+        super.onAttach(attachEvent);
+        this.broadcasterRegistration = this.broadcaster.register(attachEvent.getUI(), this::onDomainEvent);
+    }
+
+    @Override
+    protected void onDetach(DetachEvent detachEvent) {
+        if (this.broadcasterRegistration != null) {
+            this.broadcasterRegistration.remove();
+            this.broadcasterRegistration = null;
+        }
+        super.onDetach(detachEvent);
+    }
+
+    private void onDomainEvent(DomainEvent event) {
+        switch (event) {
+            case DeviceChangedEvent(Integer deviceId) -> refreshDevice(deviceId);
+            case ExecutionChangedEvent(Integer executionId, Integer deviceId, Integer userId) -> refreshDevice(
+                    deviceId);
+            case LocationChangedEvent ignored -> loadData();
+            default -> {
+                // andere Ereignisarten (Benutzer/Gruppen/Programme/Guthaben) betreffen dieses
+                // Dashboard nicht.
+            }
+        }
+    }
+
+    /**
+     * Lädt gezielt das Panel des betroffenen Geräts neu (siehe Klassen-Javadoc). Ist das Gerät
+     * (noch) nicht Teil dieser Seite - z.B. gerade erst angelegt, oder die Seite wurde vor dem
+     * betroffenen Standort noch nie geladen - fällt die Methode auf einen vollständigen
+     * {@link #loadData()} zurück.
+     */
+    private void refreshDevice(Integer deviceId) {
+        if (deviceId == null) {
+            loadData();
+            return;
+        }
+        VerticalLayout panel = this.devicePanelsByDeviceId.get(deviceId);
+        if (panel == null) {
+            loadData();
+            return;
+        }
+        this.deviceService.findById(deviceId).ifPresentOrElse(
+                device -> populateDevicePanel(panel, this.dashboardService.getDeviceStatus(device)), this::loadData);
+    }
+
     private void loadData() {
         this.locationsContainer.removeAll();
+        this.devicePanelsByDeviceId.clear();
         for (LocationStatus locationStatus : this.dashboardService.getLocationStatuses()) {
             this.locationsContainer.add(buildLocationPanel(locationStatus));
         }
@@ -201,6 +276,19 @@ public class AdminDashboardView extends VerticalLayout {
         devicePanel.addClassName("dashboard-device-panel");
         devicePanel.getElement().getThemeList().add("spacing-s");
         devicePanel.setWidth("24em");
+        populateDevicePanel(devicePanel, deviceStatus);
+        this.devicePanelsByDeviceId.put(deviceStatus.device().getId(), devicePanel);
+        return devicePanel;
+    }
+
+    /**
+     * Baut den Inhalt eines Geräte-Panels neu auf, OHNE ein neues Panel (und damit einen neuen
+     * DOM-Knoten) zu erzeugen - genutzt sowohl beim erstmaligen Aufbau ({@link
+     * #buildDevicePanel}) als auch beim gezielten Live-Update eines einzelnen Geräts ({@link
+     * #refreshDevice}, Phase 3 AP5).
+     */
+    private void populateDevicePanel(VerticalLayout devicePanel, DeviceStatus deviceStatus) {
+        devicePanel.removeAll();
 
         HorizontalLayout header = new HorizontalLayout();
         header.setWidthFull();
@@ -216,7 +304,6 @@ public class AdminDashboardView extends VerticalLayout {
                 deviceStatus.remainingTime())));
 
         devicePanel.add(buildHistoryGrid(deviceStatus));
-        return devicePanel;
     }
 
     private Span buildRunningInfo(ExecutionEntity execution, Duration remainingTime) {
