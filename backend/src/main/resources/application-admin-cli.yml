@@ -1,0 +1,16 @@
+# Profil fürs einmalige CLI-(Neu-)Setzen des Passworts eines bestehenden Benutzers (siehe
+# AdminPasswordCliRunner). web-application-type=none verhindert, dass der eingebettete
+# Webserver hochfährt - der Prozess führt nur den ApplicationRunner aus und beendet sich
+# danach von selbst.
+#
+# Vaadins Autokonfiguration verlangt einen WebApplicationContext und bricht in diesem
+# Nicht-Web-Kontext sonst mit "SpringBootAutoConfiguration required a bean of type
+# WebApplicationContext" ab (dieselbe Regression wie bei application-token-cli.yml). Im
+# reinen CLI-Lauf wird keine UI benötigt - Vaadin daher hier gezielt ausschließen.
+spring:
+  main:
+    web-application-type: none
+  autoconfigure:
+    exclude:
+      - com.vaadin.flow.spring.SpringBootAutoConfiguration
+      - com.vaadin.flow.spring.SpringSecurityAutoConfiguration

@@ -9,9 +9,6 @@ import org.testfx.api.FxToolkit;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.Statement;
 import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -20,12 +17,13 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * End-to-end test that launches the <em>real</em> Raspberry-Pi client
  * application ({@link Main}) headlessly and drives it through its actual
- * startup path: configuration loading, database connection, gateway
- * connection and the JavaFX UI state machine.
+ * startup path: configuration loading, backend REST-API/token connection,
+ * gateway connection and the JavaFX UI state machine.
  *
  * To make this possible without real hardware, the test:
- *  - points the client at a local PostgreSQL database seeded from
- *    Common/resources/database-init.sql (see run-client-e2e.sh),
+ *  - points the client at the test backend ({@link TestBackend}, REST API +
+ *    Standort-Token - since Phase 4 AP4/AP5 the client no longer connects to
+ *    the database directly, see kb/05-migration-plan.md),
  *  - runs the in-project {@link FhemSimulator} as a fake gateway (the fhem
  *    path is used because no deConz server is configured),
  *  - writes an elwasys.properties into a temporary working directory.
@@ -46,11 +44,6 @@ public class ClientAppE2ETest {
 
     @BeforeAll
     static void launchRealApplication() throws Exception {
-        // 0. Clear any leftover client registration on the "Default" location so
-        //    this run can register cleanly (a registration from a previous run
-        //    would otherwise mark the location as occupied for 5 minutes).
-        resetDefaultLocationRegistration();
-
         // 1. Fake fhem gateway
         fhem = new FhemSimulator();
         fhem.start(FHEM_PORT);
@@ -78,24 +71,16 @@ public class ClientAppE2ETest {
                 "maintenance.server=localhost",
                 "maintenance.port=3591",
                 ""));
-        // Use a stable client UID so repeated test runs re-register as the SAME
-        // client at the "Default" location (a new UID would be rejected with a
-        // LocationOccupiedException for 5 minutes after a previous run).
+        // Stable client UID (read by WashguardConfiguration, used to identify this
+        // terminal on the outgoing maintenance WebSocket connection, see
+        // TerminalWebSocketClient) - not strictly required for this test to pass, but
+        // keeps repeated runs deterministic instead of a fresh random UID each time.
         Files.writeString(workDir.resolve(".client-uid"), "e2e-test-client");
         System.setProperty("user.dir", workDir.toString());
 
         // 3. Launch the real JavaFX application.
         FxToolkit.registerPrimaryStage();
         FxToolkit.setupApplication(Main.class);
-    }
-
-    private static void resetDefaultLocationRegistration() throws Exception {
-        try (Connection c = DriverManager.getConnection(
-                "jdbc:postgresql://localhost:5432/elwasys", "elwaclient1", "elwaclient1");
-             Statement s = c.createStatement()) {
-            s.executeUpdate(
-                    "UPDATE locations SET client_uid=NULL, client_last_seen=NULL WHERE name='Default'");
-        }
     }
 
     @AfterAll

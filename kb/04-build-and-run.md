@@ -159,6 +159,23 @@ Details/Design (Hash statt Klartext, mehrere aktive Tokens pro Standort für
 ausfallfreie Rotation, `Authorization: Bearer <token>`-Header) siehe kb/03-modules.md und
 kb/05-migration-plan.md.
 
+**Admin-/Benutzer-Passwort setzen (Phase 5 AP2, seit V7 kein Default-Admin-Passwort mehr)** –
+analoges Profil `admin-cli` (`application-admin-cli.yml`, `AdminPasswordCliRunner`, ebenfalls
+`web-application-type: none`):
+```bash
+ELWASYS_DB_URL=jdbc:postgresql://localhost:5432/elwasys \
+ELWASYS_DB_USER=elwaportal ELWASYS_DB_PASSWORD=elwaportal \
+java -jar backend/target/elwasys-backend.jar \
+    --spring.profiles.active=admin-cli \
+    --username=admin \
+    --password=<neues Passwort>
+```
+Setzt das Passwort eines bestehenden Benutzers über denselben Weg wie der admin-seitige
+Passwort-Reset im Portal (`PasswordService#setNewPassword`, immer Argon2id-Format) – auf
+einer frischen Installation ist das der einzige Weg, dem Seed-`admin`-Benutzer überhaupt ein
+Passwort zu geben (siehe `V7__remove_default_admin_password.sql`, kb/02-data-model.md,
+kb/05-migration-plan.md).
+
 ## Umgebung (dieser Remote-Container)
 
 - **OS**: Ubuntu 24.04.4 LTS

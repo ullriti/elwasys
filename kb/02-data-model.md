@@ -156,13 +156,29 @@ Alt-Code unbenutzt/unbekannt.
 
 ## DB-Rollen & Rechte
 
-- **Gruppe `elwaclients`**, User `elwaclient1` (PW `elwaclient1`):
-  SELECT auf alles; INSERT/UPDATE auf `executions`; UPDATE auf `locations`, `devices`;
-  INSERT auf `credit_accounting`. (Terminal darf nur Nötiges schreiben.)
+**Stand seit Phase 5 AP2 (`V6__harden_db_roles.sql`, 2026-07-21):** `elwaportal` ist der
+EINZIGE Anwendungs-DB-User. `elwaclient1`/`elwaapi` + die Gruppe `elwaclients` (mitsamt ihrer
+Default-Passwörter) sind entfernt – das Terminal spricht seit Phase 4 AP4/AP5 nur noch über
+die Backend-REST-API/den Standort-Token mit dem Backend (kein Direkt-DB-Zugriff mehr), und die
+mobile App (`elwaapi`) ist laut Auftraggeber nicht mehr relevant (siehe „Entscheidungen“ in
+kb/05-migration-plan.md). Die alte Rollenbeschreibung bleibt hier als historischer Kontext
+dokumentiert:
+
+- ~~**Gruppe `elwaclients`**, User `elwaclient1` (PW `elwaclient1`): SELECT auf alles;
+  INSERT/UPDATE auf `executions`; UPDATE auf `locations`, `devices`; INSERT auf
+  `credit_accounting`. (Terminal durfte nur Nötiges schreiben.)~~ *(entfernt, V6)*
 - **User `elwaportal`**: volles SELECT/INSERT/UPDATE/DELETE, aber `REVOKE UPDATE, DELETE`
-  auf `credit_accounting` (Buchungen sind unveränderlich).
-- **User `elwaapi`** (PW `api1234`): SELECT auf alles; UPDATE auf `users`;
-  INSERT/DELETE auf `reservations` (für die mobile App).
+  auf `credit_accounting` (Buchungen sind unveränderlich). Unverändert seit V1.
+- ~~**User `elwaapi`** (PW `api1234`): SELECT auf alles; UPDATE auf `users`; INSERT/DELETE auf
+  `reservations` (für die mobile App).~~ *(entfernt, V6)*
+
+**Cluster-weite Rollen im geteilten Test-Cluster**: `V6` läuft idempotent und fängt den Fall
+ab, dass eine Rolle in DIESER Datenbank noch Rechte besitzt, aber in einer ANDEREN Datenbank
+desselben Clusters (z. B. die von den Client-Raspi-Testharnesses über `database-init.sql`
+geseedete `elwasys`-Test-DB, solange diese parallel existiert) noch referenziert wird – in
+diesem Fall wird `DROP ROLE`/`DROP GROUP` für diesen Lauf übersprungen (`RAISE NOTICE`), die
+Rechte in der aktuellen DB sind trotzdem entfernt. In einer echten Produktivumgebung mit
+genau einer `elwasys`-Datenbank tritt das nicht auf, siehe Kommentarkopf der Migration.
 
 ## Migrations-relevante Beobachtungen
 
@@ -229,10 +245,10 @@ Zusammenfassung:
   `baselineOnMigrate`-Baseline-Schritt mit angewendet. Details/Abwägung siehe
   kb/05-migration-plan.md („Entscheidungen“, AP3).
 - **Rollen/Grants**: Die DB-Rollen `elwaclient1`/`elwaportal`/`elwaapi` (siehe „DB-Rollen &
-  Rechte“ oben) werden von der Baseline unverändert mit angelegt/gegrantet – das Backend
-  selbst nutzt sie in AP1 noch nicht (es hat noch keine fachlichen Endpunkte); die
-  Ablösung durch einen einzelnen technischen Backend-User ist laut Roadmap erst Phase 5
-  vorgesehen.
+  Rechte“ oben) wurden von der Baseline (V1) zunächst unverändert mit angelegt/gegrantet – das
+  Backend selbst nutzte sie in AP1 noch nicht (es hatte noch keine fachlichen Endpunkte). Die
+  Ablösung durch einen einzelnen technischen Backend-User (`elwaportal`) ist seit Phase 5 AP2
+  (`V6`) umgesetzt, siehe „DB-Rollen & Rechte“ oben.
 - **`V3__create_terminal_tokens.sql`** (Phase 2 AP4, 2026-07-20): neue Tabelle
   `terminal_tokens` (siehe „Tabellen“ oben) für die Standort-Token-Auth der Terminal-API.
   Rein additiv (neue Tabelle, keine Änderung an Bestandstabellen) – der Alt-Code bekommt
@@ -247,6 +263,16 @@ Zusammenfassung:
   `locations.offline_max_duration_minutes` (siehe „Tabellen“ oben, `locations`). Rein additiv
   (`NOT NULL`-Spalte mit `DEFAULT 60`, keine Bestandsspalte geändert) – der Alt-Code bekommt
   davon nichts mit. Details siehe kb/03-modules.md „Offline-Robustheit (AP6)“ und
+  kb/05-migration-plan.md.
+- **`V6__harden_db_roles.sql`** (Phase 5 AP2, 2026-07-21): entfernt `elwaclient1`/`elwaapi` +
+  Gruppe `elwaclients` (idempotent, cluster-weite Rollen-Problematik abgefangen, siehe „DB-
+  Rollen & Rechte“ oben). `elwaportal` unverändert.
+- **`V7__remove_default_admin_password.sql`** (Phase 5 AP2, 2026-07-21): setzt
+  `users.password` für den Seed-`admin`-Benutzer auf `NULL`, aber NUR wenn er noch den
+  unveränderten Default-SHA1-Hash von „admin“ trägt (Verhalten-bewahren für Bestände, die das
+  Passwort bereits geändert haben). Frische Installationen haben danach kein bekanntes
+  Admin-Passwort mehr – es wird über das neue Admin-CLI gesetzt (`AdminPasswordCliRunner`,
+  Profil `admin-cli`, Kommando siehe kb/04-build-and-run.md). Details/Entscheidung siehe
   kb/05-migration-plan.md.
 
 ## JPA-Entities (seit Phase 2 AP2, 2026-07-20)

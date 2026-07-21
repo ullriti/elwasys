@@ -20,17 +20,18 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
  * an dieser Stelle deklariert, weil er ausschließlich vom Terminal-WebSocket-Fundament
  * gebraucht wird.
  *
- * <p>{@code @Profile("!token-cli")}: Spring Boots Standard-{@code TaskScheduler} für
- * {@code @Scheduled} nutzt NICHT-Daemon-Threads - ohne diesen Ausschluss würde der
- * einmalige CLI-Aufruf ({@code TerminalTokenCliRunner}, Profil {@code token-cli}) nach
- * getaner Arbeit nicht beendet, weil der Heartbeat-Scheduler-Thread den Prozess am Leben
- * hält (gefunden beim manuellen Testen der CLI in AP4). Der CLI-Modus braucht ohnehin weder
- * WebSocket noch Heartbeat.
+ * <p>{@code @Profile("!token-cli & !admin-cli")}: Spring Boots Standard-{@code TaskScheduler}
+ * für {@code @Scheduled} nutzt NICHT-Daemon-Threads - ohne diesen Ausschluss würde ein
+ * einmaliger CLI-Aufruf ({@code TerminalTokenCliRunner}, Profil {@code token-cli}; bzw.
+ * {@code AdminPasswordCliRunner}, Profil {@code admin-cli}, seit Phase 5 AP2) nach getaner
+ * Arbeit nicht beendet, weil der Heartbeat-Scheduler-Thread den Prozess am Leben hält
+ * (gefunden beim manuellen Testen der CLI in AP4, beim admin-cli-Härtungs-Arbeitspaket
+ * reproduziert). Der CLI-Modus braucht ohnehin weder WebSocket noch Heartbeat.
  */
 @Configuration
 @EnableWebSocket
 @EnableScheduling
-@Profile("!token-cli")
+@Profile("!token-cli & !admin-cli")
 public class TerminalWebSocketConfig implements WebSocketConfigurer {
 
     public static final String TERMINAL_WS_PATH = "/api/v1/terminal-ws";
