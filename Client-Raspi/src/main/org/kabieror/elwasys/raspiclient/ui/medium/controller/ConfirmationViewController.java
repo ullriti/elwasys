@@ -12,13 +12,15 @@ import javafx.scene.control.Label;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
-import org.kabieror.elwasys.common.Execution;
 import org.kabieror.elwasys.common.FormatUtilities;
-import org.kabieror.elwasys.common.Program;
-import org.kabieror.elwasys.common.User;
+import org.kabieror.elwasys.raspiclient.api.ApiException;
+import org.kabieror.elwasys.raspiclient.api.dto.DeviceDto;
 import org.kabieror.elwasys.raspiclient.application.ActionContainer;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
 import org.kabieror.elwasys.raspiclient.executions.FhemException;
+import org.kabieror.elwasys.raspiclient.model.ClientExecution;
+import org.kabieror.elwasys.raspiclient.model.ClientProgram;
+import org.kabieror.elwasys.raspiclient.model.ClientUser;
 import org.kabieror.elwasys.raspiclient.ui.ComponentControlInstance;
 import org.kabieror.elwasys.raspiclient.ui.MainFormState;
 import org.kabieror.elwasys.raspiclient.ui.UiUtilities;
@@ -31,7 +33,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URL;
-import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
@@ -42,17 +43,26 @@ import java.util.ResourceBundle;
 
 /**
  * Controller der Bestätigungsseite für den Programmstart.
+ * <p>
+ * Seit Phase 4 AP4 (siehe kb/05-migration-plan.md "Benachrichtigungen") steuern die
+ * E-Mail-/Push-Checkboxen nichts mehr fachlich an: der Alt-Code speicherte die
+ * Einwilligung ohnehin nur im (nie persistierten) In-Memory-Benutzerobjekt für den
+ * unmittelbar folgenden Versand durch {@code ExecutionFinisher} - dieser Versand läuft
+ * jetzt zentral im Backend anhand der dort gespeicherten Benutzer-Einstellung. Die
+ * Checkboxen/Hinweise bleiben (FXML unangetastet) sichtbar, wirken aber nicht mehr auf den
+ * Versand - eine bewusste, explizit beauftragte Verhaltensänderung (Notification-Entfernung),
+ * kein übersehener Rest. Die Auth-Key-Anzeige der elwaApp-Kopplung zeigt seit dem Cutover
+ * immer den "nicht verbunden"-Hinweis (der Alt-Spalte {@code users.auth_key} entspricht eine
+ * bewusst NICHT ins neue Datenmodell gemappte App-Altlast, siehe
+ * {@code backend.domain.UserEntity} - Entfernung in Phase 5 vorgesehen).
  */
 public class ConfirmationViewController implements Initializable, IViewController {
-
-    private static final String TEXT_CREDIT_INSUFFICENT = "Guthaben reicht nicht aus!";
-    private static final String TEXT_USER_BLOCKED = "Diese Karte ist gesperrt!";
 
     private Logger logger = LoggerFactory.getLogger(ConfirmationViewController.class);
 
     private MainFormController mfc;
 
-    private Program selectedProgram;
+    private ClientProgram selectedProgram;
 
     private ToolbarState toolbarStateWait =
             new ToolbarState("Zurück", "Start", () -> this.mfc.gotoState(MainFormState.SELECT_DEVICE), null, false,
@@ -72,7 +82,7 @@ public class ConfirmationViewController implements Initializable, IViewControlle
     /**
      * Liste aller Programme zum ausgewählten Gerät
      */
-    private Map<Program, ComponentControlInstance<ProgramListEntry>> programs = new HashMap<>();
+    private Map<ClientProgram, ComponentControlInstance<ProgramListEntry>> programs = new HashMap<>();
     @FXML
     private VBox programsContainer;
     @FXML
@@ -96,7 +106,7 @@ public class ConfirmationViewController implements Initializable, IViewControlle
     /**
      * Reagiert auf die Änderung des angemeldeten Benutzers.
      */
-    private ChangeListener<? super User> registeredUserChangedListener = (observable, oldValue, newValue) -> {
+    private ChangeListener<? super ClientUser> registeredUserChangedListener = (observable, oldValue, newValue) -> {
         this.mfc.gotoState(MainFormState.SELECT_DEVICE);
     };
 
@@ -141,9 +151,18 @@ public class ConfirmationViewController implements Initializable, IViewControlle
         this.setPortalUrl(ElwaManager.instance.getConfigurationManager().getPortalUrl());
         this.setMoreInfoText("Mehr Informationen in der elwaApp und unter " + this.getPortalUrl());
 
-        // Lade Programme
-        List<Program> progs = this.mfc.getSelectedDevice().getPrograms(this.mfc.getRegisteredUser());
-        for (Program p : progs) {
+        // Lade Programme (bereits gruppengefiltert und mit dem Preis für diesen
+        // Benutzer bepreist, siehe DeviceDto#programs()).
+        List<ClientProgram> progs;
+        try {
+            progs = this.loadProgramsForSelectedDevice();
+        } catch (ApiException e) {
+            this.logger.error("Could not load programs for the selected device.", e);
+            this.mfc.displayError("Kommunikationsfehler", e.getLocalizedMessage(),
+                    new org.kabieror.elwasys.raspiclient.application.ActionContainer(this::onActivate), true);
+            return;
+        }
+        for (ClientProgram p : progs) {
             ComponentControlInstance<ProgramListEntry> i = ProgramListEntry.createInstance();
             i.getController().setProgram(p);
             i.getController().setController(this);
@@ -159,10 +178,26 @@ public class ConfirmationViewController implements Initializable, IViewControlle
 
         if (this.mfc.getRegisteredUser() != null) {
             this.registeredUserUserName.set(this.mfc.getRegisteredUser().getUsername());
-            this.authKey.set(this.mfc.getRegisteredUser().getAuthKey());
-        } else {
-            this.authKey.set("");
         }
+        // Elwa-App-Kopplung (auth_key) ist eine App-Altlast, die das neue Datenmodell
+        // bewusst nicht mehr führt (siehe Klassenkommentar) - immer "nicht verbunden".
+        this.authKey.set("");
+    }
+
+    /**
+     * Lädt die für das gewählte Gerät verfügbaren Programme des angemeldeten Benutzers
+     * (gruppengefiltert, mit Preis) - entspricht {@code Common.Device#getPrograms(User)}.
+     */
+    private List<ClientProgram> loadProgramsForSelectedDevice() throws ApiException {
+        int userId = this.mfc.getRegisteredUser().getId();
+        int deviceId = this.mfc.getSelectedDevice().getId();
+        List<DeviceDto> devices = ElwaManager.instance.getApiClient().getDevices(userId);
+        for (DeviceDto d : devices) {
+            if (d.id() == deviceId) {
+                return d.programs().stream().map(ClientProgram::of).toList();
+            }
+        }
+        return List.of();
     }
 
     @Override
@@ -201,22 +236,17 @@ public class ConfirmationViewController implements Initializable, IViewControlle
                 assert this.mfc.getSelectedDevice() != null;
                 assert this.selectedProgram != null;
 
-                final Execution ex;
+                final ClientExecution ex;
                 try {
-                    // Aktualisiere Email-Benachrichtigung
-                    this.mfc.getRegisteredUser().setEmailNotification(this.mfc.getRegisteredUser().getEmail() != null &&
-                            !this.mfc.getRegisteredUser().getEmail().isEmpty() &&
-                            this.emailNotificationCheckBox.isSelected());
-
-                    this.mfc.getRegisteredUser().setPushEnabled(this.ionicNotificationCheckBox.isSelected());
-
-                    ex = ElwaManager.instance.getDataRetriever()
-                            .newExecution(this.mfc.getRegisteredUser(), this.selectedProgram,
-                                    this.mfc.getSelectedDevice());
-                } catch (final SQLException e1) {
+                    var dto = ElwaManager.instance.getApiClient()
+                            .createExecution(this.mfc.getRegisteredUser().getId(), this.mfc.getSelectedDevice().getId(),
+                                    this.selectedProgram.getId(), LocalDateTime.now());
+                    ex = ClientExecution.of(dto, this.mfc.getSelectedDevice(), this.selectedProgram,
+                            this.mfc.getRegisteredUser());
+                } catch (final ApiException e1) {
                     this.logger.error("The execution cannot be created.", e1);
                     Platform.runLater(() -> {
-                        this.mfc.displayError("Datenbankfehler", e1.getLocalizedMessage(), actionContainer, true);
+                        this.mfc.displayError("Kommunikationsfehler", e1.getLocalizedMessage(), actionContainer, true);
                         this.mfc.endWait();
                     });
                     return;
@@ -225,9 +255,6 @@ public class ConfirmationViewController implements Initializable, IViewControlle
                 try {
                     ElwaManager.instance.getExecutionManager().startExecution(ex);
                     this.mfc.gotoState(MainFormState.SELECT_DEVICE);
-                } catch (final SQLException e1) {
-                    this.logger.error("The execution could not be started.", e1);
-                    this.mfc.displayError("Datenbankfehler", e1.getLocalizedMessage(), actionContainer, true);
                 } catch (final IOException e1) {
                     this.logger.error("The execution could not be started.", e1);
                     this.mfc.displayError("Kommunikationsfehler", e1.getLocalizedMessage(), actionContainer, true);
@@ -257,7 +284,7 @@ public class ConfirmationViewController implements Initializable, IViewControlle
      *
      * @param program Das auszuwählende Programm.
      */
-    void selectProgram(Program program) {
+    void selectProgram(ClientProgram program) {
         if (program == null) {
             return;
         }
@@ -274,11 +301,11 @@ public class ConfirmationViewController implements Initializable, IViewControlle
         // Titeltext aktualisieren
         this.titleText.set(this.selectedProgram.getName() + " auf " + this.mfc.getSelectedDevice().getName());
 
-        // Guthabenberechnung aktualisieren
+        // Guthabenberechnung aktualisieren (Preis kommt bereits fertig berechnet vom
+        // Backend, siehe ClientProgram#getPriceAtMaxDuration()).
         this.userCredit.set(FormatUtilities.formatCurrency(this.mfc.getRegisteredUser().getCredit()));
 
-        BigDecimal maxPrice =
-                this.selectedProgram.getPrice(this.selectedProgram.getMaxDuration(), this.mfc.getRegisteredUser());
+        BigDecimal maxPrice = this.selectedProgram.getPriceAtMaxDuration();
         this.maxPrice.set(FormatUtilities.formatCurrency(maxPrice));
 
         this.remainingCredit
@@ -295,16 +322,10 @@ public class ConfirmationViewController implements Initializable, IViewControlle
         } else {
             UiUtilities.setStyleClass(this.confirmationPane, "email-not-set", false);
             this.emailNotificationText.set("Bei Fertigstellung Email an " + this.mfc.getRegisteredUser().getEmail());
-            this.emailNotificationCheckBox.setSelected(this.mfc.getRegisteredUser().getEmailNotification());
         }
 
-        if (this.mfc.getRegisteredUser().getPushIonicId() == null || this.mfc.getRegisteredUser().getPushIonicId().isEmpty()) {
-            UiUtilities.setStyleClass(this.confirmationPane, "app-not-connected", true);
-        } else {
-            UiUtilities.setStyleClass(this.confirmationPane, "app-not-connected", false);
-            this.ionicNotificationText.set("Bei Fertigstellung Push-Benachrichtigung senden");
-            this.ionicNotificationCheckBox.setSelected(this.mfc.getRegisteredUser().isPushEnabled());
-        }
+        // elwaApp-Push ist entfernt (siehe Klassenkommentar) - immer "nicht verbunden".
+        UiUtilities.setStyleClass(this.confirmationPane, "app-not-connected", true);
 
         // Toolbar aktualisieren
         this.mfc.updateToolbar();
@@ -321,8 +342,7 @@ public class ConfirmationViewController implements Initializable, IViewControlle
             return false;
         }
 
-        return this.mfc.getRegisteredUser().canAfford(
-                this.selectedProgram.getPrice(this.selectedProgram.getMaxDuration(), this.mfc.getRegisteredUser()));
+        return this.mfc.getRegisteredUser().canAfford(this.selectedProgram.getPriceAtMaxDuration());
     }
 
     /**

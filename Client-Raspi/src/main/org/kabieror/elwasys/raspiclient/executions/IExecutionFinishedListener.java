@@ -1,6 +1,6 @@
 package org.kabieror.elwasys.raspiclient.executions;
 
-import org.kabieror.elwasys.common.Execution;
+import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 
 /**
  * Diese Schnittstelle wird beim Ende einer Ausführung angewendet
@@ -15,5 +15,5 @@ public interface IExecutionFinishedListener {
      * @param e
      *            Die beendete Ausführung
      */
-    void onExecutionFinished(Execution e);
+    void onExecutionFinished(ClientExecution e);
 }

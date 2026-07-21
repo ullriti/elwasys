@@ -3,7 +3,7 @@ package org.kabieror.elwasys.raspiclient.application;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.kabieror.elwasys.common.Execution;
+import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 import org.kabieror.elwasys.raspiclient.application.fhemsimulator.FhemSimulator;
 import org.kabieror.elwasys.raspiclient.ui.MainFormState;
 import org.testfx.api.FxToolkit;
@@ -54,6 +54,8 @@ public class ClientResumeExecutionE2ETest {
                 "database.user=elwaclient1",
                 "database.password=elwaclient1",
                 "database.useSsl=false",
+                "backend.url=" + TestBackend.url(),
+                "backend.token=" + TestBackend.token(),
                 "location=Default",
                 "displayTimeout=-1",
                 "startupDelay=0",
@@ -62,10 +64,6 @@ public class ClientResumeExecutionE2ETest {
                 "fhem.server=localhost",
                 "fhem.port=" + FHEM_PORT,
                 "instance.port=8280",
-                "smtp.server=",
-                "smtp.port=465",
-                "smtp.useSSL=false",
-                "smtp.senderAddress=noreply@example.com",
                 "maintenance.server=localhost",
                 "maintenance.port=3600",
                 ""));
@@ -96,15 +94,15 @@ public class ClientResumeExecutionE2ETest {
         assertTrue(waitUntil(() -> runningExecutionOnSeededDevice() != null, Duration.ofSeconds(15)),
                 "The interrupted execution should be resumed as a running execution");
 
-        final Execution resumed = runningExecutionOnSeededDevice();
+        final ClientExecution resumed = runningExecutionOnSeededDevice();
         assertTrue(resumed != null && resumed.isRunning(),
                 "The resumed execution should report itself as running");
     }
 
     // --- helpers ------------------------------------------------------------
 
-    private static Execution runningExecutionOnSeededDevice() {
-        for (final Execution e : ElwaManager.instance.getExecutionManager().getRunningExecutions()) {
+    private static ClientExecution runningExecutionOnSeededDevice() {
+        for (final ClientExecution e : ElwaManager.instance.getExecutionManager().getRunningExecutions()) {
             if (DEVICE_NAME.equals(e.getDevice().getName())) {
                 return e;
             }

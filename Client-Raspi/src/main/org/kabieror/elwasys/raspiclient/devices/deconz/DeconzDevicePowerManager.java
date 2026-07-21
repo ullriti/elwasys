@@ -1,6 +1,6 @@
 package org.kabieror.elwasys.raspiclient.devices.deconz;
 
-import org.kabieror.elwasys.common.Device;
+import org.kabieror.elwasys.raspiclient.model.ClientDevice;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
 import org.kabieror.elwasys.raspiclient.devices.DevicePowerState;
 import org.kabieror.elwasys.raspiclient.devices.IDevicePowerManager;
@@ -46,14 +46,14 @@ public class DeconzDevicePowerManager implements IDevicePowerManager {
     }
 
     @Override
-    public void setDevicePowerState(Device device, DevicePowerState newState)
+    public void setDevicePowerState(ClientDevice device, DevicePowerState newState)
             throws IOException, InterruptedException, FhemException {
         deconzService.setDeviceState(device.getDeconzUuid(),
                 newState == DevicePowerState.SET_ON || newState == DevicePowerState.ON);
     }
 
     @Override
-    public DevicePowerState getState(Device device) throws InterruptedException, FhemException, IOException {
+    public DevicePowerState getState(ClientDevice device) throws InterruptedException, FhemException, IOException {
         if (device.getDeconzUuid() == null) {
             logger.warn("No deCONZ device registered for device %s".formatted(device.getId()));
             return DevicePowerState.UNKNOWN;

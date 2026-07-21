@@ -9,11 +9,16 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.Pane;
-import org.kabieror.elwasys.common.*;
+
+import org.kabieror.elwasys.raspiclient.api.ApiException;
 import org.kabieror.elwasys.raspiclient.application.ActionContainer;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
 import org.kabieror.elwasys.raspiclient.executions.FhemException;
 import org.kabieror.elwasys.raspiclient.io.CardDetectedEvent;
+import org.kabieror.elwasys.raspiclient.model.ClientDevice;
+import org.kabieror.elwasys.raspiclient.model.ClientExecution;
+import org.kabieror.elwasys.raspiclient.model.ClientProgram;
+import org.kabieror.elwasys.raspiclient.model.ClientUser;
 import org.kabieror.elwasys.raspiclient.ui.AbstractMainFormController;
 import org.kabieror.elwasys.raspiclient.ui.MainFormState;
 import org.kabieror.elwasys.raspiclient.ui.small.components.ProgramListItem;
@@ -22,7 +27,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URL;
-import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.ResourceBundle;
@@ -43,7 +47,7 @@ public class MainFormController extends AbstractMainFormController {
      * Aktuell laufende Aufgaben zur Aktualisierung von Einträgen der
      * Geräte-Liste
      */
-    private final Map<Execution, ScheduledFuture<?>> runningUpdateTasks;
+    private final Map<ClientExecution, ScheduledFuture<?>> runningUpdateTasks;
     private final MainFormStateManager stateManager;
     /**
      * Service, der regelmäßig Aufgaben ausführt (Update der Geräte-Liste)
@@ -52,9 +56,9 @@ public class MainFormController extends AbstractMainFormController {
     /**
      * Ausgewählte Daten des Benutzers
      */
-    Device selectedDevice;
-    Program selectedProgram;
-    User registeredUser;
+    ClientDevice selectedDevice;
+    ClientProgram selectedProgram;
+    ClientUser registeredUser;
     @FXML
     Pane startupPane;
     @FXML
@@ -96,8 +100,8 @@ public class MainFormController extends AbstractMainFormController {
      * Liste aller Programme zum ausgewählten Gerät
      */
     @FXML
-    ListView<Program> programList;
-    ObservableList<Program> programListData;
+    ListView<ClientProgram> programList;
+    ObservableList<ClientProgram> programListData;
     /**
      * Seite: Info
      */
@@ -174,7 +178,7 @@ public class MainFormController extends AbstractMainFormController {
     @FXML
     Pane waitPane;
     private Logger logger = LoggerFactory.getLogger(this.getClass());
-    private Device[] devices = new Device[4];
+    private ClientDevice[] devices = new ClientDevice[4];
     /**
      * Service, der die Warte-Seite anzeigt.
      */
@@ -254,16 +258,13 @@ public class MainFormController extends AbstractMainFormController {
                 // Kein Update, wenn eine Ausführung läuft.
                 return;
             }
-            // Update objects
-            for (final Device d : this.devices) {
-                if (d == null) {
-                    continue;
+            try {
+                this.loadDevices();
+                for (int i = 0; i < 4; i++) {
+                    this.updateDevicePane(i);
                 }
-                try {
-                    d.update();
-                } catch (final Exception e) {
-                    this.logger.error("Error while updating device.", e);
-                }
+            } catch (final ApiException e) {
+                this.logger.error("Error while updating devices.", e);
             }
         };
         this.backlightManager.listenToLightOnEvent(updateDevices::run);
@@ -326,8 +327,8 @@ public class MainFormController extends AbstractMainFormController {
         this.confirmation_buttonDoor.setOnAction(e -> {
             // Tür öffnen
             this.beginWait();
-            final Execution ex = Execution.getOfflineExecution(this.selectedDevice,
-                    Program.getDoorOpenProgram(), User.getAnonymous());
+            final ClientExecution ex = ClientExecution.offline(this.selectedDevice,
+                    ClientProgram.doorOpen(), ClientUser.anonymous());
             final ActionContainer actionContainer = new ActionContainer();
             actionContainer.setAction(() -> {
                 final Thread actionThread = new Thread(() -> {
@@ -335,12 +336,6 @@ public class MainFormController extends AbstractMainFormController {
                         ElwaManager.instance.getExecutionManager().startExecution(ex);
                         Platform.runLater(
                                 () -> this.stateManager.gotoState(MainFormState.OPEN_DOOR));
-                    } catch (final SQLException e1) {
-                        Platform.runLater(() -> {
-                            this.logger.error("The execution could not be started.", e1);
-                            this.displayError("Datenbankfehler", e1.getLocalizedMessage(),
-                                    actionContainer, true);
-                        });
                     } catch (final IOException e1) {
                         Platform.runLater(() -> {
                             this.logger.error("The execution could not be started.", e1);
@@ -374,14 +369,16 @@ public class MainFormController extends AbstractMainFormController {
                     assert this.registeredUser != null;
                     assert this.selectedProgram != null;
                     assert this.selectedDevice != null;
-                    final Execution ex;
+                    final ClientExecution ex;
                     try {
-                        ex = ElwaManager.instance.getDataRetriever().newExecution(
-                                this.registeredUser, this.selectedProgram, this.selectedDevice);
-                    } catch (final SQLException e1) {
+                        var dto = ElwaManager.instance.getApiClient().createExecution(this.registeredUser.getId(),
+                                this.selectedDevice.getId(), this.selectedProgram.getId(),
+                                java.time.LocalDateTime.now());
+                        ex = ClientExecution.of(dto, this.selectedDevice, this.selectedProgram, this.registeredUser);
+                    } catch (final ApiException e1) {
                         this.logger.error("The execution cannot be created.", e1);
                         Platform.runLater(() -> {
-                            this.displayError("Datenbankfehler", e1.getLocalizedMessage(),
+                            this.displayError("Kommunikationsfehler", e1.getLocalizedMessage(),
                                     actionContainer, true);
                             this.endWait();
                         });
@@ -389,14 +386,6 @@ public class MainFormController extends AbstractMainFormController {
                     }
                     try {
                         ElwaManager.instance.getExecutionManager().startExecution(ex);
-                    } catch (final SQLException e1) {
-                        this.logger.error("The execution could not be started.", e1);
-                        Platform.runLater(() -> {
-                            this.displayError("Datenbankfehler", e1.getLocalizedMessage(),
-                                    actionContainer, true);
-                            this.endWait();
-                        });
-                        return;
                     } catch (final IOException e1) {
                         this.logger.error("The execution could not be started.", e1);
                         Platform.runLater(() -> {
@@ -432,10 +421,10 @@ public class MainFormController extends AbstractMainFormController {
                     final ScheduledFuture<?> future =
                             this.updateService.scheduleAtFixedRate(new Runnable() {
                                 private final Logger logger = LoggerFactory.getLogger(this.getClass());
-                                private Device d;
+                                private ClientDevice d;
                                 private MainFormController c;
 
-                                Runnable init(Device d, MainFormController c) {
+                                Runnable init(ClientDevice d, MainFormController c) {
                                     this.d = d;
                                     this.c = c;
                                     return this;
@@ -510,15 +499,13 @@ public class MainFormController extends AbstractMainFormController {
 
         // Geräte-Kacheln mit Daten befüllen
         try {
-            final Location location = ElwaManager.instance.getDataRetriever()
-                    .getLocation(ElwaManager.instance.getConfigurationManager().getLocationName());
-            this.devices = ElwaManager.instance.getDataRetriever().getDevicesToDisplayXs(location);
+            this.loadDevices();
             for (int i = 0; i < 4; i++) {
                 this.updateDevicePane(i);
             }
-        } catch (final SQLException e1) {
-            this.logger.error("Error during loading data from the database.", e1);
-            this.displayError("Datenbankfehler", e1.getLocalizedMessage(),
+        } catch (final ApiException e1) {
+            this.logger.error("Error during loading data from the backend.", e1);
+            this.displayError("Kommunikationsfehler", e1.getLocalizedMessage(),
                     new ActionContainer(() -> Platform.runLater(this::initializeComponents)),
                     false);
         }
@@ -587,12 +574,31 @@ public class MainFormController extends AbstractMainFormController {
     }
 
     /**
+     * Lädt die vier festen Gerätekacheln neu (bildet
+     * {@code Common.DataManager#getDevicesToDisplayXs} nach: die Kacheln werden anhand des
+     * Felds "position" [1..4] befüllt, siehe Testfixture "position=1..4" in
+     * {@code ClientSmallUiSmokeE2ETest}). Erhält die Objekt-Identität der Geräte über
+     * {@link ElwaManager#getManagedDevices()} (siehe dessen Klassenkommentar).
+     */
+    private void loadDevices() throws ApiException {
+        ClientDevice[] result = new ClientDevice[4];
+        for (ClientDevice d : ElwaManager.instance.getManagedDevices()) {
+            for (int i = 0; i < 4; i++) {
+                if (d.getPosition() == i + 1 && result[i] == null) {
+                    result[i] = d;
+                    break;
+                }
+            }
+        }
+        this.devices = result;
+    }
+
+    /**
      * Aktualisiert ein Gerät auf der Startseite
      *
      * @param d Das zu aktualisierende Gerät
-     * @throws SQLException
      */
-    private void updateDevicePane(Device d) throws SQLException {
+    private void updateDevicePane(ClientDevice d) {
         for (int i = 0; i < 4; i++) {
             if (d.equals(this.devices[i])) {
                 this.updateDevicePane(i);
@@ -604,11 +610,10 @@ public class MainFormController extends AbstractMainFormController {
      * Aktualisiert ein Gerät auf der Startseite
      *
      * @param i Der nullbasierte Index des zu aktualisierenden Geräts
-     * @throws SQLException
      */
-    private void updateDevicePane(int i) throws SQLException {
+    private void updateDevicePane(int i) {
         this.logger.trace("Update device " + i);
-        final Device device = this.devices[i];
+        final ClientDevice device = this.devices[i];
         Pane container;
         Label detailLabel;
         switch (i) {
@@ -638,19 +643,37 @@ public class MainFormController extends AbstractMainFormController {
         detailLabel.setText("");
 
         if (device == null || !device.isEnabled()) {
-            this.logger.trace("Device " + i + " is disabled");
+            this.logger.trace("ClientDevice " + i + " is disabled");
             container.getStyleClass().add("disabled");
         } else if (ElwaManager.instance.getExecutionManager()
                 .getRunningExecution(device) != null) {
-            this.logger.trace("Device " + i + " is occupied");
+            this.logger.trace("ClientDevice " + i + " is occupied");
             container.getStyleClass().add("occupied");
             detailLabel.setText(ElwaManager.instance.getExecutionManager()
                     .getRunningExecution(device).getUser().getName());
         } else {
-            this.logger.trace("Device " + i + " is normal");
-            final User lastUser = ElwaManager.instance.getDataRetriever().getLastUser(device);
-            detailLabel.setText(lastUser == null ? "" : lastUser.getName());
+            this.logger.trace("ClientDevice " + i + " is normal");
+            detailLabel.setText(device.getLastUserName() == null ? "" : device.getLastUserName());
         }
+    }
+
+    /**
+     * Lädt das aktuell gewählte Programm mit dem tatsächlichen (gruppenrabattierten) Preis
+     * des gegebenen Benutzers neu (siehe {@code onCardDetected}). Fällt auf das bisherige,
+     * ungerabattete Programm zurück, falls es aus irgendeinem Grund in der benutzerbezogenen
+     * Liste nicht mehr auftaucht (z. B. zwischenzeitlich deaktiviert).
+     */
+    private ClientProgram reloadSelectedProgramFor(ClientUser user) throws ApiException {
+        for (var d : ElwaManager.instance.getApiClient().getDevices(user.getId())) {
+            if (d.id() == this.selectedDevice.getId()) {
+                for (var p : d.programs()) {
+                    if (p.id() == this.selectedProgram.getId()) {
+                        return ClientProgram.of(p);
+                    }
+                }
+            }
+        }
+        return this.selectedProgram;
     }
 
     /**
@@ -713,7 +736,7 @@ public class MainFormController extends AbstractMainFormController {
      * Beende das Aktualisieren eines Eintrags, wenn Ausführung zuende
      */
     @Override
-    public void onExecutionFinished(Execution e) {
+    public void onExecutionFinished(ClientExecution e) {
         Platform.runLater(() -> {
             final ActionContainer actionContainer = new ActionContainer();
             actionContainer.setAction(() -> {
@@ -738,7 +761,7 @@ public class MainFormController extends AbstractMainFormController {
     }
 
     @Override
-    public void onExecutionFailed(Execution execution, Exception exception) {
+    public void onExecutionFailed(ClientExecution execution, Exception exception) {
         Platform.runLater(() -> {
             final ActionContainer ac = new ActionContainer();
             ac.setAction(() -> {
@@ -746,9 +769,6 @@ public class MainFormController extends AbstractMainFormController {
                     try {
                         ElwaManager.instance.getExecutionManager()
                                 .retryFinishExecution(execution);
-                    } catch (final SQLException e) {
-                        this.logger.error("Could not finish the execution " + execution.getId(), e);
-                        this.displayError("Datenbankfehler", e.getLocalizedMessage(), ac, false);
                     } catch (final IOException e) {
                         this.logger.error("Could not finish the execution " + execution.getId(), e);
                         this.displayError("Kommunikationsfehler", e.getLocalizedMessage(), ac,
@@ -764,9 +784,7 @@ public class MainFormController extends AbstractMainFormController {
                 actionThread.start();
             });
             this.logger.error("Could not finish the execution " + execution.getId(), exception);
-            if (exception instanceof SQLException) {
-                this.displayError("Datenbankfehler", exception.getLocalizedMessage(), ac, false);
-            } else if (exception instanceof IOException) {
+            if (exception instanceof IOException) {
                 this.displayError("Kommunikationsfehler", exception.getLocalizedMessage(), ac,
                         false);
             } else {
@@ -803,40 +821,52 @@ public class MainFormController extends AbstractMainFormController {
             actionContainer.setAction(() -> {
                 final Runnable searchUserRunnable = () -> {
                     try {
-                        this.registeredUser = ElwaManager.instance.getDataRetriever()
-                                .getUserByCardId(e.getCardId());
-                    } catch (final SQLException e1) {
-                        this.logger.error("SQLException while looking up user.", e1);
-                        this.registeredUser = null;
-                        Platform.runLater(() -> {
-                            this.displayError("Datenbankfehler", e1.getLocalizedMessage(),
-                                    actionContainer, true);
-                            this.endWait();
-                        });
-                        return;
-                    }
-                    if (this.registeredUser != null) {
-                        if (this.registeredUser.isBlocked()) {
-                            // Benutzer gesperrt
+                        var userDto = ElwaManager.instance.getApiClient().cardLogin(e.getCardId());
+                        this.registeredUser = ClientUser.of(userDto);
+                        // Das vor dem Kartenlogin gewählte Programm wurde ohne Gruppenrabatt
+                        // bepreist (siehe DeviceOverviewDto#programs()) - jetzt mit dem
+                        // tatsächlichen Rabatt des angemeldeten Benutzers neu laden, damit
+                        // die Guthabenprüfung unten korrekt ist (entspricht
+                        // Common.Program#getPrice(maxDuration, registeredUser) im Alt-Code).
+                        this.selectedProgram = this.reloadSelectedProgramFor(this.registeredUser);
+                    } catch (final ApiException e1) {
+                        if (e1.is(404, "card-not-found")) {
+                            this.logger.warn("There is no user associated to card " + e.getCardId() + ".");
+                            this.registeredUser = null;
+                            Platform.runLater(() -> this.stateManager
+                                    .gotoState(MainFormState.CONFIRMATION_CARD_UNKNOWN));
+                        } else if (e1.is(403, "user-blocked")) {
+                            this.registeredUser = null;
                             Platform.runLater(() -> this.stateManager
                                     .gotoState(MainFormState.CONFIRMATION_USER_BLOCKED));
-                        } else if (this.registeredUser.canAfford(this.selectedProgram
-                                .getPrice(this.selectedProgram.getMaxDuration(), this.registeredUser))) {
-                            // Guthaben reicht aus
+                        } else if (e1.is(403, "location-not-allowed")) {
+                            // ui/small hat (anders als ui/medium) nie eine eigene Prüfung der
+                            // Standort-Zugehörigkeit gehabt - der nächstliegende bestehende
+                            // Zustand ohne eigene Erweiterung ist "Karte unbekannt".
+                            this.logger.info("User is not allowed to use this location.");
+                            this.registeredUser = null;
                             Platform.runLater(() -> this.stateManager
-                                    .gotoState(MainFormState.CONFIRMATION_READY));
+                                    .gotoState(MainFormState.CONFIRMATION_CARD_UNKNOWN));
                         } else {
-                            // Guthaben reicht nicht aus
-                            Platform.runLater(() -> this.stateManager
-                                    .gotoState(MainFormState.CONFIRMATION_CREDIT_INSUFFICENT));
-
+                            this.logger.error("Communication error while looking up user.", e1);
+                            this.registeredUser = null;
+                            Platform.runLater(() -> {
+                                this.displayError("Kommunikationsfehler", e1.getLocalizedMessage(),
+                                        actionContainer, true);
+                                this.endWait();
+                            });
                         }
-                    } else {
-                        // Kein Benutzer zur Id gefunden.
-                        this.logger
-                                .warn("There is no user associated to card " + e.getCardId() + ".");
+                        Platform.runLater(this::endWait);
+                        return;
+                    }
+                    if (this.registeredUser.canAfford(this.selectedProgram.getPriceAtMaxDuration())) {
+                        // Guthaben reicht aus
                         Platform.runLater(() -> this.stateManager
-                                .gotoState(MainFormState.CONFIRMATION_CARD_UNKNOWN));
+                                .gotoState(MainFormState.CONFIRMATION_READY));
+                    } else {
+                        // Guthaben reicht nicht aus
+                        Platform.runLater(() -> this.stateManager
+                                .gotoState(MainFormState.CONFIRMATION_CREDIT_INSUFFICENT));
                     }
 
                     Platform.runLater(this::endWait);

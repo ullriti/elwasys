@@ -1,6 +1,7 @@
 package org.kabieror.elwasys.backend.api;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -15,6 +16,7 @@ import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
 import org.kabieror.elwasys.backend.support.AbstractApiIT;
 import org.kabieror.elwasys.backend.support.Fixtures;
+import org.springframework.http.MediaType;
 
 /**
  * Geräte-/Programmliste über die Terminal-API (AP4, siehe kb/05-migration-plan.md).
@@ -215,5 +217,60 @@ class DeviceControllerTest extends AbstractApiIT {
 
         this.mockMvc.perform(get("/api/v1/devices/overview").header("Authorization", authHeader(token))).andExpect(
                 status().isOk()).andExpect(jsonPath("$[0].fhemSwitchName").value("wm2sw"));
+    }
+
+    /**
+     * Phase 4 AP4 (additiv): {@code ui/small} zeigt Programme samt Preis bereits VOR dem
+     * Kartenlogin an (siehe {@link org.kabieror.elwasys.backend.api.dto.DeviceOverviewDto}
+     * Javadoc) - der Preis muss dabei ohne Gruppenrabatt berechnet werden (Alt-Code:
+     * {@code User.getAnonymous()}).
+     */
+    @Test
+    void overviewIncludesProgramsWithUndiscountedPricing() throws Exception {
+        LocationEntity location = newLocation();
+        IssuedTerminalToken token = newToken(location);
+        DeviceEntity device = newDevice(location);
+        ProgramEntity program = newFixedProgram(new BigDecimal("3.00"));
+        UserGroupEntity group = newGroup();
+        allow(location, device, program, group);
+
+        this.mockMvc.perform(get("/api/v1/devices/overview").header("Authorization", authHeader(token))).andExpect(
+                status().isOk()).andExpect(jsonPath("$[0].programs.length()").value(1)).andExpect(
+                jsonPath("$[0].programs[0].id").value(program.getId())).andExpect(
+                jsonPath("$[0].programs[0].priceAtMaxDuration").value(3.00));
+    }
+
+    /**
+     * Phase 4 AP4 (additiv, siehe kb/05-migration-plan.md Änderungslog): fachlicher
+     * Nachfolger von {@code Device#modify(...)}, den der Client-Alt-Code
+     * ({@code DeconzRegistrationService#registerDevice}) nach einer erfolgreichen
+     * Pairing-Suche aufruft, um die neu gefundene deCONZ-Geräte-Id zu hinterlegen. Die
+     * AP3-Inventur hatte diesen (untesteten, Admin-Registrierungs-)Pfad übersehen.
+     */
+    @Test
+    void deconzUuidCanBeUpdatedForADeviceOfTheTokensOwnLocation() throws Exception {
+        LocationEntity location = newLocation();
+        IssuedTerminalToken token = newToken(location);
+        DeviceEntity device = newDevice(location);
+
+        this.mockMvc.perform(post("/api/v1/devices/" + device.getId() + "/deconz-uuid").header("Authorization",
+                authHeader(token)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"deconzUuid\":\"new-uuid-123\"}")).andExpect(status().isOk()).andExpect(
+                jsonPath("$.deconzUuid").value("new-uuid-123"));
+
+        this.mockMvc.perform(get("/api/v1/devices/overview").header("Authorization", authHeader(token))).andExpect(
+                status().isOk()).andExpect(jsonPath("$[0].deconzUuid").value("new-uuid-123"));
+    }
+
+    @Test
+    void deconzUuidOfAForeignDeviceIsNotAccessible() throws Exception {
+        LocationEntity ownLocation = newLocation();
+        LocationEntity otherLocation = newLocation();
+        IssuedTerminalToken token = newToken(ownLocation);
+        DeviceEntity foreignDevice = newDevice(otherLocation);
+
+        this.mockMvc.perform(post("/api/v1/devices/" + foreignDevice.getId() + "/deconz-uuid").header("Authorization",
+                authHeader(token)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"deconzUuid\":\"new-uuid-123\"}")).andExpect(status().isNotFound());
     }
 }

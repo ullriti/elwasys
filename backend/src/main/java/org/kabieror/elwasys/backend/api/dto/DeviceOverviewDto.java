@@ -1,5 +1,6 @@
 package org.kabieror.elwasys.backend.api.dto;
 
+import java.util.List;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
 
 /**
@@ -28,20 +29,31 @@ import org.kabieror.elwasys.backend.domain.DeviceEntity;
  *       für die vollen Details aufruft (kein eigener Resume-Endpunkt nötig).</li>
  * </ul>
  *
- * <p>Enthält bewusst {@code KEINE} {@code programs}/{@code usableByUser}-Felder (die
- * setzen einen bekannten Benutzer voraus) - nach einem Kartenlogin ruft der Client
- * stattdessen wie bisher {@code GET /api/v1/devices?userId=...} auf, um die
- * benutzerbezogene Sicht (verfügbare Programme, Nutzbarkeit) nachzuladen.
+ * <p>Enthält bewusst {@code KEIN} {@code usableByUser}-Feld (das setzt einen bekannten
+ * Benutzer voraus) - nach einem Kartenlogin ruft der Client stattdessen wie bisher
+ * {@code GET /api/v1/devices?userId=...} auf, um die benutzerbezogene Sicht (Nutzbarkeit,
+ * gruppengefilterte Programme) nachzuladen.
+ *
+ * <p><b>{@code programs} (Phase 4 AP4, additiv ergänzt)</b>: die vollständige, UNGEFILTERTE
+ * Programmliste des Geräts mit Preis OHNE Gruppenrabatt ({@code PricingService#getPrice(...,
+ * null)} - entspricht {@code User.getAnonymous()} im Alt-Code, dessen Gruppe stets
+ * {@code DiscountType.None} trägt). Deckt den Ladepfad von {@code ui/small} ab, dessen
+ * {@code MainFormController} Geräte samt Programmen/Preisen anzeigt, BEVOR eine Karte gescannt
+ * wurde (umgekehrter Bedienfluss ggü. {@code ui/medium}, siehe kb/06-ui-tests.md
+ * "ClientSmallUiSmokeE2ETest") - der Alt-Client nutzte dafür {@code Device#getPrograms()} (die
+ * ungefilterte Variante ohne {@code User}-Parameter) plus {@code Program#getPrice(maxDuration,
+ * User.getAnonymous())}.
  */
 public record DeviceOverviewDto(Integer id, String name, int position, boolean enabled, boolean occupied,
         Integer runningExecutionId, Integer lastUserId, String lastUserName, String fhemName, String fhemSwitchName,
-        String fhemPowerName, String deconzUuid, float autoEndPowerThreashold, int autoEndWaitTimeSeconds) {
+        String fhemPowerName, String deconzUuid, float autoEndPowerThreashold, int autoEndWaitTimeSeconds,
+        List<ProgramDto> programs) {
 
     public static DeviceOverviewDto of(DeviceEntity device, boolean occupied, Integer runningExecutionId,
-            Integer lastUserId, String lastUserName) {
+            Integer lastUserId, String lastUserName, List<ProgramDto> programs) {
         return new DeviceOverviewDto(device.getId(), device.getName(), device.getPosition(), device.isEnabled(),
                 occupied, runningExecutionId, lastUserId, lastUserName, device.getFhemName(),
                 device.getFhemSwitchName(), device.getFhemPowerName(), device.getDeconzUuid(),
-                device.getAutoEndPowerThreashold(), device.getAutoEndWaitTimeSeconds());
+                device.getAutoEndPowerThreashold(), device.getAutoEndWaitTimeSeconds(), programs);
     }
 }

@@ -1,8 +1,8 @@
 package org.kabieror.elwasys.raspiclient.ui.small;
 
 import javafx.application.Platform;
-import org.kabieror.elwasys.common.Execution;
-import org.kabieror.elwasys.common.User;
+
+import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
 import org.kabieror.elwasys.raspiclient.ui.IMainFormStateManager;
 import org.kabieror.elwasys.raspiclient.ui.MainFormState;
@@ -123,7 +123,7 @@ class MainFormStateManager implements IMainFormStateManager {
                         this.logger.trace("Refreshing info pane");
                         this.controller.info_labelDevice
                                 .setText(this.controller.selectedDevice.getName());
-                        final Execution currentExecution = ElwaManager.instance.getExecutionManager()
+                        final ClientExecution currentExecution = ElwaManager.instance.getExecutionManager()
                                         .getRunningExecution(this.controller.selectedDevice);
                         if (currentExecution == null) {
                             this.controller.info_labelEndTime.setText("Gerät ist frei");
@@ -270,14 +270,11 @@ class MainFormStateManager implements IMainFormStateManager {
                     .format(this.controller.registeredUser.getCredit()));
 
             this.controller.confirmation_cost.setText(NumberFormat.getCurrencyInstance()
-                    .format(this.controller.selectedProgram.getPrice(this.controller.selectedProgram.getMaxDuration(),
-                            this.controller.registeredUser)));
+                    .format(this.controller.selectedProgram.getPriceAtMaxDuration()));
 
             this.controller.confirmation_remainingCredit.setText(NumberFormat.getCurrencyInstance()
                     .format((this.controller.registeredUser.getCredit()
-                            .subtract(this.controller.selectedProgram
-                                    .getPrice(this.controller.selectedProgram.getMaxDuration(),
-                                            this.controller.registeredUser)))));
+                            .subtract(this.controller.selectedProgram.getPriceAtMaxDuration()))));
 
             this.controller.confirmation_credit.setVisible(true);
             this.controller.confirmation_remainingCredit.setVisible(true);
@@ -295,11 +292,9 @@ class MainFormStateManager implements IMainFormStateManager {
             this.controller.confirmation_credit
                     .setText(NumberFormat.getCurrencyInstance().format(0));
             this.controller.confirmation_cost.setText(
-                    NumberFormat.getCurrencyInstance().format(this.controller.selectedProgram
-                            .getPrice(this.controller.selectedProgram.getMaxDuration(), User.getAnonymous())));
+                    NumberFormat.getCurrencyInstance().format(this.controller.selectedProgram.getPriceAtMaxDuration()));
             this.controller.confirmation_remainingCredit.setText(
-                    NumberFormat.getCurrencyInstance().format(this.controller.selectedProgram
-                            .getPrice(this.controller.selectedProgram.getMaxDuration(), User.getAnonymous()).negate()));
+                    NumberFormat.getCurrencyInstance().format(this.controller.selectedProgram.getPriceAtMaxDuration().negate()));
             this.controller.confirmation_remainingCredit.getStyleClass().clear();
 
             this.controller.confirmation_credit.setVisible(false);
@@ -527,11 +522,9 @@ class MainFormStateManager implements IMainFormStateManager {
         this.controller.confirmation_labelDevice.setText(this.controller.selectedDevice.getName()
                 + " (" + (this.controller.selectedProgram.getMaxDuration().toMinutes()) + " min)");
         this.controller.confirmation_cost
-                .setText(NumberFormat.getCurrencyInstance().format(this.controller.selectedProgram
-                        .getPrice(this.controller.selectedProgram.getMaxDuration(), User.getAnonymous())));
+                .setText(NumberFormat.getCurrencyInstance().format(this.controller.selectedProgram.getPriceAtMaxDuration()));
         this.controller.confirmation_remainingCredit
-                .setText(NumberFormat.getCurrencyInstance().format(this.controller.selectedProgram
-                        .getPrice(this.controller.selectedProgram.getMaxDuration(), User.getAnonymous()).negate()));
+                .setText(NumberFormat.getCurrencyInstance().format(this.controller.selectedProgram.getPriceAtMaxDuration().negate()));
 
         this.controller.confirmation_remainingCredit.getStyleClass().clear();
         this.controller.confirmation_errorMessage.setVisible(false);

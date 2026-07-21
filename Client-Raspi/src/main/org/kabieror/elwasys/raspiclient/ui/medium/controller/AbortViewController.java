@@ -3,7 +3,7 @@ package org.kabieror.elwasys.raspiclient.ui.medium.controller;
 import javafx.application.Platform;
 import javafx.fxml.Initializable;
 import javafx.scene.Node;
-import org.kabieror.elwasys.common.Execution;
+import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 import org.kabieror.elwasys.raspiclient.application.ActionContainer;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
 import org.kabieror.elwasys.raspiclient.executions.IExecutionFinishedListener;
@@ -26,7 +26,7 @@ public class AbortViewController implements Initializable, IViewController, IExe
 
     private Logger logger = LoggerFactory.getLogger(AbortViewController.class);
     private MainFormController mainFormController;
-    private Execution execution;
+    private ClientExecution execution;
     private ToolbarState toolbarState =
             new ToolbarState("Zurück", "Bestätigen", this::onToolbarBack, this::onToolbarConfirm);
 
@@ -112,7 +112,7 @@ public class AbortViewController implements Initializable, IViewController, IExe
     }
 
     @Override
-    public void onExecutionFinished(Execution e) {
+    public void onExecutionFinished(ClientExecution e) {
         if (e == this.execution) {
             this.mainFormController.gotoState(MainFormState.SELECT_DEVICE);
         }

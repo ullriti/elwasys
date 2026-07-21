@@ -5,6 +5,7 @@ import java.util.List;
 import org.kabieror.elwasys.backend.api.dto.DeviceDto;
 import org.kabieror.elwasys.backend.api.dto.DeviceOverviewDto;
 import org.kabieror.elwasys.backend.api.dto.ProgramDto;
+import org.kabieror.elwasys.backend.api.dto.UpdateDeconzUuidRequest;
 import org.kabieror.elwasys.backend.api.exception.UserNotFoundException;
 import org.kabieror.elwasys.backend.auth.terminal.TerminalPrincipal;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
@@ -19,6 +20,8 @@ import org.kabieror.elwasys.backend.service.PricingService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -91,6 +94,22 @@ public class DeviceController {
                 .map(this::toOverviewDto).toList();
     }
 
+    /**
+     * Registriert die per Pairing gefundene deCONZ-Geräte-Id auf einem Gerät (Phase 4 AP4,
+     * additiv - siehe {@link UpdateDeconzUuidRequest} Javadoc). Fachlicher Nachfolger des
+     * Teils von {@code Device#modify(...)}, den {@code DeconzRegistrationService
+     * #registerDevice} im Client-Alt-Code nach einer erfolgreichen Suche aufruft - alle
+     * anderen Gerätefelder bleiben unverändert.
+     */
+    @PostMapping("/{id}/deconz-uuid")
+    public DeviceOverviewDto updateDeconzUuid(@AuthenticationPrincipal TerminalPrincipal terminal,
+            @PathVariable Integer id, @RequestBody UpdateDeconzUuidRequest request) {
+        DeviceEntity device = this.scopeGuard.requireDeviceInScope(id, terminal);
+        device.setDeconzUuid(request.deconzUuid());
+        device = this.deviceRepository.save(device);
+        return toOverviewDto(device);
+    }
+
     private DeviceOverviewDto toOverviewDto(DeviceEntity device) {
         var runningExecution = this.executionService.getRunningExecution(device);
         boolean occupied = runningExecution.isPresent();
@@ -98,7 +117,13 @@ public class DeviceController {
         var lastUser = this.executionService.getLastUser(device);
         Integer lastUserId = lastUser.map(UserEntity::getId).orElse(null);
         String lastUserName = lastUser.map(UserEntity::getName).orElse(null);
-        return DeviceOverviewDto.of(device, occupied, runningExecutionId, lastUserId, lastUserName);
+        List<ProgramDto> programs = device.getPrograms().stream()
+                .sorted((a, b) -> a.getId().compareTo(b.getId()))
+                .map(program -> ProgramDto.of(program,
+                        this.pricingService.getPrice(program, Duration.ofSeconds(program.getMaxDurationSeconds()),
+                                null)))
+                .toList();
+        return DeviceOverviewDto.of(device, occupied, runningExecutionId, lastUserId, lastUserName, programs);
     }
 
     private UserEntity requireUser(Integer userId) {

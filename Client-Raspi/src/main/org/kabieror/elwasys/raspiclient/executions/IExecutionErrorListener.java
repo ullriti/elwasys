@@ -1,6 +1,6 @@
 package org.kabieror.elwasys.raspiclient.executions;
 
-import org.kabieror.elwasys.common.Execution;
+import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 
 /**
  * Diese Schnittstelle wird beim Ende einer Ausführung angewendet
@@ -17,5 +17,5 @@ public interface IExecutionErrorListener {
      * @param exception
      *            Die Ausnahme, welche bei der Ausführung aufgetreten ist.
      */
-    void onExecutionFailed(Execution execution, Exception exception);
+    void onExecutionFailed(ClientExecution execution, Exception exception);
 }

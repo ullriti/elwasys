@@ -13,7 +13,7 @@ import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import org.kabieror.elwasys.common.FormatUtilities;
-import org.kabieror.elwasys.common.Program;
+import org.kabieror.elwasys.raspiclient.model.ClientProgram;
 import org.kabieror.elwasys.raspiclient.ui.ComponentControlInstance;
 import org.kabieror.elwasys.raspiclient.ui.medium.IViewController;
 import org.kabieror.elwasys.raspiclient.ui.medium.MainFormController;
@@ -32,7 +32,7 @@ public class ProgramListEntry implements IViewController, Initializable {
 
     private ConfirmationViewController controller;
 
-    private ObjectProperty<Program> program = new SimpleObjectProperty<>();
+    private ObjectProperty<ClientProgram> program = new SimpleObjectProperty<>();
 
     private StringProperty maxPrice = new SimpleStringProperty(FormatUtilities.formatCurrency(0d));
 
@@ -62,12 +62,12 @@ public class ProgramListEntry implements IViewController, Initializable {
 
     @Override
     public void onStart(MainFormController mfc) {
-        // Lade Programmdetails
+        // Lade Programmdetails (Preis kommt bereits fertig vom Backend berechnet, siehe
+        // ClientProgram#getPriceAtMaxDuration()).
         switch (program.get().getType()) {
             case DYNAMIC:
                 // Höchstpreis
-                this.maxPrice.set("max. " + FormatUtilities.formatCurrency(
-                        program.get().getPrice(program.get().getMaxDuration(), mfc.getRegisteredUser())));
+                this.maxPrice.set("max. " + FormatUtilities.formatCurrency(program.get().getPriceAtMaxDuration()));
 
                 // Spezielle Daten
                 this.detailBox.getChildren().add(createKeyValueControl("Grundgebühr",
@@ -99,8 +99,7 @@ public class ProgramListEntry implements IViewController, Initializable {
             case FIXED:
             default:
                 // Genauer Preis
-                this.maxPrice.set(FormatUtilities.formatCurrency(
-                        program.get().getPrice(program.get().getMaxDuration(), mfc.getRegisteredUser())));
+                this.maxPrice.set(FormatUtilities.formatCurrency(program.get().getPriceAtMaxDuration()));
                 break;
         }
 
@@ -139,15 +138,15 @@ public class ProgramListEntry implements IViewController, Initializable {
         this.controller = controller;
     }
 
-    public Program getProgram() {
+    public ClientProgram getProgram() {
         return program.get();
     }
 
-    public void setProgram(Program program) {
+    public void setProgram(ClientProgram program) {
         this.program.set(program);
     }
 
-    public ObjectProperty<Program> programProperty() {
+    public ObjectProperty<ClientProgram> programProperty() {
         return program;
     }
 

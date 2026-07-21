@@ -142,16 +142,26 @@ public class WashguardConfiguration extends ConfigurationManager {
     }
 
     /**
-     * Der API-Token dieser Anwendung bei Pushover.
+     * Die Basis-URL des Backends (Phase 4 AP4, siehe kb/05-migration-plan.md
+     * "Client-Cutover"), z. B. {@code http://localhost:8080/}. Ersetzt die frühere
+     * Direkt-DB-Anbindung als primären Datenzugriffspfad des Terminals.
      *
-     * @return Den API-Token dieser Anwendung bei Pushover.
+     * @return Die Basis-URL des Backends.
      */
-    public String getPushoverApiToken() {
-        return "abgQotPcAEUncZEF9AsFy3T2M36jQ7";
+    public String getBackendUrl() {
+        return this.props.getProperty("backend.url");
     }
 
-    public String getIonicApiToken() {
-        return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJkNzg1Yzg2Mi1hYzhmLTRiYTgtYjZmMi1mZDgwMGQzZDU3ZTUifQ.B0a4pnx_n7V2vR_Vxkv7urE2FCrvUG0-Glt0lhn-7Po";
+    /**
+     * Der Standort-Token dieses Terminals für die Backend-API v1
+     * ({@code Authorization: Bearer <token>}, siehe {@code backend.auth.terminal
+     * .TerminalTokenService}) - ersetzt die frühere Anmeldung mit DB-Zugangsdaten. Erzeugt
+     * über {@code token-cli} (siehe kb/04-build-and-run.md).
+     *
+     * @return Den Standort-Token dieses Terminals.
+     */
+    public String getBackendToken() {
+        return this.props.getProperty("backend.token");
     }
 
     /**

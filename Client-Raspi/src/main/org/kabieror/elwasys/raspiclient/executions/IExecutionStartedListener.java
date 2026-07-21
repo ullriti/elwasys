@@ -1,6 +1,6 @@
 package org.kabieror.elwasys.raspiclient.executions;
 
-import org.kabieror.elwasys.common.Execution;
+import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 
 /**
  * Diese Schnittstelle wird beim Start einer Programmausführung angewendet.
@@ -13,5 +13,5 @@ public interface IExecutionStartedListener {
      *
      * @param e Die gestartete Programmausführung.
      */
-    void onExecutionStarted(Execution e);
+    void onExecutionStarted(ClientExecution e);
 }

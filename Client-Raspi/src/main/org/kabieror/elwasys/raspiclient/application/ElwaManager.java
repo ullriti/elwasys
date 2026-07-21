@@ -3,7 +3,14 @@ package org.kabieror.elwasys.raspiclient.application;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 import org.apache.commons.lang3.StringUtils;
-import org.kabieror.elwasys.common.*;
+import org.kabieror.elwasys.common.DataManager;
+import org.kabieror.elwasys.common.LocationOccupiedException;
+import org.kabieror.elwasys.common.NoDataFoundException;
+import org.kabieror.elwasys.common.Utilities;
+import org.kabieror.elwasys.raspiclient.api.ApiClient;
+import org.kabieror.elwasys.raspiclient.api.ApiException;
+import org.kabieror.elwasys.raspiclient.api.dto.DeviceOverviewDto;
+import org.kabieror.elwasys.raspiclient.api.dto.ExecutionDto;
 import org.kabieror.elwasys.raspiclient.configuration.LocationManager;
 import org.kabieror.elwasys.raspiclient.configuration.WashguardConfiguration;
 import org.kabieror.elwasys.raspiclient.devices.FhemDevicePowerManager;
@@ -16,6 +23,10 @@ import org.kabieror.elwasys.raspiclient.devices.deconz.DeconzRegistrationService
 import org.kabieror.elwasys.raspiclient.executions.ExecutionManager;
 import org.kabieror.elwasys.raspiclient.executions.FhemException;
 import org.kabieror.elwasys.raspiclient.io.CardReader;
+import org.kabieror.elwasys.raspiclient.model.ClientDevice;
+import org.kabieror.elwasys.raspiclient.model.ClientExecution;
+import org.kabieror.elwasys.raspiclient.model.ClientProgram;
+import org.kabieror.elwasys.raspiclient.model.ClientUser;
 import org.kabieror.elwasys.raspiclient.ui.AbstractMainFormController;
 import org.slf4j.LoggerFactory;
 
@@ -23,7 +34,9 @@ import java.io.IOException;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Vector;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ElwaManager {
 
@@ -50,7 +63,26 @@ public class ElwaManager {
     private final List<ICloseListener> closeListeners;
 
     /**
-     * Die Anbindung an die Datenbank.
+     * Identitäts-Cache der von diesem Client verwalteten Geräte, je Geräte-Id
+     * (Phase 4 AP4). Bildet den Identitäts-Cache nach, den {@code Common.DataManager}
+     * intern führte (siehe {@link ClientDevice} Klassenkommentar) - wichtig, damit
+     * {@link ClientDevice#getCurrentExecution()} über mehrere
+     * {@link #getManagedDevices()}-Aufrufe hinweg konsistent bleibt.
+     */
+    private final Map<Integer, ClientDevice> deviceCache = new ConcurrentHashMap<>();
+
+    /**
+     * Die Anbindung an das Backend über die REST-API v1 (Phase 4 AP4). Ersetzt
+     * {@link #dataManager} als primären Datenzugriffspfad des Terminals.
+     */
+    private ApiClient apiClient;
+
+    /**
+     * Die Anbindung an die Datenbank - seit Phase 4 AP4 NUR NOCH für den transitional
+     * verbliebenen Fernwartungs-Registrierungspfad ({@link LocationManager}) verwendet, bis
+     * dieser in AP5 durch die ausgehende WebSocket-Verbindung ersetzt wird (siehe
+     * kb/05-migration-plan.md "Arbeitspakete Phase 4", AP4-Auftrag). Alle übrigen
+     * Datenzugriffe laufen über {@link #apiClient}.
      */
     private DataManager dataManager;
 
@@ -73,7 +105,7 @@ public class ElwaManager {
     private IDeviceRegistrationService deviceRegistrationService;
 
     /**
-     * Der Manager für die Registrierung auf einen Ort.
+     * Der Manager für die Registrierung auf einen Ort (transitional, siehe {@link #dataManager}).
      */
     private LocationManager locationManager;
 
@@ -91,11 +123,6 @@ public class ElwaManager {
      * Das Hauptfenster
      */
     private Stage primaryStage;
-
-    /**
-     * Der Ort, an dem dieser Client stationiert ist.
-     */
-    private Location thisLocation;
 
     private LocalDateTime startupTime = LocalDateTime.now();
 
@@ -138,11 +165,21 @@ public class ElwaManager {
         try {
             this.logger.info("Starting up managers");
             SingleInstanceManager.instance.start(this.configurationManager.getSingleInstancePort());
+
+            this.apiClient = new ApiClient(this.configurationManager.getBackendUrl(),
+                    this.configurationManager.getBackendToken());
+
+            // Transitional (AP5 löst dies durch die ausgehende WS-Verbindung ab, siehe
+            // kb/05-migration-plan.md): die Fernwartungs-Registrierung läuft weiterhin
+            // direkt gegen die Datenbank.
             this.dataManager = new DataManager(this.configurationManager);
             this.locationManager = new LocationManager(this.configurationManager);
 
-            // Lade Ort
-            this.thisLocation = this.dataManager.getLocation(this.configurationManager.getLocationName());
+            // Erreichbarkeits-Check des Backends beim Start (entspricht dem alten
+            // "Standort aus der Datenbank laden"-Schritt, jetzt über die API - ein
+            // nicht erreichbares Backend führt wie zuvor eine nicht erreichbare
+            // Datenbank zum ERROR-Zustand, siehe Testfall C15).
+            this.apiClient.getMyLocation();
 
             if (StringUtils.isNotBlank(this.configurationManager.getDeconzServer())) {
                 this.logger.info("Using deCONZ as gateway.");
@@ -162,12 +199,21 @@ public class ElwaManager {
             this.executionManager = new ExecutionManager(this.devicePowerManager);
             this.mainFormController.initiate();
 
-            // Setze unterbrochene Ausführungen fort
-            for (Device d : this.dataManager.getDevices()) {
-                Execution e = this.dataManager.getRunningExecution(d);
-                if (e != null) {
-                    // Unterbrochene Ausführung gefunden
-                    this.executionManager.startExecution(e);
+            // Setze unterbrochene Ausführungen fort (Testfall C13). Anders als der
+            // Alt-Client (der ALLE Geräte systemweit über alle Standorte hinweg
+            // scannte, siehe DataManager#getDevices()) ist dieser Scan jetzt korrekt
+            // auf den eigenen Standort beschränkt (kommt implizit aus dem
+            // Standort-Token) - siehe kb/05-migration-plan.md, Änderungslog "Phase 4
+            // AP4" für die Einordnung dieses Befunds.
+            for (ClientDevice d : this.getManagedDevices()) {
+                DeviceOverviewDto overview = this.lastOverviewFor(d.getId());
+                if (overview != null && overview.runningExecutionId() != null) {
+                    ExecutionDto execDto = this.apiClient.getExecution(overview.runningExecutionId());
+                    ClientProgram program = findProgram(d, execDto.programId());
+                    ClientUser user = ClientUser.display(overview.lastUserId(), overview.lastUserName());
+                    ClientExecution execution = ClientExecution.of(execDto, d, program, user);
+                    d.onExecutionStarted(execution);
+                    this.executionManager.startExecution(execution);
                 }
             }
         } catch (Exception e) {
@@ -177,6 +223,26 @@ public class ElwaManager {
             }
             throw e;
         }
+    }
+
+    private static ClientProgram findProgram(ClientDevice device, int programId) {
+        for (ClientProgram p : device.getPrograms()) {
+            if (p.getId() == programId) {
+                return p;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Merkt sich den zuletzt geladenen Übersichts-Datensatz je Gerät, damit
+     * {@link #initiate()} nach {@link #getManagedDevices()} nicht dieselben Daten ein
+     * zweites Mal laden muss.
+     */
+    private final Map<Integer, DeviceOverviewDto> lastOverview = new ConcurrentHashMap<>();
+
+    private DeviceOverviewDto lastOverviewFor(int deviceId) {
+        return this.lastOverview.get(deviceId);
     }
 
     /**
@@ -216,7 +282,17 @@ public class ElwaManager {
     }
 
     /**
-     * Gib die Anbindung an die Datenbank zurück.
+     * Gibt die Anbindung an die Backend-API zurück (Phase 4 AP4).
+     *
+     * @return Die Anbindung an die Backend-API.
+     */
+    public ApiClient getApiClient() {
+        return this.apiClient;
+    }
+
+    /**
+     * Gibt die Anbindung an die Datenbank zurück - transitional, nur noch für die
+     * Fernwartungs-Registrierung gebraucht (siehe {@link #dataManager}).
      *
      * @return Die Anbindung an die Datenbank.
      */
@@ -327,18 +403,20 @@ public class ElwaManager {
     }
 
     /**
-     * Gibt den Ort zurück, an dem dieser Client stationiert ist.
+     * Gibt alle Geräte zurück, die von diesem Client verwaltet werden sollen. Behält
+     * dabei die Objekt-Identität je Geräte-Id über mehrere Aufrufe hinweg bei (siehe
+     * {@link ClientDevice} Klassenkommentar).
      */
-    public Location getLocation() throws SQLException, NoDataFoundException {
-        thisLocation.update();
-        return thisLocation;
-    }
-
-    /**
-     * Gibt alle Geräte zurück, die von diesem Client verwaltet werden sollen.
-     */
-    public List<Device> getManagedDevices() throws SQLException, NoDataFoundException {
-        return this.dataManager.getDevicesToDisplay(this.getLocation());
+    public List<ClientDevice> getManagedDevices() throws ApiException {
+        List<DeviceOverviewDto> overview = this.apiClient.getDevicesOverview();
+        List<ClientDevice> result = new java.util.ArrayList<>(overview.size());
+        for (DeviceOverviewDto dto : overview) {
+            ClientDevice device = this.deviceCache.computeIfAbsent(dto.id(), ClientDevice::new);
+            device.updateFrom(dto);
+            this.lastOverview.put(dto.id(), dto);
+            result.add(device);
+        }
+        return result;
     }
 
     /**

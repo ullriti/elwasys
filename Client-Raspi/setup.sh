@@ -26,7 +26,25 @@ function generate_password() {
 function collect_data() {
     echo
     echo
-    echo === Database Connection ===
+    echo === Backend Connection ===
+    echo
+    echo "Since Phase 4 the terminal talks to the elwasys backend (REST API v1)"
+    echo "instead of the database directly. Enter its base URL and this terminal's"
+    echo "location token (issued via the backend's token-cli, see kb/04-build-and-run.md)."
+    echo
+    read -p "Enter backend base URL (e.g., https://backend-host:8080/): " BACKEND_URL
+    echo
+    read -s -p "Enter this terminal's backend token: " BACKEND_TOKEN
+    echo
+
+    echo
+    echo
+    echo === Database Connection \(TRANSITIONAL\) ===
+    echo
+    echo "TRANSITIONAL: direct database access is only still used for the maintenance"
+    echo "connection registration (LocationManager); it will be replaced by the"
+    echo "outgoing WebSocket connection in Phase 4 AP5, after which these questions go"
+    echo "away. All other data access goes through the backend above."
     echo
     read -p "Enter database server address (e.g., localhost:5432): " DB_SERVER
     echo
@@ -43,23 +61,6 @@ function collect_data() {
     echo "Provide a file in PEM format."
     echo "When you're done, type #"
     read -d '#' DB_CA_CERT
-
-    echo
-    echo
-    echo === Email Settings ===
-    echo
-    read -p "Enter SMTP server: " SMTP_SERVER
-    echo
-    read -p "Enter SMTP port: " SMTP_PORT
-    echo
-    read -p "Enter SMTP username: " SMTP_USER
-    echo
-    read -s -p "Enter SMTP password: " SMTP_PASSWORD
-    echo
-    echo
-    read -p "Should the SMTP connection use SSL? (true/false): " SMTP_USE_SSL
-    echo
-    read -p "Enter SMTP sender address: " SMTP_SENDER
 
     echo
     echo
@@ -169,6 +170,17 @@ function config_elwasys() {
     # Populate the Config file
     config_file="./elwasys.properties"
     tee "$config_file" > /dev/null <<EOT
+# Base URL of the elwasys backend (REST API v1). Since Phase 4 this is the
+# terminal's primary data access path (login, devices, programs, executions,
+# credit); see kb/05-migration-plan.md "Client-Cutover".
+backend.url: $BACKEND_URL
+
+# This terminal's location token for the backend API v1 (issued via token-cli).
+backend.token: $BACKEND_TOKEN
+
+# TRANSITIONAL (Phase 4 AP4, removed in AP5): the direct database connection is
+# only still used for the maintenance connection registration (LocationManager);
+# all other data access goes through backend.url/backend.token above.
 # The address of the postgresql server
 # z.B. - databaseserver1:5432
 #      - 192.168.0.100:10090,
@@ -210,13 +222,9 @@ deconz.server: http://localhost
 deconz.user: delight
 deconz.password: $DECONZ_PASSWORD
 
-# Settings for outgoing mails
-smtp.server: $SMTP_SERVER
-smtp.port: $SMTP_PORT
-smtp.user: $SMTP_USER
-smtp.password: $SMTP_PASSWORD
-smtp.useSSL: $SMTP_USE_SSL
-smtp.senderAddress: $SMTP_SENDER
+# Notifications (email/push) are sent centrally by the backend now
+# (elwasys.notifications.enabled in the backend configuration). This client no
+# longer sends any notifications itself, so smtp.*/pushover.* settings are gone.
 
 # Port to listen on for incoming maintenance requests
 maintenance.server: $DB_SERVER

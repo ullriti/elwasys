@@ -1,7 +1,7 @@
 package org.kabieror.elwasys.raspiclient.devices;
 
-import org.kabieror.elwasys.common.Device;
-import org.kabieror.elwasys.common.Execution;
+import org.kabieror.elwasys.raspiclient.model.ClientDevice;
+import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
 import org.kabieror.elwasys.raspiclient.application.ICloseListener;
 import org.kabieror.elwasys.raspiclient.application.Main;
@@ -114,7 +114,7 @@ public class FhemDevicePowerManager implements IDevicePowerManager, ICloseListen
      * @throws InterruptedException
      */
     @Override
-    public void setDevicePowerState(Device device, DevicePowerState newState)
+    public void setDevicePowerState(ClientDevice device, DevicePowerState newState)
             throws IOException, InterruptedException, FhemException {
         synchronized (TELNET_LOCK) {
             if (newState != DevicePowerState.ON && newState != DevicePowerState.OFF) {
@@ -193,7 +193,7 @@ public class FhemDevicePowerManager implements IDevicePowerManager, ICloseListen
      * @return The power state of the device.
      */
     @Override
-    public DevicePowerState getState(Device device) throws InterruptedException, FhemException, IOException {
+    public DevicePowerState getState(ClientDevice device) throws InterruptedException, FhemException, IOException {
         if (Main.dry) {
             return DevicePowerState.UNKNOWN;
         }
@@ -374,7 +374,7 @@ public class FhemDevicePowerManager implements IDevicePowerManager, ICloseListen
         final Matcher powerMatcher = this.eventsPowerPattern.matcher(event);
 
         if (powerMatcher.find()) {
-            for (final Execution execution : ElwaManager.instance.getExecutionManager().getRunningExecutions()) {
+            for (final ClientExecution execution : ElwaManager.instance.getExecutionManager().getRunningExecutions()) {
                 if (powerMatcher.group(1).equals(execution.getDevice().getFhemPowerName())) {
                     this.logger.trace("Power Measurement received: " + event);
                     Double measurement = Double.parseDouble(powerMatcher.group(2));
@@ -456,7 +456,7 @@ public class FhemDevicePowerManager implements IDevicePowerManager, ICloseListen
      * @param device The device of which the state is to be looked up.
      * @return The state of the device.
      */
-    private String getRawState(Device device) throws IOException, InterruptedException, FhemException {
+    private String getRawState(ClientDevice device) throws IOException, InterruptedException, FhemException {
         if (Main.dry) {
             return "unknown";
         }

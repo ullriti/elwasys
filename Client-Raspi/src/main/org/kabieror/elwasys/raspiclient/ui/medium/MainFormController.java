@@ -4,11 +4,14 @@ import javafx.application.Platform;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.fxml.FXML;
-import org.kabieror.elwasys.common.*;
+import org.kabieror.elwasys.raspiclient.api.ApiException;
 import org.kabieror.elwasys.raspiclient.application.ActionContainer;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
 import org.kabieror.elwasys.raspiclient.executions.IExecutionStartedListener;
 import org.kabieror.elwasys.raspiclient.io.CardDetectedEvent;
+import org.kabieror.elwasys.raspiclient.model.ClientDevice;
+import org.kabieror.elwasys.raspiclient.model.ClientExecution;
+import org.kabieror.elwasys.raspiclient.model.ClientUser;
 import org.kabieror.elwasys.raspiclient.ui.AbstractMainFormController;
 import org.kabieror.elwasys.raspiclient.ui.MainFormState;
 import org.kabieror.elwasys.raspiclient.ui.medium.controller.*;
@@ -20,7 +23,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URL;
-import java.sql.SQLException;
 import java.util.ResourceBundle;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -67,8 +69,8 @@ public class MainFormController extends AbstractMainFormController implements IM
     /**
      * Ausgewählte Daten des Benutzers
      */
-    private Device selectedDevice;
-    private ObjectProperty<User> registeredUser = new SimpleObjectProperty<>();
+    private ClientDevice selectedDevice;
+    private ObjectProperty<ClientUser> registeredUser = new SimpleObjectProperty<>();
 
     /**
      * Aktueller Fehlerzustand
@@ -84,7 +86,7 @@ public class MainFormController extends AbstractMainFormController implements IM
      * Die Aktion, die fehlgeschlagen ist und wiederholt werden kann
      */
     private Runnable retryAction;
-    private Execution executionToAbort;
+    private ClientExecution executionToAbort;
 
     /**
      * Gibt an, ob gegenwärtig auf die Fertigstellung einer Aktion gewartet wird.
@@ -371,69 +373,57 @@ public class MainFormController extends AbstractMainFormController implements IM
             this.logger.warn("Cannot log in user while in error state");
             return;
         }
-        // Suche den zur Karte passenden Benutzer
+        // Suche den zur Karte passenden Benutzer. Seit Phase 4 AP4 läuft das über
+        // POST /api/v1/card-login, der server-seitig 1:1 dieselben Prüfungen wie zuvor
+        // dieser Controller ausführt (Kartennummer -> Benutzer, gesperrt-Prüfung,
+        // Standort-Zugehörigkeit) - siehe CardLoginController im Backend.
         final ActionContainer actionContainer = new ActionContainer();
         actionContainer.setAction(() -> {
             final Runnable searchUserRunnable = () -> {
-                final User newUser;
                 try {
-                    newUser = ElwaManager.instance.getDataRetriever().getUserByCardId(e.getCardId());
-                } catch (final SQLException e1) {
-                    this.logger.error("SQLException while looking up user.", e1);
-                    Platform.runLater(() -> {
-                        this.displayError("Datenbankfehler", e1.getLocalizedMessage(), actionContainer, true);
-                        this.endWait();
-                    });
-                    return;
-                }
-                Location location = null;
-                try {
-                    location = ElwaManager.instance.getLocation();
-                } catch (SQLException e1) {
-                    this.logger.error("Could not load the location of this client.", e1);
-                    Platform.runLater(() -> {
-                        this.displayError("Datenbankfehler", e1.getLocalizedMessage(), actionContainer, true);
-                        this.endWait();
-                    });
-                    return;
-                } catch (NoDataFoundException e1) {
-                    this.logger.error("Could not load the location of this client.", e1);
-                    Platform.runLater(() -> {
-                        this.displayError("Standort gelöscht",
-                                "Dieser Standort wurde im elwaPortal gelöscht und steht nicht weiter zur Verfügung.",
-                                actionContainer, false);
-                        this.endWait();
-                    });
-                    return;
-                }
-                if (newUser == null) {
-                    // Kein Benutzer zur Id gefunden.
-                    this.logger.warn("There is no user associated to card " + e.getCardId() + ".");
-                    Platform.runLater(() -> {
-                        this.registeredUser.set(null);
-                        this.toolbarPaneController.visualizeUnknownId();
-                        this.endWait();
-                    });
-                } else if (newUser.isBlocked()) {
-                    this.logger.info("Blocked user " + newUser.getName() + " tried to log in.");
-                    Platform.runLater(() -> {
-                        this.registeredUser.set(null);
-                        this.toolbarPaneController.visualizeBlockedUser();
-                        this.endWait();
-                    });
-                } else if (!location.getValidUserGroups().contains(newUser.getGroup())) {
-                    this.logger.info("User " + newUser.getName() + " is not allowed to use this location");
-                    Platform.runLater(() -> {
-                        this.registeredUser.set(null);
-                        this.toolbarPaneController.visualizeLocationNotAllowed();
-                        this.endWait();
-                    });
-                } else {
+                    var userDto = ElwaManager.instance.getApiClient().cardLogin(e.getCardId());
+                    final ClientUser newUser = ClientUser.of(userDto);
+                    // Entspricht Common.Device#getValidUserGroups().contains(user.getGroup())
+                    // im Alt-Code: einmalig ermitteln, welche Geräte dieser Benutzer nutzen
+                    // darf, damit jede Gerätekachel das lokal (ohne eigenen Netzwerkaufruf)
+                    // prüfen kann (siehe DeviceListEntry#applyUserStyle).
+                    var usableDeviceIds = ElwaManager.instance.getApiClient().getDevices(newUser.getId()).stream()
+                            .filter(d -> d.usableByUser()).map(d -> d.id()).collect(java.util.stream.Collectors.toSet());
+                    newUser.setUsableDeviceIds(usableDeviceIds);
                     this.logger.info("User logged in: " + newUser.getName());
                     Platform.runLater(() -> {
                         this.registeredUser.set(newUser);
                         this.endWait();
                     });
+                } catch (final ApiException e1) {
+                    if (e1.is(404, "card-not-found")) {
+                        this.logger.warn("There is no user associated to card " + e.getCardId() + ".");
+                        Platform.runLater(() -> {
+                            this.registeredUser.set(null);
+                            this.toolbarPaneController.visualizeUnknownId();
+                            this.endWait();
+                        });
+                    } else if (e1.is(403, "user-blocked")) {
+                        this.logger.info("Blocked user tried to log in.");
+                        Platform.runLater(() -> {
+                            this.registeredUser.set(null);
+                            this.toolbarPaneController.visualizeBlockedUser();
+                            this.endWait();
+                        });
+                    } else if (e1.is(403, "location-not-allowed")) {
+                        this.logger.info("User is not allowed to use this location.");
+                        Platform.runLater(() -> {
+                            this.registeredUser.set(null);
+                            this.toolbarPaneController.visualizeLocationNotAllowed();
+                            this.endWait();
+                        });
+                    } else {
+                        this.logger.error("Communication error while looking up user.", e1);
+                        Platform.runLater(() -> {
+                            this.displayError("Kommunikationsfehler", e1.getLocalizedMessage(), actionContainer, true);
+                            this.endWait();
+                        });
+                    }
                 }
             };
 
@@ -448,34 +438,44 @@ public class MainFormController extends AbstractMainFormController implements IM
     }
 
     @Override
-    public void onExecutionStarted(Execution e) {
+    public void onExecutionStarted(ClientExecution e) {
         this.updateUser();
     }
 
     @Override
-    public void onExecutionFinished(Execution e) {
+    public void onExecutionFinished(ClientExecution e) {
         this.updateUser();
     }
 
     @Override
-    public void onExecutionFailed(Execution execution, Exception exception) {
+    public void onExecutionFailed(ClientExecution execution, Exception exception) {
         this.updateUser();
     }
 
+    /**
+     * Aktualisiert das Guthaben des angemeldeten Benutzers (z. B. nach Bezahlung einer
+     * fertiggestellten Ausführung). Entspricht {@code Common.User#update()} - anders als
+     * dort liefert die Guthaben-Abfrage aber keine Information mehr darüber, ob der
+     * Benutzer inzwischen gelöscht wurde (kein "user not found" ist über
+     * {@code GET /api/v1/users/{id}/credit} sinnvoll unterscheidbar von anderen 404-Fällen,
+     * ein untesteter Rand­fall - siehe kb/05-migration-plan.md, Änderungslog "Phase 4 AP4"):
+     * ein 404 wird sicherheitshalber wie eine Löschung behandelt (Abmelden), jeder andere
+     * Fehler wird nur geloggt.
+     */
     private void updateUser() {
         if (this.registeredUser.get() != null) {
+            final ClientUser user = this.registeredUser.get();
             try {
-                this.registeredUser.get().update();
-                if (this.registeredUser.get().isDeleted()) {
+                var credit = ElwaManager.instance.getApiClient().getCredit(user.getId());
+                user.setCredit(credit.credit());
+            } catch (ApiException e1) {
+                if (e1.getHttpStatus() == 404) {
+                    this.logger.warn(
+                            "The user has been deleted since the beginning of the execution! Logging out.");
                     this.registeredUser.set(null);
+                } else {
+                    this.logger.error("Could not update user.", e1);
                 }
-            } catch (NoDataFoundException e1) {
-                this.logger
-                        .warn("The user has been deleted since the beginning of the execution! Aborting newly started" +
-                                " execution.");
-                this.registeredUser.set(null);
-            } catch (SQLException e1) {
-                this.logger.error("Could not update user.", e1);
             }
         }
     }
@@ -485,7 +485,7 @@ public class MainFormController extends AbstractMainFormController implements IM
      *
      * @param device Das zu buchende Gerät.
      */
-    public void onDeviceSelected(Device device) {
+    public void onDeviceSelected(ClientDevice device) {
         this.selectedDevice = device;
         this.stateManager.gotoState(MainFormState.CONFIRMATION);
     }
@@ -504,22 +504,22 @@ public class MainFormController extends AbstractMainFormController implements IM
      *
      * @return Das ausgewählte Gerät
      */
-    public Device getSelectedDevice() {
+    public ClientDevice getSelectedDevice() {
         return selectedDevice;
     }
 
     /**
      * Property: RegisteredUser
      */
-    public User getRegisteredUser() {
+    public ClientUser getRegisteredUser() {
         return registeredUser.get();
     }
 
-    public void setRegisteredUser(User registeredUser) {
+    public void setRegisteredUser(ClientUser registeredUser) {
         this.registeredUser.set(registeredUser);
     }
 
-    public ObjectProperty<User> registeredUserProperty() {
+    public ObjectProperty<ClientUser> registeredUserProperty() {
         return registeredUser;
     }
 
@@ -539,11 +539,11 @@ public class MainFormController extends AbstractMainFormController implements IM
         return updateService;
     }
 
-    public Execution getExecutionToAbort() {
+    public ClientExecution getExecutionToAbort() {
         return executionToAbort;
     }
 
-    public void setExecutionToAbort(Execution executionToAbort) {
+    public void setExecutionToAbort(ClientExecution executionToAbort) {
         this.executionToAbort = executionToAbort;
     }
 

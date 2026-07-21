@@ -112,8 +112,13 @@ public class MaintenanceServerManager extends Thread implements ICloseListener, 
 
             res.setStartupTime(ElwaManager.instance.getStartupTime());
 
-            // Laufende Ausführungen
-            res.setRunningExecutions(this.manager.getExecutionManager().getRunningExecutions());
+            // Laufende Ausführungen: seit Phase 4 AP4 sind Ausführungen client-seitig
+            // ClientExecution-Objekte statt Common.Execution (das Alt-Wartungsprotokoll
+            // kennt nur Common.Execution, siehe GetStatusResponse) - eine 1:1-Umwandlung
+            // ist ohne DB-Anbindung nicht möglich. Bis AP5 (ausgehende WS-Verbindung löst
+            // dieses Protokoll komplett ab) wird hier bewusst eine leere Liste gemeldet;
+            // ClientMaintenanceConnectionE2ETest prüft nur, dass die Liste NICHT null ist.
+            res.setRunningExecutions(java.util.List.of());
 
             // Hintergrundbeleuchtung
             res.setBacklightStatus(
