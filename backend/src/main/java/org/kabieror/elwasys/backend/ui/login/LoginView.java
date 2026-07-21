@@ -79,6 +79,11 @@ public class LoginView extends VerticalLayout implements BeforeEnterObserver {
         form.setUsername("Benutzername");
         form.setPassword("Passwort");
         form.setSubmit("Login");
+        // Bugfix (Phase 3 AP6, gefunden bei der E2E-Portierung, siehe kb/05-migration-plan.md):
+        // ohne diese Zeile blieb der "Passwort vergessen?"-Knopf beim Vaadin-Default "Forgot
+        // password" (Englisch) hängen, obwohl alle anderen Formulartexte hier bewusst
+        // eingedeutscht sind (1:1 wie das Alt-Portal, siehe Klassen-Javadoc).
+        form.setForgotPassword("Passwort vergessen?");
 
         LoginI18n.ErrorMessage errorMessage = i18n.getErrorMessage();
         errorMessage.setTitle("Login fehlgeschlagen");
