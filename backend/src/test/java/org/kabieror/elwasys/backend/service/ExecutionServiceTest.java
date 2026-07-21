@@ -251,6 +251,53 @@ class ExecutionServiceTest extends AbstractBackendIT {
     }
 
     @Test
+    void startExecutionWithClientTimestampUsesItInsteadOfServerNow() {
+        // AP3, Phase 4 (additiv, siehe kb/05-migration-plan.md "Idempotenz + Replay" und
+        // ExecutionStartRequest#clientTimestamp Javadoc): ein vom Terminal mitgelieferter
+        // Original-Zeitstempel wird 1:1 übernommen statt der Serverzeit.
+        UserEntity user = newUser();
+        DeviceEntity device = newDevice();
+        ProgramEntity program = newProgram(3600);
+        ExecutionEntity execution = this.executionService.createExecution(device, program, user);
+        LocalDateTime clientTimestamp = LocalDateTime.of(2020, 1, 1, 10, 0, 0);
+
+        execution = this.executionService.startExecution(execution, clientTimestamp);
+
+        assertThat(execution.getStart()).isEqualTo(clientTimestamp);
+    }
+
+    @Test
+    void startExecutionWithoutClientTimestampFallsBackToServerNowLikeBefore() {
+        UserEntity user = newUser();
+        DeviceEntity device = newDevice();
+        ProgramEntity program = newProgram(3600);
+        ExecutionEntity execution = this.executionService.createExecution(device, program, user);
+        LocalDateTime before = LocalDateTime.now();
+
+        execution = this.executionService.startExecution(execution, null);
+
+        assertThat(execution.getStart()).isNotNull();
+        assertThat(execution.getStart()).isAfterOrEqualTo(before);
+    }
+
+    @Test
+    void finishExecutionWithClientTimestampSetsTheOriginalStopTime() {
+        UserEntity user = newUser();
+        DeviceEntity device = newDevice();
+        ProgramEntity program = newProgram(3600);
+        this.creditService.inpayment(user, new BigDecimal("50.00"));
+        LocalDateTime startTimestamp = LocalDateTime.of(2020, 1, 1, 10, 0, 0);
+        LocalDateTime stopTimestamp = LocalDateTime.of(2020, 1, 1, 12, 0, 0);
+        ExecutionEntity execution = this.executionService.startExecution(
+                this.executionService.createExecution(device, program, user), startTimestamp);
+
+        execution = this.executionService.finishExecution(execution, stopTimestamp);
+
+        assertThat(execution.getStop()).isEqualTo(stopTimestamp);
+        assertThat(execution.isFinished()).isTrue();
+    }
+
+    @Test
     void getExecutionsReturnsOnlyStartedOnesNewestFirst() {
         DeviceEntity device = newDevice();
         ProgramEntity program = newProgram(3600);
