@@ -243,6 +243,25 @@ class TerminalWebSocketTest {
         ws.sendText(CharBuffer.wrap(this.objectMapper.writeValueAsString(message)), true).get(5, TimeUnit.SECONDS);
     }
 
+    /**
+     * Der Client-Handshake ({@link #connectSimulatedTerminal}) gilt bereits als abgeschlossen,
+     * bevor der Server die Verbindung in seiner Registry eingetragen hat
+     * ({@code afterConnectionEstablished} läuft asynchron dazu) - ein sofortiges
+     * {@code isConnected(...)} direkt nach dem Connect ist daher ein Wettlauf, den langsame
+     * CI-Runner verlieren können. Deshalb: bis zu 5s auf die serverseitige Registrierung warten.
+     */
+    private void awaitConnected(Integer locationId) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (!this.maintenanceService.isConnected(locationId)) {
+            if (System.nanoTime() > deadline) {
+                break;
+            }
+            Thread.sleep(25);
+        }
+        assertThat(this.maintenanceService.isConnected(locationId))
+                .as("expected the server to register the terminal connection within 5s").isTrue();
+    }
+
     @Test
     void maintenanceRequestOnANotConnectedLocationFailsImmediatelyWithoutTimeout() {
         LocationEntity location = this.locationRepository.save(new LocationEntity(Fixtures.unique("loc")));
@@ -267,7 +286,7 @@ class TerminalWebSocketTest {
         SimulatedTerminal terminal = new SimulatedTerminal();
         WebSocket ws = connectSimulatedTerminal(token, terminal);
         try {
-            assertThat(this.maintenanceService.isConnected(location.getId())).isTrue();
+            awaitConnected(location.getId());
 
             Future<List<String>> future = this.executor.submit(
                     () -> this.maintenanceService.requestLog(location.getId()));
@@ -293,6 +312,8 @@ class TerminalWebSocketTest {
         SimulatedTerminal terminal = new SimulatedTerminal();
         WebSocket ws = connectSimulatedTerminal(token, terminal);
         try {
+            awaitConnected(location.getId());
+
             Future<?> future = this.executor.submit(() -> this.maintenanceService.requestRestart(location.getId()));
 
             TerminalWsMessage request = this.objectMapper.readValue(terminal.next(), TerminalWsMessage.class);
@@ -316,6 +337,8 @@ class TerminalWebSocketTest {
         SimulatedTerminal terminal = new SimulatedTerminal();
         WebSocket ws = connectSimulatedTerminal(token, terminal);
         try {
+            awaitConnected(location.getId());
+
             Future<List<String>> future = this.executor.submit(
                     () -> this.maintenanceService.requestLog(location.getId()));
 
