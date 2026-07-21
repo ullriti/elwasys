@@ -229,6 +229,47 @@ Display, `-Dtest=...` überschreibt gezielt den in `backend/pom.xml` konfigurier
 Standard-Ausschluss dieser Testklasse aus dem normalen `mvn test`-Lauf (siehe
 kb/03-modules.md).
 
+## Offline-Robustheit (Phase 4 AP6, 2026-07-21)
+
+Neue Tests für die C15-Nachfolger-Szenarien (Backend nicht erreichbar, laufende Ausführung
+lokal beenden + nachmelden, Offline-Buchungen, Zeitfenster, Replay-Idempotenz), siehe
+kb/05-migration-plan.md „Konzeptskizze: Offline-Buchungen am Terminal“ und
+kb/03-modules.md „Offline-Robustheit (AP6)“.
+
+- **Neuer Test-Helfer `BackendProxy`** (`Client-Raspi/src/test/.../application/`, reine
+  JDK-TCP-Weiterleitung, analog `FhemSimulator`): der Client zeigt statt direkt auf
+  `TestBackend.url()` auf diesen lokalen Proxy; `goOffline()`/`goOnline()` machen „Backend
+  nicht erreichbar“ für einen einzelnen Test gezielt simulierbar, ohne das für die ganze
+  Suite gemeinsam genutzte Test-Backend anzufassen. `goOffline()` schließt zusätzlich
+  bereits offene Verbindungen aktiv (inkl. eines vom `java.net.http`-Verbindungspool
+  warmgehaltenen Keep-Alive-Sockets) – sonst könnte ein Test durch eine zufällig noch
+  funktionierende Altverbindung flaken.
+- **`ClientOfflineRobustnessE2ETest`** (TestFX, 3 geordnete Tests):
+  1. laufende Ausführung übersteht einen Backend-Ausfall (Abbruch schlägt am
+     Kommunikationsfehler fehl → lokal abgeschlossen + im Journal hinterlegt → nach
+     Wiederverbindung repliziert, Backend-DB zeigt danach `finished=true`).
+  2. eine neue Buchung wird offline (Kartenlogin + Berechtigungs-/Guthabenprüfung gegen den
+     Snapshot) akzeptiert, existiert beim Backend zunächst NICHT, wird nach Wiederverbindung
+     repliziert (inkl. Verbuchung über `credit_accounting`).
+  3. nach testweisem Setzen von `locations.offline_max_duration_minutes=0` +
+     `OfflineGateway#refreshSnapshot()` wird eine neue Buchung mit demselben Fehlerbild wie
+     C15 abgelehnt (`MainFormState.ERROR`) – kein neu erfundenes Fehlerbild.
+- **`ClientOfflineReplayIdempotencyE2ETest`** (bewusst KEIN TestFX – kleinste belastbare
+  Testform, siehe Klassen-Javadoc): repliziert dasselbe Journal zweimal gegen das echte
+  Test-Backend (simuliert einen Terminal-Absturz zwischen erfolgreichem Netzwerkaufruf und
+  Journal-Löschung bzw. einen sich überschneidenden zweiten Replay-Versuch) und beweist über
+  `executions`-/`credit_accounting`-Zeilenzahlen, dass dabei weder eine zweite Ausführung
+  noch eine zweite Guthabenbuchung entsteht.
+- **Backend**: `ExecutionControllerOfflineReplayTest` (8 reine Mockito-Unit-Tests, gleiches
+  Muster wie `ExecutionControllerNotificationTest` – kein zusätzlicher Spring-Testkontext),
+  deckt die Zeitstempel-Toleranz (inkl. standortspezifischer `offline.max-duration`) und die
+  Notification-Unterdrückung für zu alte Ereignisse ab.
+
+**Testzahlen Phase 4 AP6 (2026-07-21)**: `run-ui-tests.sh` **43/43 → 47/47**,
+`run-client-e2e.sh` **25/25 → 29/29** (2× hintereinander reproduziert), Cross-Component
+unverändert **3/3**, Backend-Suite **199/199 → 207/207**, Portal-E2E-Suite weiterhin
+**20/20** (P14 inkl. neuem Feld „Offline-Maximaldauer“, unveränderter Save-Roundtrip).
+
 ## Alt-Portal (Vaadin 7) – Playwright E2E ⚠️ STILLGELEGT (Phase 3 AP6, 2026-07-21)
 
 > **Stillgelegt.** Diese Suite (`Portal/e2e/`) war der Maßstab für P1–P20 und lief bis Phase 3

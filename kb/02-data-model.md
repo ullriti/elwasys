@@ -65,6 +65,14 @@ Ein Standort = ein Client-Terminal.
   bestehen (KEINE Migration entfernt Bestandsspalten in Phase 4) – Entfall per additiver
   Migration ist für Phase 5 vorgesehen.
 - Seed: `Default`
+- `offline_max_duration_minutes` (INT, NOT NULL, Default 60) – **neu seit Phase 4 AP6**
+  (2026-07-21): `offline.max-duration` dieses Standorts (Auftraggeber-Vorgabe, siehe
+  kb/05-migration-plan.md „Festlegungen zu den Offline-Detailfragen“) – wie lange ein
+  Terminal ohne Backend-Verbindung eigenständig neue Buchungen annimmt, bevor es sie ablehnt
+  (Fehlerbild wie C15); im Portal-Standorte-Dialog editierbar
+  (`LocationFormDialog`/`AdminLocationsView`), an das Terminal über `SnapshotDto
+  #offlineMaxDurationMinutes()` ausgeliefert. Additive Migration
+  `V5__add_offline_max_duration_to_locations.sql`.
 
 ### locations_valid_user_groups
 n:m Standort ↔ erlaubte Benutzergruppen. Seed: Default-Location ↔ Default-Group.
@@ -234,6 +242,11 @@ Zusammenfassung:
   `terminal_idempotency_keys` (siehe „Tabellen“ oben) für die Deduplizierung terminal-gemeldeter
   Execution-Ereignisse. Rein additiv (neue Tabelle, keine Änderung an Bestandstabellen) – der
   Alt-Code bekommt davon nichts mit. Details siehe kb/03-modules.md „Idempotenz + Replay“ und
+  kb/05-migration-plan.md.
+- **`V5__add_offline_max_duration_to_locations.sql`** (Phase 4 AP6, 2026-07-21): neue Spalte
+  `locations.offline_max_duration_minutes` (siehe „Tabellen“ oben, `locations`). Rein additiv
+  (`NOT NULL`-Spalte mit `DEFAULT 60`, keine Bestandsspalte geändert) – der Alt-Code bekommt
+  davon nichts mit. Details siehe kb/03-modules.md „Offline-Robustheit (AP6)“ und
   kb/05-migration-plan.md.
 
 ## JPA-Entities (seit Phase 2 AP2, 2026-07-20)

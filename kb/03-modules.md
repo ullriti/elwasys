@@ -43,8 +43,11 @@ kb/05-migration-plan.md, Änderungslog „Phase 4 AP5“.
   Execution-Endpunkte), `ApiException`, `dto/` (Records: `CardLoginRequest`,
   `CreditResponse`, `DeviceDto`, `DeviceOverviewDto`, `ExecutionDto`,
   `ExecutionEndRequest`/`-StartRequest`, `LocationDto`, `ProgramDto`,
-  `UpdateDeconzUuidRequest`, `UserDto`) – 1:1 an die Backend-REST-API v1 angelehnt (siehe
-  kb/03, Abschnitt „REST-API v1“ weiter unten)
+  `UpdateDeconzUuidRequest`, `UserDto`; seit Phase 4 AP6 zusätzlich `SnapshotDto` +
+  `SnapshotUserDto`/`SnapshotUserGroupDto`/`SnapshotDeviceDto`/`SnapshotProgramDto`/
+  `DiscountType`, Gegenstücke zu den gleichnamigen Backend-DTOs, siehe
+  `ApiClient#getSnapshot()`) – 1:1 an die Backend-REST-API v1 angelehnt (siehe kb/03,
+  Abschnitt „REST-API v1“ weiter unten)
 - `ws/` – **neu (Phase 4 AP5)**: `TerminalWebSocketClient` (die ausgehende Fernwartungs-
   Verbindung zum Backend, `/api/v1/terminal-ws`, dasselbe Standort-Token wie `api/ApiClient`;
   Technologie: `org.springframework.web.socket.client.standard.StandardWebSocketClient`,
@@ -65,7 +68,12 @@ kb/05-migration-plan.md, Änderungslog „Phase 4 AP5“.
   - `ui/scheduler/` – `InactivityScheduler`, `InactivityJob/Future`, `BacklightManager`
   - `ui/` gemeinsam: `MainFormState`, `Icons`, `UiUtilities`, `AbstractMainFormController`
 - `executions/` – `ExecutionManager`, `ExecutionFinisher` (Benachrichtigungsversand seit AP4
-  entfernt, siehe unten), Listener, `FhemException`
+  entfernt, siehe unten; seit AP6 fängt `ExecutionFinisher` einen reinen
+  Kommunikationsfehler beim Beenden/Abbrechen ab und journaliert lokal statt einen Fehler zu
+  melden, siehe „Offline-Robustheit (AP6)“ unten), Listener, `FhemException`
+- `offline/` – **neu (Phase 4 AP6)**: `OfflineSnapshotStore`, `OfflineJournal`(`Entry`),
+  `OfflinePricing`, `OfflineGateway`, `OfflineJsonSupport` – siehe „Offline-Robustheit (AP6)“
+  weiter unten für Details
 - `devices/` – `deconz/` (Service, ApiAdapter, EventListener, PowerManager,
   RegistrationService, `model/`), `FhemDevicePowerManager`, Interfaces, `DevicePowerState`
 - `io/` – `CardReader`, `TelnetClient`, Card-Events
@@ -603,8 +611,102 @@ eines an diesem Standort nicht zugelassenen Nutzers würde offline wie eine unbe
 behandelt (nicht wie das spezifischere „an diesem Standort nicht erlaubt") - eine bewusst
 konservative Vereinfachung im Sinne der Konzeptskizze Punkt 2 („Regeln bewusst konservativ").
 Dieses Arbeitspaket liefert nur die DATEN aus - die eigentliche Offline-Entscheidungslogik
-(Kartenlogin/Berechtigungs-/Guthabenprüfung gegen den Snapshot, Ereignis-Journal, Replay) bleibt
-laut Roadmap AP6 vorbehalten.
+(Kartenlogin/Berechtigungs-/Guthabenprüfung gegen den Snapshot, Ereignis-Journal, Replay) wurde
+in AP6 umgesetzt (siehe unten).
+
+### Offline-Robustheit (Phase 4 AP6, siehe kb/05-migration-plan.md „Konzeptskizze:
+Offline-Buchungen am Terminal")
+
+Zwei Stufen: (A) laufende, online gestartete Ausführungen bei einem Backend-Ausfall lokal zu
+Ende führen + nachmelden; (B) während des Ausfalls komplett neu gebuchte Ausführungen
+(„Offline-Buchungen"), solange der Standort-Snapshot nicht älter als dessen
+`offline.max-duration` ist.
+
+**Backend-seitig additiv** (kein bestehender Endpunkt-Vertrag geändert):
+- `locations.offline_max_duration_minutes` (Migration V5, Default 60, siehe
+  kb/02-data-model.md) - pro Standort im Portal-Standorte-Dialog editierbar
+  (`LocationFormDialog`, Feld „Offline-Maximaldauer (Minuten)"; `LocationService#create`/
+  `#update` haben dafür eine 3-Arg-Überladung bekommen, die 2-Arg-Signaturen bleiben
+  unverändert bestehen) und über `SnapshotDto#offlineMaxDurationMinutes()` ans Terminal
+  ausgeliefert.
+- Neues Package `backend/.../offline/`: `ClientTimestampPolicy` (+ `OfflineProperties`,
+  Konfigurationsschlüssel `elwasys.offline.clock-drift-tolerance`, Default `PT5M`) prüft
+  einen vom Terminal mitgeschickten `clientTimestamp` (Execution-Start/-Ende/-Abbruch, siehe
+  AP3 oben) gegen das Fenster `[jetzt - (offline.max-duration + Toleranz), jetzt + Toleranz]`
+  - liegt er außerhalb, verwendet `ExecutionController` stattdessen die Serverzeit
+  (Protokollhinweis, kein Fehler). Zusätzlich unterdrückt `ClientTimestampPolicy
+  #isNotificationSuppressed` die `finish`/`abort`-Benachrichtigung, wenn das Ereignis selbst
+  älter als `offline.max-duration` ist (ohne die Toleranz) - beides Auftraggeber-Vorgabe (siehe
+  kb/05-migration-plan.md „Festlegungen zu den Offline-Detailfragen"). Das eigentliche
+  Deduplizieren wiederholter Meldungen läuft weiterhin unverändert über den seit AP3
+  bestehenden `Idempotency-Key`-Mechanismus (`IdempotencyService`) - AP6 ist der erste
+  produktive Konsument, der ihn für eine Nachmeldung nutzt, die tatsächlich Minuten/Stunden
+  später erfolgt.
+
+**Client-seitig, neues Package `Client-Raspi/.../offline/`** (Terminal spricht weiterhin
+ausschließlich über die bestehende REST-API v1 - keine neuen Endpunkte nötig):
+- `OfflineSnapshotStore`: persistiert den zuletzt geladenen `SnapshotDto` als JSON
+  (`offline-snapshot.json` im Arbeitsverzeichnis, wie `.client-uid`/`elwasys.properties`) -
+  neustartfest, unverschlüsselt (Auftraggeber-Entscheidung, keine Passwort-Hashes enthalten).
+- `OfflineJournal`: neustartfestes, append-only Ereignis-Journal
+  (`offline-journal.jsonl`, eine JSON-Zeile je `OfflineJournalEntry` - Start/Ende/Abbruch mit
+  Idempotenz-Schlüssel, Original-Zeitstempel, und bei Ende/Abbruch entweder einer bereits
+  echten Backend-Id [Stufe A] oder dem Idempotenz-Schlüssel des zugehörigen `START`-Eintrags
+  [Stufe B, die Ausführung wurde selbst offline angelegt]). `computeOfflineDebits()` leitet
+  das lokal aufgelaufene, vom gecachten Guthaben abzuziehende Offline-Delta direkt aus dem
+  Journal her (kein separates Ledger nötig) - jeder Ende/Abbruch-Eintrag trägt dafür den
+  lokal berechneten Preis (`chargedPrice`, rein informativ, nie an das Backend geschickt).
+- `OfflinePricing`: 1:1-Portierung von `PricingService` für die Offline-Preisberechnung
+  (Snapshot liefert Flagfall/Rate/Zeiteinheit/Rabattregel, siehe `SnapshotProgramDto`/
+  `SnapshotUserGroupDto`).
+- `OfflineGateway`: zentrale Offline-Entscheidungslogik + Journal-Replay.
+  - Kartenlogin/Geräte-Übersicht/Geräte-für-Benutzer/Buchen liefern JEWEILS dieselben
+    Wire-DTOs (`UserDto`/`DeviceOverviewDto`/`DeviceDto`) bzw. dasselbe Fehler-Vokabular
+    (`ApiException`-Status/Slug) wie der Online-Pfad - der komplette UI-/Modellcode
+    (`ClientUser.of`, `ClientDevice.updateFrom`, `ClientProgram.of`,
+    `MainFormController#onCardDetected`s Fehlerbehandlung) bleibt dadurch UNVERÄNDERT
+    nutzbar.
+  - Fehlt ein nutzbarer (nicht abgelaufener) Snapshot, wird die URSPRÜNGLICHE
+    `ApiException` (der Kommunikationsfehler) unverändert weitergereicht - kein neu
+    erfundenes Fehlerbild, sondern exakt das bestehende C15-Bild.
+  - `replay()`: überträgt das komplette Journal in Reihenfolge über die (bereits seit AP3
+    idempotenten) Execution-Endpunkte. Bricht bei JEDEM Fehler sofort ab und lässt das
+    Journal komplett UNVERÄNDERT (kein teilweises Abschneiden) - der nächste Versuch
+    beginnt wieder von vorn; das ist sicher, weil das Backend über den
+    `Idempotency-Key`-Header dedupliziert (ein erneuter Versuch eines bereits erfolgreich
+    verarbeiteten Eintrags liefert nur die gespeicherte Antwort erneut, siehe
+    `ExecutionControllerOfflineReplayTest`/`ClientOfflineReplayIdempotencyE2ETest`).
+- `ClientExecution#isOfflinePendingReplay()` (entkoppelt von `isVirtual()`, das weiterhin
+  ausschließlich die rein lokale „Tür öffnen"-Funktion markiert): eine offline gebuchte,
+  noch nicht nachgemeldete Ausführung referenziert ihren Journal-`START`-Eintrag über den
+  Idempotenz-Schlüssel statt einer echten Backend-Id - `ExecutionFinisher` journaliert ihr
+  Ende/Abbruch deshalb IMMER, ohne einen (unmöglichen) Live-Aufruf zu versuchen.
+- `application.ElwaManager#cardLogin`/`#getDevicesForUser`/`#createExecution` kapseln
+  Online-Pfad (`ApiClient`) + Offline-Fallback (`OfflineGateway`) hinter demselben
+  DTO-Vertrag - `ui/medium/MainFormController`, `ui/medium/.../ConfirmationViewController`
+  und `ui/small/MainFormController` rufen nur noch diese Methoden auf (Wechsel des
+  Zielobjekts, sonst unveränderte Aufrufstellen). `#getManagedDevices()` (zentral für die
+  Geräteliste, seit AP3/AP4) ist ebenso offline-fähig gemacht.
+- **Stufe A** (`executions/ExecutionFinisher#executeAction`): der Live-`finish`/`abort`-
+  Aufruf wird wie bisher versucht; scheitert er an einem reinen Kommunikationsfehler
+  (`ApiException#isCommunicationFailure()`), wird die Ausführung stattdessen lokal
+  abgeschlossen und im Journal hinterlegt (kein Fehler-/Retry-UX) - ein ECHTER fachlicher
+  Fehler (z. B. 409 „bereits beendet") löst weiterhin das bestehende Retry-UX aus.
+- **Periodischer Hintergrundabgleich** (`ElwaManager#initiate`, eigener
+  `ScheduledExecutorService`, Intervall `offline.pollIntervalSeconds` in
+  `elwasys.properties`, Default 20s wie der bestehende `ExecutionManager`-Loop):
+  aktualisiert den Snapshot und ruft `OfflineGateway#replay()` auf, sobald das Backend
+  erreichbar ist. Ist das Backend beim Terminal-Start nicht erreichbar, aber ein noch nicht
+  abgelaufener Snapshot vorhanden, bootet der Client im Offline-Modus statt in den
+  Fehlerzustand (C15) zu gehen (`ElwaManager#initiate`, Reachability-Check).
+
+**Restrisiko** (siehe Abschlussbericht/kb/05 „Risiken"): startet der Client selbst NEU,
+während er offline ist UND eine Ausführung gerade läuft, kann diese laufende Ausführung
+nicht wiederaufgenommen werden (der Wiederaufnahme-Scan, Testfall C13, braucht die
+Backend-Antwort auf `GET /api/v1/devices/overview`/`GET /api/v1/executions/{id}` - offline
+liefert der Snapshot dafür bewusst keine Belegungsdaten, siehe `OfflineGateway
+#getDevicesOverview` Javadoc). Das ist ein enger, dokumentierter Sonderfall (Terminal-Neustart
+UND Backend-Ausfall gleichzeitig), kein Verlust bereits gemeldeter Buchungsdaten.
 
 #### WebSocket-Endpunkt (`/api/v1/terminal-ws`, Package `backend/.../ws/`)
 

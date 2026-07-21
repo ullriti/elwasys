@@ -234,7 +234,10 @@ lauscht nicht mehr als Server (bis Phase 4 AP4 galt `database.*` noch transition
 mittlerweile entfernte Fernwartungs-Registrierung `LocationManager`). Weitere Keys: `location`
 (nur noch Anzeigename), `portalUrl`. Gateway: entweder `deconz.*` oder `fhem.*`. Die zuvor
 hier dokumentierten `smtp.*`-Keys entfallen ebenfalls (Benachrichtigungsversand läuft seit AP4
-zentral über das Backend, siehe kb/03-modules.md „Benachrichtigungsdienst").
+zentral über das Backend, siehe kb/03-modules.md „Benachrichtigungsdienst"). **Seit Phase 4
+AP6**: `offline.pollIntervalSeconds` (Default 20) steuert das Intervall des periodischen
+Offline-Abgleichs (Snapshot-Aktualisierung + Journal-Replay, siehe kb/03-modules.md
+„Offline-Robustheit (AP6)").
 
 Start (aus `setup.sh`, `run.sh`):
 ```bash
