@@ -107,6 +107,14 @@ elwasys:
     token-validity: ${ELWASYS_PASSWORD_RESET_TOKEN_VALIDITY:PT2H}
     portal-base-url: ${ELWASYS_PORTAL_BASE_URL:http://localhost:8080}
 
+  # Offline-Robustheit (Phase 4 AP6, siehe kb/05-migration-plan.md "Konzeptskizze:
+  # Offline-Buchungen am Terminal" und ClientTimestampPolicy-Javadoc). Die eigentliche
+  # "offline.max-duration" ist KEIN globaler Schalter, sondern pro Standort im
+  # Standorte-Dialog konfigurierbar (locations.offline_max_duration_minutes, Default 60,
+  # siehe LocationEntity) - hier nur die globale Uhren-Drift-Toleranz.
+  offline:
+    clock-drift-tolerance: ${ELWASYS_OFFLINE_CLOCK_DRIFT_TOLERANCE:PT5M}
+
 logging:
   level:
     root: INFO

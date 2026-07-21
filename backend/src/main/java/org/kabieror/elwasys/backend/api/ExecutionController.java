@@ -25,6 +25,7 @@ import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.notification.NotificationService;
+import org.kabieror.elwasys.backend.offline.ClientTimestampPolicy;
 import org.kabieror.elwasys.backend.repository.ProgramRepository;
 import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.kabieror.elwasys.backend.service.CreditService;
@@ -80,6 +81,16 @@ import org.springframework.web.bind.annotation.RestController;
  * zu {@code PasswordResetService}. Bei einem idempotenten Replay (siehe oben) wird die
  * Benachrichtigung NICHT erneut ausgelöst, weil die fachliche Aktion (inkl. Benachrichtigung)
  * dann gar nicht erst erneut ausgeführt wird.
+ *
+ * <p><b>Offline-Nachmeldung/Zeitstempel-Toleranz (AP6, Phase 4, additiv)</b>: ein
+ * {@code clientTimestamp}, der außerhalb des erlaubten Zeitfensters (Standort-
+ * {@code offline.max-duration} + Uhren-Drift-Toleranz) liegt, wird von
+ * {@link ClientTimestampPolicy#resolve} durch die Serverzeit ersetzt statt die Anfrage
+ * abzulehnen (Auftraggeber-Vorgabe: "Server-Zeit + Protokollhinweis"). Zusätzlich wird eine
+ * Benachrichtigung zu einem {@code finish}/{@code abort} unterdrückt, wenn das Ereignis
+ * selbst älter als {@code offline.max-duration} ist (siehe
+ * {@link ClientTimestampPolicy#isNotificationSuppressed}) - beides bewusst NACH der
+ * Idempotenz-Prüfung ausgeführt, da ein Replay ohnehin nichts erneut auslöst.
  */
 @RestController
 @RequestMapping("/api/v1/executions")
@@ -105,10 +116,12 @@ public class ExecutionController {
 
     private final NotificationService notificationService;
 
+    private final ClientTimestampPolicy clientTimestampPolicy;
+
     public ExecutionController(ProgramRepository programRepository, UserRepository userRepository,
             PermissionService permissionService, PricingService pricingService, CreditService creditService,
             ExecutionService executionService, TerminalScopeGuard scopeGuard, IdempotencyService idempotencyService,
-            NotificationService notificationService) {
+            NotificationService notificationService, ClientTimestampPolicy clientTimestampPolicy) {
         this.programRepository = programRepository;
         this.userRepository = userRepository;
         this.permissionService = permissionService;
@@ -118,6 +131,7 @@ public class ExecutionController {
         this.scopeGuard = scopeGuard;
         this.idempotencyService = idempotencyService;
         this.notificationService = notificationService;
+        this.clientTimestampPolicy = clientTimestampPolicy;
     }
 
     @PostMapping
@@ -163,7 +177,9 @@ public class ExecutionController {
                                 this.creditService.getCredit(user));
                     }
                     ExecutionEntity execution = this.executionService.createExecution(device, program, user);
-                    execution = this.executionService.startExecution(execution, request.clientTimestamp());
+                    LocalDateTime resolvedTimestamp = this.clientTimestampPolicy.resolve(request.clientTimestamp(),
+                            device.getLocation(), "execution-start");
+                    execution = this.executionService.startExecution(execution, resolvedTimestamp);
                     return toDto(execution);
                 });
         return result.body();
@@ -215,11 +231,19 @@ public class ExecutionController {
                     if (execution.isFinished()) {
                         throw new ExecutionAlreadyFinishedException(id);
                     }
-                    ExecutionEntity finished = this.executionService.finishExecution(execution, clientTimestamp);
-                    if (aborted) {
-                        this.notificationService.notifyExecutionAborted(finished.getUser(), finished.getDevice());
-                    } else {
-                        this.notificationService.notifyExecutionFinished(finished.getUser(), finished.getDevice());
+                    LocalDateTime resolvedTimestamp = this.clientTimestampPolicy.resolve(clientTimestamp, location,
+                            operation);
+                    ExecutionEntity finished = this.executionService.finishExecution(execution, resolvedTimestamp);
+                    // Benachrichtigungen zu einem stark verspätet nachgemeldeten Ereignis werden
+                    // unterdrueckt (Auftraggeber-Vorgabe, siehe ClientTimestampPolicy-Javadoc) -
+                    // die ORIGINAL-Zeitstempel-Angabe entscheidet, nicht der ggf. per Drift-Toleranz
+                    // ersetzte resolvedTimestamp.
+                    if (!this.clientTimestampPolicy.isNotificationSuppressed(clientTimestamp, location)) {
+                        if (aborted) {
+                            this.notificationService.notifyExecutionAborted(finished.getUser(), finished.getDevice());
+                        } else {
+                            this.notificationService.notifyExecutionFinished(finished.getUser(), finished.getDevice());
+                        }
                     }
                     return toDto(finished);
                 });

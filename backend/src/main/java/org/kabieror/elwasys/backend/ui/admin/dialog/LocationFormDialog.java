@@ -8,6 +8,7 @@ import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.notification.Notification;
 import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
+import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.TextField;
 import java.util.Set;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
@@ -22,6 +23,12 @@ import org.kabieror.elwasys.backend.service.UserGroupService;
  * {@code TwinColSelect} des Alt-Fensters (freigegebene Gruppen für diesen Standort). Anlegen
  * ist NEU (das Alt-Fenster kannte nur "Bearbeiten", siehe {@code AdminLayout}-Javadoc) - die
  * eigenständige Standort-Ansicht ist eine vom Auftraggeber gewünschte UX-Verbesserung.
+ *
+ * <p>Feld "Offline-Maximaldauer" (Phase 4 AP6, additiv - siehe kb/05-migration-plan.md
+ * "Festlegungen zu den Offline-Detailfragen"): Auftraggeber-Auflage, dass
+ * {@code offline.max-duration} über das Portal konfigurierbar sein muss. In Minuten, Default
+ * {@link LocationService#DEFAULT_OFFLINE_MAX_DURATION_MINUTES}, wird an das Terminal über
+ * {@code SnapshotDto#offlineMaxDurationMinutes()} ausgeliefert.
  */
 public class LocationFormDialog extends Dialog {
 
@@ -30,6 +37,7 @@ public class LocationFormDialog extends Dialog {
 
     private final TextField tfName = new TextField("Name");
     private final MultiSelectComboBox<UserGroupEntity> selGroups = new MultiSelectComboBox<>("Benutzergruppen");
+    private final IntegerField ifOfflineMaxDuration = new IntegerField("Offline-Maximaldauer (Minuten)");
 
     public LocationFormDialog(LocationService locationService, UserGroupService userGroupService,
             LocationEntity locationToEdit, Runnable onSaved) {
@@ -48,13 +56,24 @@ public class LocationFormDialog extends Dialog {
         this.selGroups.setItemLabelGenerator(UserGroupEntity::getName);
         this.selGroups.setWidthFull();
 
-        FormLayout form = new FormLayout(this.tfName, this.selGroups);
+        this.ifOfflineMaxDuration.setMin(1);
+        this.ifOfflineMaxDuration.setStepButtonsVisible(true);
+        this.ifOfflineMaxDuration.setWidthFull();
+        this.ifOfflineMaxDuration.setHelperText(
+                "Wie lange darf ein Terminal dieses Standorts ohne Backend-Verbindung eigenständig neue "
+                        + "Buchungen annehmen, bevor es sie ablehnt?");
+        this.ifOfflineMaxDuration.setValue(LocationService.DEFAULT_OFFLINE_MAX_DURATION_MINUTES);
+
+        FormLayout form = new FormLayout(this.tfName, this.selGroups, this.ifOfflineMaxDuration);
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
         add(form);
 
         if (editMode) {
             this.tfName.setValue(locationToEdit.getName());
             this.selGroups.setValue(Set.copyOf(locationToEdit.getValidUserGroups()));
+            this.ifOfflineMaxDuration.setValue(locationToEdit.getOfflineMaxDurationMinutes() != null
+                    ? locationToEdit.getOfflineMaxDurationMinutes()
+                    : LocationService.DEFAULT_OFFLINE_MAX_DURATION_MINUTES);
         }
 
         Button btnCancel = new Button("Abbrechen", e -> close());
@@ -71,11 +90,20 @@ public class LocationFormDialog extends Dialog {
         }
         this.tfName.setInvalid(false);
 
+        if (this.ifOfflineMaxDuration.isEmpty() || this.ifOfflineMaxDuration.getValue() < 1) {
+            this.ifOfflineMaxDuration.setInvalid(true);
+            this.ifOfflineMaxDuration.setErrorMessage("Bitte einen Wert von mindestens 1 Minute eingeben.");
+            return;
+        }
+        this.ifOfflineMaxDuration.setInvalid(false);
+
         try {
             if (this.locationToEdit == null) {
-                this.locationService.create(this.tfName.getValue(), this.selGroups.getValue());
+                this.locationService.create(this.tfName.getValue(), this.selGroups.getValue(),
+                        this.ifOfflineMaxDuration.getValue());
             } else {
-                this.locationService.update(this.locationToEdit, this.tfName.getValue(), this.selGroups.getValue());
+                this.locationService.update(this.locationToEdit, this.tfName.getValue(), this.selGroups.getValue(),
+                        this.ifOfflineMaxDuration.getValue());
             }
         } catch (RuntimeException e) {
             Notification notification = Notification.show(

@@ -23,11 +23,23 @@ import java.util.List;
  * Programme beschränkt (analog {@code GET /api/v1/devices}, aber ohne {@code userId} -
  * siehe {@code DeviceOverviewDto}).
  *
- * <p>Dieses Arbeitspaket (AP3) liefert nur die DATEN aus - die eigentliche
- * Offline-Entscheidungslogik (Kartenlogin/Berechtigungs-/Guthabenprüfung gegen den Snapshot,
- * Ereignis-Journal, Replay) ist laut Roadmap AP6 vorbehalten.
+ * <p>AP3 lieferte nur die DATEN aus; AP6 (Phase 4, siehe kb/05-migration-plan.md
+ * "Festlegungen zu den Offline-Detailfragen") ergänzt additiv {@link #offlineMaxDurationMinutes()}
+ * ("offline.max-duration" dieses Standorts, im Portal editierbar über
+ * {@code LocationFormDialog}) und implementiert die eigentliche Offline-Entscheidungslogik
+ * (Kartenlogin/Berechtigungs-/Guthabenprüfung gegen den Snapshot, Ereignis-Journal, Replay)
+ * clientseitig.
+ *
+ * @param offlineMaxDurationMinutes die maximale Zeitspanne (in Minuten), für die das
+ *                                  Terminal dieses Standorts ohne Backend-Verbindung
+ *                                  eigenständig neue Buchungen akzeptiert, bevor es sie
+ *                                  ablehnt (Fehlerbild wie C15) - siehe
+ *                                  {@code LocationEntity#getOfflineMaxDurationMinutes()}.
+ *                                  Läuft relativ zu {@link #generatedAt()}: ein Terminal
+ *                                  lehnt neue Buchungen ab, sobald "jetzt" mehr als diese
+ *                                  Anzahl Minuten nach {@link #generatedAt()} liegt.
  */
 public record SnapshotDto(Integer locationId, String locationName, LocalDateTime generatedAt,
-        List<SnapshotUserGroupDto> userGroups, List<SnapshotUserDto> users, List<SnapshotDeviceDto> devices,
-        List<SnapshotProgramDto> programs) {
+        int offlineMaxDurationMinutes, List<SnapshotUserGroupDto> userGroups, List<SnapshotUserDto> users,
+        List<SnapshotDeviceDto> devices, List<SnapshotProgramDto> programs) {
 }

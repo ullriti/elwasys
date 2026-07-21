@@ -30,6 +30,8 @@ import org.kabieror.elwasys.backend.domain.TerminalIdempotencyKeyEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
 import org.kabieror.elwasys.backend.notification.NotificationService;
+import org.kabieror.elwasys.backend.offline.ClientTimestampPolicy;
+import org.kabieror.elwasys.backend.offline.OfflineProperties;
 import org.kabieror.elwasys.backend.repository.TerminalIdempotencyKeyRepository;
 import org.kabieror.elwasys.backend.service.CreditService;
 import org.kabieror.elwasys.backend.service.ExecutionService;
@@ -88,7 +90,8 @@ class ExecutionControllerNotificationTest {
 
         this.controller = new ExecutionController(null, null, mock(PermissionService.class),
                 mock(PricingService.class), mock(CreditService.class), this.executionService, scopeGuard,
-                idempotencyService, this.notificationService);
+                idempotencyService, this.notificationService,
+                new ClientTimestampPolicy(new OfflineProperties()));
 
         LocationEntity location = new LocationEntity("Waschkeller");
         DeviceEntity device = new DeviceEntity("Waschmaschine 1", 0, location);

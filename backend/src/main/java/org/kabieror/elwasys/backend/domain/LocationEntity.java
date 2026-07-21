@@ -46,6 +46,20 @@ public class LocationEntity {
             inverseJoinColumns = @JoinColumn(name = "group_id"))
     private Set<UserGroupEntity> validUserGroups = new HashSet<>();
 
+    /**
+     * Maximale Dauer (in Minuten), für die ein Terminal dieses Standorts ohne
+     * Backend-Verbindung eigenständig NEUE Buchungen akzeptiert ("offline.max-duration",
+     * Phase 4 AP6, additive Migration {@code V5__add_offline_max_duration_to_locations.sql}
+     * - siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal" und
+     * "Festlegungen zu den Offline-Detailfragen"). Danach lehnt das Terminal neue Buchungen
+     * ab (Fehlerbild wie C15); bereits laufende Ausführungen werden unabhängig davon
+     * weiterhin lokal zu Ende geführt und nachgemeldet. Default 60 (Auftraggeber-Vorgabe),
+     * im Portal je Standort editierbar (siehe {@code LocationFormDialog}), an das Terminal
+     * über {@code SnapshotDto#offlineMaxDurationMinutes()} ausgeliefert.
+     */
+    @Column(name = "offline_max_duration_minutes", nullable = false)
+    private Integer offlineMaxDurationMinutes = 60;
+
     protected LocationEntity() {
         // for JPA
     }
@@ -68,6 +82,14 @@ public class LocationEntity {
 
     public Set<UserGroupEntity> getValidUserGroups() {
         return this.validUserGroups;
+    }
+
+    public Integer getOfflineMaxDurationMinutes() {
+        return this.offlineMaxDurationMinutes;
+    }
+
+    public void setOfflineMaxDurationMinutes(Integer offlineMaxDurationMinutes) {
+        this.offlineMaxDurationMinutes = offlineMaxDurationMinutes;
     }
 
     @Override

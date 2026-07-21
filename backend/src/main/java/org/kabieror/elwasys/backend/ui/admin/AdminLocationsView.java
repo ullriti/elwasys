@@ -98,6 +98,7 @@ public class AdminLocationsView extends VerticalLayout {
         this.grid.setSizeFull();
         this.grid.addColumn(LocationEntity::getName).setHeader("Name").setSortable(true);
         this.grid.addColumn(l -> l.getValidUserGroups().size()).setHeader("Benutzergruppen");
+        this.grid.addColumn(l -> l.getOfflineMaxDurationMinutes() + " min").setHeader("Offline-Maximaldauer");
         this.grid.addComponentColumn(this::actionButtons).setHeader("").setFlexGrow(0).setWidth("110px");
     }
 

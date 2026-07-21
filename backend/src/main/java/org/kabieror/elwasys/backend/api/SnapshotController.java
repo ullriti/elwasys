@@ -18,6 +18,7 @@ import org.kabieror.elwasys.backend.repository.DeviceRepository;
 import org.kabieror.elwasys.backend.repository.LocationRepository;
 import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.kabieror.elwasys.backend.service.CreditService;
+import org.kabieror.elwasys.backend.service.LocationService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -80,7 +81,10 @@ public class SnapshotController {
 
         List<SnapshotDeviceDto> deviceDtos = devices.stream().map(SnapshotDeviceDto::of).toList();
 
-        return new SnapshotDto(location.getId(), location.getName(), LocalDateTime.now(), userGroups, users,
-                deviceDtos, programs);
+        int offlineMaxDurationMinutes = location.getOfflineMaxDurationMinutes() != null
+                ? location.getOfflineMaxDurationMinutes()
+                : LocationService.DEFAULT_OFFLINE_MAX_DURATION_MINUTES;
+        return new SnapshotDto(location.getId(), location.getName(), LocalDateTime.now(), offlineMaxDurationMinutes,
+                userGroups, users, deviceDtos, programs);
     }
 }
