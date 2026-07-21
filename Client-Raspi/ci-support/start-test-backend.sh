@@ -23,8 +23,23 @@ start_test_backend() {
   local backend_log
   backend_log="$(mktemp -t elwasys-test-backend-log.XXXXXX)"
 
-  echo "[start-test-backend] building backend jar"
-  mvn -q -B -f "$repo_root/backend/pom.xml" package -DskipTests
+  echo "[start-test-backend] building backend jar (production profile)"
+  # -Pproduction is required here, not just faster: a "mvn package" without it ships a
+  # DEVELOPMENT-mode Vaadin servlet, whose first init() blocks the startup ("main") thread on
+  # an ONLINE license check against vaadin.com (com.vaadin.pro.licensechecker.LicenseChecker,
+  # see kb/05-migration-plan.md "Risiken" for the sandbox's general Vaadin-license finding).
+  # Discovered here (Phase 4 AP4): in this network-restricted sandbox that check does not fail
+  # fast - it hangs for ~60s and then throws, which tears down the WHOLE Spring context
+  # (Tomcat connector + Hikari pool) roughly 60-70s after the backend reports itself healthy.
+  # That is exactly the "backend stops accepting connections mid-suite" failure this harness
+  # used to hit deterministically once cumulative test wall-time crossed ~60s (around the 7th
+  # E2E test class), regardless of which test happened to be running at that moment - a
+  # time bomb, not a per-test or memory issue. The "production" profile builds Vaadin's
+  # pre-minified production frontend bundle (verified to work here without npm/network, see
+  # kb/05-migration-plan.md "Phase 3 AP2") and runs the servlet in PRODUCTION mode, which does
+  # NOT perform the blocking online check (it only logs a MissingLicenseKeyException and keeps
+  # serving) - this matches the already-verified de-risking finding from Phase 3 AP1/AP2.
+  mvn -q -B -f "$repo_root/backend/pom.xml" package -Pproduction -DskipTests
 
   echo "[start-test-backend] starting backend on port ${TEST_BACKEND_PORT}"
   ELWASYS_DB_URL="jdbc:postgresql://localhost:5432/elwasys" \
