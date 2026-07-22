@@ -13,23 +13,42 @@
  * Views. Es werden ausschließlich Farben/Rahmen verändert - keine Texte, keine Struktur.
  */
 
-/* AdminLTE-Farbpalette als Lumo-Grundfarben. */
+/*
+ * Farbpalette - bewusst dieselbe wie das Terminal (Client-Raspi/.../ui/medium/MainForm.css),
+ * damit Terminal und Portal als EIN Produkt wirken: Blau #4488dd (Terminal-Toolbar/-Akzent),
+ * Grün #53a22d/#94d966 (frei/Erfolg), Rot #c82a1c/#f1666e (besetzt/Fehler), Grau #aaaaaa
+ * (deaktiviert). Diese ersetzen das zuvor hier verwendete AdminLTE-Blau #3c8dbc; das Alt-Portal
+ * selbst nutzte noch die Vaadin-7-Valo-Standardfarben (Blau ~#197de1), war also mit dem Terminal
+ * ohnehin nie farbgleich - die Vereinheitlichung auf die Terminal-Palette ist eine bewusste
+ * Verbesserung (Auftraggeber-Rückfrage 2026-07-22).
+ */
 html {
-  --lumo-primary-color: #3c8dbc;
-  --lumo-primary-color-50pct: rgba(60, 141, 188, 0.5);
-  --lumo-primary-color-10pct: rgba(60, 141, 188, 0.12);
-  --lumo-primary-text-color: #3c8dbc;
+  --lumo-primary-color: #4488dd;
+  --lumo-primary-color-50pct: rgba(68, 136, 221, 0.5);
+  --lumo-primary-color-10pct: rgba(68, 136, 221, 0.12);
+  --lumo-primary-text-color: #2f6fbf;
+
+  /* Status-Farben an die Terminal-Palette angleichen (Badges "Frei"/"Aktiv", "Besetzt"/… ). */
+  --lumo-success-color: #53a22d;
+  --lumo-success-text-color: #3f7f22;
+  --lumo-error-color: #c82a1c;
+  --lumo-error-text-color: #b02417;
 
   --lumo-border-radius-s: 2px;
   --lumo-border-radius-m: 3px;
   --lumo-border-radius-l: 3px;
 
-  --elwa-header-blue: #3c8dbc;
+  --elwa-header-blue: #4488dd;
   --elwa-sidebar-dark: #222d32;
   --elwa-sidebar-active: #1e282c;
   --elwa-sidebar-text: #b8c7ce;
   --elwa-content-bg: #ecf0f5;
   --elwa-box-border: #d2d6de;
+
+  /* Terminal-Statusfarben für den oberen Rand der Dashboard-Gerätekarten. */
+  --elwa-status-free: #94d966;
+  --elwa-status-occupied: #f1666e;
+  --elwa-status-disabled: #aaaaaa;
 }
 
 /* ------------------------------------------------------------------ *
@@ -155,19 +174,44 @@ vaadin-grid::part(even-row-cell) {
 }
 
 /* ------------------------------------------------------------------ *
- *  Dashboard-Karten - weiße Boxen mit blauem oberem Rand (AdminLTE-"box box-primary").
+ *  Dashboard-Karten - weiße Boxen. Die Gerätekarten sind wie im Alt-Portal
+ *  (Portal/.../dashboard.scss: .device-container 50%/100%) RESPONSIV: zwei pro
+ *  Reihe auf breiten Bildschirmen, eine pro Reihe wenn es eng wird - nicht mehr
+ *  fest 24em (das ließ die Verlaufstabelle abgeschnitten wirken). Der obere Rand
+ *  ist in der Terminal-Statusfarbe eingefärbt (frei = grün, besetzt = rot,
+ *  deaktiviert = grau; Klassen setzt AdminDashboardView#populateDevicePanel).
  * ------------------------------------------------------------------ */
 .dashboard-device-panel,
 .dashboard-spark {
   background-color: #ffffff;
   border: 1px solid var(--elwa-box-border);
-  border-top: 3px solid var(--elwa-header-blue);
+  border-top: 4px solid var(--elwa-header-blue);
   border-radius: 3px;
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  box-sizing: border-box;
+}
+
+.dashboard-device-panel {
+  /* Zwei Karten pro Reihe (Container hat flex-wrap + 1rem gap), Umbruch auf eine
+     Reihe sobald weniger als ~26em Platz bleibt. */
+  flex: 1 1 calc(50% - 0.5rem);
+  min-width: 26em;
+}
+
+.dashboard-device-panel.device-status-free {
+  border-top-color: var(--elwa-status-free);
+}
+
+.dashboard-device-panel.device-status-occupied {
+  border-top-color: var(--elwa-status-occupied);
+}
+
+.dashboard-device-panel.device-status-disabled {
+  border-top-color: var(--elwa-status-disabled);
 }
 
 .dashboard-location-header h3 {
-  color: #3c8dbc;
+  color: var(--elwa-header-blue);
   font-weight: 600;
 }
 
