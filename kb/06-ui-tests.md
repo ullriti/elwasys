@@ -70,7 +70,7 @@ Simulatoren nachweisen.
 
 Fachliches Gegenstück zu `FhemSimulator`, bildet aber statt eines Telnet-Protokolls die
 **REST+WebSocket**-Architektur von deCONZ nach (siehe `Client-Raspi/.../devices/deconz/`
-und `doc/deconz`):
+und `Client-Raspi/docs/deconz`):
 
 - **REST-API** über `com.sun.net.httpserver.HttpServer` (Teil der JDK, keine neue
   Abhängigkeit): `POST /api` (Authentifizierung, liefert ein festes Fake-Token),

@@ -296,7 +296,7 @@ Entscheidung des Auftraggebers offen.
 | `ci.yml` (PR-CI, 3 Jobs, grün) | ✅ vorhanden | **Modern.** – an neue Modulstruktur anpassen |
 | `maven-publish.yml` (Release: sed-Versionsersetzung, fat-jar als Release-Asset) | Hack, aber funktional | **Modern.** – Release-Flow auf Parent-POM-Versionierung umstellen; zusätzlich Backend-Artefakt (Container-Image) veröffentlichen |
 | `kb/` + `cloud-init` (Remote-Build/Test-Umgebung), `run-*.sh` | ✅ Phase 0 | **Bleibt** – laufend fortschreiben |
-| `CNAME` (elwasys.de, GitHub Pages), `doc/deconz`, LICENSE, READMEs | ok | **Bleibt** – Doku am Ende auf Zielarchitektur aktualisieren |
+| `CNAME` (elwasys.de, GitHub Pages), `Client-Raspi/docs/deconz`, LICENSE, READMEs | ok | **Bleibt** – Doku am Ende auf Zielarchitektur aktualisieren |
 
 ## Zielarchitektur
 

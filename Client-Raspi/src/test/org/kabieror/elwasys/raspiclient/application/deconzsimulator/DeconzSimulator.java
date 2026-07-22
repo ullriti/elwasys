@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
  * A fake deCONZ REST + WebSocket gateway for the Client-Raspi E2E test
  * harness - the deCONZ counterpart to the existing {@code FhemSimulator}
  * (see {@code fhemsimulator/} in this test tree). It implements just enough
- * of the real deCONZ HTTP API (see {@code doc/deconz} and
+ * of the real deCONZ HTTP API (see {@code Client-Raspi/docs/deconz} and
  * {@code devices/deconz/}) to drive the client's real production code -
  * {@code DeconzApiAdapter}, {@code DeconzEventListener},
  * {@code DeconzDevicePowerManager}, {@code DeconzRegistrationService} -
