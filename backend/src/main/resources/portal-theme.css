@@ -191,9 +191,16 @@ vaadin-grid::part(even-row-cell) {
   box-sizing: border-box;
 }
 
+/* Der Karten-Container muss die volle Breite des Standort-Panels einnehmen, sonst
+   schrumpft die FlexLayout auf ihren Inhalt und rechts bleibt Platz ungenutzt. */
+.dashboard-device-list {
+  width: 100%;
+}
+
 .dashboard-device-panel {
-  /* Zwei Karten pro Reihe (Container hat flex-wrap + 1rem gap), Umbruch auf eine
-     Reihe sobald weniger als ~26em Platz bleibt. */
+  /* Zwei Karten pro Reihe (Container hat flex-wrap + 1rem gap), die dank flex-grow
+     die volle Breite ausfüllen; Umbruch auf eine Reihe sobald weniger als ~26em
+     Platz bleibt. */
   flex: 1 1 calc(50% - 0.5rem);
   min-width: 26em;
 }
