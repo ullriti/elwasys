@@ -47,3 +47,4 @@ verdichtete Journal-Sicht.
 | 2026-07-22 | [agentic-baseline-setup](2026-07-22-agentic-baseline-setup.md) | agentic-baseline übernommen: AGENTS.md, docs/-Wissenssystem, .claude/-Agenten, KB entwirrt (Worklog/CHANGELOG/ADRs) |
 | 2026-07-22 | [portal-design](2026-07-22-portal-design.md) | Portal-Design wiederhergestellt (Laufzeit-Inline-CSS statt @Theme), Palette an Terminal angeglichen, Dashboard-Karten responsiv+volle Breite |
 | 2026-07-22 | [demo-daten-ui-checks](2026-07-22-demo-daten-ui-checks.md) | Demo-Modus (Profil `demo`): DemoDataSeeder + run-demo.sh, wiederverwendbarer Beispielbestand fürs visuelle UI-Prüfen, DemoDataSeederTest (5) |
+| 2026-07-22 | [ap1-offline-replay-kern](2026-07-22-ap1-offline-replay-kern.md) | Pre-Launch AP1 (#16/#17/#18/#54/#59): privilegierter Replay-Pfad, Client-Robustheit (Dead-Letter/Paar-Reihenfolge/NPE/clear-Race), Zeitstempel-Invariante+Preis-Deckel, Uhren-Plausibilität, ADR 0016 |

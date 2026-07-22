@@ -22,3 +22,4 @@ Herleitung der Einzelentscheidungen findet sich im Modernisierungsplan
 | [0013](0013-verhalten-bewahren-strangler-und-e2e.md) | Grundsatz „Verhalten bewahren" mit Strangler-Muster und E2E-Sicherheitsnetz | accepted |
 | [0014](0014-deployment-docker-compose-und-kubernetes-helm.md) | Backend-Deployment als Container: Docker-Compose oder Kubernetes (Helm) | accepted |
 | [0015](0015-terminal-ui-bleibt-javafx.md) | Terminal-UI bleibt JavaFX (aktualisiert auf Java 21) | accepted |
+| [0016](0016-offline-replay-haertung.md) | Offline-Replay-Härtung: privilegierter Nachbuchungs-Pfad, Zeitstempel-Invariante, Preis-Deckel | accepted |
