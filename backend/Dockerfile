@@ -6,13 +6,13 @@
 #   docker build -f backend/Dockerfile -t elwasys-backend:local .
 #
 # Grund: das Backend-Modul hängt am Aggregator-Parent-POM (/pom.xml) und wird über den
-# Root-Reactor gebaut - genau der Fallstrick aus kb/04-build-and-run.md/kb/05-migration-plan.md
-# ("mvn -f Common/pom.xml install" installiert die Parent-POM NICHT mit ins lokale Repo).
-# Ein reiner "backend/"-Build-Kontext hätte weder die Parent-POM noch Common zur Verfügung.
+# Root-Reactor gebaut - ein reiner "backend/"-Build-Kontext hätte die Parent-POM nicht zur
+# Verfügung. Der Build über den Reactor (-pl backend -am) zieht die Parent-POM als Teil
+# desselben Builds mit heran.
 #
-# Zwei mvn-Aufrufe, exakt wie in kb/04-build-and-run.md dokumentiert:
-#   1. mvn -f pom.xml install -pl Common -am -DskipTests   (Common + Parent-POM ins Repo)
-#   2. mvn -f pom.xml package -pl backend -DskipTests      (Backend-Jar bauen)
+# Ein mvn-Aufruf (das frühere "common"-Modul wurde nach der Migration aufgelöst, siehe
+# kb/05-migration-plan.md):
+#   mvn -f pom.xml package -pl backend -am -DskipTests   (Backend-Jar über den Reactor bauen)
 # Tests laufen hier bewusst NICHT (das Backend hat eine eigene, von Docker unabhängige
 # Test-Pipeline mit Testcontainers/lokalem PostgreSQL-Override, siehe
 # backend/run-backend-tests.sh) - der Image-Build ist ein reiner Paketierungsschritt.
@@ -24,33 +24,30 @@
 FROM maven:3.9-eclipse-temurin-21 AS deps
 WORKDIR /build
 
-# Nur die POM-Dateien aller drei Reactor-Module kopieren: Maven muss beim Parsen des
-# Root-Reactors (Parent-POM listet alle drei <module>-Einträge auf) jede Modul-POM lesen
-# können, auch wenn mit -pl/-am letztlich nur Common und backend tatsächlich gebaut werden.
-# Client-Raspi braucht dafür NUR seine pom.xml, kein Quellcode (wird nicht gebaut).
+# Die POM-Dateien beider Reactor-Module kopieren: Maven muss beim Parsen des Root-Reactors
+# (Parent-POM listet beide <module>-Einträge auf) jede Modul-POM lesen können, auch wenn mit
+# -pl/-am letztlich nur backend tatsächlich gebaut wird. Client-Raspi braucht dafür NUR seine
+# pom.xml, kein Quellcode (wird nicht gebaut).
 COPY pom.xml pom.xml
-COPY Common/pom.xml Common/pom.xml
 COPY Client-Raspi/pom.xml Client-Raspi/pom.xml
 COPY backend/pom.xml backend/pom.xml
 
-# Abhängigkeiten für Common + backend vorab auflösen/cachen (go-offline scheitert nicht an
-# fehlenden Client-Raspi-Sourcen, da -pl/-am die Ausführung auf Common+backend
-# beschränkt). Läuft mit dem lokalen Maven-Repo-Cache-Mount, damit wiederholte Builds in
-# derselben Umgebung nicht jedes Mal alles neu herunterladen.
+# Abhängigkeiten für backend vorab auflösen/cachen (go-offline scheitert nicht an fehlenden
+# Client-Raspi-Sourcen, da -pl/-am die Ausführung auf backend beschränkt). Läuft mit dem
+# lokalen Maven-Repo-Cache-Mount, damit wiederholte Builds in derselben Umgebung nicht jedes
+# Mal alles neu herunterladen.
 RUN --mount=type=cache,target=/root/.m2/repository \
     mvn -B -f pom.xml -pl backend -am dependency:go-offline
 
 # ---------------------------------------------------------------------------
-# Stage 2: Quellcode kopieren und bauen (eigener Layer - nur Common/backend-Quellcode nötig).
+# Stage 2: Quellcode kopieren und bauen (eigener Layer - nur backend-Quellcode nötig).
 # ---------------------------------------------------------------------------
 FROM deps AS build
 
-COPY Common/src Common/src
 COPY backend/src backend/src
 
 RUN --mount=type=cache,target=/root/.m2/repository \
-    mvn -B -f pom.xml install -pl Common -am -DskipTests \
-    && mvn -B -f pom.xml package -pl backend -DskipTests \
+    mvn -B -f pom.xml package -pl backend -am -DskipTests \
     && cp backend/target/elwasys-backend.jar /build/elwasys-backend.jar
 
 # ---------------------------------------------------------------------------

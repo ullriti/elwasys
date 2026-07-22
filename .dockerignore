@@ -1,8 +1,9 @@
 # Build-Kontext-Filter für "docker build -f backend/Dockerfile ." (Kontext = Repo-Wurzel,
 # siehe backend/Dockerfile). Ziel: nur das in den Container-Build schicken, was das Backend-
-# Image tatsächlich braucht (Root-POM + Common/Client-Raspi-POMs + Common/backend-
-# Quellcode) - alles andere raus, damit der Build-Kontext klein bleibt und Layer-Caching nicht
-# durch irrelevante Änderungen (z.B. Client-Raspi-Quellcode) invalidiert wird.
+# Image tatsächlich braucht (Root-POM + Client-Raspi-/backend-POMs für den Reactor-Parse +
+# backend-Quellcode) - alles andere raus, damit der Build-Kontext klein bleibt und
+# Layer-Caching nicht durch irrelevante Änderungen (z.B. Client-Raspi-Quellcode) invalidiert
+# wird.
 
 # Versionskontrolle / IDE / Editor
 .git/

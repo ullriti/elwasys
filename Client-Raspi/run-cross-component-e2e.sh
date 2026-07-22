@@ -13,7 +13,7 @@
 # subprocess pointed at that context's random port + a seeded terminal token - see the
 # test's class Javadoc for the full rationale ("kleinster belastbarer Aufbau").
 #
-# Steps: 1. install Common, 2. build the real client jar, 3. start+seed a throwaway
+# Steps: 1. install the parent POM, 2. build the real client jar, 3. start+seed a throwaway
 #        PostgreSQL database (same pattern as backend/run-backend-tests.sh - the backend
 #        Spring context is started BY the JUnit test itself, not by this script, since the
 #        test needs the TerminalMaintenanceService bean instance directly), 4. run the suite

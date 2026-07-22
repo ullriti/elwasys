@@ -42,7 +42,7 @@ services:
   backend:
     build:
       # Kontext = Repo-Wurzel (zwei Ebenen über diesem Verzeichnis), siehe Begründung im
-      # Kopf-Kommentar von backend/Dockerfile (Root-Reactor/Parent-POM/Common-Fallstrick).
+      # Kopf-Kommentar von backend/Dockerfile (Root-Reactor/Parent-POM-Fallstrick).
       context: ../..
       dockerfile: backend/Dockerfile
     image: elwasys-backend:local
