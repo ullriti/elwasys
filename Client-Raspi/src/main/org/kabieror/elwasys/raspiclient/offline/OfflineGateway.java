@@ -5,8 +5,10 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.kabieror.elwasys.raspiclient.api.ApiClient;
 import org.kabieror.elwasys.raspiclient.api.ApiException;
 import org.kabieror.elwasys.raspiclient.api.dto.DeviceDto;
@@ -280,16 +282,31 @@ public class OfflineGateway {
     // --- Replay (Konzeptskizze Punkt 4) ------------------------------------------------------
 
     /**
-     * Überträgt das komplette Journal in Reihenfolge über die Execution-Endpunkte (siehe
-     * docs/kb/03-modules.md "Idempotenz + Replay"). Bricht bei JEDEM Fehler (Kommunikations- wie
-     * fachlicher Fehler) sofort ab und lässt das Journal UNVERÄNDERT - der nächste Versuch
-     * beginnt wieder ganz von vorn. Das ist sicher (nicht nur "wieder-anlaufend"), weil das
-     * Backend über den {@code Idempotency-Key}-Header dedupliziert (siehe
-     * {@code IdempotencyService}): ein erneuter Versuch eines bereits erfolgreich verarbeiteten
-     * Eintrags liefert nur die gespeicherte Antwort erneut, ohne die fachliche Aktion ein
-     * zweites Mal auszulösen.
+     * Überträgt das Journal in Schreibreihenfolge über die Execution-Endpunkte (siehe
+     * docs/kb/03-modules.md "Idempotenz + Replay"). Robustheit (Issue #17):
+     * <ul>
+     *   <li><b>Kommunikationsfehler</b> (Backend nicht erreichbar): der Replay bricht ab und
+     *       lässt die noch nicht übertragenen Einträge im Journal - der nächste Versuch macht an
+     *       dieser Stelle weiter. Sicher, weil das Backend über den {@code Idempotency-Key}
+     *       dedupliziert (bereits verarbeitete Einträge lösen nichts erneut aus).</li>
+     *   <li><b>Fachlicher Fehler</b> (Poison-Entry, z. B. 404/403/402, gelöschtes Gerät/
+     *       Programm, kein auflösbarer Start): der Eintrag wird in die Dead-Letter-Datei
+     *       verschoben und der Replay fährt mit dem nächsten Eintrag fort - ein einzelner
+     *       Giftzahn verklemmt so nicht mehr alle nachfolgenden, gültigen Einträge.</li>
+     *   <li><b>Paar-Reihenfolge</b>: ein {@code START} einer offline gebuchten Ausführung wird
+     *       erst nachgemeldet, wenn seine Terminierung ({@code FINISH}/{@code ABORT} mit
+     *       demselben {@code startIdempotencyKey}) ebenfalls im Journal liegt - d. h. die
+     *       Ausführung lokal nicht mehr läuft. Sonst würde nach dem Entfernen des replayten
+     *       {@code START} die nur in dieser Methode gelernte echte Backend-Id verloren gehen und
+     *       ein späterer {@code FINISH}-Replay das Ende nie nachmelden (die längst fertige
+     *       Maschine würde beim nächsten Terminal-Neustart sogar wieder eingeschaltet).</li>
+     *   <li><b>Kein {@code clear()}-Race</b>: erfolgreich übertragene Einträge werden EINZELN
+     *       aus dem Journal entfernt ({@code removeEntry}), nie das ganze Journal geleert -
+     *       ein während des Replays parallel hinzugekommener Eintrag (eine gerade endende
+     *       Maschine) bleibt dadurch erhalten und wird beim nächsten Lauf nachgemeldet.</li>
+     * </ul>
      *
-     * @return {@code true}, wenn das Journal vollständig geleert werden konnte
+     * @return {@code true}, wenn nach diesem Lauf kein nachmeldbarer Eintrag mehr aussteht
      */
     public boolean replay() {
         List<OfflineJournalEntry> entries = this.journal.readAll();
@@ -297,35 +314,93 @@ public class OfflineGateway {
             return true;
         }
         this.logger.info("Starte Offline-Journal-Replay ueber {} Eintrag/Eintraege.", entries.size());
-        Map<String, Integer> resolvedStartKeys = new HashMap<>();
+
+        // Paar-Reihenfolge: alle START-Schluessel, deren Terminierung (FINISH/ABORT) ebenfalls
+        // im Journal liegt - nur solche STARTs duerfen jetzt nachgemeldet werden.
+        Set<String> terminatedStartKeys = new HashSet<>();
         for (OfflineJournalEntry entry : entries) {
-            try {
-                replayOne(entry, resolvedStartKeys);
-            } catch (ApiException e) {
-                this.logger.warn(
-                        "Offline-Journal-Replay bei Eintrag '{}' ({}) unterbrochen - wird beim naechsten Versuch "
-                                + "komplett erneut versucht (das Backend dedupliziert bereits verarbeitete "
-                                + "Eintraege ueber den Idempotenz-Schluessel, ein erneuter Versuch ist sicher).",
-                        entry.idempotencyKey(), entry.type(), e);
-                return false;
+            boolean isFinishOrAbort = OfflineJournalEntry.TYPE_FINISH.equals(entry.type())
+                    || OfflineJournalEntry.TYPE_ABORT.equals(entry.type());
+            if (isFinishOrAbort && entry.startIdempotencyKey() != null) {
+                terminatedStartKeys.add(entry.startIdempotencyKey());
             }
         }
-        this.journal.clear();
-        this.logger.info("Offline-Journal-Replay abgeschlossen: {} Eintrag/Eintraege erfolgreich nachgemeldet.",
-                entries.size());
-        return true;
+
+        Map<String, Integer> resolvedStartKeys = new HashMap<>();
+        int replayed = 0;
+        int deadLettered = 0;
+        for (OfflineJournalEntry entry : entries) {
+            // Einen START ohne vorliegende Terminierung ueberspringen - die Ausfuehrung laeuft
+            // lokal noch; er wird zusammen mit seiner Terminierung in einem spaeteren Lauf
+            // nachgemeldet (bleibt so lange im Journal).
+            if (OfflineJournalEntry.TYPE_START.equals(entry.type())
+                    && !terminatedStartKeys.contains(entry.idempotencyKey())) {
+                continue;
+            }
+            try {
+                replayOne(entry, resolvedStartKeys);
+                this.journal.removeEntry(entry.idempotencyKey());
+                replayed++;
+            } catch (ApiException e) {
+                if (e.isCommunicationFailure()) {
+                    this.logger.warn(
+                            "Offline-Journal-Replay bei Eintrag '{}' ({}) wegen eines Kommunikationsfehlers "
+                                    + "unterbrochen - die restlichen Eintraege bleiben im Journal und werden beim "
+                                    + "naechsten Versuch nachgemeldet.", entry.idempotencyKey(), entry.type(), e);
+                    return false;
+                }
+                this.logger.error(
+                        "Offline-Journal-Eintrag '{}' ({}) wurde vom Backend fachlich abgelehnt ({} {}) - wird in "
+                                + "die Dead-Letter-Datei verschoben; der Replay faehrt mit den restlichen Eintraegen "
+                                + "fort.", entry.idempotencyKey(), entry.type(), e.getHttpStatus(), e.getTypeSlug(), e);
+                this.journal.moveToDeadLetter(entry, deadLetterReason(entry, e));
+                deadLettered++;
+            } catch (RuntimeException e) {
+                // Defensiv (Issue #17): jeder unerwartete Laufzeitfehler beim Verarbeiten eines
+                // Eintrags (z. B. ein FINISH ohne auflösbaren Start) darf nie das gesamte
+                // Journal dauerhaft verklemmen - Dead-Letter statt Abbruch.
+                this.logger.error("Offline-Journal-Eintrag '{}' ({}) konnte nicht verarbeitet werden - wird in die "
+                        + "Dead-Letter-Datei verschoben.", entry.idempotencyKey(), entry.type(), e);
+                this.journal.moveToDeadLetter(entry, deadLetterReason(entry, e));
+                deadLettered++;
+            }
+        }
+        this.logger.info(
+                "Offline-Journal-Replay abgeschlossen: {} Eintrag/Eintraege nachgemeldet, {} in die Dead-Letter-"
+                        + "Datei verschoben.", replayed, deadLettered);
+        // Ein noch offener, lokal weiter laufender START (ohne Terminierung) bleibt bewusst im
+        // Journal - dann ist noch nicht alles erledigt.
+        return !this.journal.hasPendingEntries();
+    }
+
+    private static String deadLetterReason(OfflineJournalEntry entry, Exception e) {
+        return entry.type() + " " + entry.idempotencyKey() + ": " + e.getMessage();
     }
 
     private void replayOne(OfflineJournalEntry entry, Map<String, Integer> resolvedStartKeys) throws ApiException {
         switch (entry.type()) {
             case OfflineJournalEntry.TYPE_START -> {
-                ExecutionDto dto = this.apiClient.createExecution(entry.userId(), entry.deviceId(),
+                // Nachmeldung ueber den privilegierten Replay-Pfad (Issue #16): das Backend
+                // ueberspringt die fachlichen Waechter, da ein nachgemeldetes Ereignis ein Fakt
+                // ist (der Nutzer wurde evtl. zwischenzeitlich gesperrt, das Guthaben reicht
+                // rechnerisch nicht mehr - beides darf die Nachbuchung nicht scheitern lassen).
+                ExecutionDto dto = this.apiClient.replayCreateExecution(entry.userId(), entry.deviceId(),
                         entry.programId(), entry.clientTimestamp(), entry.idempotencyKey());
                 resolvedStartKeys.put(entry.idempotencyKey(), dto.id());
             }
             case OfflineJournalEntry.TYPE_FINISH, OfflineJournalEntry.TYPE_ABORT -> {
-                int executionId = entry.executionId() != null ? entry.executionId()
-                        : resolvedStartKeys.get(entry.startIdempotencyKey());
+                Integer executionId = entry.executionId();
+                if (executionId == null) {
+                    // Stufe B: die echte Backend-Id wurde erst beim Nachmelden des zugehoerigen
+                    // START-Eintrags (in DIESEM Lauf) gelernt. Fehlt sie (der START wurde nicht
+                    // erfolgreich nachgemeldet, z. B. selbst als Dead-Letter aussortiert), wird
+                    // dieser Eintrag ebenfalls zum Dead-Letter - KEINE Unboxing-NPE (Issue #17).
+                    executionId = resolvedStartKeys.get(entry.startIdempotencyKey());
+                }
+                if (executionId == null) {
+                    throw new IllegalStateException("Kein auflösbarer Start (startIdempotencyKey='"
+                            + entry.startIdempotencyKey() + "') fuer die Nachmeldung des Endes/Abbruchs vorhanden.");
+                }
                 if (OfflineJournalEntry.TYPE_FINISH.equals(entry.type())) {
                     this.apiClient.finishExecution(executionId, entry.clientTimestamp(), entry.idempotencyKey());
                 } else {
@@ -356,7 +431,7 @@ public class OfflineGateway {
 
     private SnapshotDto usableSnapshotOrRethrow(ApiException originalFailure) throws ApiException {
         SnapshotDto snapshot = this.snapshotStore.get();
-        if (snapshot == null || isExpired(snapshot)) {
+        if (snapshot == null || !isUsable(snapshot)) {
             throw originalFailure;
         }
         return snapshot;
@@ -370,12 +445,27 @@ public class OfflineGateway {
      */
     public boolean hasUsableSnapshot() {
         SnapshotDto snapshot = this.snapshotStore.get();
-        return snapshot != null && !isExpired(snapshot);
+        return snapshot != null && isUsable(snapshot);
     }
 
-    private static boolean isExpired(SnapshotDto snapshot) {
+    /**
+     * Ob der Snapshot aktuell für Offline-Entscheidungen taugt: er darf weder abgelaufen sein
+     * (älter als sein Offline-Fenster) noch aus der Zukunft der lokalen Terminaluhr stammen.
+     *
+     * <p><b>Plausibilitätscheck der lokalen Uhr (Issue #54)</b>: Zeit-/Ablauflogik hängt komplett
+     * an der Terminaluhr ({@code LocalDateTime.now()} gegen {@code snapshot.generatedAt()}). Ein
+     * Raspberry Pi hat keine RTC; nach einem Stromausfall OHNE Netz (genau das Offline-Szenario)
+     * kann die Uhr weit daneben stehen. Liegt die Terminalzeit VOR dem Snapshot-Zeitpunkt, ist
+     * die Uhr offensichtlich falsch gestellt - dann wird der Snapshot als unbrauchbar gewertet
+     * (Offline-Buchung wird abgelehnt statt auf Basis einer falschen Uhr falsch abzurechnen).
+     */
+    private static boolean isUsable(SnapshotDto snapshot) {
+        LocalDateTime now = LocalDateTime.now();
+        if (now.isBefore(snapshot.generatedAt())) {
+            return false;
+        }
         LocalDateTime expiry = snapshot.generatedAt().plusMinutes(snapshot.offlineMaxDurationMinutes());
-        return LocalDateTime.now().isAfter(expiry);
+        return !now.isAfter(expiry);
     }
 
     private static SnapshotUserDto findUser(SnapshotDto snapshot, int userId) {
