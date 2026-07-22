@@ -1,0 +1,24 @@
+# Profil "demo": faehrt das Backend samt Portal ganz normal hoch (anders als die reinen
+# CLI-Profile "admin-cli"/"token-cli" wird der Webserver NICHT abgeschaltet und Vaadin NICHT
+# ausgeschlossen) und aktiviert zusaetzlich den DemoDataSeeder (siehe dessen Klassen-Javadoc),
+# der beim Start einen realistischen, wiederverwendbaren Beispielbestand anlegt - gedacht fuer
+# das visuelle Pruefen von UI-Aenderungen ohne jedes Mal von Hand angelegte Daten.
+#
+# Start (siehe backend/run-demo.sh fuer den kompletten Ablauf inkl. PostgreSQL + Demo-DB):
+#   java -jar backend/target/elwasys-backend.jar --spring.profiles.active=demo
+#
+# Login am Portal: admin/admin (Admin) bzw. anna|ben|clara|david|eva mit Passwort "demo".
+#
+# Der Seeder ist idempotent: ein erneuter Start gegen dieselbe, bereits geseedete Datenbank
+# legt nichts doppelt an. Fuer einen frischen Bestand die Demo-DB neu erzeugen
+# (backend/run-demo.sh mit RESET_DEMO_DB=1).
+spring:
+  # Der DemoDataSeeder setzt die Passwoerter der Demo-Benutzer immer im neuen Argon2id-Format
+  # (PasswordVerificationService#encodeNew) - unabhaengig von diesem Flag; es ist hier nur der
+  # Vollstaendigkeit halber sichtbar, das Verhalten entspricht dem Default (aus).
+  jpa:
+    open-in-view: false
+
+logging:
+  level:
+    org.kabieror.elwasys.backend.demo: INFO

@@ -13,6 +13,15 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Added
+- Demo-Datenbestand fürs visuelle UI-Prüfen: `DemoDataSeeder` (`backend/.../demo/`,
+  `@Profile("demo")`) legt beim Start einen realistischen, idempotenten Beispielbestand an
+  (4 Benutzergruppen mit allen Rabattarten, 3 Standorte, 5 Programme, 6 Geräte inkl. eines
+  deaktivierten, 5 Benutzer inkl. gesperrtem Gast, Guthaben, Ausführungshistorie und laufende
+  Ausführungen). Start über `backend/run-demo.sh` (Profil `demo`, Demo-DB `elwasys_demo`,
+  Portal auf :8080, Login admin/admin bzw. `<benutzer>`/`demo`); Profil-Konfiguration
+  `application-demo.yml`; Regressionstest `DemoDataSeederTest` (5 Tests). Keine
+  Flyway-Migration (Demo-Daten gehören nicht ins Produktivschema). Siehe
+  docs/kb/06-ui-tests.md „Demo-Daten" und docs/kb/04-build-and-run.md „Demo-Modus".
 - agentic-baseline-Setup: `AGENTS.md` als Single Source of Truth (Instruktionen), thin
   `CLAUDE.md` mit `@AGENTS.md`-Import; `docs/`-Wissenssystem (`worklog/`, `specs/`,
   `architecture/` mit ADR 0001–0015, `agent-setup.md`); `.claude/` mit Commands

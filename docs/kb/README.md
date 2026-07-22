@@ -40,7 +40,10 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   ohne Direkt-DB-Zugriff (nur REST-API + WebSocket + Standort-Token), DB-Rollen gehärtet,
   Alt-Portal und `Common`-Modul entfernt (Root-Reactor = 2 Module: Client-Raspi, backend).
   Zuletzt wurde das Doku-/Agenten-Setup auf die **agentic-baseline**-Struktur umgestellt
-  (AGENTS.md als Single Source of Truth, `docs/`-Wissenssystem, `.claude/`-Agenten).
+  (AGENTS.md als Single Source of Truth, `docs/`-Wissenssystem, `.claude/`-Agenten). Zusätzlich
+  gibt es seit 2026-07-22 einen **Demo-Modus** (Profil `demo`, `DemoDataSeeder` + `backend/run-demo.sh`)
+  mit wiederverwendbarem Beispielbestand fürs visuelle UI-Prüfen (siehe
+  [06-ui-tests.md](06-ui-tests.md) „Demo-Daten", [04-build-and-run.md](04-build-and-run.md) „Demo-Modus").
 - **Nächster Schritt:** Betrieb/Nachpflege auf der Zielarchitektur; neue Vorhaben vorab als
   Spec in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten. Die
   Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).
