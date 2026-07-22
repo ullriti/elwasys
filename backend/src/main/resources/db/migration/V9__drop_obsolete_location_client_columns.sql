@@ -1,5 +1,5 @@
--- Aufraeumen obsoleter Spalten (Phase 5 AP3, siehe kb/02-data-model.md,
--- kb/05-migration-plan.md): locations.client_uid/client_ip/client_port/client_last_seen
+-- Aufraeumen obsoleter Spalten (Phase 5 AP3, siehe docs/kb/02-data-model.md,
+-- docs/kb/05-migration-plan.md): locations.client_uid/client_ip/client_port/client_last_seen
 -- dienten der Alt-Fernwartung, bei der sich das Terminal per IP/Port beim Server anmeldete
 -- (Client haelt Verbindung offen, Portal verbindet sich zum Client). Seit Phase 4 AP5 laeuft
 -- die Fernwartung umgekehrt ueber einen ausgehenden WebSocket-Kanal des Terminals zum

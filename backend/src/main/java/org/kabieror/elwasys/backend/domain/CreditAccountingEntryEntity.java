@@ -14,10 +14,10 @@ import java.time.LocalDateTime;
 
 /**
  * Entspricht der Tabelle {@code credit_accounting} (Guthaben-Buchungen, siehe
- * kb/02-data-model.md) sowie {@code org.kabieror.elwasys.common.CreditAccountingEntry} im
+ * docs/kb/02-data-model.md) sowie {@code org.kabieror.elwasys.common.CreditAccountingEntry} im
  * Alt-Code.
  *
- * <p><b>Buchungen sind unveränderlich</b> (siehe kb/02-data-model.md, DB-Rollen &amp;
+ * <p><b>Buchungen sind unveränderlich</b> (siehe docs/kb/02-data-model.md, DB-Rollen &amp;
  * Rechte: {@code REVOKE UPDATE, DELETE ON credit_accounting FROM elwaportal}): diese Entity
  * bietet daher bewusst keine Setter für bereits gespeicherte Buchungen an, nur den
  * Konstruktor - {@code CreditService} erzeugt ausschließlich neue Einträge, nie Änderungen
@@ -28,7 +28,7 @@ import java.time.LocalDateTime;
  * beim INSERT nie explizit und verlässt sich auf diesen DB-Default. Diese Entity setzt
  * {@code date} stattdessen explizit auf den Anwendungszeitpunkt (siehe
  * {@code CreditService}) - das ist eine bewusste Vereinfachung (siehe
- * kb/05-migration-plan.md, "Entscheidungen"), keine Verhaltensänderung: beide Varianten
+ * docs/kb/05-migration-plan.md, "Entscheidungen"), keine Verhaltensänderung: beide Varianten
  * bedeuten "Zeitpunkt der Buchung", ein Unterschied entstünde nur bei nennenswertem
  * Uhren-Versatz zwischen Anwendungs- und DB-Host.
  */

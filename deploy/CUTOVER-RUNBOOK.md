@@ -12,7 +12,7 @@ Detail-Runbooks, die jeweils der Maßstab für die einzelnen Schritte bleiben:
 - **Terminal-Seite (JRE-21, Update, Watchdog)** → [`deploy/terminal/README.md`](terminal/README.md)
 - **Rollout-Gate (Post-Deploy-Smoke)** → [`deploy/smoke/README.md`](smoke/README.md)
 
-Hintergrund/Roadmap: [kb/05-migration-plan.md](../kb/05-migration-plan.md), Abschnitt
+Hintergrund/Roadmap: [docs/kb/05-migration-plan.md](../kb/05-migration-plan.md), Abschnitt
 „Phase 6 – Produktivumschaltung (Cutover)".
 
 > **Scope-Grenze (ehrlich):** Die **Feld-Umschaltung selbst** – echte Raspi-Hardware, echte

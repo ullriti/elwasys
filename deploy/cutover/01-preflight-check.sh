@@ -1,5 +1,5 @@
 #!/bin/bash
-# Cutover-Preflight-Check (Phase 6 AP1, siehe kb/05-migration-plan.md "Produktivumschaltung").
+# Cutover-Preflight-Check (Phase 6 AP1, siehe docs/kb/05-migration-plan.md "Produktivumschaltung").
 #
 # REIN LESEND - dieses Skript verändert NICHTS an der Datenbank (nur SELECT-Abfragen). Es
 # erstellt einen Readiness-Report für den Cutover der Bestands-DB (angelegt über den Alt-Weg,

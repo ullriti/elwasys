@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Konfiguration des Passwort-Reset-per-Email-Flows (Phase 3 AP4, siehe
- * kb/05-migration-plan.md). Fachlicher Nachfolger von {@code PasswordForgotWindow}/
+ * docs/kb/05-migration-plan.md). Fachlicher Nachfolger von {@code PasswordForgotWindow}/
  * {@code ResetPasswordWindow}/{@code UserWindow}s Admin-Passwort-Reset (Alt-Portal).
  *
  * <p><b>{@code elwasys.password-reset.enabled}</b> (Default: {@code true}) - bewusst ANDERS
@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
  * sich genau eine Mail für seine eigene Aktion - keine zwei Systeme reagieren auf dasselbe
  * Ereignis. Der Schalter existiert trotzdem als eigenständige Ops-Bremse (z.B. um das Backend
  * ohne konfigurierten SMTP-Server sauber laufen zu lassen, ohne Fehler in den Logs zu
- * erzeugen) - siehe kb/05-migration-plan.md, "Entscheidungen" für die vollständige
+ * erzeugen) - siehe docs/kb/05-migration-plan.md, "Entscheidungen" für die vollständige
  * Begründung.
  */
 @Component

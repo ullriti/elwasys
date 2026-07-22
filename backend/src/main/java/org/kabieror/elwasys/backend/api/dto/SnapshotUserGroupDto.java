@@ -8,7 +8,7 @@ import org.kabieror.elwasys.backend.domain.UserGroupEntity;
  * Benutzergruppen inkl. Rabattregel - nötig, damit ein Terminal offline dieselbe
  * Preisberechnung wie {@link org.kabieror.elwasys.backend.service.PricingService}
  * nachvollziehen könnte (Vorbereitung für die Offline-Buchungs-Vertiefung in AP6, siehe
- * kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal").
+ * docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal").
  */
 public record SnapshotUserGroupDto(Integer id, String name, DiscountType discountType, double discountValue) {
 

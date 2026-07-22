@@ -34,7 +34,7 @@ test('admin can navigate to every section (P5)', async ({ page }) => {
 
   // "Standorte" is a NEW, dedicated menu entry compared to the legacy portal (there it was only
   // reachable via a dialog on the dashboard) - a deliberate, auftraggeber-gewünschte
-  // UX-improvement documented in kb/05-migration-plan.md ("Entscheidungen", AdminLayout
+  // UX-improvement documented in docs/kb/05-migration-plan.md ("Entscheidungen", AdminLayout
   // Javadoc), not a functional change; the section itself (LocationFormDialog) is exercised by
   // the P14 test in admin-crud.spec.ts.
   const sections = [

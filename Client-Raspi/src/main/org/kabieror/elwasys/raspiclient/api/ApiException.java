@@ -4,7 +4,7 @@ import java.io.IOException;
 
 /**
  * Wird von {@link ApiClient} für alle nicht-2xx-Antworten sowie echte Kommunikationsfehler
- * (Verbindungsaufbau/Timeout) geworfen (Phase 4 AP4, siehe kb/05-migration-plan.md).
+ * (Verbindungsaufbau/Timeout) geworfen (Phase 4 AP4, siehe docs/kb/05-migration-plan.md).
  * <p>
  * Erbt bewusst von {@link IOException}: bestehender Aufrufer-Code, der bislang
  * {@code catch (IOException e)} für Kommunikationsfehler (z. B. mit fhem/deCONZ) verwendet
@@ -60,7 +60,7 @@ public class ApiException extends IOException {
      * Ob dies ein reiner Kommunikationsfehler ist (keine Antwort empfangen - Verbindung
      * verweigert/Timeout/DNS-Fehler o. ä.), im Unterschied zu einer empfangenen
      * Fehlerantwort (z. B. {@code 403 user-blocked}). Phase 4 AP6 (siehe
-     * kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"): genau dieser
+     * docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"): genau dieser
      * Fall löst die Offline-Behandlung aus ({@code offline.OfflineGateway}) - ein
      * echter fachlicher Fehler (z. B. gesperrter Benutzer) wird weiterhin ganz normal
      * gemeldet, auch wenn er lokal gegen den Snapshot geprüft wurde.

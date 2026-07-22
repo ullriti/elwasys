@@ -1,6 +1,6 @@
 #!/bin/bash
 # Auto-Update mit Rollback fuer Raspi-Terminals (Phase 6 AP5, siehe
-# kb/05-migration-plan.md "Phase 6 - Produktivumschaltung", Roadmap-Punkt
+# docs/kb/05-migration-plan.md "Phase 6 - Produktivumschaltung", Roadmap-Punkt
 # "Auto-Update mit Rollback").
 #
 # Warum: Ein im Feld laufendes Terminal soll sich selbsttaetig auf eine neue
@@ -30,9 +30,9 @@
 # HINWEIS: Echte Rollouts (GitHub-Download, sudo killall) wurden in dieser
 # Umgebung NICHT ausgefuehrt, nur trocken verifiziert (Temp-ELWA_ROOT, Fake-Jars,
 # Fake-java, Fake-Version-Cmd, kurze Deadline). Siehe Aenderungslog "Phase 6 AP5"
-# in kb/05-migration-plan.md.
+# in docs/kb/05-migration-plan.md.
 #
-# QA-Nacharbeiten (Phase-6-Review, siehe kb/05 Aenderungslog "Phase 6 QA-Nacharbeiten"):
+# QA-Nacharbeiten (Phase-6-Review, siehe docs/kb/05 Aenderungslog "Phase 6 QA-Nacharbeiten"):
 #   - B1 (Blocker behoben): ein blosser Fetch-/Download-Fehlschlag von update.sh
 #     (Netz/Tag/Platte - VOR jedem Symlink-Wechsel) wird jetzt von einem echten
 #     fehlgeschlagenen Deploy unterschieden. Nur wenn update.sh den latest-Symlink

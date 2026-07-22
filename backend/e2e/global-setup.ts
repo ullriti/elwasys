@@ -24,7 +24,7 @@ import { request } from '@playwright/test';
  * Password for both users is "test" (SHA1 a94a8fe5ccb19ba61c4c0873d391e987982fbbd3, same
  * legacy hash the seed scripts have always used) - the backend's auth layer verifies legacy
  * SHA1 hashes unchanged (Phase 2 AP3 parallel-operation behaviour, rehash-on-login stays off
- * by default, see kb/05-migration-plan.md), so this is a faithful stand-in for "a user who has
+ * by default, see docs/kb/05-migration-plan.md), so this is a faithful stand-in for "a user who has
  * never logged into the new portal before".
  */
 async function globalSetup() {

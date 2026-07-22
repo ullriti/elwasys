@@ -50,7 +50,7 @@ public class DeconzDevicePowerManager implements IDevicePowerManager {
     public void setDevicePowerState(ClientDevice device, DevicePowerState newState)
             throws IOException, InterruptedException, FhemException {
         // Verteidigung gegen ein Gerät ohne (oder mit leerer) deCONZ-Id (Phase 4
-        // CI-Stabilität, siehe kb/05-migration-plan.md, Änderungslog "Phase 4
+        // CI-Stabilität, siehe docs/kb/05-migration-plan.md, Änderungslog "Phase 4
         // CI-Stabilität (deCONZ)"): ohne diese Prüfung würde ein solches Gerät hier
         // gegen einen aus einer leeren Id gebildeten (und damit auf keinen deCONZ-
         // Endpunkt routenden) Pfad laufen - eine wenig aussagekräftige Fehlerkette

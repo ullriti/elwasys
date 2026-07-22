@@ -10,13 +10,13 @@ import org.springframework.stereotype.Component;
 
 /**
  * Minimaler, dokumentierter Weg zum Erzeugen/Widerrufen von Standort-Tokens in Phase 2 (siehe
- * kb/05-migration-plan.md, AP4: "kein Admin-UI [Phase 3], ein dokumentierter Weg
+ * docs/kb/05-migration-plan.md, AP4: "kein Admin-UI [Phase 3], ein dokumentierter Weg
  * [CLI-Runner/SQL-Anleitung] genügt"). Läuft NUR unter dem Profil {@code token-cli} (siehe
  * {@code application-token-cli.yml}, das zusätzlich {@code spring.main.web-application-type:
  * none} setzt, damit dieser einmalige CLI-Aufruf keinen Webserver hochfährt und der Prozess
  * nach Abschluss von selbst beendet).
  *
- * <p><b>Anlegen</b> (siehe kb/04-build-and-run.md für das vollständige Kommando):
+ * <p><b>Anlegen</b> (siehe docs/kb/04-build-and-run.md für das vollständige Kommando):
  * <pre>
  * java -jar backend/target/elwasys-backend.jar \
  *     --spring.profiles.active=token-cli \

@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Smoke test for the 320x240 small terminal UI ({@code ui/small}, see
  * {@code MainForm.fxml}/{@code MainFormController} in that package) - so
  * far the E2E suite only covered {@code ui/medium} (800x480). Per Phase 4
- * AP1 (kb/05-migration-plan.md), this UI stays in use and needs at least
+ * AP1 (docs/kb/05-migration-plan.md), this UI stays in use and needs at least
  * smoke coverage before any further modernisation touches it.
  * <p>
  * {@link Main#applicationInterfaceType} decides which FXML/UI size loads
@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@code Main#start}); this test sets the field directly before boot so the
  * choice does not depend on the headless Xvfb screen's actual resolution.
  * <p>
- * <b>Finding (documented, not a bug - see kb/05-migration-plan.md "Phase 4
+ * <b>Finding (documented, not a bug - see docs/kb/05-migration-plan.md "Phase 4
  * AP1"):</b> unlike {@code ui/medium}, the small UI's flow is reversed: the
  * user taps a device tile <em>first</em> (gated only by
  * {@code Device#isEnabled}, not by a logged-in user - {@code
@@ -54,7 +54,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * behaviour.
  *
  * Run: xvfb-run mvn test -Dtest=ClientSmallUiSmokeE2ETest
- * See kb/06-ui-tests.md.
+ * See docs/kb/06-ui-tests.md.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class ClientSmallUiSmokeE2ETest {

@@ -30,7 +30,7 @@ import org.kabieror.elwasys.backend.service.UserService;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
 /**
- * Benutzer-Dashboard (Phase 3 AP3, siehe kb/05-migration-plan.md) - fachlicher Nachfolger von
+ * Benutzer-Dashboard (Phase 3 AP3, siehe docs/kb/05-migration-plan.md) - fachlicher Nachfolger von
  * {@code Portal/.../views/UsersDashboardView} (Alt-Portal, Testfall P15: "Guthaben"/
  * "Übersicht" sichtbar - "Übersicht" ist bereits der Menüpunkt in {@link UserLayout}, "Guthaben"
  * die Beschriftung der Kachel in dieser View). Zeigt das eigene Guthaben, die letzte eigene
@@ -42,7 +42,7 @@ import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
  * ein Nicht-Administrator kann über diese View also strukturell nur die eigenen Daten sehen,
  * nie die eines anderen Benutzers.
  *
- * <p><b>Seit Phase 3 AP5</b> (siehe kb/05-migration-plan.md, "Live-Updates zwischen Sessions"):
+ * <p><b>Seit Phase 3 AP5</b> (siehe docs/kb/05-migration-plan.md, "Live-Updates zwischen Sessions"):
  * das eigene Guthaben ändert sich nicht nur durch eigenes Zutun (z.B. Admin lädt Guthaben in
  * einer anderen Session auf, oder ein Terminal meldet über die REST-API das Ende einer
  * Programmausführung dieses Benutzers) - die View meldet sich daher beim {@link UiBroadcaster}

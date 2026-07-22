@@ -17,7 +17,7 @@ import com.vaadin.flow.spring.security.VaadinSecurityConfigurer;
 
 /**
  * Session-basiertes Login-Fundament (AP3, seit Phase 3 AP1 an das Vaadin-Flow-Admin-Portal
- * angebunden, siehe kb/05-migration-plan.md). {@link ElwasysAuthenticationProvider} ist
+ * angebunden, siehe docs/kb/05-migration-plan.md). {@link ElwasysAuthenticationProvider} ist
  * weiterhin die einzige Authentifizierungsquelle.
  *
  * <p>Diese Kette bleibt die "Catch-all"-Kette für Admin-Portal/Actuator/API-Dokumentation
@@ -25,7 +25,7 @@ import com.vaadin.flow.spring.security.VaadinSecurityConfigurer;
  * Kette - siehe {@link org.kabieror.elwasys.backend.auth.terminal.TerminalApiSecurityConfig}
  * für {@code /api/v1/**} - zuständig ist).
  *
- * <p><b>Phase 3 AP1 (Vaadin-Integration, siehe kb/05-migration-plan.md)</b>: statt eines
+ * <p><b>Phase 3 AP1 (Vaadin-Integration, siehe docs/kb/05-migration-plan.md)</b>: statt eines
  * generischen {@code formLogin(Customizer.withDefaults())} registriert
  * {@link VaadinSecurityConfigurer#vaadin()} jetzt {@link LoginView} als Login-Ziel
  * ({@code loginView(LoginView.class)}) - das übernimmt u.a. das Freischalten der
@@ -47,7 +47,7 @@ import com.vaadin.flow.spring.security.VaadinSecurityConfigurer;
  * alles andere verlangt eine Anmeldung (Default-Deny).
  *
  * <p>{@code @ConditionalOnWebApplication} auf {@link #securityFilterChain} (seit Phase 3 AP1
- * nötig geworden, siehe kb/05-migration-plan.md): mehrere bestehende Backend-Tests (AP2,
+ * nötig geworden, siehe docs/kb/05-migration-plan.md): mehrere bestehende Backend-Tests (AP2,
  * siehe {@code AbstractBackendIT}) laufen bewusst mit {@code webEnvironment=NONE} (kein Web-/
  * Servlet-Kontext, siehe deren Javadoc) und laden dabei trotzdem den kompletten
  * {@code ApplicationContext} inkl. dieser Klasse, weil {@code @SpringBootTest} ohne

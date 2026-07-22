@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Post-Deploy-Smoke-Test (Rollout-Gate) - Phase 6 AP6, siehe kb/05-migration-plan.md "Phase 6"
+# Post-Deploy-Smoke-Test (Rollout-Gate) - Phase 6 AP6, siehe docs/kb/05-migration-plan.md "Phase 6"
 # und deploy/smoke/README.md.
 #
 # Läuft NACH einem Deployment gegen die frisch deployte, LAUFENDE Portal/Backend-Umgebung und

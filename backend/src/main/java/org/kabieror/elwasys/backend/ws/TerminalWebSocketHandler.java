@@ -13,7 +13,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 /**
  * Terminal-WebSocket-Endpunkt ({@code /api/v1/terminal-ws}, AP4, siehe
- * kb/05-migration-plan.md/kb/03-modules.md für das vollständige Protokoll). Kanal-Fundament
+ * docs/kb/05-migration-plan.md/kb/03-modules.md für das vollständige Protokoll). Kanal-Fundament
  * für künftigen Ereignis-Push Backend-&gt;Terminal und die Fernwartung (Status/Logs/Restart,
  * fachliche Referenz {@code Common.maintenance.*}) - dieses Arbeitspaket implementiert das
  * Nachrichtenformat, die Verbindungsregistry, Heartbeat sowie HELLO/HELLO_ACK und

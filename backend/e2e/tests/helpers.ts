@@ -3,7 +3,7 @@ import { Page, Locator, expect } from '@playwright/test';
 /**
  * Shared helpers for the elwasys backend Portal E2E suite (Vaadin Flow, Phase 3 AP6) -
  * fachlicher Nachfolger der Vaadin-7-Lokatoren-Helfer in Portal/e2e/tests/*.spec.ts, siehe
- * kb/06-ui-tests.md für die Selektor-Strategie.
+ * docs/kb/06-ui-tests.md für die Selektor-Strategie.
  */
 
 export const ADMIN_USERNAME = 'admin';
@@ -69,7 +69,7 @@ export async function pickCombo(page: Page, scope: Locator, label: string, item:
  * Returns locators for every column cell of the `vaadin-grid` row whose accessible name
  * matches `rowName`, in column order.
  *
- * IMPORTANT (see kb/06-ui-tests.md): `vaadin-grid` renders cell content as LIGHT-DOM
+ * IMPORTANT (see docs/kb/06-ui-tests.md): `vaadin-grid` renders cell content as LIGHT-DOM
  * `<vaadin-grid-cell-content slot="...">` elements that are children of `<vaadin-grid>` itself,
  * NOT of the row's `<tr>` - they are merely *slotted* into a `<td><slot></td>` inside the row's
  * shadow tree. `row.locator(...)` therefore silently finds nothing (Playwright's locators
@@ -99,7 +99,7 @@ export async function gridRowActions(page: Page, rowName: string | RegExp): Prom
  * buttons here carry only a `vaadin-tooltip` for a sighted/screen-reader hint via
  * `aria-describedby`, which does NOT contribute to the accessible NAME Playwright's
  * `getByRole('button', { name })` matches against - confirmed empirically, see
- * kb/06-ui-tests.md - so name-based lookup silently finds nothing for these buttons). The order
+ * docs/kb/06-ui-tests.md - so name-based lookup silently finds nothing for these buttons). The order
  * matches each view's `actionButtons()` method 1:1:
  *   - AdminUsersView: Bearbeiten(0), Guthaben aufladen(1), Umsätze ansehen(2), Löschen(3)
  *   - AdminDevicesView / AdminUserGroupsView / AdminProgramsView / AdminLocationsView:

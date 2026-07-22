@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Standort-Snapshot für die Offline-Buchungs-Vorbereitung (AP3, Phase 4, siehe
- * {@link SnapshotDto} Javadoc und kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen
+ * {@link SnapshotDto} Javadoc und docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen
  * am Terminal", Punkt 1 "Lokaler Daten-Snapshot"). Standort-Scope kommt implizit aus dem
  * Terminal-Token (kein Pfad-/Query-Parameter nötig, analog {@code LocationController#me}).
  */

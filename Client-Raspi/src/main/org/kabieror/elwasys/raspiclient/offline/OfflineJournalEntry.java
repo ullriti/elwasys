@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 
 /**
  * Ein Eintrag im persistenten Ereignis-Journal ({@link OfflineJournal}, Phase 4 AP6, siehe
- * kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal" Punkt 3
+ * docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal" Punkt 3
  * "Persistentes Ereignis-Journal").
  *
  * @param type                  {@code "START"}, {@code "FINISH"} oder {@code "ABORT"}

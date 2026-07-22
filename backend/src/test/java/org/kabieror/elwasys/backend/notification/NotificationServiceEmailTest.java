@@ -17,7 +17,7 @@ import org.kabieror.elwasys.backend.auth.PasswordResetProperties;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 /**
- * E-Mail-Kanal des Benachrichtigungsdienstes (AP5, siehe kb/05-migration-plan.md) gegen
+ * E-Mail-Kanal des Benachrichtigungsdienstes (AP5, siehe docs/kb/05-migration-plan.md) gegen
  * einen echten lokalen Test-SMTP-Server (GreenMail, siehe backend/pom.xml).
  *
  * <p>Betreff/Body sind wörtliche Zitate aus {@code ExecutionFinisher#executeAction()} im

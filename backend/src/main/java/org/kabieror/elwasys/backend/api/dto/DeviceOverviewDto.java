@@ -5,8 +5,8 @@ import org.kabieror.elwasys.backend.domain.DeviceEntity;
 
 /**
  * Anonyme (benutzerunabhängige) Geräteübersicht des Standorts eines Terminal-Tokens (AP3,
- * Phase 4, siehe kb/05-migration-plan.md "Arbeitspakete Phase 4", AP3 sowie
- * kb/03-modules.md, Inventur-Tabelle). Anders als {@link DeviceDto} (das {@code userId}
+ * Phase 4, siehe docs/kb/05-migration-plan.md "Arbeitspakete Phase 4", AP3 sowie
+ * docs/kb/03-modules.md, Inventur-Tabelle). Anders als {@link DeviceDto} (das {@code userId}
  * voraussetzt, siehe {@code DeviceController#list}) deckt dieses DTO die Ladepfade ab, die
  * im Alt-Client VOR einem bekannten Benutzer ablaufen:
  *
@@ -39,7 +39,7 @@ import org.kabieror.elwasys.backend.domain.DeviceEntity;
  * null)} - entspricht {@code User.getAnonymous()} im Alt-Code, dessen Gruppe stets
  * {@code DiscountType.None} trägt). Deckt den Ladepfad von {@code ui/small} ab, dessen
  * {@code MainFormController} Geräte samt Programmen/Preisen anzeigt, BEVOR eine Karte gescannt
- * wurde (umgekehrter Bedienfluss ggü. {@code ui/medium}, siehe kb/06-ui-tests.md
+ * wurde (umgekehrter Bedienfluss ggü. {@code ui/medium}, siehe docs/kb/06-ui-tests.md
  * "ClientSmallUiSmokeE2ETest") - der Alt-Client nutzte dafür {@code Device#getPrograms()} (die
  * ungefilterte Variante ohne {@code User}-Parameter) plus {@code Program#getPrice(maxDuration,
  * User.getAnonymous())}.

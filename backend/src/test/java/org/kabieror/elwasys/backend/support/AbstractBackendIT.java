@@ -11,7 +11,7 @@ import org.springframework.test.context.DynamicPropertySource;
  * {@code backend/run-backend-tests.sh}).
  *
  * <p>Bewusst OHNE {@code @Transactional}: Ursprünglich (Phase 2 AP2, siehe
- * kb/05-migration-plan.md) verglichen mehrere Tests hier Alt-Code (eine eigene,
+ * docs/kb/05-migration-plan.md) verglichen mehrere Tests hier Alt-Code (eine eigene,
  * autocommittende JDBC-Connection über eine mittlerweile entfernte Test-Hilfsklasse) mit
  * dem neuen Service (Spring-Data-Repositories). Diese Alt-Code-Vergleichstests
  * (Parity-Tests) samt ihrer Hilfsklasse wurden in Phase 5 gelöscht, nachdem der Alt-Code
@@ -23,7 +23,7 @@ import org.springframework.test.context.DynamicPropertySource;
  * eindeutige Namen (siehe Testklassen), damit parallele/wiederholte Läufe nicht
  * kollidieren.
  *
- * <p><b>Phase 3 AP1 (Vaadin-Integration, siehe kb/05-migration-plan.md)</b>: Vaadins eigene
+ * <p><b>Phase 3 AP1 (Vaadin-Integration, siehe docs/kb/05-migration-plan.md)</b>: Vaadins eigene
  * Spring-Boot-Autokonfigurationsklassen (siehe {@code vaadin-spring}s
  * {@code META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports}:
  * {@code SpringBootAutoConfiguration}, {@code SpringSecurityAutoConfiguration},

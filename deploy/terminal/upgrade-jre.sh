@@ -1,6 +1,6 @@
 #!/bin/bash
 # JRE-Upgrade fuer BESTEHENDE Raspi-Terminals (Phase 6 AP3, siehe
-# kb/05-migration-plan.md "Phase 6 - Produktivumschaltung" + Risikotabelle).
+# docs/kb/05-migration-plan.md "Phase 6 - Produktivumschaltung" + Risikotabelle).
 #
 # Warum: Bereits im Feld provisionierte Terminals tragen aus einem frueheren
 # setup.sh-Lauf nur ein Java-17-JRE. Das Client-fat-jar baut seit Phase 1 mit

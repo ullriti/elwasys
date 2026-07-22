@@ -1,4 +1,4 @@
--- Typo-Fix (Phase 5 AP3, siehe kb/02-data-model.md, kb/05-migration-plan.md): die Spalte
+-- Typo-Fix (Phase 5 AP3, siehe docs/kb/02-data-model.md, docs/kb/05-migration-plan.md): die Spalte
 -- devices.auto_end_power_threashold trug seit der 0.4.0-Baseline
 -- (V1__baseline_schema_0_4_0.sql, ebenso Common/resources/database-init.sql) einen
 -- Tippfehler ("threashold" statt "threshold"). AP3 zieht den Fix vollstaendig durch

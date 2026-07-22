@@ -17,7 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * Tests für {@link PasswordService} (Phase 3 AP4, Testfall P16, siehe
- * kb/05-migration-plan.md) - fachlicher Nachfolger von
+ * docs/kb/05-migration-plan.md) - fachlicher Nachfolger von
  * {@code Portal/.../components/ChangePasswordWindow}.
  */
 class PasswordServiceTest extends AbstractBackendIT {

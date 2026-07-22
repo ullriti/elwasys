@@ -21,7 +21,7 @@ import org.kabieror.elwasys.backend.service.CreditService;
  * Nutzt ausschließlich die bestehenden Phase-2-Methoden {@link CreditService#inpayment} und
  * {@link CreditService#payout}: dieser Dialog erzeugt damit ausnahmslos NEUE Buchungssätze,
  * er verändert oder löscht nie einen bestehenden Eintrag in {@code credit_accounting} - die
- * Unveränderlichkeit der Buchungen (Rahmenbedingung, siehe kb/02-data-model.md) ist damit
+ * Unveränderlichkeit der Buchungen (Rahmenbedingung, siehe docs/kb/02-data-model.md) ist damit
  * strukturell sichergestellt.
  *
  * <p>Felder und Vorbelegung wie im Alt-Fenster: Einzahlung/Auszahlung (Radiobuttons, Default

@@ -16,7 +16,7 @@ import java.time.Instant;
  * bedienbereiten Zustand ({@link org.kabieror.elwasys.raspiclient.ui.MainFormState#SELECT_DEVICE})
  * erreicht (u.a. beim frischen App-Start STARTUP -> SELECT_DEVICE).
  *
- * <p>Zweck (Phase 6 AP5, siehe kb/05-migration-plan.md und
+ * <p>Zweck (Phase 6 AP5, siehe docs/kb/05-migration-plan.md und
  * deploy/terminal/auto-update-watchdog.sh): Der Shell-Watchdog auf dem Pi wertet den
  * <b>mtime</b> dieser Datei aus, um festzustellen, ob eine gerade ausgerollte
  * Client-Version tatsächlich hochgekommen und bedienbereit ist. Bleibt der mtime nach

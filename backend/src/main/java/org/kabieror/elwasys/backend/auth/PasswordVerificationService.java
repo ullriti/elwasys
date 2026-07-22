@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * Prüft ein Klartext-Passwort gegen einen gespeicherten Hash in BEIDEN im Bestand
- * vorkommenden Formaten (siehe kb/05-migration-plan.md, AP3) und erzeugt neue Hashes
+ * vorkommenden Formaten (siehe docs/kb/05-migration-plan.md, AP3) und erzeugt neue Hashes
  * IMMER im neuen Format.
  *
  * <ul>
@@ -30,7 +30,7 @@ import org.springframework.stereotype.Service;
  * <p><b>Byte-Kodierung des Klartexts für SHA1</b>: der Alt-Code ruft {@code
  * s.getBytes()} ohne explizites Charset auf (Plattform-Default). Diese Portierung
  * verwendet explizit UTF-8 - auf allen betroffenen Alt- und Neu-JVMs (Linux, Java 8/16/21)
- * ist das ohnehin der Plattform-Default, siehe kb/05-migration-plan.md ("Beobachtungen").
+ * ist das ohnehin der Plattform-Default, siehe docs/kb/05-migration-plan.md ("Beobachtungen").
  * Nur bei Passwörtern mit Nicht-ASCII-Zeichen UND einer abweichend konfigurierten
  * Alt-JVM-Locale/-Encoding könnte das theoretisch divergieren - in der Praxis nicht
  * beobachtet und über den Parity-Test gegen die echte Alt-Code-Routine abgesichert.

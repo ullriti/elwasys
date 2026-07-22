@@ -33,8 +33,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Client E2E für Phase 4 AP6 (Offline-Robustheit, siehe kb/05-migration-plan.md
- * "Konzeptskizze: Offline-Buchungen am Terminal" und kb/08-test-plan.md, C15-Nachfolger):
+ * Client E2E für Phase 4 AP6 (Offline-Robustheit, siehe docs/kb/05-migration-plan.md
+ * "Konzeptskizze: Offline-Buchungen am Terminal" und docs/kb/08-test-plan.md, C15-Nachfolger):
  * ein {@link BackendProxy} zwischen Terminal und dem gemeinsam genutzten Test-Backend
  * ({@link TestBackend}) macht "Backend nicht erreichbar" gezielt simulierbar, ohne das für
  * die ganze Suite laufende Backend selbst anzufassen.

@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Geräte-/Programmliste für den Standort des Terminal-Tokens (AP4, siehe
- * kb/05-migration-plan.md). Entspricht dem Ladepfad {@code DataManager#getDevicesToDisplay}
+ * docs/kb/05-migration-plan.md). Entspricht dem Ladepfad {@code DataManager#getDevicesToDisplay}
  * (Geräteliste) + {@code Device#getPrograms(User)} (Programmliste je Gerät) im Alt-Code,
  * berechtigungsgeprüft über {@link PermissionService} (1:1-Portierung aus AP2).
  *

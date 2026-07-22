@@ -8,7 +8,7 @@ public interface ProgramRepository extends JpaRepository<ProgramEntity, Integer>
 
     /**
      * Alle Programme, alphabetisch nach Name - für die Admin-Programmliste (Portal-UI, siehe
-     * kb/03-modules.md, "Portal-UI").
+     * docs/kb/03-modules.md, "Portal-UI").
      */
     List<ProgramEntity> findAllByOrderByNameAsc();
 }

@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Minimaler, dokumentierter Weg zum (Neu-)Setzen des Passworts eines bestehenden Benutzers
- * (insbesondere des Administrators) in Phase 5 (siehe kb/05-migration-plan.md, AP2: "DB
+ * (insbesondere des Administrators) in Phase 5 (siehe docs/kb/05-migration-plan.md, AP2: "DB
  * härten" - der Default-Admin-Seed mit fest eingebettetem Passwort entfällt für frische
  * Installationen, siehe {@code V7__remove_default_admin_password.sql}). Analog zu
  * {@link org.kabieror.elwasys.backend.auth.terminal.TerminalTokenCliRunner} (gleiches Muster:
@@ -28,7 +28,7 @@ import org.springframework.stereotype.Component;
  * gespeichert ({@link PasswordVerificationService#encodeNew}) - kein separates/neues
  * Hashing-Schema.
  *
- * <p><b>Setzen</b> (siehe kb/04-build-and-run.md für das vollständige Kommando):
+ * <p><b>Setzen</b> (siehe docs/kb/04-build-and-run.md für das vollständige Kommando):
  * <pre>
  * java -jar backend/target/elwasys-backend.jar \
  *     --spring.profiles.active=admin-cli \

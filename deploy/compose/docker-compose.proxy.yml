@@ -1,5 +1,5 @@
 # Optionales TLS-Overlay: Reverse Proxy (Caddy) vor dem Backend (Phase 2 AP6, TLS-Konzept
-# siehe kb/05-migration-plan.md Zielarchitektur Punkt 5 "TLS über Reverse Proxy oder Ingress").
+# siehe docs/kb/05-migration-plan.md Zielarchitektur Punkt 5 "TLS über Reverse Proxy oder Ingress").
 #
 # Caddy übernimmt hier automatisches TLS via Let's-Encrypt/ZeroSSL (HTTP-01-Challenge über
 # Port 80, danach HTTPS auf Port 443) - keine manuelle Zertifikatsverwaltung nötig, solange

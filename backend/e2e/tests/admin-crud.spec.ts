@@ -152,7 +152,7 @@ test('admin can create a device (P10)', async ({ page }) => {
   await pickCombo(page, win, 'Position', '1');
   await pickCombo(page, win, 'Standort', 'Default');
   // fhem gateway fields (required) - both fhem and deCONZ gateways stay supported (see
-  // kb/05-migration-plan.md "Entscheidungen"), the legacy test only ever exercised fhem.
+  // docs/kb/05-migration-plan.md "Entscheidungen"), the legacy test only ever exercised fhem.
   await win.getByLabel('Fhem Name').fill('e2e-wm');
   await win.getByLabel('Fhem Switch Name').fill('e2e-wm-sw');
   await win.getByLabel('Fhem Power Name').fill('e2e-wm-pw');
@@ -166,7 +166,7 @@ test('admin can create a device (P10)', async ({ page }) => {
 });
 
 test('admin can activate/deactivate a device and it persists (P11)', async ({ page }) => {
-  // P11 was never implemented against the legacy Vaadin 7 portal (see kb/08-test-plan.md) -
+  // P11 was never implemented against the legacy Vaadin 7 portal (see docs/kb/08-test-plan.md) -
   // newly added here to reach full P1-P20 coverage, per the Phase 3 AP6 acceptance criterion.
   const deviceName = `E2E-Geraet-Toggle-${Date.now()}`;
 
@@ -238,7 +238,7 @@ test('admin can open and save a location from the Standorte section (P14)', asyn
   // The legacy portal only exposed location editing via a dialog on the dashboard
   // (LocationWindow); the backend Portal gives locations their own "Standorte" section instead
   // (AdminLocationsView) - a deliberate, auftraggeber-gewünschte UX-improvement, not a
-  // functional change (see kb/05-migration-plan.md "Entscheidungen", AdminLayout Javadoc). The
+  // functional change (see docs/kb/05-migration-plan.md "Entscheidungen", AdminLayout Javadoc). The
   // underlying assertion (P14's "name prefilled, unchanged save round-trip") is unchanged.
   await openAdminSection(page, 'admin/locations');
 

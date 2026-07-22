@@ -15,7 +15,7 @@ import java.util.concurrent.ScheduledFuture;
 /**
  * Diese Klasse führt die bei der Beendigung einer Programmausführung notwendigen Operationen aus.
  * <p>
- * Seit Phase 4 AP4 (siehe kb/05-migration-plan.md "Benachrichtigungen") versendet dieser
+ * Seit Phase 4 AP4 (siehe docs/kb/05-migration-plan.md "Benachrichtigungen") versendet dieser
  * Client selbst KEINE Benachrichtigungen mehr (E-Mail/Pushover/elwaApp-Push sind komplett
  * entfernt, inkl. des in Phase 4 AP2 migrierten, faktisch toten Ionic-Push-Zweigs) - das
  * Backend versendet die Benachrichtigung serverseitig beim API-gemeldeten Execution-Ende
@@ -114,7 +114,7 @@ class ExecutionFinisher implements Runnable {
         // virtuelle/offline Ausführungen (Tür öffnen) bleibt es - wie im Alt-Code - rein
         // lokal und ohne Abrechnung.
         //
-        // Phase 4 AP6 (Offline-Robustheit, siehe kb/05-migration-plan.md "Konzeptskizze:
+        // Phase 4 AP6 (Offline-Robustheit, siehe docs/kb/05-migration-plan.md "Konzeptskizze:
         // Offline-Buchungen am Terminal"): eine WÄHREND eines Backend-Ausfalls offline
         // gebuchte Ausführung (e.isOfflinePendingReplay()) hat noch keine echte Backend-Id -
         // ihr Ende/Abbruch wird darum IMMER direkt im Ereignis-Journal hinterlegt, nie über

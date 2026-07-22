@@ -21,7 +21,7 @@ import org.kabieror.elwasys.backend.support.Fixtures;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * Tests für {@link ProgramService} (Phase 3 AP2, siehe kb/05-migration-plan.md) - fachlicher
+ * Tests für {@link ProgramService} (Phase 3 AP2, siehe docs/kb/05-migration-plan.md) - fachlicher
  * Nachfolger von {@code Portal/.../components/ProgramWindow} (Testfall P12) inkl. des
  * Lösch-Wächters aus {@code Portal/.../views/ProgramsView#deleteProgram}.
  */

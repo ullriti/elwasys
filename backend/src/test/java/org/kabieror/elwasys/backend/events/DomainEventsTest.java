@@ -43,12 +43,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 /**
  * End-to-End-Nachweis der AP5-Ereignis-Kette (Service → {@code ApplicationEventPublisher} →
  * {@link UiBroadcaster} → registrierter Listener) über einen ECHTEN Spring-Kontext (siehe
- * kb/05-migration-plan.md, "Live-Updates zwischen Sessions") - bewusst über {@link
+ * docs/kb/05-migration-plan.md, "Live-Updates zwischen Sessions") - bewusst über {@link
  * AbstractBackendIT} statt gemockter Services, damit auch Springs {@code
  * @TransactionalEventListener}-Mechanismus (Default-Phase {@code AFTER_COMMIT}) tatsächlich
  * mitgetestet wird, nicht nur der reine Verteil-Mechanismus von {@link UiBroadcaster} (der ist
  * Gegenstand von {@code UiBroadcasterTest}). KEIN Test rendert eine echte Vaadin-Route (siehe
- * kb/05-migration-plan.md, Lizenz-Befund) - {@link UI#access} wird wie in {@code
+ * docs/kb/05-migration-plan.md, Lizenz-Befund) - {@link UI#access} wird wie in {@code
  * UiBroadcasterTest} über Mockito synchron simuliert.
  */
 class DomainEventsTest extends AbstractBackendIT {

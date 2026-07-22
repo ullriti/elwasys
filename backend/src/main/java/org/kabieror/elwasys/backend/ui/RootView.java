@@ -10,12 +10,12 @@ import org.kabieror.elwasys.backend.ui.admin.AdminDashboardView;
 import org.kabieror.elwasys.backend.ui.user.UserDashboardView;
 
 /**
- * Einstiegs-Route ("/") nach dem Login (Phase 3 AP1, siehe kb/05-migration-plan.md) - leitet
+ * Einstiegs-Route ("/") nach dem Login (Phase 3 AP1, siehe docs/kb/05-migration-plan.md) - leitet
  * je nach Rolle sofort weiter: Administratoren ins Admin-Dashboard, alle anderen angemeldeten
  * Benutzer ins Benutzer-Dashboard. Fachlicher Nachfolger von
  * {@code Portal/.../WaschportalUI#loadSessionContent}, das dort abhängig vom
  * {@code SessionManager.AuthorizedType} zwischen {@code AdministratorLayout} und
- * {@code UserLayout} wählte (siehe kb/05-migration-plan.md, Testfälle P2/P15).
+ * {@code UserLayout} wählte (siehe docs/kb/05-migration-plan.md, Testfälle P2/P15).
  *
  * <p>{@code @PermitAll} statt {@code @AnonymousAllowed}: diese Route selbst verlangt bereits
  * eine Anmeldung (nicht-authentifizierte Zugriffe werden von der HTTP-Sicherheitskette in

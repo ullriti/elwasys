@@ -40,18 +40,18 @@ import org.kabieror.elwasys.backend.service.PricingService;
 
 /**
  * Verdrahtung des Benachrichtigungsdienstes an den API-Execution-Lebenszyklus (AP3, Phase 4,
- * siehe kb/05-migration-plan.md und {@code ExecutionController} Klassen-Javadoc,
+ * siehe docs/kb/05-migration-plan.md und {@code ExecutionController} Klassen-Javadoc,
  * "Benachrichtigungen"). Bewusst ein reiner Mockito-Unit-Test OHNE Spring-Kontext (kein
  * {@code @SpringBootTest}/{@code AbstractApiIT}): ein zusätzlicher, sich per {@code @MockBean}
  * unterscheidender Kontext würde einen weiteren gecachten Spring-Testkontext samt eigenem
  * Connection-Pool erzeugen - genau das Muster, das in Phase 3 AP4 bereits einmal
- * "PostgreSQL max_connections=100" überschritten hat (siehe kb/05-migration-plan.md,
+ * "PostgreSQL max_connections=100" überschritten hat (siehe docs/kb/05-migration-plan.md,
  * Änderungslog "Phase 3 AP4", Fallstrick). Der Controller ist reines Java (keine
  * Spring-MVC-Reflektion nötig, um seine Methoden direkt aufzurufen), ein Mockito-Unit-Test
  * prüft die Verdrahtungslogik daher ebenso zuverlässig, aber ohne jede DB-Verbindung. Das
  * Notification-GATING selbst (inkl. Flag-AUS-Fall) ist bereits auf Ebene von
  * {@link NotificationService} durch {@code NotificationServiceEmailTest}/
- * {@code NotificationsPropertiesDefaultTest} abgedeckt (siehe kb/03-modules.md).
+ * {@code NotificationsPropertiesDefaultTest} abgedeckt (siehe docs/kb/03-modules.md).
  */
 class ExecutionControllerNotificationTest {
 

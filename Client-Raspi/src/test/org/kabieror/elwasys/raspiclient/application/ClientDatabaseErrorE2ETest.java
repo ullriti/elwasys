@@ -13,7 +13,7 @@ import java.time.Duration;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Client E2E (test plan C15, Phase 4 AP4 - siehe kb/05-migration-plan.md "Client-Cutover"):
+ * Client E2E (test plan C15, Phase 4 AP4 - siehe docs/kb/05-migration-plan.md "Client-Cutover"):
  * ist das Backend beim Start nicht erreichbar, stürzt der Client nicht ab, sondern bootet
  * die UI und geht in den Fehlerzustand, sodass ein Bediener es erneut versuchen kann
  * ({@code AbstractMainFormController#tryInitiate} fängt die von {@code ElwaManager#initiate}
@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * ausschließlich der Backend-Erreichbarkeits-Check fehlschlägt).
  *
  * Run: ./run-client-e2e.sh   (or xvfb-run mvn test -Dtest=ClientDatabaseErrorE2ETest)
- * See kb/08-test-plan.md.
+ * See docs/kb/08-test-plan.md.
  */
 public class ClientDatabaseErrorE2ETest {
 

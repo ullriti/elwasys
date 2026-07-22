@@ -13,7 +13,7 @@ import org.kabieror.elwasys.backend.domain.DeviceEntity;
  * <p><b>Gateway-/Hardwarefelder (AP3, Phase 4, additiv ergänzt):</b> {@code fhemName}/
  * {@code fhemSwitchName}/{@code fhemPowerName}/{@code deconzUuid}/
  * {@code autoEndPowerThreshold}/{@code autoEndWaitTimeSeconds} entsprechen 1:1 den
- * gleichnamigen {@link DeviceEntity}-Feldern (siehe kb/02-data-model.md) - der Alt-Client
+ * gleichnamigen {@link DeviceEntity}-Feldern (siehe docs/kb/02-data-model.md) - der Alt-Client
  * lädt sie bislang über {@code DataManager#getDevicesToDisplay}/{@code Device}, das
  * Terminal-Cutover (AP4) braucht sie über die API, um die Steckdose des jeweiligen
  * Gateways (fhem ODER deCONZ) korrekt anzusteuern und automatische Programmenden per

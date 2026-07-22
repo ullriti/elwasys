@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Regression test for the CI flakiness diagnosed under Phase 4 (see kb/05-migration-plan.md,
+ * Regression test for the CI flakiness diagnosed under Phase 4 (see docs/kb/05-migration-plan.md,
  * Änderungslog "Phase 4 CI-Stabilität"): {@code ClientAutoEndDeconzE2ETest} failed
  * deterministically in two consecutive CI runs with
  * {@code ApiException: Das Backend ist nicht erreichbar: HTTP/1.1 header parser received no

@@ -12,12 +12,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Stammdaten-Verwaltung für Benutzer (Phase 3 AP2, siehe kb/05-migration-plan.md) - fachlicher
+ * Stammdaten-Verwaltung für Benutzer (Phase 3 AP2, siehe docs/kb/05-migration-plan.md) - fachlicher
  * Nachfolger von {@code Portal/.../components/UserWindow} (Anlegen/Bearbeiten, OHNE den
  * dortigen Admin-Passwort-Reset-Teil - das ist AP4) sowie des Lösch-Verhaltens aus
  * {@code Portal/.../views/UsersView#deleteUser}.
  *
- * <p>Seit Phase 3 AP5 (siehe kb/05-migration-plan.md, "Live-Updates zwischen Sessions")
+ * <p>Seit Phase 3 AP5 (siehe docs/kb/05-migration-plan.md, "Live-Updates zwischen Sessions")
  * veröffentlicht jede erfolgreiche Änderung ein {@link UserChangedEvent} über
  * {@link ApplicationEventPublisher} - die Ereignis-Auslösung liegt bewusst hier in der
  * Service-Schicht statt in der UI, damit sie unabhängig vom Aufrufer (Portal-UI oder künftig
@@ -68,7 +68,7 @@ public class UserService {
      * Bearbeitet einen bestehenden Benutzer. 1:1-Portierung von {@code UserWindow#save}
      * (Mode {@code EDIT_USER}) über {@code User#modify}: Admin-Flag und Benachrichtigungs-
      * Einstellungen sind hier bewusst nicht Teil der Signatur - für sie gibt es in diesem
-     * Arbeitspaket keine UI (siehe kb/05-migration-plan.md, AP2-Auftrag), sie bleiben daher
+     * Arbeitspaket keine UI (siehe docs/kb/05-migration-plan.md, AP2-Auftrag), sie bleiben daher
      * unverändert.
      *
      * @throws DuplicateCardIdException wenn eine der Kartennummern bereits einem ANDEREN
@@ -94,7 +94,7 @@ public class UserService {
      * Benutzername wird zusätzlich mit dem Präfix {@code #del<id>#} versehen - der Alt-Code
      * macht das bewusst, damit der ursprüngliche (eindeutige) Benutzername danach wieder für
      * eine Neuanmeldung frei ist ({@code users.username} trägt eine UNIQUE-Constraint, siehe
-     * kb/02-data-model.md). Buchungen/Historie des Benutzers bleiben erhalten (kein
+     * docs/kb/02-data-model.md). Buchungen/Historie des Benutzers bleiben erhalten (kein
      * physisches Löschen), analog zum Alt-Code.
      */
     @Transactional

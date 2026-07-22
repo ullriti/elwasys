@@ -19,7 +19,7 @@ import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.service.ExecutionService;
 
 /**
- * Dialog "Verfallene Ausführungsaufträge" (Phase 3 AP4, siehe kb/05-migration-plan.md) -
+ * Dialog "Verfallene Ausführungsaufträge" (Phase 3 AP4, siehe docs/kb/05-migration-plan.md) -
  * fachlicher Nachfolger von {@code Portal/.../components/ExpiredExecutionsWindow}
  * (Alt-Portal): listet nicht abgerechnete, aber bereits abgelaufene Ausführungen eines
  * Benutzers auf (siehe {@link ExecutionService#getExpiredExecutions}) - sie zählen bereits

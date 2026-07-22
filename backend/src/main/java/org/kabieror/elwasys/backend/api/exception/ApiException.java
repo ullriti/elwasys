@@ -4,7 +4,7 @@ import org.springframework.http.HttpStatus;
 
 /**
  * Basisklasse aller fachlichen Fehler der Terminal-REST-API ({@code /api/v1/**}, AP4, siehe
- * kb/05-migration-plan.md). {@link org.kabieror.elwasys.backend.api.ApiExceptionHandler}
+ * docs/kb/05-migration-plan.md). {@link org.kabieror.elwasys.backend.api.ApiExceptionHandler}
  * übersetzt jede Instanz in eine RFC-7807-{@link org.springframework.http.ProblemDetail}
  * -Antwort mit dem hier festgelegten HTTP-Status, Typ-URI und Titel.
  */

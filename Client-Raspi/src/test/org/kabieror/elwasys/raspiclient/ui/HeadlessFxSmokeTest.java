@@ -19,7 +19,7 @@ import static org.testfx.matcher.control.LabeledMatchers.hasText;
  * Run headless under Xvfb, e.g.:
  *   xvfb-run -a mvn -f Client-Raspi/pom.xml test -Dtest=HeadlessFxSmokeTest
  *
- * See kb/06-ui-tests.md for the overall UI-test strategy.
+ * See docs/kb/06-ui-tests.md for the overall UI-test strategy.
  */
 public class HeadlessFxSmokeTest extends ApplicationTest {
 

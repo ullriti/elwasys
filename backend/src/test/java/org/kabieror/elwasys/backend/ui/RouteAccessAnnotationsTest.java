@@ -17,7 +17,7 @@ import org.kabieror.elwasys.backend.ui.user.UserDashboardView;
 
 /**
  * Reiner Reflection-Test (kein Spring-Kontext, keine DB) für den rollenbasierten
- * Routen-Schutz des Vaadin-Grundgerüsts (Phase 3 AP1, siehe kb/05-migration-plan.md, vgl.
+ * Routen-Schutz des Vaadin-Grundgerüsts (Phase 3 AP1, siehe docs/kb/05-migration-plan.md, vgl.
  * Testfall P18: Nicht-Admins sehen/erreichen keine Admin-Views). Vaadins
  * {@code NavigationAccessControl} (aktiviert über {@code VaadinSecurityConfigurer} in
  * {@link org.kabieror.elwasys.backend.auth.SecurityConfig}) wertet genau diese
@@ -31,12 +31,12 @@ import org.kabieror.elwasys.backend.ui.user.UserDashboardView;
  * einen echten eingebetteten Servlet-Container (RANDOM_PORT) wurde bewusst NICHT ergänzt: in
  * dieser Umgebung fehlt der Netzwerkzugriff auf vaadin.com, den Vaadins Lizenzprüfung im
  * Dev-Modus beim ersten {@code VaadinServlet#init()} verlangt (siehe
- * kb/05-migration-plan.md, "Offene Punkte/Risiken Phase 3 AP1", sowie die Begründung der
+ * docs/kb/05-migration-plan.md, "Offene Punkte/Risiken Phase 3 AP1", sowie die Begründung der
  * Abhängigkeits-Ausschlüsse in backend/pom.xml) - ein solcher Test könnte hier nicht grün
  * laufen, unabhängig vom Java-Code dieses Arbeitspakets. Ein vollständiger, per Browser/JS
  * getriebener Login-Durchstich (Vaadins {@code LoginForm} ist ohnehin eine clientseitig
  * gerenderte Web-Komponente, kein klassisches Server-HTML-Formular mit scrapebarem CSRF-Feld)
- * bleibt der späteren Playwright-E2E-Suite vorbehalten (siehe kb/08-test-plan.md, P18).
+ * bleibt der späteren Playwright-E2E-Suite vorbehalten (siehe docs/kb/08-test-plan.md, P18).
  */
 class RouteAccessAnnotationsTest {
 
@@ -48,7 +48,7 @@ class RouteAccessAnnotationsTest {
 
     @Test
     void resetPasswordViewAllowsAnonymousAccess() {
-        // Phase 3 AP4 (siehe kb/05-migration-plan.md, Testfall P19): die öffentliche
+        // Phase 3 AP4 (siehe docs/kb/05-migration-plan.md, Testfall P19): die öffentliche
         // Passwort-Reset-Ansicht muss - wie LoginView - ohne Anmeldung erreichbar sein, sonst
         // könnte ein Nutzer den per Email verschickten Link nie öffnen.
         assertThat(ResetPasswordView.class.isAnnotationPresent(com.vaadin.flow.server.auth.AnonymousAllowed.class))

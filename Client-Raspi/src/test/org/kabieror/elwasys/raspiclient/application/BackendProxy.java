@@ -15,8 +15,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Ein simulierbarer "Backend nicht erreichbar"-Zustand für die Offline-E2E-Tests (Phase 4
- * AP6, siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal" und
- * kb/08-test-plan.md). Ein minimaler TCP-Weiterleitungs-Proxy (reines JDK, analog
+ * AP6, siehe docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal" und
+ * docs/kb/08-test-plan.md). Ein minimaler TCP-Weiterleitungs-Proxy (reines JDK, analog
  * {@code application.fhemsimulator.FhemSimulator}): der Client zeigt mit {@code backend.url}
  * auf diesen Proxy statt direkt auf das gemeinsam genutzte Test-Backend
  * ({@link TestBackend#url()}); solange {@link #isOnline()} gilt, werden alle Bytes 1:1 in

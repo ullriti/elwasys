@@ -1,7 +1,7 @@
 #!/bin/bash
 # Idempotently bring up the elwasys backend Portal (Vaadin Flow, Phase 3 AP6) for E2E tests -
 # fachlicher Nachfolger von Portal/e2e/scripts/start-portal.sh (Vaadin 7), siehe
-# kb/06-ui-tests.md, kb/05-migration-plan.md.
+# docs/kb/06-ui-tests.md, docs/kb/05-migration-plan.md.
 #
 #   1. start PostgreSQL
 #   2. create a FRESH, dedicated E2E database (dropped+recreated every run, same pattern as
@@ -47,7 +47,7 @@ sudo -u postgres psql -q -c "CREATE DATABASE ${DB_NAME};"
 
 # 3. Build the backend jar in production mode (mvn package -Pproduction) - the only build
 #    mode verified to run without a Vaadin dev-mode license check in this sandbox, see
-#    kb/05-migration-plan.md "Phase 3 AP2"/"AP6". Building via the root reactor (-pl backend)
+#    docs/kb/05-migration-plan.md "Phase 3 AP2"/"AP6". Building via the root reactor (-pl backend)
 #    resolves the aggregator parent POM as part of the same build, so no separate install is
 #    needed. Tests are skipped here (backend/run-backend-tests.sh is the dedicated, faster
 #    path for the backend's own JUnit suite).

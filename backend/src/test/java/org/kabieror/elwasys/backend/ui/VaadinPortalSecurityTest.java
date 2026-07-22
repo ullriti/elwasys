@@ -25,7 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Sicherheits-Filterebene des Vaadin-Flow-Grundgerüsts (Phase 3 AP1, siehe
- * kb/05-migration-plan.md): geschützte Routen leiten nicht angemeldete Anfragen auf die
+ * docs/kb/05-migration-plan.md): geschützte Routen leiten nicht angemeldete Anfragen auf die
  * Login-Seite um, und die Anbindung an
  * {@link org.kabieror.elwasys.backend.auth.ElwasysAuthenticationProvider} funktioniert über
  * genau die Login-Route, die {@link org.kabieror.elwasys.backend.auth.SecurityConfig} bei
@@ -38,7 +38,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * Servlet-Container): das genügt für alles, was rein in der Spring-Security-Filterkette
  * entschieden wird (Authentifizierung, Umleitung, Logout) - Vaadins EIGENE Servlet-/
  * Routing-Schicht (tatsächliches Rendern einer View) braucht dagegen einen echten Container
- * UND (siehe kb/05-migration-plan.md, "Offene Punkte/Risiken Phase 3 AP1") in dieser Umgebung
+ * UND (siehe docs/kb/05-migration-plan.md, "Offene Punkte/Risiken Phase 3 AP1") in dieser Umgebung
  * einen Netzwerkzugriff auf vaadin.com, den es hier nicht gibt - ein entsprechender
  * RANDOM_PORT-Test wurde deshalb bewusst NICHT ergänzt (siehe kb-Eintrag für die Herleitung).
  * Der rollenbasierte Routen-Schutz (Admin- vs. Benutzer-Bereich, vgl. Testfall P18) wird

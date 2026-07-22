@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 1:1-Portierung der Guthaben-/Abrechnungslogik aus
  * {@code org.kabieror.elwasys.common.User} (Methoden {@code loadCredit}, {@code
- * payExecution}, {@code inpayment}, {@code payout}) - siehe kb/05-migration-plan.md, AP2.
+ * payExecution}, {@code inpayment}, {@code payout}) - siehe docs/kb/05-migration-plan.md, AP2.
  * Buchungen ({@link CreditAccountingEntryEntity}) sind unveränderlich: dieser Service
  * fügt ausschließlich neue Einträge hinzu, nie Änderungen an bestehenden.
  */
@@ -44,7 +44,7 @@ public class CreditService {
     /**
      * 1:1-Portierung von {@code User#loadCredit} (dort: privat + im Konstruktor/bei jedem
      * {@code update()} aufgerufen und zwischengespeichert; hier bewusst bei jedem Aufruf
-     * neu berechnet statt gecacht - siehe kb/05-migration-plan.md, "Entscheidungen": der
+     * neu berechnet statt gecacht - siehe docs/kb/05-migration-plan.md, "Entscheidungen": der
      * 5-Sekunden-Cache des Alt-Codes ({@code DataManager.UPDATE_DELAY}) ist reine
      * DB-Lastreduktion des Einzelplatz-Clients, kein fachliches Verhalten, das das Backend
      * nachbilden müsste - im Gegenteil würde ein serverseitiger Cache dieser Art in einem
@@ -68,7 +68,7 @@ public class CreditService {
             if (program == null) {
                 // Defensiv, wie im Alt-Code (dort wird eine Ausführung ohne gültiges Programm
                 // geloggt und übersprungen). In der Praxis durch die FK-Constraints der DB
-                // nicht erreichbar, siehe kb/05-migration-plan.md ("Beobachtungen").
+                // nicht erreichbar, siehe docs/kb/05-migration-plan.md ("Beobachtungen").
                 continue;
             }
             Duration maxDuration = Duration.ofSeconds(program.getMaxDurationSeconds());
@@ -91,7 +91,7 @@ public class CreditService {
      * 1:1 wie {@code Execution#getPrice()} - siehe dort für den Aufrufzeitpunkt, i.d.R.
      * unmittelbar nach dem Setzen von {@code stop}/{@code finished}).
      *
-     * <p>Beobachtung (siehe kb/05-migration-plan.md): der Alt-Code prüft
+     * <p>Beobachtung (siehe docs/kb/05-migration-plan.md): der Alt-Code prüft
      * {@code e.getPrice().equals(BigDecimal.ZERO)} - ein {@link BigDecimal#equals} statt
      * {@link BigDecimal#compareTo}, das ZUSÄTZLICH zum Wert auch die Skala vergleicht. Ein
      * FIXED-Programm mit einer in der DB als {@code 0.00} (Skala 2) gepflegten
@@ -167,7 +167,7 @@ public class CreditService {
      * veränderte Buchungshistorie eines Benutzers, neueste zuerst. Fachlicher Nachfolger von
      * {@code Portal/.../components/CreditAccountingWindow} (Alt-Portal, "Umsätze ansehen")
      * sowie des Buchungsteils von {@code Portal/.../views/UsersDashboardView} (Testfall P15,
-     * Phase 3 AP3, siehe kb/05-migration-plan.md). Liest nur - Buchungen werden hier wie
+     * Phase 3 AP3, siehe docs/kb/05-migration-plan.md). Liest nur - Buchungen werden hier wie
      * überall in diesem Service niemals verändert.
      */
     @Transactional(readOnly = true)

@@ -43,7 +43,7 @@ Benutzergruppen mit Rabattregel.
 - `blocked`, `password` – ursprünglich `VARCHAR(50)` für den SHA1-Hash (40 hex); seit
   Phase 2 AP3 per Flyway-Migration `V2` auf `VARCHAR(255)` erweitert (trägt jetzt sowohl
   SHA1- als auch Argon2id-kodierte Hashes, siehe „Flyway-Baseline“ unten und
-  kb/05-migration-plan.md), `is_admin`
+  docs/kb/05-migration-plan.md), `is_admin`
 - `email_notification`, `push_notification`, `pushover_user_key`
 - `password_reset_key`, `password_reset_timeout` – seit Phase 3 AP4 aktiv vom Backend
   genutzt (`UserEntity#passwordResetKey`/`#passwordResetTimeout`, Service
@@ -51,14 +51,14 @@ Benutzergruppen mit Rabattregel.
   `ResetPasswordWindow`-Flows, bewusst dieselben Bestandsspalten wiederverwendet statt einer
   neuen Migration/Tabelle (additiv im Sinne der Rahmenbedingung – Alt-Code liest/schreibt
   dieselben Spalten weiterhin unverändert, kein Konflikt bei Parallelbetrieb, siehe
-  kb/05-migration-plan.md, „Entscheidungen“)
+  docs/kb/05-migration-plan.md, „Entscheidungen“)
 - `deleted`, `last_login`, `group_id` → user_groups (Default 1)
 - ~~App-Anbindung: `app_id`, `access_key`, `auth_key` (Trigger `user_authkey_trigger`
   generiert `auth_key` beim INSERT über `generate_user_authkey()`)~~ *(entfernt in Phase 5
   AP4, `V10__drop_app_remnants.sql`: Trigger + beide Funktionen
   `user_authkey_trigger_function()`/`generate_user_authkey()` sowie die drei Spalten – die
   mobile App (`elwaapi`) ist laut Auftraggeber nicht mehr relevant, siehe
-  kb/05-migration-plan.md „Entscheidungen“)*
+  docs/kb/05-migration-plan.md „Entscheidungen“)*
 - Seed: `admin` / Passwort-Hash `d033e22ae348aeb5660fc2140aec35850c4da997`
   (= SHA1 von „admin“), `is_admin=TRUE`
 
@@ -67,15 +67,15 @@ Ein Standort = ein Client-Terminal.
 - `id`, `name` (unique)
 - `client_uid`, `client_ip`, `client_port`, `client_last_seen` – **entfernt in Phase 5 AP3**
   (2026-07-21, `V9__drop_obsolete_location_client_columns.sql`): dienten der Alt-IP-
-  Registrierung für die Fernwartung (`LocationManager`, siehe kb/01-architecture.md
+  Registrierung für die Fernwartung (`LocationManager`, siehe docs/kb/01-architecture.md
   „Maintenance-Protokoll (Common)“) – seit Phase 4 AP5 läuft die Fernwartung über eine vom
   Terminal ausgehende WebSocket-Verbindung, `TerminalConnectionRegistry` im Backend hält die
-  Erreichbarkeit rein in-memory (siehe kb/03-modules.md). Die Spalten waren seitdem ungenutzt
+  Erreichbarkeit rein in-memory (siehe docs/kb/03-modules.md). Die Spalten waren seitdem ungenutzt
   und wurden per V9 gedroppt.
 - Seed: `Default`
 - `offline_max_duration_minutes` (INT, NOT NULL, Default 60) – **neu seit Phase 4 AP6**
   (2026-07-21): `offline.max-duration` dieses Standorts (Auftraggeber-Vorgabe, siehe
-  kb/05-migration-plan.md „Festlegungen zu den Offline-Detailfragen“) – wie lange ein
+  docs/kb/05-migration-plan.md „Festlegungen zu den Offline-Detailfragen“) – wie lange ein
   Terminal ohne Backend-Verbindung eigenständig neue Buchungen annimmt, bevor es sie ablehnt
   (Fehlerbild wie C15); im Portal-Standorte-Dialog editierbar
   (`LocationFormDialog`/`AdminLocationsView`), an das Terminal über `SnapshotDto
@@ -128,7 +128,7 @@ Guthaben-Buchungen.
 ~~Verzeichnis für Föderation mit anderen Servern.~~
 ~~- `prefix` (Auth-Key-Prefix), `server_address`~~
 *(`V10__drop_app_remnants.sql` – App-Relikt, mobile App laut Auftraggeber nicht mehr
-relevant, siehe kb/05-migration-plan.md „Entscheidungen“)*
+relevant, siehe docs/kb/05-migration-plan.md „Entscheidungen“)*
 
 ### ~~reservations~~ *(entfernt in Phase 5 AP4)*
 ~~Gerätereservierungen.~~
@@ -140,7 +140,7 @@ relevant)*
 ### terminal_tokens *(neu, seit Phase 2 AP4)*
 Standort-Tokens für die Terminal-REST-API/den WebSocket-Endpunkt (additive Migration
 `V3__create_terminal_tokens.sql`, siehe „Flyway-Migrationen“ unten und
-kb/05-migration-plan.md). Vom Alt-Code unbenutzt/unbekannt.
+docs/kb/05-migration-plan.md). Vom Alt-Code unbenutzt/unbekannt.
 - `id`, `location_id` → locations (`ON DELETE CASCADE`)
 - `token_hash` (VARCHAR(64), unique) – SHA-256-Hex-Hash des Klartext-Tokens; das Klartext-
   Token selbst wird NIE gespeichert (nur einmalig beim Erzeugen angezeigt)
@@ -151,8 +151,8 @@ kb/05-migration-plan.md). Vom Alt-Code unbenutzt/unbekannt.
 
 ### terminal_idempotency_keys *(neu, seit Phase 4 AP3)*
 Dedupliziert terminal-gemeldete Execution-Ereignisse (Start/Ende/Abbruch/Reset über
-`/api/v1/executions/**`, siehe kb/03-modules.md „Idempotenz + Replay" und
-kb/05-migration-plan.md). Additive Migration `V4__create_terminal_idempotency_keys.sql`. Vom
+`/api/v1/executions/**`, siehe docs/kb/03-modules.md „Idempotenz + Replay" und
+docs/kb/05-migration-plan.md). Additive Migration `V4__create_terminal_idempotency_keys.sql`. Vom
 Alt-Code unbenutzt/unbekannt.
 - `id`, `location_id` → locations (`ON DELETE CASCADE`, rein informativ)
 - `idempotency_key` (VARCHAR(64), unique) – die vom Terminal erzeugte UUID; ein Schlüssel
@@ -174,7 +174,7 @@ EINZIGE Anwendungs-DB-User. `elwaclient1`/`elwaapi` + die Gruppe `elwaclients` (
 Default-Passwörter) sind entfernt – das Terminal spricht seit Phase 4 AP4/AP5 nur noch über
 die Backend-REST-API/den Standort-Token mit dem Backend (kein Direkt-DB-Zugriff mehr), und die
 mobile App (`elwaapi`) ist laut Auftraggeber nicht mehr relevant (siehe „Entscheidungen“ in
-kb/05-migration-plan.md). Die alte Rollenbeschreibung bleibt hier als historischer Kontext
+docs/kb/05-migration-plan.md). Die alte Rollenbeschreibung bleibt hier als historischer Kontext
 dokumentiert:
 
 - ~~**Gruppe `elwaclients`**, User `elwaclient1` (PW `elwaclient1`): SELECT auf alles;
@@ -205,9 +205,9 @@ genau einer `elwasys`-Datenbank tritt das nicht auf, siehe Kommentarkopf der Mig
 
 ## Flyway-Baseline (seit Phase 2 AP1, 2026-07-20)
 
-Neues Backend-Modul (`backend/`, siehe kb/03-modules.md) übernimmt die Schemapflege künftig
+Neues Backend-Modul (`backend/`, siehe docs/kb/03-modules.md) übernimmt die Schemapflege künftig
 über **Flyway** statt der handgepflegten SQL-Skripte. Details/Entscheidungen siehe
-kb/05-migration-plan.md (Änderungslog, Phase 2 AP1); hier die für das Datenmodell relevante
+docs/kb/05-migration-plan.md (Änderungslog, Phase 2 AP1); hier die für das Datenmodell relevante
 Zusammenfassung:
 
 - **Baseline-Migration**: `backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql`.
@@ -267,14 +267,14 @@ Zusammenfassung:
   den die Baseline abbildet).
 - **`V2__widen_users_password_column.sql`** (Phase 2 AP3, 2026-07-20): `ALTER TABLE users
   ALTER COLUMN password TYPE VARCHAR(255)` (war `VARCHAR(50)`). Befund: Argon2id-kodierte
-  Passwort-Hashes (neues Format, siehe kb/03-modules.md „Auth“) sind mit Spring Securitys
+  Passwort-Hashes (neues Format, siehe docs/kb/03-modules.md „Auth“) sind mit Spring Securitys
   empfohlenen Parametern empirisch gemessen konstant 97 Zeichen lang – mehr als das
   Doppelte der bisherigen, exakt auf 40-Zeichen-SHA1-Hex zugeschnittenen Spaltenbreite.
   Additiv/abwärtskompatibel: der Alt-Code prüft die Spaltenlänge nirgends selbst, ein
   SHA1-Hash passt weiterhin klaglos in die breitere Spalte – Parallelbetrieb bleibt
   unangetastet. Wird bei jedem Flyway-Lauf gegen eine Bestands-DB automatisch nach dem
   `baselineOnMigrate`-Baseline-Schritt mit angewendet. Details/Abwägung siehe
-  kb/05-migration-plan.md („Entscheidungen“, AP3).
+  docs/kb/05-migration-plan.md („Entscheidungen“, AP3).
 - **Rollen/Grants**: Die DB-Rollen `elwaclient1`/`elwaportal`/`elwaapi` (siehe „DB-Rollen &
   Rechte“ oben) wurden von der Baseline (V1) zunächst unverändert mit angelegt/gegrantet – das
   Backend selbst nutzte sie in AP1 noch nicht (es hatte noch keine fachlichen Endpunkte). Die
@@ -284,17 +284,17 @@ Zusammenfassung:
   `terminal_tokens` (siehe „Tabellen“ oben) für die Standort-Token-Auth der Terminal-API.
   Rein additiv (neue Tabelle, keine Änderung an Bestandstabellen) – der Alt-Code bekommt
   davon nichts mit. Details/Entscheidungen (Hash statt Klartext, Rotation über mehrere
-  aktive Tokens) siehe kb/05-migration-plan.md.
+  aktive Tokens) siehe docs/kb/05-migration-plan.md.
 - **`V4__create_terminal_idempotency_keys.sql`** (Phase 4 AP3, 2026-07-21): neue Tabelle
   `terminal_idempotency_keys` (siehe „Tabellen“ oben) für die Deduplizierung terminal-gemeldeter
   Execution-Ereignisse. Rein additiv (neue Tabelle, keine Änderung an Bestandstabellen) – der
-  Alt-Code bekommt davon nichts mit. Details siehe kb/03-modules.md „Idempotenz + Replay“ und
-  kb/05-migration-plan.md.
+  Alt-Code bekommt davon nichts mit. Details siehe docs/kb/03-modules.md „Idempotenz + Replay“ und
+  docs/kb/05-migration-plan.md.
 - **`V5__add_offline_max_duration_to_locations.sql`** (Phase 4 AP6, 2026-07-21): neue Spalte
   `locations.offline_max_duration_minutes` (siehe „Tabellen“ oben, `locations`). Rein additiv
   (`NOT NULL`-Spalte mit `DEFAULT 60`, keine Bestandsspalte geändert) – der Alt-Code bekommt
-  davon nichts mit. Details siehe kb/03-modules.md „Offline-Robustheit (AP6)“ und
-  kb/05-migration-plan.md.
+  davon nichts mit. Details siehe docs/kb/03-modules.md „Offline-Robustheit (AP6)“ und
+  docs/kb/05-migration-plan.md.
 - **`V6__harden_db_roles.sql`** (Phase 5 AP2, 2026-07-21): entfernt `elwaclient1`/`elwaapi` +
   Gruppe `elwaclients` (idempotent, cluster-weite Rollen-Problematik abgefangen, siehe „DB-
   Rollen & Rechte“ oben). `elwaportal` unverändert.
@@ -303,13 +303,13 @@ Zusammenfassung:
   unveränderten Default-SHA1-Hash von „admin“ trägt (Verhalten-bewahren für Bestände, die das
   Passwort bereits geändert haben). Frische Installationen haben danach kein bekanntes
   Admin-Passwort mehr – es wird über das neue Admin-CLI gesetzt (`AdminPasswordCliRunner`,
-  Profil `admin-cli`, Kommando siehe kb/04-build-and-run.md). Details/Entscheidung siehe
-  kb/05-migration-plan.md.
+  Profil `admin-cli`, Kommando siehe docs/kb/04-build-and-run.md). Details/Entscheidung siehe
+  docs/kb/05-migration-plan.md.
 
 ## JPA-Entities (seit Phase 2 AP2, 2026-07-20)
 
-Details zu den Entities/Repositories/Services siehe kb/03-modules.md (Abschnitt Backend)
-und kb/05-migration-plan.md (Änderungslog, AP2). Für das Datenmodell relevante Erkenntnisse:
+Details zu den Entities/Repositories/Services siehe docs/kb/03-modules.md (Abschnitt Backend)
+und docs/kb/05-migration-plan.md (Änderungslog, AP2). Für das Datenmodell relevante Erkenntnisse:
 
 - **Postgres-native Enums** (`DISCOUNT_TYPE`, `PROGRAM_TYPE`, `TIME_UNIT_TYPE`) lassen sich
   nicht per einfachem `@Enumerated(STRING)` gegen eine Postgres-ENUM-Spalte binden (Fehler
@@ -324,8 +324,8 @@ und kb/05-migration-plan.md (Änderungslog, AP2). Für das Datenmodell relevante
   Trigger-Nebenwirkung.)*
 - **`credit_accounting.date`**: die Spalte hat einen `CURRENT_TIMESTAMP`-DB-Default, den
   der Alt-Code nie explizit überschreibt. `CreditAccountingEntryEntity` setzt den Wert
-  stattdessen bewusst per Anwendungs-Uhr – siehe kb/05-migration-plan.md (Änderungslog,
+  stattdessen bewusst per Anwendungs-Uhr – siehe docs/kb/05-migration-plan.md (Änderungslog,
   AP2) für die Begründung.
 - **Alle fachlich genutzten Assoziationen sind `FetchType.EAGER`** (kein `LAZY`), um den
   Alt-`DataManager` nachzubilden, der beim Laden eines Objekts immer sofort alle
-  referenzierten Objekte mitlädt – siehe kb/05-migration-plan.md (Änderungslog, AP2).
+  referenzierten Objekte mitlädt – siehe docs/kb/05-migration-plan.md (Änderungslog, AP2).

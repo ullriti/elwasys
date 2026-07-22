@@ -30,7 +30,7 @@ import org.kabieror.elwasys.backend.service.UserGroupService;
  * Modaler Dialog zum Anlegen/Bearbeiten eines Geräts - fachlicher Nachfolger von
  * {@code Portal/.../components/DeviceWindow} (Alt-Portal, Testfälle P10/P11). Felder wie im
  * Alt-Fenster: Name, Position, Standort, fhem-Name/-Switch-Name/-Power-Name, deCONZ-UUID
- * (beide Gateways bleiben laut Auftraggeber unterstützt, siehe kb/05-migration-plan.md),
+ * (beide Gateways bleiben laut Auftraggeber unterstützt, siehe docs/kb/05-migration-plan.md),
  * Auto-Ende-Schwellwert/-Wartezeit, Aktiviert, zugeordnete Programme, freigegebene
  * Benutzergruppen.
  *
@@ -38,7 +38,7 @@ import org.kabieror.elwasys.backend.service.UserGroupService;
  * Geräte-Dialog anlegen" (inkl. automatischem Aufräumen unbenutzter Standorte beim
  * Schließen) entfällt - Standorte haben seit AP1 eine eigene Verwaltung
  * ({@code AdminLocationsView}), das macht diesen Nebenpfad überflüssig statt einer
- * Funktionslücke (siehe kb/05-migration-plan.md, "Entscheidungen", Gestaltungsrahmen
+ * Funktionslücke (siehe docs/kb/05-migration-plan.md, "Entscheidungen", Gestaltungsrahmen
  * Portal-Neubau).
  */
 public class DeviceFormDialog extends Dialog {

@@ -29,7 +29,7 @@ import org.springframework.stereotype.Component;
  * </pre>
  *
  * <p>Aus dem Bytecode von {@code PushoverRestClient#pushMessage} (siehe
- * kb/05-migration-plan.md, AP5, für die vollständige Herleitung) ergibt sich exakt diese
+ * docs/kb/05-migration-plan.md, AP5, für die vollständige Herleitung) ergibt sich exakt diese
  * Form-URL-encoded-Anfrage per POST an {@code https://api.pushover.net/1/messages.json}:
  * Felder {@code token}, {@code user}, {@code message} (immer gesetzt), dann {@code title},
  * {@code url}, {@code url_title} (nur falls nicht {@code null} - hier immer gesetzt), dann
@@ -38,7 +38,7 @@ import org.springframework.stereotype.Component;
  * setzt {@code HIGH}, dessen {@code toString()} den int-Wert {@code "1"} liefert).
  *
  * <p>Ersetzt Apache HttpClient/die {@code pushover-client}-Bibliothek durch
- * {@code java.net.http} (siehe kb/05-migration-plan.md, Technologie-Entscheidungen: "HTTP im
+ * {@code java.net.http} (siehe docs/kb/05-migration-plan.md, Technologie-Entscheidungen: "HTTP im
  * Terminal: java.net.http" - hier analog fürs Backend). Abweichung: die Ziel-URL ist
  * konfigurierbar ({@link NotificationsProperties.Pushover#getBaseUrl()}), damit Tests einen
  * lokalen Mock-Server verwenden können; der Produktionsdefault ist identisch zur

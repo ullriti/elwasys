@@ -1,10 +1,10 @@
--- DB-Härtung (Phase 5 AP2, siehe kb/05-migration-plan.md): entfernt die in
+-- DB-Härtung (Phase 5 AP2, siehe docs/kb/05-migration-plan.md): entfernt die in
 -- V1__baseline_schema_0_4_0.sql (bzw. dem Alt-Weg Common/resources/database-init.sql) mit
 -- Default-Passwörtern angelegten Rollen 'elwaclient1' (Passwort 'elwaclient1') und 'elwaapi'
 -- (Passwort 'api1234') sowie deren Gruppe 'elwaclients'. Diese drei Rollen/Gruppen wurden vom
 -- Alt-Client (JDBC-Direktzugriff auf die DB) verwendet - seit Phase 4 AP4/AP5 spricht
 -- Client-Raspi nur noch über die Backend-REST-API/den Standort-Token (kein Direkt-DB-Zugriff
--- des Clients mehr, siehe kb/05-migration-plan.md "Phase 4"). Der Backend-User 'elwaportal'
+-- des Clients mehr, siehe docs/kb/05-migration-plan.md "Phase 4"). Der Backend-User 'elwaportal'
 -- (siehe application.yml, ELWASYS_DB_USER) bleibt unverändert mit seinen bestehenden Grants
 -- aus V1 bestehen - er ist ab jetzt der EINZIGE Anwendungs-DB-User.
 --

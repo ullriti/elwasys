@@ -1,8 +1,8 @@
 package org.kabieror.elwasys.backend.ws;
 
 /**
- * Nachrichtentypen des Terminal-WebSocket-Protokolls (AP4, siehe kb/05-migration-plan.md und
- * kb/03-modules.md für die vollständige Protokoll-Doku). Fachliche Referenz für die
+ * Nachrichtentypen des Terminal-WebSocket-Protokolls (AP4, siehe docs/kb/05-migration-plan.md und
+ * docs/kb/03-modules.md für die vollständige Protokoll-Doku). Fachliche Referenz für die
  * Fernwartungs-Nachrichten (Status/Logs/Restart): Common {@code maintenance/*} (Alt-Protokoll,
  * heute Portal-&gt;Client; das neue Protokoll läuft über dieselbe ausgehende
  * Terminal-&gt;Backend-Verbindung, die auch für den Kartenlogin/die Geräteliste genutzt wird).
@@ -13,7 +13,7 @@ package org.kabieror.elwasys.backend.ws;
  * rein reservierte Typen (jede Anfrage dieser Typen wurde serverseitig mit
  * {@code ERROR{reason:"not-implemented"}} beantwortet).
  *
- * <p><b>Phase 3 AP4</b> (siehe kb/05-migration-plan.md, Roadmap-Punkt "Fernwartung"):
+ * <p><b>Phase 3 AP4</b> (siehe docs/kb/05-migration-plan.md, Roadmap-Punkt "Fernwartung"):
  * {@code LOG_REQUEST}/{@code RESTART_REQUEST} werden jetzt tatsächlich verwendet - allerdings
  * PORTAL-INITIIERT (Server fragt das Terminal, nicht umgekehrt), vermittelt über
  * {@link TerminalMaintenanceService}. {@code LOG_RESPONSE} (fachliche Referenz
@@ -27,7 +27,7 @@ package org.kabieror.elwasys.backend.ws;
  * nicht verbundenes Terminal schlägt daher bewusst SOFORT serverseitig fehl
  * ({@link TerminalMaintenanceService}), ohne eine Nachricht zu senden.
  *
- * <p><b>Phase 4 AP5</b> (siehe kb/05-migration-plan.md, "Arbeitspakete Phase 4" AP5): das
+ * <p><b>Phase 4 AP5</b> (siehe docs/kb/05-migration-plan.md, "Arbeitspakete Phase 4" AP5): das
  * Terminal verbindet sich jetzt tatsächlich ausgehend ({@code TerminalWebSocketClient} im
  * Client-Raspi-Modul) und bedient {@code HELLO}/{@code PING}/{@code LOG_REQUEST}/
  * {@code RESTART_REQUEST} sowie - additiv ergänzt - auch das ebenfalls portal-initiierte

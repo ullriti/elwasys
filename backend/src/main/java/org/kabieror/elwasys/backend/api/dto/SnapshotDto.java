@@ -5,12 +5,12 @@ import java.util.List;
 
 /**
  * Standort-Snapshot für die Offline-Buchungs-Vorbereitung (AP3, Phase 4, siehe
- * kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal", Punkt 1 "Lokaler
+ * docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal", Punkt 1 "Lokaler
  * Daten-Snapshot"): "Nutzer mit Kartennummern, Guthaben, Sperr-Status, Geräte/Programme/
  * Preise, Berechtigungen" mit Zeitstempel. <b>Enthält bewusst KEINE Passwort-Hashes</b>
  * (siehe {@link SnapshotUserDto}).
  *
- * <p><b>Scope-Entscheidung (siehe kb/03-modules.md für die Begründung)</b>: {@code users}
+ * <p><b>Scope-Entscheidung (siehe docs/kb/03-modules.md für die Begründung)</b>: {@code users}
  * ist auf Benutzer beschränkt, deren Gruppe an DIESEM Standort zugelassen ist (({@code
  * userGroups} enthält entsprechend nur die Standort-Gruppen selbst), statt ALLE Benutzer des
  * Systems auszuliefern - ein Terminal muss offline nur wissen, wer bei ihm einchecken darf.
@@ -23,7 +23,7 @@ import java.util.List;
  * Programme beschränkt (analog {@code GET /api/v1/devices}, aber ohne {@code userId} -
  * siehe {@code DeviceOverviewDto}).
  *
- * <p>AP3 lieferte nur die DATEN aus; AP6 (Phase 4, siehe kb/05-migration-plan.md
+ * <p>AP3 lieferte nur die DATEN aus; AP6 (Phase 4, siehe docs/kb/05-migration-plan.md
  * "Festlegungen zu den Offline-Detailfragen") ergänzt additiv {@link #offlineMaxDurationMinutes()}
  * ("offline.max-duration" dieses Standorts, im Portal editierbar über
  * {@code LocationFormDialog}) und implementiert die eigentliche Offline-Entscheidungslogik

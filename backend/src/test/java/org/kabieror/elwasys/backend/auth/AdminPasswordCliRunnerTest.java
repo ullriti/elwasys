@@ -21,7 +21,7 @@ import org.springframework.boot.DefaultApplicationArguments;
 
 /**
  * Reiner Unit-Test (Mockito, keine DB) für {@link AdminPasswordCliRunner} (Phase 5 AP2, siehe
- * kb/05-migration-plan.md). Prüft die Argument-Validierung sowie, dass das Setzen des
+ * docs/kb/05-migration-plan.md). Prüft die Argument-Validierung sowie, dass das Setzen des
  * Passworts an {@link PasswordService#setNewPassword} delegiert wird - genau derselbe Weg, den
  * auch der admin-seitige Passwort-Reset im Portal verwendet (siehe {@link PasswordService}
  * Javadoc), sodass hier bewusst KEIN eigenes Hashing getestet wird (das deckt

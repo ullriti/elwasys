@@ -21,7 +21,7 @@ import org.kabieror.elwasys.backend.support.Fixtures;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * Tests für {@link UserGroupService} (Phase 3 AP2, siehe kb/05-migration-plan.md) -
+ * Tests für {@link UserGroupService} (Phase 3 AP2, siehe docs/kb/05-migration-plan.md) -
  * fachlicher Nachfolger von {@code Portal/.../components/UserGroupWindow} (Testfälle
  * P9/P13).
  */

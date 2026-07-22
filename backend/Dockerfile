@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# elwasys backend – container image (Phase 2 AP6, siehe kb/05-migration-plan.md).
+# elwasys backend – container image (Phase 2 AP6, siehe docs/kb/05-migration-plan.md).
 #
 # Build-Kontext ist die REPO-WURZEL, nicht dieses Verzeichnis (siehe docker-compose.yml unter
 # deploy/compose/ und die "docker build"-Schritte in .github/workflows/*.yml):
@@ -11,7 +11,7 @@
 # desselben Builds mit heran.
 #
 # Ein mvn-Aufruf (das frühere "common"-Modul wurde nach der Migration aufgelöst, siehe
-# kb/05-migration-plan.md):
+# docs/kb/05-migration-plan.md):
 #   mvn -f pom.xml package -pl backend -am -DskipTests   (Backend-Jar über den Reactor bauen)
 # Tests laufen hier bewusst NICHT (das Backend hat eine eigene, von Docker unabhängige
 # Test-Pipeline mit Testcontainers/lokalem PostgreSQL-Override, siehe

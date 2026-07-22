@@ -26,13 +26,13 @@ import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
 /**
- * Standortverwaltung (Phase 3 AP2, siehe kb/05-migration-plan.md) - fachlicher Nachfolger
+ * Standortverwaltung (Phase 3 AP2, siehe docs/kb/05-migration-plan.md) - fachlicher Nachfolger
  * von {@code Portal/.../components/LocationWindow} (Alt-Portal, Testfall P14), jetzt als
  * eigener Menüpunkt statt eines Dashboard-Dialogs (siehe {@code AdminLayout}-Javadoc: vom
  * Auftraggeber gewünschte UX-Verbesserung, keine Funktionsänderung). Ergänzt um Anlegen/
  * Löschen, die es im Alt-Fenster mangels eigener Ansicht so nicht gab.
  *
- * <p><b>Seit Phase 3 AP5</b> (siehe kb/05-migration-plan.md, "Live-Updates zwischen Sessions"):
+ * <p><b>Seit Phase 3 AP5</b> (siehe docs/kb/05-migration-plan.md, "Live-Updates zwischen Sessions"):
  * die Liste lädt sich über den {@link UiBroadcaster} automatisch neu, wenn irgendeine Session
  * einen Standort anlegt, bearbeitet oder löscht.
  */

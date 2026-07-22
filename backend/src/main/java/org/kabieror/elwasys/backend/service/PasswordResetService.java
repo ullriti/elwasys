@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Passwort-Reset per Email (Phase 3 AP4, siehe kb/05-migration-plan.md, kb/03-modules.md) -
+ * Passwort-Reset per Email (Phase 3 AP4, siehe docs/kb/05-migration-plan.md, docs/kb/03-modules.md) -
  * fachlicher Nachfolger von {@code Portal/.../components/PasswordForgotWindow} +
  * {@code ResetPasswordWindow} (Selbstbedienung, Testfall P19) sowie des
  * "Sende dem Benutzer per Email ein neues Passwort"-Teils von
@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p><b>Speicherung des Schlüssels</b>: nutzt bewusst die BESTEHENDEN Spalten
  * {@code users.password_reset_key}/{@code users.password_reset_timeout} (Teil der
  * Flyway-Baseline {@code V1__baseline_schema_0_4_0.sql}, 1:1 aus dem Alt-Schema übernommen,
- * siehe kb/02-data-model.md) statt einer neuen Migration - diese Spalten existieren im
+ * siehe docs/kb/02-data-model.md) statt einer neuen Migration - diese Spalten existieren im
  * Bestand bereits (der Alt-Code selbst nutzt sie über {@code common.User#generatePasswordResetKey}/
  * {@code #passwordResetKeyIsValid}), sind aber bisher von keiner Backend-Entity gelesen/
  * geschrieben worden. Kein Konflikt mit dem Alt-Portal: dessen eigener Reset-Flow bleibt

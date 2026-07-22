@@ -4,7 +4,7 @@ import java.math.BigDecimal;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 
 /**
- * DTO statt Entity an der API-Grenze (siehe kb/05-migration-plan.md, AP4: "beachte den
+ * DTO statt Entity an der API-Grenze (siehe docs/kb/05-migration-plan.md, AP4: "beachte den
  * EAGER-Hinweis aus AP2 - gezielte Abfragen/DTO-Mapping, keine Entity-Serialisierung").
  * Enthält bewusst KEIN Passwort-/Sicherheitsfeld.
  */

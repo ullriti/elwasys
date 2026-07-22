@@ -25,7 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Basisklasse für Integrationstests der Terminal-REST-API ({@code /api/v1/**}, AP4, siehe
- * kb/05-migration-plan.md). Eigene {@code @SpringBootTest}-Konfiguration statt
+ * docs/kb/05-migration-plan.md). Eigene {@code @SpringBootTest}-Konfiguration statt
  * {@link org.kabieror.elwasys.backend.support.AbstractBackendIT}: diese Tests brauchen einen
  * echten (Mock-)Servlet-Container, um BEIDE Sicherheitsketten (AP3-Catch-all +
  * {@code TerminalApiSecurityConfig}) end-to-end zu durchlaufen (analog

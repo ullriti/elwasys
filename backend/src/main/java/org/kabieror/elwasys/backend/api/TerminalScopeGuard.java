@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Setzt den Standort-Scope eines Terminal-Tokens für Geräte/Ausführungen durch (AP4, siehe
- * kb/05-migration-plan.md: "ein Token sieht nur Geräte/Executions seines Standorts" - vgl.
+ * docs/kb/05-migration-plan.md: "ein Token sieht nur Geräte/Executions seines Standorts" - vgl.
  * Client-E2E-Fall C16). Ein Gerät/eine Ausführung eines ANDEREN Standorts wird wie ein
  * unbekanntes behandelt ({@code 404}, nicht {@code 403}) - das verrät keine Existenz an
  * fremden Standorten.

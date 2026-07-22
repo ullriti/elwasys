@@ -15,11 +15,11 @@ import java.util.Set;
 
 /**
  * Entspricht der Tabelle {@code locations} (ein Standort = ein Client-Terminal, siehe
- * kb/02-data-model.md) sowie {@code org.kabieror.elwasys.common.Location} im Alt-Code.
+ * docs/kb/02-data-model.md) sowie {@code org.kabieror.elwasys.common.Location} im Alt-Code.
  *
  * <p>Die Spalten {@code client_uid}/{@code client_ip}/{@code client_port}/
  * {@code client_last_seen} (Registry für die alte Fernwartungs-Anwahl, siehe
- * kb/05-migration-plan.md Komponenten-Inventur: "Weg - obsolet durch ausgehende
+ * docs/kb/05-migration-plan.md Komponenten-Inventur: "Weg - obsolet durch ausgehende
  * Client-Verbindung") wurden hier nie gemappt und sind seit Phase 5 AP3
  * ({@code V9__drop_obsolete_location_client_columns.sql}) auch in der Datenbank entfernt.
  */
@@ -49,7 +49,7 @@ public class LocationEntity {
      * Maximale Dauer (in Minuten), für die ein Terminal dieses Standorts ohne
      * Backend-Verbindung eigenständig NEUE Buchungen akzeptiert ("offline.max-duration",
      * Phase 4 AP6, additive Migration {@code V5__add_offline_max_duration_to_locations.sql}
-     * - siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal" und
+     * - siehe docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal" und
      * "Festlegungen zu den Offline-Detailfragen"). Danach lehnt das Terminal neue Buchungen
      * ab (Fehlerbild wie C15); bereits laufende Ausführungen werden unabhängig davon
      * weiterhin lokal zu Ende geführt und nachgemeldet. Default 60 (Auftraggeber-Vorgabe),

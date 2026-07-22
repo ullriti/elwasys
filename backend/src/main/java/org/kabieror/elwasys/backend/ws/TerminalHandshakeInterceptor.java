@@ -15,7 +15,7 @@ import org.springframework.web.socket.server.HandshakeInterceptor;
 /**
  * Übernimmt den bereits vor dem WebSocket-Upgrade authentifizierten Standort-Kontext in die
  * {@link org.springframework.web.socket.WebSocketSession}-Attribute (AP4, siehe
- * kb/05-migration-plan.md: "authentifiziert mit demselben Standort-Token beim Handshake").
+ * docs/kb/05-migration-plan.md: "authentifiziert mit demselben Standort-Token beim Handshake").
  *
  * <p>Der WebSocket-Handshake ist zunächst eine normale HTTP-Anfrage - sie durchläuft daher
  * dieselbe {@code securityMatcher("/api/v1/**")}-Sicherheitskette wie die REST-Endpunkte

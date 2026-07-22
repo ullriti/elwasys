@@ -2,12 +2,12 @@ name: CI
 
 # Run the test suites on every pull request (and on pushes to master, so the
 # default branch stays green). Jobs mirror the documented local runner scripts (see
-# kb/06-ui-tests.md, kb/05-migration-plan.md "Phase 5 AP1"): client/backend build+test
+# docs/kb/06-ui-tests.md, docs/kb/05-migration-plan.md "Phase 5 AP1"): client/backend build+test
 # their module, backend-e2e is the Playwright suite (P1-P20) against the Vaadin-Flow Portal
 # (the Alt-Portal module and its own Playwright suite were removed in Phase 5 AP1 - it had
 # been STILLGELEGT as an E2E target since Phase 3 AP6, superseded by backend-e2e). The
 # Cross-Component maintenance-channel suite (P21/P22) needs no Portal module either. Since
-# Phase 4 AP5 (Fernwartung umgedreht, see kb/05-migration-plan.md) it exercises the outgoing
+# Phase 4 AP5 (Fernwartung umgedreht, see docs/kb/05-migration-plan.md) it exercises the outgoing
 # terminal WebSocket channel instead of the retired Alt-TCP protocol: a real, packaged
 # Client-Raspi jar talks to a real backend Spring context (TerminalMaintenanceRealClientE2ETest,
 # backend module) - it runs as an extra step in "client" (which already has Xvfb + a local
@@ -29,7 +29,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # Raspi-Client – JavaFX TestFX characterization tests + a headless end-to-end
   # test that boots the whole app against a seeded PostgreSQL and the in-project
-  # fhem simulator. Runs under Xvfb (see kb/06-ui-tests.md).
+  # fhem simulator. Runs under Xvfb (see docs/kb/06-ui-tests.md).
   # ---------------------------------------------------------------------------
   client:
     name: Client-Raspi (headless UI + E2E)
@@ -68,8 +68,8 @@ jobs:
         run: bash Client-Raspi/run-ui-tests.sh
 
       - name: Run Cross-Component maintenance E2E (headless via Xvfb)
-        # Successor of the old P21/P22 suite (Phase 4 AP5, see kb/05-migration-plan.md /
-        # kb/06-ui-tests.md): a real, packaged Client-Raspi jar talks to a real backend Spring
+        # Successor of the old P21/P22 suite (Phase 4 AP5, see docs/kb/05-migration-plan.md /
+        # docs/kb/06-ui-tests.md): a real, packaged Client-Raspi jar talks to a real backend Spring
         # context over the outgoing terminal WebSocket channel. Lives in the backend module's
         # test sources but is excluded from backend's own default "mvn test" run (see
         # backend/pom.xml) - this script is the only place that runs it.
@@ -93,11 +93,11 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Backend Portal (Vaadin Flow) – Playwright E2E (Phase 3 AP6 Abnahmekriterium, siehe
-  # kb/05-migration-plan.md / kb/06-ui-tests.md). backend/e2e/scripts/start-backend.sh boots
+  # docs/kb/05-migration-plan.md / docs/kb/06-ui-tests.md). backend/e2e/scripts/start-backend.sh boots
   # PostgreSQL, creates a fresh dedicated E2E database, builds the backend jar in production
   # mode (mvn package -Pproduction - the only build mode verified to run without a Vaadin
-  # dev-mode license check, see kb/05-migration-plan.md "Phase 3 AP2") and runs it; the P1-P20
-  # test plan (kb/08-test-plan.md) is exercised against it in Chromium. Fachlicher Nachfolger
+  # dev-mode license check, see docs/kb/05-migration-plan.md "Phase 3 AP2") and runs it; the P1-P20
+  # test plan (docs/kb/08-test-plan.md) is exercised against it in Chromium. Fachlicher Nachfolger
   # des Alt-Portal-Playwright-Ziels (Portal/e2e, Vaadin 7), das mitsamt dem Alt-Portal-Modul in
   # Phase 5 AP1 entfernt wurde.
   # ---------------------------------------------------------------------------
@@ -150,11 +150,11 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Backend – new Spring Boot module (Phase 2, parallel to the legacy stack, see
-  # kb/05-migration-plan.md).
+  # docs/kb/05-migration-plan.md).
   #
   # Tests use Testcontainers by default (see backend/src/test/.../TestPostgres.java) - unlike
   # the "client"/"backend-e2e" jobs above, which seed/boot a local PostgreSQL cluster because
-  # the sandboxed dev container this project is normally developed in (see kb/07-cloud-init.md)
+  # the sandboxed dev container this project is normally developed in (see docs/kb/07-cloud-init.md)
   # has no Docker daemon. GitHub-hosted ubuntu-24.04 runners *do* have a Docker daemon, so
   # here Testcontainers can run unmodified and doesn't need the local-PG workaround
   # backend/run-backend-tests.sh provides for that daemon-less environment.
@@ -183,10 +183,10 @@ jobs:
           path: backend/target/surefire-reports/
           if-no-files-found: ignore
 
-      # Deployment (Phase 2 AP6, siehe kb/05-migration-plan.md, backend/Dockerfile): baut nur
+      # Deployment (Phase 2 AP6, siehe docs/kb/05-migration-plan.md, backend/Dockerfile): baut nur
       # das Container-Image, ohne es zu veröffentlichen - beweist, dass das Dockerfile
       # tatsächlich baubar ist (kann in der sandboxed Entwicklungsumgebung dieses Projekts
-      # nicht verifiziert werden, siehe kb/07-cloud-init.md: kein Docker-Daemon dort).
+      # nicht verifiziert werden, siehe docs/kb/07-cloud-init.md: kein Docker-Daemon dort).
       # GitHub-Actions-ubuntu-24.04-Runner bringen Docker+BuildKit bereits mit. Kontext ist die
       # Repo-Wurzel (siehe Kopf-Kommentar von backend/Dockerfile), unabhängig vom
       # obigen Maven-Build dieses Jobs (baut den Jar-Build im eigenen Container noch einmal,

@@ -29,7 +29,7 @@ import org.kabieror.elwasys.backend.service.UserGroupService;
  * {@code Portal/.../components/UserGroupWindow} (Alt-Portal, Testfall P9). Die drei
  * "TwinColSelect"-Auswahlen des Alt-Fensters (Standorte/Geräte/Programme, die für diese
  * Gruppe freigegeben sind) sind hier als {@link MultiSelectComboBox} umgesetzt - gleiche
- * Funktion (Mehrfachauswahl), moderneres Bedienelement (siehe kb/05-migration-plan.md,
+ * Funktion (Mehrfachauswahl), moderneres Bedienelement (siehe docs/kb/05-migration-plan.md,
  * "Entscheidungen", Gestaltungsrahmen Portal-Neubau: UX-Verbesserungen sind erwünscht,
  * solange die Struktur wiedererkennbar bleibt).
  */

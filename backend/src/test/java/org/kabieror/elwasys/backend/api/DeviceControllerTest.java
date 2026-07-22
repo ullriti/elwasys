@@ -19,7 +19,7 @@ import org.kabieror.elwasys.backend.support.Fixtures;
 import org.springframework.http.MediaType;
 
 /**
- * Geräte-/Programmliste über die Terminal-API (AP4, siehe kb/05-migration-plan.md).
+ * Geräte-/Programmliste über die Terminal-API (AP4, siehe docs/kb/05-migration-plan.md).
  * Standort-Scope entspricht dem Client-E2E-Fall C16 ("standortfremdes Gerät erscheint nicht
  * in der Liste") - hier zusätzlich für den direkten Zugriff per Id (404 statt 403, siehe
  * {@link org.kabieror.elwasys.backend.api.exception.DeviceNotFoundException}).
@@ -241,7 +241,7 @@ class DeviceControllerTest extends AbstractApiIT {
     }
 
     /**
-     * Phase 4 AP4 (additiv, siehe kb/05-migration-plan.md Änderungslog): fachlicher
+     * Phase 4 AP4 (additiv, siehe docs/kb/05-migration-plan.md Änderungslog): fachlicher
      * Nachfolger von {@code Device#modify(...)}, den der Client-Alt-Code
      * ({@code DeconzRegistrationService#registerDevice}) nach einer erfolgreichen
      * Pairing-Suche aufruft, um die neu gefundene deCONZ-Geräte-Id zu hinterlegen. Die

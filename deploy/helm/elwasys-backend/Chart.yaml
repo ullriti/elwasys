@@ -3,11 +3,11 @@ name: elwasys-backend
 description: >-
   elwasys-Backend (Spring Boot) – Geschäftslogik, REST-API/WebSocket für Terminals,
   integriertes Admin-Portal-UI (Vaadin Flow, seit Phase 3 Teil des Backends - kein
-  eigenständiges Portal-Modul mehr). Siehe kb/05-migration-plan.md (Modernisierungsplan) und
-  kb/01-architecture.md im elwasys-Repo. Dieser Chart deployt AUSSCHLIESSLICH das Backend
+  eigenständiges Portal-Modul mehr). Siehe docs/kb/05-migration-plan.md (Modernisierungsplan) und
+  docs/kb/01-architecture.md im elwasys-Repo. Dieser Chart deployt AUSSCHLIESSLICH das Backend
   (Deployment/Service/Ingress/ConfigMap/Secret) - PostgreSQL wird bewusst nicht als
   Sub-Chart mitgeliefert, siehe die Begründung in values.yaml unter "database:" und in
-  kb/05-migration-plan.md ("Entscheidungen").
+  docs/kb/05-migration-plan.md ("Entscheidungen").
 type: application
 # Chart-Version: eigene, vom Anwendungs-Release unabhängige Versionierung dieses Helm-Charts
 # (SemVer, hochzählen bei Chart-Änderungen wie neuen Values/Templates).

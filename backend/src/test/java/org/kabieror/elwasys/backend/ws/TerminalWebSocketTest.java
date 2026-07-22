@@ -34,12 +34,12 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * End-to-End-Test des Terminal-WebSocket-Endpunkts ({@code /api/v1/terminal-ws}, AP4, siehe
- * kb/05-migration-plan.md/kb/03-modules.md): Handshake mit/ohne Standort-Token sowie das
+ * docs/kb/05-migration-plan.md/kb/03-modules.md): Handshake mit/ohne Standort-Token sowie das
  * Minimal-Nachrichtenpaar (HELLO/HELLO_ACK, PING/PONG, STATUS_REQUEST/STATUS_RESPONSE).
  *
  * <p>Nutzt den JDK-eigenen {@link java.net.http.HttpClient}-WebSocket-Client (keine
  * zusätzliche Testabhängigkeit nötig) - derselbe Client, den der Raspi-Terminal-Client laut
- * kb/05-migration-plan.md ohnehin für die Backend-Anbindung nutzen soll
+ * docs/kb/05-migration-plan.md ohnehin für die Backend-Anbindung nutzen soll
  * (Technologie-Entscheidung "HTTP im Terminal").
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -194,7 +194,7 @@ class TerminalWebSocketTest {
     }
 
     // ---------------------------------------------------------------------------------------
-    // Phase 3 AP4 (siehe kb/05-migration-plan.md, Roadmap-Punkt "Fernwartung"): Tests der
+    // Phase 3 AP4 (siehe docs/kb/05-migration-plan.md, Roadmap-Punkt "Fernwartung"): Tests der
     // Portal-seitigen Fernwartungs-Vermittlung (TerminalMaintenanceService) - ergänzt HIER
     // (statt in einer eigenen Testklasse) bewusst denselben RANDOM_PORT-Kontext wieder, um
     // keinen weiteren, zusätzlichen Spring-Kontext (samt eigenem Connection-Pool) gegen den

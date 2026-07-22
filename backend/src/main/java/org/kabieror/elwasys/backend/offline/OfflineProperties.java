@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Konfiguration der Backend-seitigen Offline-Nachmelde-Toleranz (Phase 4 AP6, siehe
- * kb/05-migration-plan.md "Festlegungen zu den Offline-Detailfragen" - "Uhren-Drift:
+ * docs/kb/05-migration-plan.md "Festlegungen zu den Offline-Detailfragen" - "Uhren-Drift:
  * ... Toleranz [konkret: ±5 Minuten, konfigurierbar]"). Terminals laufen mit NTP
  * (Raspbian-Default), Original-Zeitstempel können aber trotzdem leicht abweichen bzw. ein
  * Terminal kann während eines Backend-Ausfalls länger als die konfigurierte

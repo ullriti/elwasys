@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Charakterisierungstests für die Zustandsmaschine {@link MainFormStateManager}.
  *
  * <p>Bewusst KEIN TestFX/Xvfb-E2E-Test im Sinne der bestehenden Client-Suite (siehe
- * kb/06-ui-tests.md): Hier wird ausschließlich das Zustandsmodell selbst geprüft - ohne
+ * docs/kb/06-ui-tests.md): Hier wird ausschließlich das Zustandsmodell selbst geprüft - ohne
  * Datenbank, ohne {@link org.kabieror.elwasys.raspiclient.application.ElwaManager},
  * ohne echte Stage/Szene und ohne Programmstart über {@code Main}. Die einzige
  * JavaFX-Abhängigkeit ist der Application-Thread, den {@code gotoState()} für die
@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>Dieser Test liegt bewusst im selben Package wie {@link MainFormStateManager} und
  * {@link MainFormController}: Beide sind package-private bzw. haben package-private
  * Felder (die Pane-Controller wie {@code devicesPaneController}), auf die hier direkt
- * zugegriffen wird - siehe kb/05-migration-plan.md (Phase 1, "ElwaManager-Singleton per
+ * zugegriffen wird - siehe docs/kb/05-migration-plan.md (Phase 1, "ElwaManager-Singleton per
  * DI entkoppeln"). Der dort eingeführte Test-Konstruktor
  * {@code new MainFormController(false)} überspringt die Kopplung an
  * {@code ElwaManager.instance}: Schon das bloße Referenzieren dieses Singletons würde

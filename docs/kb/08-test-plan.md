@@ -126,11 +126,11 @@ P1–P20. **Alle geplanten Fälle sind umgesetzt.**
   Knopf per Playwright klicken.
 
 > **Update Phase 4 AP5 (2026-07-21)**: Die Fernwartung ist umgedreht (ausgehende
-> Terminal-WebSocket-Verbindung statt Alt-TCP-Protokoll, siehe kb/05-migration-plan.md/
-> kb/03-modules.md), `ClientMaintenanceConnectionE2ETest` ist entfernt. P21/P22 werden jetzt
+> Terminal-WebSocket-Verbindung statt Alt-TCP-Protokoll, siehe docs/kb/05-migration-plan.md/
+> docs/kb/03-modules.md), `ClientMaintenanceConnectionE2ETest` ist entfernt. P21/P22 werden jetzt
 > durch `TerminalMaintenanceRealClientE2ETest` (Backend-Modul: Status/Log/Restart über den
 > echten WS-Kanal, echter Client-Subprozess + echte `TerminalMaintenanceService`-Bean) über
-> `Client-Raspi/run-cross-component-e2e.sh` abgedeckt – siehe kb/06-ui-tests.md für den vollen
+> `Client-Raspi/run-cross-component-e2e.sh` abgedeckt – siehe docs/kb/06-ui-tests.md für den vollen
 > Testaufbau. Der obige Abschnitt beschreibt den ABGELÖSTEN Alt-Stand, historisch belassen.
 
 **Hinweise zu den zuletzt ergänzten Fällen:**
@@ -145,8 +145,8 @@ P1–P20. **Alle geplanten Fälle sind umgesetzt.**
   abgelaufener) Offline-Snapshot vorliegt - andernfalls startet der Client im Offline-Modus
   (siehe „C15-Nachfolger (Offline-Robustheit, Phase 4 AP6)" unten).
 
-**C15-Nachfolger (Offline-Robustheit, Phase 4 AP6, siehe kb/05-migration-plan.md
-„Konzeptskizze: Offline-Buchungen am Terminal" und kb/06-ui-tests.md „Offline-Robustheit"):**
+**C15-Nachfolger (Offline-Robustheit, Phase 4 AP6, siehe docs/kb/05-migration-plan.md
+„Konzeptskizze: Offline-Buchungen am Terminal" und docs/kb/06-ui-tests.md „Offline-Robustheit"):**
 
 | ID | Prio | Testfall | Kern-Assertion | Testklasse |
 |----|------|----------|-----------------|------------|
@@ -179,6 +179,6 @@ ursprünglichen Plans stehen, war aber bereits seit Phase 3 AP6 nicht mehr das E
 und ist – mit dem gesamten Alt-Portal-Modul – seit **Phase 5 AP1** auch als Code aus dem Repo
 entfernt (Abschnitt B unten beschreibt daher nicht mehr ausführbaren Code). Details, Selektor-
 Strategie und
-Test-für-Test-Status: kb/06-ui-tests.md. Fachliche Abweichungen (P14 eigener
+Test-für-Test-Status: docs/kb/06-ui-tests.md. Fachliche Abweichungen (P14 eigener
 „Standorte“-Menüpunkt, P16 nur noch Neu-Portal-Teil wegen Argon2id, P19 zusätzlicher
-Fehlerfall) sind dort begründet und in kb/05-migration-plan.md unter „Entscheidungen“ verortet.
+Fehlerfall) sind dort begründet und in docs/kb/05-migration-plan.md unter „Entscheidungen“ verortet.
