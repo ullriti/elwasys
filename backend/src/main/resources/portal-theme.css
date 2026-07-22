@@ -1,0 +1,196 @@
+/*
+ * elwasys-Portal-Design - stellt den vertrauten AdminLTE-Look des Alt-Portals (Portal/, in
+ * Phase 5 AP1 entfernt) im neuen Vaadin-Flow-Portal wieder her: blauer Kopfbalken, dunkle
+ * Sidebar mit hervorgehobenem aktivem Punkt, gerahmte/gezebra-te Tabellen, hellgrauer
+ * Inhaltsbereich und eine als Karte gerahmte Login-Maske.
+ *
+ * Dieses Stylesheet wird zur LAUFZEIT dokumentweit in den <head> eingehängt (siehe
+ * ElwasysAppShell#configurePage) und nicht als kompiliertes Vaadin-Theme ausgeliefert - die
+ * ausführliche Begründung (Vaadin-24.10-Lizenzcheck beim Frontend-Build) steht dort im Javadoc.
+ *
+ * Wirkprinzip: Lumo-Custom-Properties (vererben sich in die Shadow-DOMs der Komponenten) +
+ * ::part()-Selektoren auf den von Vaadin exponierten Teilen + die Light-DOM-Klassen-Hooks der
+ * Views. Es werden ausschließlich Farben/Rahmen verändert - keine Texte, keine Struktur.
+ */
+
+/* AdminLTE-Farbpalette als Lumo-Grundfarben. */
+html {
+  --lumo-primary-color: #3c8dbc;
+  --lumo-primary-color-50pct: rgba(60, 141, 188, 0.5);
+  --lumo-primary-color-10pct: rgba(60, 141, 188, 0.12);
+  --lumo-primary-text-color: #3c8dbc;
+
+  --lumo-border-radius-s: 2px;
+  --lumo-border-radius-m: 3px;
+  --lumo-border-radius-l: 3px;
+
+  --elwa-header-blue: #3c8dbc;
+  --elwa-sidebar-dark: #222d32;
+  --elwa-sidebar-active: #1e282c;
+  --elwa-sidebar-text: #b8c7ce;
+  --elwa-content-bg: #ecf0f5;
+  --elwa-box-border: #d2d6de;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Kopfbalken (AppLayout-Navbar) - durchgehend AdminLTE-Blau, weiße Schrift.
+ * ------------------------------------------------------------------ */
+vaadin-app-layout::part(navbar) {
+  background-color: var(--elwa-header-blue);
+  color: #ffffff;
+  border-bottom: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  min-height: 50px;
+}
+
+.admin-layout-title,
+.user-layout-title {
+  color: #ffffff;
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1;
+  margin: 0 0 0 0.25rem;
+  white-space: nowrap;
+}
+
+/* Menü-Icon (DrawerToggle) in Weiß. */
+vaadin-app-layout::part(navbar) vaadin-drawer-toggle {
+  color: #ffffff;
+}
+
+/* Benutzermenü nach rechts schieben und in Weiß darstellen. */
+.user-menu-bar {
+  margin-left: auto;
+  --lumo-primary-text-color: #ffffff;
+  --lumo-body-text-color: #ffffff;
+  --lumo-primary-color-10pct: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Sidebar (AppLayout-Drawer) - dunkles Charcoal, helle Navigationstexte.
+ *  Die SideNav-Items ziehen ihre Farben selbst aus diesen Lumo-Variablen,
+ *  daher genügt es, sie hier auf Drawer-Ebene umzudefinieren.
+ * ------------------------------------------------------------------ */
+vaadin-app-layout::part(drawer) {
+  background-color: var(--elwa-sidebar-dark);
+  border-right: none;
+  padding: 0;
+
+  --lumo-body-text-color: var(--elwa-sidebar-text);
+  --lumo-contrast-90pct: #ffffff;
+  --lumo-contrast-80pct: #dfe7ea;
+  --lumo-contrast-70pct: #cdd8dd;
+  --lumo-contrast-60pct: var(--elwa-sidebar-text);
+  --lumo-contrast-50pct: #a3b3bb;
+
+  /* Hover-Hintergrund der Items: SideNav nutzt --lumo-contrast-5pct dafür. */
+  --lumo-contrast-5pct: var(--elwa-sidebar-active);
+
+  /* Aktiver Punkt: dunkler Hintergrund + weiße Schrift (SideNav nutzt diese Variablen). */
+  --lumo-primary-color: var(--elwa-header-blue);
+  --lumo-primary-text-color: #ffffff;
+  --lumo-primary-color-10pct: var(--elwa-sidebar-active);
+}
+
+vaadin-app-layout::part(drawer) vaadin-side-nav {
+  width: 100%;
+  padding: 0.25rem 0;
+}
+
+/* Hover-Hervorhebung der Navigationspunkte. */
+vaadin-side-nav-item:hover::part(link) {
+  background-color: var(--elwa-sidebar-active);
+}
+
+/*
+ * Aktiver Navigationspunkt (Vaadin markiert ihn mit dem Attribut [current], NICHT [active]):
+ * dunkler Hintergrund, weiße Schrift und der blaue linke Balken des Alt-Portals. Die Farben
+ * werden hier explizit auf den exponierten link-Part gesetzt, weil der current-Zustand in
+ * Vaadins Lumo-Styling sonst die dunkle Standard-Textfarbe verwendet (auf der dunklen Sidebar
+ * unsichtbar).
+ */
+vaadin-side-nav-item[current]::part(link) {
+  color: #ffffff;
+  background-color: var(--elwa-sidebar-active);
+  box-shadow: inset 3px 0 0 0 var(--elwa-header-blue);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Inhaltsbereich - hellgrauer Hintergrund wie im Alt-Portal.
+ *  Die geroutete View ist das einzige Kind der AppLayout ohne slot-Attribut.
+ * ------------------------------------------------------------------ */
+vaadin-app-layout > :not([slot]) {
+  background-color: var(--elwa-content-bg);
+}
+
+vaadin-app-layout > :not([slot]) h2 {
+  font-weight: 400;
+  color: #2f3d44;
+  margin-top: 0.25rem;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Tabellen (Grid) - gerahmt und gezebra-t statt nackt.
+ * ------------------------------------------------------------------ */
+vaadin-grid {
+  border: 1px solid var(--elwa-box-border);
+  border-radius: 3px;
+  background-color: #ffffff;
+}
+
+vaadin-grid::part(header-cell) {
+  background-color: #f7f8fa;
+  color: #4b5563;
+  font-weight: 600;
+}
+
+vaadin-grid::part(cell) {
+  border-inline-end: 1px solid #f0f1f3;
+}
+
+vaadin-grid::part(even-row-cell) {
+  background-color: #f7f9fb;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Dashboard-Karten - weiße Boxen mit blauem oberem Rand (AdminLTE-"box box-primary").
+ * ------------------------------------------------------------------ */
+.dashboard-device-panel,
+.dashboard-spark {
+  background-color: #ffffff;
+  border: 1px solid var(--elwa-box-border);
+  border-top: 3px solid var(--elwa-header-blue);
+  border-radius: 3px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+}
+
+.dashboard-location-header h3 {
+  color: #3c8dbc;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Login-Maske - als Karte mit blauem oberem Rand, auf grauem Hintergrund.
+ * ------------------------------------------------------------------ */
+.login-view {
+  background-color: var(--elwa-content-bg);
+}
+
+.login-view h2 {
+  color: #444444;
+  font-weight: 600;
+}
+
+.login-view vaadin-login-form,
+.login-view vaadin-login-form-wrapper {
+  background-color: #ffffff;
+  border-top: 3px solid var(--elwa-header-blue);
+  border-radius: 3px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+
+.reset-password-view {
+  background-color: var(--elwa-content-bg);
+}

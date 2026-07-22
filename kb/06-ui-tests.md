@@ -385,6 +385,22 @@ aufgebaut (Playwright/Node/TS, gleiches `package.json`-Muster, gleiche Chromium-
   `rowActionButton()` adressiert sie deshalb bewusst über ihre Quellcode-Reihenfolge
   (`actionButtons()`-Methode der jeweiligen View), genau wie die Alt-Suite es für Vaadin 7
   tat.
+- **Aktiver Navigationspunkt**: Vaadin markiert das gerade ausgewählte `vaadin-side-nav-item`
+  mit dem Attribut **`[current]`** (nicht `[active]`). Für Assertions/Selektoren, die „der
+  Menüpunkt X ist aktiv" prüfen wollen, ist das der richtige Anker; die bestehenden Helfer
+  (`openAdminSection` prüft die URL, nicht das Attribut) sind davon unberührt.
+
+### Portal-Design zur Laufzeit (kein kompiliertes Theme)
+
+Seit 2026-07-22 liefert das Portal wieder den AdminLTE-Look des Alt-Portals aus (blauer Header,
+dunkle Sidebar, gerahmte Zebra-Tabellen, Login als Karte). Das Styling ist **bewusst kein
+kompiliertes Vaadin-Theme**, sondern ein zur Laufzeit in den `<head>` injiziertes Stylesheet
+(`ElwasysAppShell#configurePage` → `backend/src/main/resources/portal-theme.css`) – ein echtes
+`@Theme`/`@CssImport` würde einen Frontend-Bundle-Build und damit den Vaadin-24.10-Lizenzcheck
+erzwingen, der in dieser Umgebung abbricht (siehe kb/05-migration-plan.md, Risikotabelle
+„Vaadin-Lizenzpflicht" + Änderungslog „Portal-Design-Wiederherstellung"). Für die E2E-Suite
+ist das **rein kosmetisch**: nur Farben/Rahmen ändern sich, keine Texte/Struktur/Selektoren –
+P1–P20 blieben nach der Änderung unverändert **19/19 grün** (sauberer `-Pproduction`-Build).
 
 ### Test-für-Test-Status (P1–P20, letzter Lauf 2026-07-21)
 
