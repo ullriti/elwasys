@@ -130,10 +130,78 @@ wird) und stößt nur den Neustart an.
 `ELWA_JAVA_PGREP` (Default `pgrep -x java`), `ELWA_GITHUB_REPO` (Default
 `kabieror/elwasys`).
 
-**Auto-Update mit Rollback (folgt in AP5):** Ein Watchdog rollt automatisch aus
-und fällt bei Startproblemen zurück. Der Rollback braucht dank obiger Konvention
-nur **`latest` zurück auf das `previous`-Ziel + `java`-Prozess beenden** – die
-Loop startet dann wieder die vorige Version.
+## Auto-Update mit Rollback (`auto-update-watchdog.sh`, Phase 6 AP5)
+
+`deploy/terminal/auto-update-watchdog.sh` hebt ein Terminal **selbsttätig** auf
+eine neue Client-Version und **fällt bei einem fehlgeschlagenen Start automatisch
+zurück**. Es ist bewusst die schlanke Shell-/Cron-Variante – **kein systemd, kein
+großer Java-Umbau** (Auftraggeber-Entscheidung 2026-07-22, „kein Overkill"). Der
+einzige Client-Java-Zusatz ist ein kleiner **Readiness-Marker** (siehe unten).
+
+### Funktionsweise (ein Cron-Lauf)
+
+1. **Aktuelle Version** aus dem `raspi-client.latest.jar`-Symlink ableiten.
+2. **Ziel-Version** ermitteln: primär GitHub-Releases-`latest` (gleiches Muster
+   wie `setup.sh`/`update.sh`, per `ELWA_LATEST_VERSION_CMD` überschreibbar).
+   Existiert die Datei `${ELWA_ROOT}/.update-target`, hat ihr Inhalt **Vorrang**
+   – so kann der Betrieb/das Backend ein Update anstoßen, **ohne Backend-Code zu
+   ändern** (der GitHub-Poll bleibt der Normalpfad; die Datei wird nach einem
+   erfolgreichen Update konsumiert).
+3. **Up-to-date** (Ziel == aktuell) → stiller No-op (Exit 0, nur Logdatei).
+4. **Lockfile** `${ELWA_ROOT}/.watchdog.lock` (atomar via `mkdir`) verhindert
+   parallele Cron-Läufe.
+5. Läuft **keine JVM** (Terminal aus), wird das Update auf einen späteren Lauf
+   verschoben – **kein erzwungener Start**.
+6. **Update mit Verifikation** (Ziel neuer): Konfig-Snapshot
+   (`elwasys.properties` → `.previous`), `restart_epoch`+Marker-mtime merken,
+   `update.sh --version <ziel>` (rotiert `latest`/`previous` + Neustart), dann bis
+   zu `ELWA_UPDATE_DEADLINE` Sekunden (Default 180) darauf warten, dass der
+   **Readiness-Marker** einen mtime **> `restart_epoch`** bekommt.
+7. **Erfolg** → loggen, Snapshot aufräumen, Exit 0.
+8. **Fehlschlag** (Deadline überschritten) → **ROLLBACK**: `latest` zurück auf das
+   `previous`-Ziel, Konfig ggf. aus `.previous` zurückspielen, `java` killen
+   (Supervisor relauncht die vorige Version), erneut kurz auf den Marker warten
+   (Recovery bestätigen); klarer **FAILURE**-Log auf stderr **und** in
+   `${ELWA_ROOT}/log/auto-update-watchdog.log`; Exit != 0.
+
+### Der Readiness-Marker (`SELECT_DEVICE` → `.terminal-ready`)
+
+Der JavaFX-Client schreibt beim Erreichen des bedienbereiten Zustands
+`SELECT_DEVICE` (u. a. beim frischen Start `STARTUP → SELECT_DEVICE`) eine
+Marker-Datei mit frischem `mtime` (Klasse
+`org.kabieror.elwasys.raspiclient.application.TerminalReadinessMarker`). Pfad:
+System-Property `elwasys.readyMarkerFile`, sonst `${user.dir}/.terminal-ready` –
+auf dem Gerät `/opt/elwasys/.terminal-ready`, weil `run.sh` `cd $ELWA_ROOT` macht.
+Ein mtime-Fortschritt **nach** einem Update ist der Beweis, dass die neue Version
+tatsächlich hochgekommen ist. Der Marker-Schreiber ist robust: jeder IO-Fehler
+wird gefangen und nur geloggt, **nie** in die UI geworfen – der Bedienfluss bleibt
+unverändert. Watchdog-Marker-Pfad per `ELWA_MARKER_FILE` (Default
+`${ELWA_ROOT}/.terminal-ready`).
+
+### Cron-Einrichtung
+
+Als **Terminal-User** (der auch den Client fährt), damit `${user.dir}`/Rechte
+passen. `sudo killall java` muss ohne Passwort laufen (bei `setup.sh`-Geräten via
+sudoers gegeben). Beispiel – alle 30 Minuten:
+
+```cron
+# /etc/cron.d/elwasys-watchdog  (oder `crontab -e` des Terminal-Users)
+*/30 * * * * pi /opt/elwasys/../deploy/terminal/auto-update-watchdog.sh >> /opt/elwasys/log/auto-update-watchdog.cron.log 2>&1
+```
+
+(Pfad zum Skript an die Ablage anpassen; `update.sh` wird per Default **neben**
+dem Watchdog gesucht, überschreibbar via `ELWA_UPDATE_SCRIPT`.)
+
+**Env-Overrides** (Tests/Sonderfälle): `ELWA_ROOT`, `ELWA_RESTART_CMD`,
+`ELWA_JAVA_PGREP`, `ELWA_LATEST_VERSION_CMD`, `ELWA_UPDATE_DEADLINE`,
+`ELWA_MARKER_FILE`, `ELWA_UPDATE_SCRIPT`, `ELWA_GITHUB_REPO`.
+
+**Vor einem Java-Versionssprung** zuerst [`upgrade-jre.sh`](upgrade-jre.sh)
+ausführen (Java 21) – der Watchdog rollt nur das Jar, nicht das JRE.
+
+**Verifikation:** echte Rollouts wurden **nur trocken** nachgewiesen (Temp-
+`ELWA_ROOT`, Fake-Jars, Fake-`java`, Fake-Version-Cmd, kurze Deadline) – keine
+echten Downloads/apt/sudo. Details im Abschnitt unten.
 
 ## Hinweis zur Verifikation in dieser Umgebung
 
@@ -147,5 +215,11 @@ einem gefakten `run.sh`-Loop (Overrides `ELWA_RESTART_CMD`/`ELWA_JAVA_PGREP`)
 nachgewiesen: `latest`/`previous`-Umschaltung, Relaunch der Loop mit der neuen
 Version, Idempotenz (erneuter Lauf → No-op, `previous` unverändert) und der
 Kein-java-Fall. Der GitHub-Download (`--version`) wurde **nicht** real gegen
-github.com ausgeführt. Details im Änderungslog „Phase 6 AP3"/„Phase 6 AP4" in
-kb/05-migration-plan.md.
+github.com ausgeführt. Für `auto-update-watchdog.sh` (AP5) wurde in einem Temp-
+`ELWA_ROOT` mit Fake-Jars, gefaktem `java`-Check/-Restart und gefakter
+Version-Ermittlung (kurze Deadline) nachgewiesen: Szenario A (gutes Update →
+`latest` = neue Version, kein Rollback), Szenario B (Marker bleibt aus → Deadline
+→ Rollback auf `previous`, Recovery bestätigt, FAILURE-Log), Szenario C
+(up-to-date → stiller No-op) und die Lockfile-Sperre gegen parallele Läufe – ohne
+echte Downloads/apt/sudo, ohne hängende Prozesse. Details im Änderungslog
+„Phase 6 AP3"/„Phase 6 AP4"/„Phase 6 AP5" in kb/05-migration-plan.md.

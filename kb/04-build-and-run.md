@@ -273,6 +273,29 @@ eines mit Sprachlevel 21 gebauten Release-Jars** (löst das Java-17-Restrisiko d
 Risikotabelle auf, siehe „Bekannte Build-Risiken" unten). Ein frisches Gerät braucht das
 nicht: `setup.sh` installiert Java 21 ohnehin.
 
+**Client-Jar-Update (`deploy/terminal/update.sh`, seit Phase 6 AP4)**: hebt ein bereits
+provisioniertes Terminal auf ein neues fat-jar, ohne `setup.sh` erneut zu fahren
+(`--version <tag>` von GitHub oder `--jar <Pfad>` offline). Jar-Layout: versionierte
+`raspi-client-<version>.jar` bleiben liegen, Symlink `raspi-client.latest.jar` → aktuell,
+`raspi-client.previous.jar` → vorige Version (Rollback-Ziel). Neustart über den Supervisor-
+Vertrag (java beenden → Loop startet das neu verlinkte Jar).
+
+**Auto-Update mit Rollback (`deploy/terminal/auto-update-watchdog.sh`, seit Phase 6 AP5)**:
+bewusst schlanke Shell-/Cron-Variante (kein systemd). Für periodischen Cron-Aufruf als
+Terminal-User gedacht (Beispiel `*/30 * * * *`, siehe Runbook). Ein Lauf: aktuelle Version
+aus `raspi-client.latest.jar` ableiten → Ziel-Version ermitteln (primär GitHub-Releases-
+`latest`, optionaler ops/backend-Override `${ELWA_ROOT}/.update-target` hat Vorrang) → bei
+neuerer Version `update.sh --version` aufrufen und den erfolgreichen Start über den
+**Readiness-Marker** verifizieren: der Client schreibt beim Erreichen von `SELECT_DEVICE`
+eine Datei `${ELWA_ROOT}/.terminal-ready` mit frischem `mtime`
+(`TerminalReadinessMarker`, siehe kb/03); bleibt der `mtime`-Fortschritt binnen
+`ELWA_UPDATE_DEADLINE` (Default 180 s) aus, **Rollback** auf `raspi-client.previous.jar`
+(plus Konfig-Snapshot `elwasys.properties.previous`) + java killen + Recovery bestätigen +
+klarer FAILURE-Log unter `${ELWA_ROOT}/log/`. Lockfile `${ELWA_ROOT}/.watchdog.lock` gegen
+parallele Cron-Läufe; stiller No-op bei up-to-date bzw. wenn kein java läuft (Terminal aus).
+Env-Overrides (u. a. für Trocken-Tests): `ELWA_ROOT`, `ELWA_RESTART_CMD`, `ELWA_JAVA_PGREP`,
+`ELWA_LATEST_VERSION_CMD`, `ELWA_UPDATE_DEADLINE`, `ELWA_MARKER_FILE`, `ELWA_UPDATE_SCRIPT`.
+
 ### Datenbank
 PostgreSQL, initialisiert über `Common/resources/database-init.sql` (legt DB `elwasys`,
 Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).

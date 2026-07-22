@@ -69,6 +69,17 @@ kb/05-migration-plan.md, Änderungslog „Phase 4 AP5“.
     Toolbar, UserSettings, Wait, Copyright), `state/` (ErrorState, ToolbarState, Listener)
   - `ui/scheduler/` – `InactivityScheduler`, `InactivityJob/Future`, `BacklightManager`
   - `ui/` gemeinsam: `MainFormState`, `Icons`, `UiUtilities`, `AbstractMainFormController`
+- **Readiness-Marker (Phase 6 AP5)**: `application/TerminalReadinessMarker` schreibt beim
+  erfolgreichen Wechsel in den bedienbereiten Zustand `MainFormState.SELECT_DEVICE` (u. a.
+  beim `STARTUP → SELECT_DEVICE` eines frischen Starts) eine Marker-Datei mit frischem
+  `mtime` (`${user.dir}/.terminal-ready`, überschreibbar per System-Property
+  `elwasys.readyMarkerFile`). Aufgerufen als Einzeiler aus BEIDEN
+  `MainFormStateManager#gotoState` (medium + small) an der Stelle, an der `SELECT_DEVICE`
+  wirksam gesetzt wird. Robust: jeder IO-Fehler wird gefangen und nur geloggt, **nie** in die
+  UI geworfen – der Bedienfluss/die Zustandsmaschine ändern sich nicht. Der Shell-Watchdog
+  `deploy/terminal/auto-update-watchdog.sh` wertet den `mtime` aus, um einen erfolgreichen
+  Start einer frisch ausgerollten Version zu verifizieren (siehe kb/04, „Auto-Update mit
+  Rollback"). Keine neuen `ConfigurationManager`-Keys (System-Property genügt).
 - `executions/` – `ExecutionManager`, `ExecutionFinisher` (Benachrichtigungsversand seit AP4
   entfernt, siehe unten; seit AP6 fängt `ExecutionFinisher` einen reinen
   Kommunikationsfehler beim Beenden/Abbrechen ab und journaliert lokal statt einen Fehler zu
