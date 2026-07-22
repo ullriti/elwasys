@@ -91,6 +91,16 @@ import org.springframework.web.bind.annotation.RestController;
  * selbst älter als {@code offline.max-duration} ist (siehe
  * {@link ClientTimestampPolicy#isNotificationSuppressed}) - beides bewusst NACH der
  * Idempotenz-Prüfung ausgeführt, da ein Replay ohnehin nichts erneut auslöst.
+ *
+ * <p><b>Privilegierter Nachbuchungs-Pfad (Issue #16)</b>: kennzeichnet der Aufrufer eine
+ * {@code start}-Meldung über {@link ExecutionStartRequest#replay()} als Offline-Nachmeldung,
+ * überspringt {@link #start} die fachlichen Wächter (Sperrung/Standort/Nutzbarkeit/Belegung/
+ * Guthaben). Andernfalls würde ein fachlich abgelehnter Nachbuchungs-Eintrag bei JEDEM Versuch
+ * erneut scheitern und - weil der Idempotenz-Schlüssel nur bei Erfolg abgelegt wird (siehe
+ * {@link IdempotencyService}) - das gesamte Terminal-Journal dauerhaft verklemmen. Eine
+ * Nachmeldung ist ein Fakt, keine Anfrage; die Auftraggeber-Festlegung (siehe
+ * docs/kb/05-migration-plan.md und ADR 0010) lässt beim Replay ausdrücklich auch negative
+ * Salden zu. Live-Buchungen (ohne Replay-Flag) durchlaufen die Wächter unverändert.
  */
 @RestController
 @RequestMapping("/api/v1/executions")
@@ -152,29 +162,40 @@ public class ExecutionController {
                 () -> new ProgramNotFoundException(request.programId()));
         UserEntity user = this.userRepository.findById(request.userId()).orElseThrow(
                 () -> new UserNotFoundException(request.userId()));
+        boolean replay = request.isReplay();
 
         IdempotentResult<ExecutionDto> result = this.idempotencyService.execute(idempotencyKey, device.getLocation(),
                 "execution-start", HttpStatus.CREATED.value(), ExecutionDto.class, () -> {
-                    if (user.isBlocked()) {
-                        throw new UserBlockedException(user.getId());
-                    }
-                    if (!this.permissionService.isUserAllowedAtLocation(user, device.getLocation())) {
-                        throw new LocationNotAllowedException(user.getId(), device.getLocation().getName());
-                    }
-                    if (!this.permissionService.isDeviceUsableByUser(device, user)) {
-                        throw new DeviceNotUsableException(device.getId(), user.getId());
-                    }
-                    if (!this.permissionService.isProgramAvailableForDeviceAndUser(device, program, user)) {
-                        throw new ProgramNotAvailableException(program.getId(), device.getId(), user.getId());
-                    }
-                    if (this.executionService.getRunningExecution(device).isPresent()) {
-                        throw new DeviceOccupiedException(device.getId());
-                    }
-                    BigDecimal maxPrice = this.pricingService.getPrice(program,
-                            Duration.ofSeconds(program.getMaxDurationSeconds()), user);
-                    if (!this.creditService.canAfford(user, maxPrice)) {
-                        throw new InsufficientCreditException(user.getId(), maxPrice,
-                                this.creditService.getCredit(user));
+                    // Offline-Nachmeldung (Issue #16): eine bereits offline gebuchte Ausführung
+                    // wird nachgetragen - das Ereignis ist ein FAKT, keine Anfrage. Die
+                    // fachlichen Wächter würden hier einen zwischenzeitlich geänderten Zustand
+                    // (Sperrung, standortübergreifende Guthabenänderung, ein zweiter
+                    // Offline-Start, dessen Reservierung noch nicht gebucht ist) fälschlich als
+                    // Ablehnung werten und den kompletten Journal-Replay dauerhaft verklemmen.
+                    // Auftraggeber-Festlegung (docs/kb/05-migration-plan.md, ADR 0010): der
+                    // Snapshot-Stand gilt, negativ gewordene Salden werden normal verbucht.
+                    if (!replay) {
+                        if (user.isBlocked()) {
+                            throw new UserBlockedException(user.getId());
+                        }
+                        if (!this.permissionService.isUserAllowedAtLocation(user, device.getLocation())) {
+                            throw new LocationNotAllowedException(user.getId(), device.getLocation().getName());
+                        }
+                        if (!this.permissionService.isDeviceUsableByUser(device, user)) {
+                            throw new DeviceNotUsableException(device.getId(), user.getId());
+                        }
+                        if (!this.permissionService.isProgramAvailableForDeviceAndUser(device, program, user)) {
+                            throw new ProgramNotAvailableException(program.getId(), device.getId(), user.getId());
+                        }
+                        if (this.executionService.getRunningExecution(device).isPresent()) {
+                            throw new DeviceOccupiedException(device.getId());
+                        }
+                        BigDecimal maxPrice = this.pricingService.getPrice(program,
+                                Duration.ofSeconds(program.getMaxDurationSeconds()), user);
+                        if (!this.creditService.canAfford(user, maxPrice)) {
+                            throw new InsufficientCreditException(user.getId(), maxPrice,
+                                    this.creditService.getCredit(user));
+                        }
                     }
                     ExecutionEntity execution = this.executionService.createExecution(device, program, user);
                     LocalDateTime resolvedTimestamp = this.clientTimestampPolicy.resolve(request.clientTimestamp(),

@@ -113,7 +113,19 @@ public class ExecutionService {
     @Transactional
     public ExecutionEntity stopExecution(ExecutionEntity execution, LocalDateTime clientTimestamp) {
         execution.setFinished(true);
-        execution.setStop(clientTimestamp != null ? clientTimestamp : LocalDateTime.now());
+        LocalDateTime stop = clientTimestamp != null ? clientTimestamp : LocalDateTime.now();
+        // Issue #18: Der Stop-Zeitstempel darf nie VOR dem Start liegen. Das kann nur bei einer
+        // stark verspäteten Offline-Nachmeldung auftreten, deren Start-Zeitstempel unabhängig
+        // vom Stop auf die Serverzeit ersetzt wurde (ClientTimestampPolicy prüft beide
+        // Zeitstempel je gegen "jetzt", nie gegeneinander) - dann entstünde sonst eine negative
+        // Dauer (0-€-Waschgang) UND ein Datensatz mit stop < start in der DB. Der reale
+        // End-Zeitpunkt bleibt in allen anderen Fällen unverändert als Audit-Record erhalten;
+        // die Preis-Obergrenze (start + maxDuration) erzwingt {@link #getPrice} separat.
+        LocalDateTime start = execution.getStart();
+        if (start != null && stop.isBefore(start)) {
+            stop = start;
+        }
+        execution.setStop(stop);
         return this.executionRepository.save(execution);
     }
 
@@ -180,8 +192,21 @@ public class ExecutionService {
             if (execution.getStop() == null) {
                 return this.pricingService.getPrice(program, maxDuration, execution.getUser());
             }
-            return this.pricingService.getPrice(program, Duration.between(execution.getStart(), execution.getStop()),
-                    execution.getUser());
+            // Issue #18: Abrechnungsdauer auf [0, maxDuration] deckeln. Ein vom Terminal
+            // gemeldeter Stop-Zeitstempel kann - trotz Start-Klemmung in stopExecution - länger
+            // als die Maximaldauer zurückliegen (langer Backend-Ausfall während eines online
+            // gestarteten Waschgangs, Szenario 1: Überberechnung). Ohne Deckel würde ein
+            // DYNAMIC-Programm die gesamte Ausfallzeit mitberechnen, ungedeckelt über den beim
+            // Start geprüften maxPrice hinaus. Für den Normalfall (Dauer im Fenster) ändert sich
+            // nichts. Eine negative Dauer (Alt-Bestand vor der stopExecution-Klemmung) wird als
+            // 0 gewertet statt als negativer Rechenfaktor.
+            Duration billed = Duration.between(execution.getStart(), execution.getStop());
+            if (billed.isNegative()) {
+                billed = Duration.ZERO;
+            } else if (billed.compareTo(maxDuration) > 0) {
+                billed = maxDuration;
+            }
+            return this.pricingService.getPrice(program, billed, execution.getUser());
         } else {
             Duration timeSinceStart = Duration.between(execution.getStart(), LocalDateTime.now());
             if (timeSinceStart.compareTo(maxDuration) > 0) {

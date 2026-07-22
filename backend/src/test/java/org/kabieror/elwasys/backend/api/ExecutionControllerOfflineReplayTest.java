@@ -68,12 +68,18 @@ class ExecutionControllerOfflineReplayTest {
 
     private ExecutionEntity execution;
 
+    private PermissionService permissionService;
+
+    private CreditService creditService;
+
     private void setUp(int offlineMaxDurationMinutes) {
         this.executionService = mock(ExecutionService.class);
         this.notificationService = mock(NotificationService.class);
         PermissionService permissionService = mock(PermissionService.class);
         PricingService pricingService = mock(PricingService.class);
         CreditService creditService = mock(CreditService.class);
+        this.permissionService = permissionService;
+        this.creditService = creditService;
         TerminalScopeGuard scopeGuard = mock(TerminalScopeGuard.class);
 
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
@@ -140,7 +146,7 @@ class ExecutionControllerOfflineReplayTest {
         setUp(60);
         LocalDateTime withinWindow = LocalDateTime.now().minusMinutes(30);
 
-        this.controller.start(this.terminal, null, new ExecutionStartRequest(1, 1, 1, withinWindow));
+        this.controller.start(this.terminal, null, new ExecutionStartRequest(1, 1, 1, withinWindow, null));
 
         ArgumentCaptor<LocalDateTime> captor = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(this.executionService).startExecution(eq(this.execution), captor.capture());
@@ -153,7 +159,7 @@ class ExecutionControllerOfflineReplayTest {
         setUp(5);
         LocalDateTime tooOld = LocalDateTime.now().minusMinutes(200);
 
-        this.controller.start(this.terminal, null, new ExecutionStartRequest(1, 1, 1, tooOld));
+        this.controller.start(this.terminal, null, new ExecutionStartRequest(1, 1, 1, tooOld, null));
 
         ArgumentCaptor<LocalDateTime> captor = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(this.executionService).startExecution(eq(this.execution), captor.capture());
@@ -167,7 +173,7 @@ class ExecutionControllerOfflineReplayTest {
         setUp(60);
         LocalDateTime slightlyInTheFuture = LocalDateTime.now().plusMinutes(2);
 
-        this.controller.start(this.terminal, null, new ExecutionStartRequest(1, 1, 1, slightlyInTheFuture));
+        this.controller.start(this.terminal, null, new ExecutionStartRequest(1, 1, 1, slightlyInTheFuture, null));
 
         ArgumentCaptor<LocalDateTime> captor = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(this.executionService).startExecution(eq(this.execution), captor.capture());
@@ -178,7 +184,7 @@ class ExecutionControllerOfflineReplayTest {
     void missingClientTimestampStaysNull() {
         setUp(60);
 
-        this.controller.start(this.terminal, null, new ExecutionStartRequest(1, 1, 1, null));
+        this.controller.start(this.terminal, null, new ExecutionStartRequest(1, 1, 1, null, null));
 
         verify(this.executionService).startExecution(this.execution, null);
     }
@@ -226,5 +232,41 @@ class ExecutionControllerOfflineReplayTest {
         this.controller.finish(this.terminal, 1, null, new ExecutionEndRequest(eightMinutesAgo));
 
         verify(this.notificationService, never()).notifyExecutionFinished(any(), any());
+    }
+
+    // --- Privilegierter Nachbuchungs-Pfad (Issue #16) ---------------------------------------
+
+    @Test
+    void replayStartSkipsBusinessGuardsAndBooksTheFactEvenWithBlockedUserAndInsufficientCredit() {
+        // Issue #16: eine Offline-Nachmeldung ist ein FAKT. Alle fachlichen Wächter würden eine
+        // Live-Buchung ablehnen (Nutzer zwischenzeitlich gesperrt, Guthaben reicht nicht) - beim
+        // Replay müssen sie übersprungen werden, sonst verklemmt der Eintrag das Journal dauerhaft.
+        setUp(60);
+        this.user.setBlocked(true);
+        when(this.creditService.canAfford(any(), any())).thenReturn(false);
+        when(this.executionService.getRunningExecution(any()))
+                .thenReturn(Optional.of(mock(ExecutionEntity.class)));
+
+        this.controller.start(this.terminal, "replay-key-1",
+                new ExecutionStartRequest(1, 1, 1, LocalDateTime.now().minusMinutes(30), Boolean.TRUE));
+
+        // Die Ausführung wird trotz aller Wächter angelegt und gestartet (negatives Guthaben ist
+        // beim Replay laut Auftraggeber-Festlegung zulässig).
+        verify(this.executionService, times(1)).createExecution(this.device, this.program, this.user);
+        verify(this.executionService, times(1)).startExecution(eq(this.execution), any());
+    }
+
+    @Test
+    void nonReplayStartStillRejectsABlockedUser() {
+        // Gegenprobe: ohne Replay-Flag greifen die Wächter unverändert.
+        setUp(60);
+        this.user.setBlocked(true);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                org.kabieror.elwasys.backend.api.exception.UserBlockedException.class,
+                () -> this.controller.start(this.terminal, "live-key-1",
+                        new ExecutionStartRequest(1, 1, 1, LocalDateTime.now().minusMinutes(30), Boolean.FALSE)));
+
+        verify(this.executionService, never()).createExecution(any(), any(), any());
     }
 }
