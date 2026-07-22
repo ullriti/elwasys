@@ -40,7 +40,7 @@ spring:
     # durchläuft V1 stattdessen ganz normal. Siehe kb/02-data-model.md.
     baseline-on-migrate: true
     baseline-version: 1
-    baseline-description: "Bestandsschema 0.4.0 (Alt-Weg: database-init.sql + database-upgrade/*.sql)"
+    baseline-description: "Bestandsschema 0.4.0 (entspricht der Flyway-V1-Baseline)"
 
   # Mail-Transport für den Benachrichtigungsdienst (AP5, siehe kb/05-migration-plan.md und
   # elwasys.notifications unten). Aktiviert die JavaMailSender-Autokonfiguration von Spring

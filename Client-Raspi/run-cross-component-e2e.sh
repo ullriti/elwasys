@@ -13,7 +13,7 @@
 # subprocess pointed at that context's random port + a seeded terminal token - see the
 # test's class Javadoc for the full rationale ("kleinster belastbarer Aufbau").
 #
-# Steps: 1. install Common, 2. build the real client jar, 3. start+seed a throwaway
+# Steps: 1. install the parent POM, 2. build the real client jar, 3. start+seed a throwaway
 #        PostgreSQL database (same pattern as backend/run-backend-tests.sh - the backend
 #        Spring context is started BY the JUnit test itself, not by this script, since the
 #        test needs the TerminalMaintenanceService bean instance directly), 4. run the suite
@@ -25,9 +25,11 @@ cd "$(dirname "$0")"
 REPO_ROOT="$(cd .. && pwd)"
 PG_VER=16
 
-# 1. Install Common (and the aggregator parent POM, which a plain "mvn -f Common/pom.xml
-#    install" would NOT install) into the local Maven repo.
-mvn -q -B -f "$REPO_ROOT/pom.xml" install -pl Common -am -DskipTests
+# 1. Install the aggregator parent POM into the local Maven repo ("mvn -N install"
+#    installs just that parent POM) so the per-module builds below can resolve it.
+#    (The former "common" module was dissolved after the migration; its classes now
+#    live in Client-Raspi/src/main.)
+mvn -q -B -N -f "$REPO_ROOT/pom.xml" install -DskipTests
 
 # 2. Build the real client fat jar - the process this suite launches as "the terminal".
 mvn -q -B -f "$REPO_ROOT/Client-Raspi/pom.xml" package -DskipTests

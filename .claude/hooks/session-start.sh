@@ -1,6 +1,6 @@
 #!/bin/bash
 # SessionStart hook for elwasys — prepares a remote Claude Code (web) session
-# so that Common + Client-Raspi build and headless JavaFX UI tests can run.
+# so that the Client-Raspi build and headless JavaFX UI tests can run.
 #
 # Idempotent and non-interactive. Runs only in the remote environment.
 set -euo pipefail
@@ -29,16 +29,17 @@ if ! command -v Xvfb >/dev/null 2>&1; then
     echo "[elwasys hook] WARN: could not install Xvfb; headless FX may rely on Monocle only"
 fi
 
-# --- Warm the Maven cache: install Common, resolve Client deps --------------
+# --- Warm the Maven cache: install parent POM, resolve Client deps ----------
 # Container state is cached after the hook, so subsequent builds/tests are fast.
-# Building via the root reactor (-pl Common -am) also installs the aggregator
-# parent POM into the local repo, which a plain "mvn -f Common/pom.xml
-# install" does not — and Client-Raspi needs it to resolve Common.
-echo "[elwasys hook] Building/installing Common (+ parent POM) into local Maven repo"
-mvn -q -B -f pom.xml install -pl Common -am -DskipTests
+# A per-module build (e.g. "mvn -f Client-Raspi/pom.xml package") needs the
+# aggregator parent POM in the local repo; "mvn -N install" installs just that
+# parent POM. (The former "common" module was dissolved after the migration –
+# its classes now live in Client-Raspi, so there is nothing extra to install.)
+echo "[elwasys hook] Installing the aggregator parent POM into the local Maven repo"
+mvn -q -B -N install -DskipTests
 
 echo "[elwasys hook] Resolving Client-Raspi dependencies (offline warm-up)"
 mvn -q -B -f Client-Raspi/pom.xml dependency:go-offline -DskipTests || \
   echo "[elwasys hook] WARN: some Client deps could not be pre-fetched (will resolve on demand)"
 
-echo "[elwasys hook] Done. Common installed; Client dependencies warmed."
+echo "[elwasys hook] Done. Parent POM installed; Client dependencies warmed."

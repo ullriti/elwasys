@@ -7,7 +7,7 @@
 # tatsächlich für den Cutover relevanten Eigenschaften explizit per Assert-Liste (siehe unten).
 #
 # Ablauf:
-#   1. Test-DB als Kopie des Bestandsschemas anlegen (Common/resources/database-init.sql,
+#   1. Test-DB als Kopie des Bestandsschemas anlegen (database/database-init.sql,
 #      ohne dessen eigene CREATE DATABASE/\connect-Zeilen - die Test-DB wird selbst vorher
 #      angelegt, eigener Name/Port konfigurierbar).
 #   2. VOR der Migration realistische Bestandsdaten einfügen (je eine Zeile: user_group,
@@ -71,22 +71,20 @@ sudo -u postgres psql -q -c "ALTER USER postgres WITH PASSWORD 'postgres';"
 echo "== 1) Test-DB als Kopie des Bestandsschemas -> ${CUTOVER_VERIFY_DB} =="
 sudo -u postgres psql -q -c "DROP DATABASE IF EXISTS ${CUTOVER_VERIFY_DB};"
 sudo -u postgres psql -q -c "CREATE DATABASE ${CUTOVER_VERIFY_DB};"
-# database-init.sql legt selbst "CREATE DATABASE elwasys;" + "\connect elwasys" an (Zeilen 1-4,
-# siehe Common/resources/database-init.sql) - das wollen wir NICHT (eigener DB-Name/Port für
-# diese Verifikation), daher die ersten vier Zeilen überspringen und den Rest (Funktionen,
-# Schema, Seed-Daten, Rollen/Grants) direkt gegen die oben schon angelegte Test-DB einspielen.
+# Das Bestandsschema 0.4.0 wird über die Flyway-V1-Baseline eingespielt - die EINZIGE Quelle
+# des Alt-Schemas (das frühere, byte-äquivalente database/database-init.sql wurde entfernt).
+# V1 hat bewusst keine "CREATE DATABASE"/"\connect"-Präambel (Flyway migriert eine bereits
+# gewählte DB), daher spielen wir es direkt gegen die oben angelegte Test-DB ein - genau so
+# entsteht eine 0.4.0-DB OHNE flyway_schema_history, d.h. eine echte pre-Flyway-Produktiv-DB,
+# gegen die dann baseline-on-migrate getestet wird.
 #
 # NOTE: In diesem geteilten Test-Cluster (dieselbe Postgres-Instanz wie
-# backend/run-backend-tests.sh, backend/verify-schema-baseline.sh, backend/e2e/,
-# Client-Raspi/run-*-e2e.sh) sind die Rollen elwaclient1/elwaportal/elwaapi typischerweise
-# schon aus einem früheren Lauf vorhanden - Rollen sind clusterweit, nicht pro Datenbank
-# (siehe V1__baseline_schema_0_4_0.sql-Header für dieselbe Erklärung). Beim Einspielen
-# erscheint dann harmlos z.B. "ERROR: role \"elwaportal\" already exists". psql läuft hier
-# bewusst OHNE "-v ON_ERROR_STOP=1" (database-init.sql selbst kennt das historisch auch
-# nicht) - nach so einem Fehler macht psql einfach mit dem nächsten Statement weiter, alle
-# nachfolgenden Schema-/Daten-/Grant-Statements laufen normal durch. Eine echte Produktiv-DB
-# hat nur EINEN Cluster für sich, dort tritt dieser Fall gar nicht erst auf.
-tail -n +5 Common/resources/database-init.sql | sudo -u postgres psql -q -d "${CUTOVER_VERIFY_DB}"
+# backend/run-backend-tests.sh, backend/e2e/, Client-Raspi/run-*-e2e.sh) sind die Rollen
+# elwaclient1/elwaportal/elwaapi typischerweise schon aus einem früheren Lauf vorhanden -
+# Rollen sind clusterweit, nicht pro Datenbank (siehe V1-Header). V1 legt sie idempotent an
+# (IF NOT EXISTS), daher laufen alle nachfolgenden Schema-/Daten-/Grant-Statements normal
+# durch. Eine echte Produktiv-DB hat nur EINEN Cluster für sich.
+sudo -u postgres psql -q -d "${CUTOVER_VERIFY_DB}" < backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql
 
 echo "== 2) Realistische Bestandsdaten VOR der Migration einfügen (Beweis für Datenerhalt) =="
 sudo -u postgres psql -v ON_ERROR_STOP=1 -q -d "${CUTOVER_VERIFY_DB}" <<'SQL'
@@ -117,7 +115,6 @@ SQL
 echo "  Bestandsdaten eingefügt."
 
 echo "== 3) Backend-Jar bauen (Produktionsmodus - siehe kb/04-build-and-run.md, laenger laufender Prozess braucht -Pproduction) =="
-mvn -q -B -f pom.xml install -pl Common -am -DskipTests
 mvn -q -B -f pom.xml package -pl backend -Pproduction -DskipTests
 
 echo "== 4) Backend gegen die Alt-Weg-DB starten (Flyway migriert automatisch: BASELINE@1, dann V2..V10) =="

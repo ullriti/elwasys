@@ -25,14 +25,17 @@ hs_err_pid*
 .DS_Store
 target/
 
+# IDE / editor config (not part of the build; keep out of the repo)
 .idea/
+*.iml
+.settings/
+.classpath
+.project
+.vscode/
 
 elwasys.properties
 
 .client-uid
-# Vaadin on-the-fly theme compilation artifact
-Portal/src/main/webapp/VAADIN/themes/**/styles.scss.cache
-Portal/jetty-run.log
 
 # Transient agent worktrees (Claude Code parallel-agent isolation)
 .claude/worktrees/

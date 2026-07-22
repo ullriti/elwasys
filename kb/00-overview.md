@@ -55,8 +55,6 @@ Domain: `elwasys.de` (siehe `CNAME`). Ursprünglicher Autor: Oliver Kabierschke
   Client ⇄ Zigbee-Gateway (deCONZ/ConBee2)  bzw.  fhem  → Funksteckdosen
 ```
 
-- **Common**: kleine gemeinsame Bibliothek (Enum-Typ, Format-/Konfigurationshilfen), wird von
-  Client-Raspi als Maven-Dependency genutzt (vom Backend nur noch test-scope).
 - **Client-Raspi**: die JavaFX-Anwendung auf dem Raspberry Pi (das Terminal) – seit Phase 4
   ohne Direkt-DB-Zugriff, ausschließlich über die Backend-REST-API und eine ausgehende
   WebSocket-Verbindung (auch für Fernwartung).
@@ -64,6 +62,12 @@ Domain: `elwasys.de` (siehe `CNAME`). Ursprünglicher Autor: Oliver Kabierschke
   das eingebettete Admin-Portal-UI (Vaadin Flow), Notifications, Flyway-verwaltetes Schema.
   Es gibt seit Phase 5 AP1 kein eigenständiges Portal-Modul mehr (das Vaadin-7-Alt-Portal ist
   vollständig entfernt).
+
+Das früher eigenständige **Common**-Modul (kleine gemeinsame Bibliothek: Enum-Typ, Format-/
+Konfigurationshilfen) wurde im Phase-5-Nachtrag **aufgelöst**; seine 6 verbliebenen Klassen
+(Package `org.kabieror.elwasys.common`) liegen jetzt unverändert direkt im Client-Raspi-Modul.
+Nur das Terminal nutzt sie zur Laufzeit – das Backend hat ein eigenes Datenmodell und brauchte
+Common nie produktiv.
 
 Backend und Terminals teilen sich **eine gemeinsame PostgreSQL-Datenbank**, aber nur das
 Backend greift direkt zu (User `elwaportal`) – die Terminals sprechen ausschließlich die
@@ -82,7 +86,8 @@ Backend-API. Details: [01-architecture.md](01-architecture.md).
 
 > Dieser Abschnitt beschreibt bewusst den **Stand vor Beginn** der Modernisierung (Grundlage
 > für den Migrationsplan) und ist nicht der aktuelle Zustand. Der aktuelle Stand (Phase 5, Root-
-> Reactor mit 3 Modulen, kein Alt-Portal mehr) ist oben im „Komponenten-Bild" sowie in
+> Reactor mit 2 Modulen, kein Alt-Portal und kein eigenständiges Common-Modul mehr) ist oben im
+> „Komponenten-Bild" sowie in
 > [01-architecture.md](01-architecture.md) und [05-migration-plan.md](05-migration-plan.md)
 > beschrieben.
 

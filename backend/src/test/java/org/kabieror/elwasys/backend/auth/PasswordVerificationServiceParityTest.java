@@ -5,15 +5,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 import org.kabieror.elwasys.backend.auth.PasswordVerificationService.HashAlgorithm;
 import org.kabieror.elwasys.backend.auth.PasswordVerificationService.VerificationResult;
-import org.kabieror.elwasys.common.Utilities;
 
 /**
  * Äquivalenznachweis Alt vs. Neu (analog AP2, siehe kb/05-migration-plan.md, AP3): ein
- * Hash, den die ECHTE Alt-Code-Routine ({@code org.kabieror.elwasys.common.Utilities#sha1},
- * aufgerufen von {@code common.User#checkPassword}/{@code #changePassword}) für ein
- * Passwort erzeugt, muss vom neuen {@link PasswordVerificationService} als gültiges
- * SHA1-Legacy-Passwort akzeptiert werden. {@code common} ist nur test-scope Abhängigkeit
- * (siehe backend/pom.xml) - keine Laufzeit-Abhängigkeit des Backends.
+ * Hash, den das Alt-Portal-SHA1-Verfahren (im Alt-Code {@code Utilities#sha1}, aufgerufen
+ * von {@code User#checkPassword}/{@code #changePassword}) für ein Passwort erzeugt, muss
+ * vom neuen {@link PasswordVerificationService} als gültiges SHA1-Legacy-Passwort
+ * akzeptiert werden. Das abgelöste {@code common}-Modul wurde nach der Migration aufgelöst;
+ * das Alt-Hash-Format wird für diesen Test byte-genau von {@link LegacySha1} reproduziert
+ * (das Backend hatte nie eine Laufzeit-Abhängigkeit auf {@code common}).
  */
 class PasswordVerificationServiceParityTest {
 
@@ -25,7 +25,7 @@ class PasswordVerificationServiceParityTest {
         // PasswordVerificationService dokumentierte Charset-Annahme (UTF-8 statt des vom
         // Alt-Code verwendeten Plattform-Default-Charsets) gegen die echte Alt-Code-Routine.
         for (String password : new String[] {"admin", "correct horse battery staple", "Wäschküche42!", "a"}) {
-            String legacyHash = Utilities.sha1(password);
+            String legacyHash = LegacySha1.sha1(password);
 
             VerificationResult result = this.service.verify(password, legacyHash);
 
@@ -37,7 +37,7 @@ class PasswordVerificationServiceParityTest {
 
     @Test
     void rejectsALegacyHashProducedForADifferentPassword() throws Exception {
-        String legacyHash = Utilities.sha1("correct password");
+        String legacyHash = LegacySha1.sha1("correct password");
 
         VerificationResult result = this.service.verify("wrong password", legacyHash);
 

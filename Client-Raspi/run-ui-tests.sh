@@ -34,18 +34,24 @@ pg_isready || { echo "PostgreSQL not ready"; exit 1; }
 #    DB role, see backend/application.yml)
 if ! sudo -u postgres psql -lqt | cut -d'|' -f1 | grep -qw elwasys; then
   echo "[run-ui-tests] initializing elwasys database"
-  sudo -u postgres psql -q < "$REPO_ROOT/Common/resources/database-init.sql"
+  # Apply the Flyway V1 baseline (0.4.0 schema) directly via psql - it is the SINGLE
+  # source of truth for the legacy/base schema (the former standalone
+  # database/database-init.sql was a byte-equivalent duplicate and was removed; proven
+  # equivalent via pg_dump). V1 carries no CREATE DATABASE preamble (Flyway migrates an
+  # already-selected DB), so create the database first, then pipe V1 into it.
+  sudo -u postgres psql -q -c "CREATE DATABASE elwasys;"
+  sudo -u postgres psql -q -d elwasys < "$REPO_ROOT/backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql"
 fi
 # The E2E tests seed fixtures via JDBC as the postgres superuser (they need to
 # clean up credit_accounting, which the elwaportal role may not delete). Give
 # postgres a password the driver can use over TCP.
 sudo -u postgres psql -q -c "ALTER USER postgres WITH PASSWORD 'postgres';"
 
-# 3. Ensure the Common library (and its parent POM) are available in the local
-# Maven repo. Building via the root reactor (-pl Common -am) also installs
-# the aggregator parent POM, which "mvn -f Common/pom.xml install" alone does
-# not — and Client-Raspi's dependency resolution needs it on the local repo.
-mvn -q -B -f "$REPO_ROOT/pom.xml" install -pl Common -am -DskipTests
+# 3. Ensure the aggregator parent POM is available in the local Maven repo so
+# Client-Raspi's per-module build can resolve it. "mvn -N install" installs just
+# that parent POM. (The former "common" module was dissolved after the migration;
+# its classes now live in Client-Raspi/src/main, so there is nothing else to install.)
+mvn -q -B -N -f "$REPO_ROOT/pom.xml" install -DskipTests
 
 # 4. Build+start the backend jar and seed a terminal token (exports
 #    ELWASYS_TEST_BACKEND_URL/-TOKEN, stops the backend on exit).

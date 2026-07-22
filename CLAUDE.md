@@ -60,14 +60,14 @@ danach Phase 6 (Produktivumschaltung), siehe Roadmap in kb/05.
 
 ```bash
 # Build (seit Phase 1 gibt es ein Aggregator-Parent-POM, siehe kb/04/kb/05).
-# WICHTIG: "mvn -f Common/pom.xml install" allein installiert die Parent-POM
-# NICHT mit ins lokale Repo – Client-Raspi scheitert dann beim Auflösen von
-# "common". Immer über den Root-Reactor bauen:
-mvn -f pom.xml install -pl Common -am -DskipTests
+# Ein Einzelmodul-Build (z. B. "mvn -f Client-Raspi/pom.xml package") braucht die
+# Parent-POM im lokalen Repo; "mvn -N install" installiert genau diese Parent-POM:
+mvn -N install -DskipTests
 mvn -f Client-Raspi/pom.xml package
 mvn -f backend/pom.xml package
-# oder komplett: mvn install (von der Repo-Wurzel; Root-Reactor = 3 Module seit
-# Phase 5 AP1: Common, Client-Raspi, backend – kein Portal-Modul mehr)
+# oder komplett: mvn install (von der Repo-Wurzel; Root-Reactor = 2 Module:
+# Client-Raspi, backend – das frühere "common"-Modul wurde nach der Migration
+# aufgelöst, seine 6 Utility-Klassen liegen jetzt in Client-Raspi/src/main)
 
 # Client: UI-/E2E-Tests headless (startet PG, seedet DB, Xvfb)
 Client-Raspi/run-ui-tests.sh              # alle
@@ -84,7 +84,7 @@ backend/run-backend-tests.sh
 cd backend/e2e && npm test
 ```
 
-Der SessionStart-Hook installiert Common und wärmt die Client-Dependencies vor.
-CI: `.github/workflows/ci.yml` baut/testet Common, Client-Raspi (inkl. Cross-Component) und
+Der SessionStart-Hook installiert die Parent-POM und wärmt die Client-Dependencies vor.
+CI: `.github/workflows/ci.yml` baut/testet Client-Raspi (inkl. Cross-Component) und
 Backend (JUnit + Playwright-E2E) bei jedem PR – kein separates Alt-Portal-Modul mehr
 (entfernt in Phase 5 AP1, siehe kb/06-ui-tests.md).

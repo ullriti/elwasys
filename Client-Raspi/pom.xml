@@ -14,10 +14,25 @@
 	<description>The elwasys client for Raspberry Pi</description>
 
 	<dependencies>
+		<!-- Phase 5 follow-up: the former "common" module was dissolved; its six
+		     utility classes (package org.kabieror.elwasys.common) now live directly
+		     in this module's src/main. commons-lang3 (used by Utilities#generatePassword
+		     via RandomStringUtils) was previously provided transitively by common and
+		     is therefore declared here now. -->
 		<dependency>
-			<groupId>org.kabieror.elwasys</groupId>
-			<artifactId>common</artifactId>
-			<version>${project.version}</version>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-lang3</artifactId>
+			<version>3.4</version>
+		</dependency>
+		<!-- test-scope only: the headless E2E harness seeds/cleans DB fixtures directly
+		     via JDBC. The terminal's own production code no longer touches the database
+		     (since Phase 4 AP4/AP5, see kb/05-migration-plan.md); the driver was
+		     previously pulled in transitively via the now-dissolved "common" module.
+		     Version is managed by the parent POM. -->
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>com.pi4j</groupId>

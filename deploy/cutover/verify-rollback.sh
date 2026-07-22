@@ -187,7 +187,6 @@ run_core_asserts
 echo
 echo "== 5) Re-Cutover-Beweis: Backend erneut gegen die (jetzt zurückgebaute) DB starten =="
 echo "   (Backend-Jar bauen - Produktionsmodus wie in verify-cutover-migration.sh)"
-mvn -q -B -f pom.xml install -pl Common -am -DskipTests
 mvn -q -B -f pom.xml package -pl backend -Pproduction -DskipTests
 
 ELWASYS_DB_URL="jdbc:postgresql://localhost:5432/${CUTOVER_VERIFY_DB}" \

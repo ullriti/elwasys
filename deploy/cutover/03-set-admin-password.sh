@@ -46,7 +46,6 @@ done
 
 if [[ ! -f "${JAR}" ]]; then
   echo "FEHLER: ${JAR} nicht gefunden. Erst bauen:" >&2
-  echo "  mvn -q -f ${REPO_ROOT}/pom.xml install -pl Common -am -DskipTests" >&2
   echo "  mvn -q -f ${REPO_ROOT}/pom.xml package -pl backend -DskipTests" >&2
   exit 1
 fi

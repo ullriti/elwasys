@@ -28,7 +28,7 @@ Hintergrund/Roadmap: [kb/05-migration-plan.md](../kb/05-migration-plan.md), Absc
 
 - **Ausgangslage:** bestehendes Produktiv-Setup = physische Raspi-Terminals im Feld
   (Direkt-DB-Zugriff, Java 17) + ein laufendes Alt-Portal (Vaadin 7) auf einer gemeinsamen
-  PostgreSQL-DB, angelegt über den Alt-Weg (`Common/resources/database-init.sql`, Schema 0.4.0).
+  PostgreSQL-DB, angelegt über den Alt-Weg (Schema 0.4.0, entspricht der Flyway-V1-Baseline).
 - **Ziel:** dieselbe DB (mit allen Bestandsdaten) unter das neue Backend nehmen
   (Flyway-verwaltetes Schema, Vaadin-Flow-Portal im Backend) und die Terminals auf
   REST-API + Standort-Token + ausgehende Wartungs-WebSocket umstellen (kein Direkt-DB-Zugriff

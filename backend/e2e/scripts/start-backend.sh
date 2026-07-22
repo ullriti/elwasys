@@ -45,13 +45,12 @@ echo "[start-backend] (re-)creating database $DB_NAME"
 sudo -u postgres psql -q -c "DROP DATABASE IF EXISTS ${DB_NAME};"
 sudo -u postgres psql -q -c "CREATE DATABASE ${DB_NAME};"
 
-# 3. Make sure Common (+ the aggregator parent POM, which "mvn -f Common/pom.xml install"
-#    alone does NOT install - see kb/04-build-and-run.md) is available, then build the backend
-#    jar in production mode (mvn package -Pproduction) - the only build mode verified to run
-#    without a Vaadin dev-mode license check in this sandbox, see kb/05-migration-plan.md
-#    "Phase 3 AP2"/"AP6". Tests are skipped here (backend/run-backend-tests.sh is the
-#    dedicated, faster path for the backend's own JUnit suite).
-mvn -q -B -f "$REPO_ROOT/pom.xml" install -pl Common -am -DskipTests
+# 3. Build the backend jar in production mode (mvn package -Pproduction) - the only build
+#    mode verified to run without a Vaadin dev-mode license check in this sandbox, see
+#    kb/05-migration-plan.md "Phase 3 AP2"/"AP6". Building via the root reactor (-pl backend)
+#    resolves the aggregator parent POM as part of the same build, so no separate install is
+#    needed. Tests are skipped here (backend/run-backend-tests.sh is the dedicated, faster
+#    path for the backend's own JUnit suite).
 mvn -q -B -f "$REPO_ROOT/pom.xml" package -pl backend -Pproduction -DskipTests
 
 # 4./5. Run the backend (foreground; Playwright tears this down after the run).

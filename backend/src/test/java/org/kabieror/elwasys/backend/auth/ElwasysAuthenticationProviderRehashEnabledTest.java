@@ -10,7 +10,6 @@ import org.kabieror.elwasys.backend.repository.UserGroupRepository;
 import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.kabieror.elwasys.backend.support.AbstractBackendIT;
 import org.kabieror.elwasys.backend.support.Fixtures;
-import org.kabieror.elwasys.common.Utilities;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -52,7 +51,7 @@ class ElwasysAuthenticationProviderRehashEnabledTest extends AbstractBackendIT {
         String username = Fixtures.unique("migrating-user");
         String rawPassword = "s3cr3t!";
         UserEntity user = new UserEntity(Fixtures.unique("Name"), username, group);
-        String legacyHash = Utilities.sha1(rawPassword);
+        String legacyHash = LegacySha1.sha1(rawPassword);
         user.setPassword(legacyHash);
         user = this.userRepository.save(user);
 
@@ -66,10 +65,10 @@ class ElwasysAuthenticationProviderRehashEnabledTest extends AbstractBackendIT {
         assertThat(afterFirstLogin.getPassword()).isNotEqualTo(legacyHash);
 
         // Parallelbetriebs-Risiko konkret bewiesen (siehe AuthProperties-Javadoc): das
-        // Alt-Portal vergleicht storedHash.equals(Utilities.sha1(password))
+        // Alt-Portal vergleicht storedHash.equals(LegacySha1.sha1(password))
         // (common.User#checkPassword) - das schlägt jetzt fehl, der Benutzer wäre im
         // Alt-Portal ausgesperrt. Genau deshalb ist das Flag produktiv per Default AUS.
-        boolean legacyPortalWouldStillAccept = afterFirstLogin.getPassword().equals(Utilities.sha1(rawPassword));
+        boolean legacyPortalWouldStillAccept = afterFirstLogin.getPassword().equals(LegacySha1.sha1(rawPassword));
         assertThat(legacyPortalWouldStillAccept).as("Alt-Portal-SHA1-Login würde nach der Migration fehlschlagen")
                 .isFalse();
 

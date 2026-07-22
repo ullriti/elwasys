@@ -5,7 +5,7 @@ import { ADMIN_USERNAME, ADMIN_PASSWORD, login } from './helpers';
  * Login smoke test for the elwasys backend Portal (Vaadin Flow) - test plan P1/P2, fachlicher
  * Nachfolger von Portal/e2e/tests/login.spec.ts (Vaadin 7). Uses the administrator account
  * (username "admin", password "admin"): the account itself is created by the Flyway baseline
- * migration (V1__baseline_schema_0_4_0.sql, 1:1 aus Common/resources/database-init.sql
+ * migration (V1__baseline_schema_0_4_0.sql, die eingefrorene 0.4.0-Baseline
  * übernommen), but since Phase 5 AP2 (siehe kb/05-migration-plan.md) the baseline's default
  * password is cleared for fresh installations by V7__remove_default_admin_password.sql - the
  * "admin" password used here is instead set explicitly by the E2E setup via the admin-cli

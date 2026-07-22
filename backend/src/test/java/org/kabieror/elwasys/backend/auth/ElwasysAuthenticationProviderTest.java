@@ -12,7 +12,6 @@ import org.kabieror.elwasys.backend.repository.UserGroupRepository;
 import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.kabieror.elwasys.backend.support.AbstractBackendIT;
 import org.kabieror.elwasys.backend.support.Fixtures;
-import org.kabieror.elwasys.common.Utilities;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.LockedException;
@@ -48,7 +47,7 @@ class ElwasysAuthenticationProviderTest extends AbstractBackendIT {
 
     private UserEntity userWithLegacyPassword(String username, String rawPassword, boolean blocked) throws Exception {
         UserEntity user = new UserEntity(Fixtures.unique("Name"), username, group());
-        user.setPassword(Utilities.sha1(rawPassword));
+        user.setPassword(LegacySha1.sha1(rawPassword));
         user.setBlocked(blocked);
         return this.userRepository.save(user);
     }
@@ -106,7 +105,7 @@ class ElwasysAuthenticationProviderTest extends AbstractBackendIT {
         assertThat(reloaded.getPassword()).as(
                 "Parallelbetriebs-Beweis: Hash bleibt SHA1, das Alt-Portal kann den Benutzer weiterhin "
                         + "verifizieren").isEqualTo(originalHash);
-        assertThat(reloaded.getPassword()).isEqualTo(Utilities.sha1(rawPassword));
+        assertThat(reloaded.getPassword()).isEqualTo(LegacySha1.sha1(rawPassword));
     }
 
     @Test
