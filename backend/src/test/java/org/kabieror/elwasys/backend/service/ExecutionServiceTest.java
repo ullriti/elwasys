@@ -13,6 +13,7 @@ import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.ProgramType;
+import org.kabieror.elwasys.backend.domain.TimeUnitType;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
 import org.kabieror.elwasys.backend.repository.DeviceRepository;
@@ -65,6 +66,20 @@ class ExecutionServiceTest extends AbstractBackendIT {
     private ProgramEntity newProgram(int maxDurationSeconds) {
         ProgramEntity program = new ProgramEntity(Fixtures.unique("prog"), ProgramType.FIXED, maxDurationSeconds);
         program.setFlagfall(new BigDecimal("3.00"));
+        program.setFreeDurationSeconds(0);
+        return this.programRepository.save(program);
+    }
+
+    /**
+     * DYNAMIC-Programm mit Grundgebühr 1.00 und Zeitpreis 2.00/Stunde - für die
+     * Preis-Deckel-Tests (Issue #18): nur bei einem DYNAMIC-Programm hängt der Preis überhaupt
+     * von der Dauer ab (FIXED = Grundgebühr unabhängig von der Dauer).
+     */
+    private ProgramEntity newDynamicHourlyProgram(int maxDurationSeconds) {
+        ProgramEntity program = new ProgramEntity(Fixtures.unique("dyn"), ProgramType.DYNAMIC, maxDurationSeconds);
+        program.setFlagfall(new BigDecimal("1.00"));
+        program.setRate(new BigDecimal("2.00"));
+        program.setTimeUnit(TimeUnitType.HOURS);
         program.setFreeDurationSeconds(0);
         return this.programRepository.save(program);
     }
@@ -295,6 +310,56 @@ class ExecutionServiceTest extends AbstractBackendIT {
 
         assertThat(execution.getStop()).isEqualTo(stopTimestamp);
         assertThat(execution.isFinished()).isTrue();
+    }
+
+    @Test
+    void finishExecutionClampsStopToStartWhenClientTimestampIsBeforeStart() {
+        // Issue #18, Szenario 2 (negative Dauer): eine stark verspätete Offline-Nachmeldung,
+        // deren Start-Zeitstempel unabhängig auf die Serverzeit ersetzt wurde, kann einen
+        // Finish-Zeitstempel VOR dem Start erzeugen. Ohne Klemmung entstünde ein Datensatz mit
+        // stop < start und - über die Freiminuten-Regel - ein 0-€-Waschgang. Der Stop wird auf
+        // den Start geklemmt (Dauer 0), stop >= start gilt in der DB.
+        UserEntity user = newUser();
+        DeviceEntity device = newDevice();
+        ProgramEntity program = newProgram(3600);
+        this.creditService.inpayment(user, new BigDecimal("50.00"));
+        LocalDateTime start = LocalDateTime.of(2020, 1, 1, 10, 0, 0);
+        LocalDateTime finishBeforeStart = LocalDateTime.of(2020, 1, 1, 9, 0, 0);
+        ExecutionEntity execution = this.executionService.startExecution(
+                this.executionService.createExecution(device, program, user), start);
+
+        execution = this.executionService.finishExecution(execution, finishBeforeStart);
+
+        assertThat(execution.getStop()).as("stop must never be before start (no negative duration in DB)")
+                .isEqualTo(start);
+        assertThat(execution.getStop()).isAfterOrEqualTo(execution.getStart());
+        // Dauer 0 -> Freiminuten-Regel -> kein Abzug, Guthaben unverändert.
+        assertThat(this.creditService.getCredit(user)).isEqualByComparingTo("50.00");
+    }
+
+    @Test
+    void getPriceForAFinishedExecutionIsCappedAtProgramMaxDuration() {
+        // Issue #18, Szenario 1 (Überberechnung): ein langer Backend-Ausfall während eines online
+        // gestarteten Waschgangs führt beim Replay zu einem Finish-Zeitstempel, der über die
+        // Maximaldauer hinaus zurückliegt. Der Preis eines DYNAMIC-Programms darf trotzdem nie
+        // über den beim Start geprüften maxPrice (Preis bei Maximaldauer) hinausgehen.
+        UserEntity user = newUser();
+        DeviceEntity device = newDevice();
+        ProgramEntity program = newDynamicHourlyProgram(3600); // maxDuration 1h
+        this.creditService.inpayment(user, new BigDecimal("50.00"));
+        LocalDateTime start = LocalDateTime.of(2020, 1, 1, 10, 0, 0);
+        LocalDateTime finishThreeHoursLater = LocalDateTime.of(2020, 1, 1, 13, 0, 0);
+        ExecutionEntity execution = this.executionService.startExecution(
+                this.executionService.createExecution(device, program, user), start);
+
+        execution = this.executionService.finishExecution(execution, finishThreeHoursLater);
+
+        // maxPrice = Grundgebühr 1.00 + 2.00/h * 1h = 3.00 (nicht 1.00 + 2.00*3 = 7.00).
+        assertThat(this.executionService.getPrice(execution)).isEqualByComparingTo("3.00");
+        assertThat(this.creditService.getCredit(user)).as("only the capped price is charged")
+                .isEqualByComparingTo("47.00");
+        // Der reale End-Zeitstempel bleibt als Audit-Record erhalten (nur der Preis ist gedeckelt).
+        assertThat(execution.getStop()).isEqualTo(finishThreeHoursLater);
     }
 
     @Test

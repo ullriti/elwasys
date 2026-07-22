@@ -12,6 +12,21 @@ im [Worklog](docs/worklog/README.md).
 
 ## [Unreleased]
 
+### Fixed
+- Offline-Replay-Kern gehärtet (Pre-Launch-Review AP1, Issues #16/#17/#18/#54/#59, ADR 0016):
+  Nachmeldungen laufen über einen privilegierten Replay-Pfad (`replay`-Flag), der die
+  fachlichen Wächter überspringt, statt das Journal bei einer zwischenzeitlichen
+  Sperrung/Guthabenänderung dauerhaft zu verklemmen (#16).
+- Client-Journal-Replay robust gemacht: Dead-Letter für dauerhaft abgelehnte Einträge,
+  Paar-Reihenfolge (START erst mit vorliegendem FINISH), einzelnes Entfernen statt `clear()`
+  (kein Verlust parallel hinzugekommener Enden), NPE-Absicherung beim Auflösen der
+  Backend-Id (#17).
+- Zeitstempel-Invariante `stop ≥ start` erzwungen und Abrechnungsdauer auf `maxDuration`
+  gedeckelt – kein `stop < start`/0-€-Waschgang und keine Überberechnung mehr bei
+  Offline-Nachmeldungen; der reale End-Zeitstempel bleibt als Audit-Record erhalten (#18).
+- Terminal wertet einen Snapshot als unbrauchbar, wenn die lokale Uhr vor dem
+  Snapshot-Zeitpunkt liegt (Raspberry Pi ohne RTC), statt falsch abzurechnen (#54).
+
 ### Added
 - Demo-Datenbestand fürs visuelle UI-Prüfen: `DemoDataSeeder` (`backend/.../demo/`,
   `@Profile("demo")`) legt beim Start einen realistischen, idempotenten Beispielbestand an

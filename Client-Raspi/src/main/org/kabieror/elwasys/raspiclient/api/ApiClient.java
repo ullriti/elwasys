@@ -134,7 +134,23 @@ public class ApiClient {
      */
     public ExecutionDto createExecution(int userId, int deviceId, int programId, LocalDateTime clientTimestamp,
             String idempotencyKey) throws ApiException {
-        return post("api/v1/executions", new ExecutionStartRequest(userId, deviceId, programId, clientTimestamp),
+        return post("api/v1/executions",
+                new ExecutionStartRequest(userId, deviceId, programId, clientTimestamp, Boolean.FALSE),
+                ExecutionDto.class, idempotencyKey);
+    }
+
+    /**
+     * Nachmeldung ({@code replay}) einer bereits offline gebuchten Ausführung (Issue #16,
+     * privilegierter Nachbuchungs-Pfad): wie {@link #createExecution(int, int, int,
+     * LocalDateTime, String)}, aber mit gesetztem {@code replay}-Flag, sodass das Backend die
+     * fachlichen Wächter (Sperrung/Standort/Nutzbarkeit/Belegung/Guthaben) überspringt. Ein
+     * nachgemeldetes Ereignis ist ein Fakt, keine Anfrage - ein fachlich abgelehnter Eintrag
+     * würde sonst das gesamte Journal-Replay dauerhaft verklemmen.
+     */
+    public ExecutionDto replayCreateExecution(int userId, int deviceId, int programId, LocalDateTime clientTimestamp,
+            String idempotencyKey) throws ApiException {
+        return post("api/v1/executions",
+                new ExecutionStartRequest(userId, deviceId, programId, clientTimestamp, Boolean.TRUE),
                 ExecutionDto.class, idempotencyKey);
     }
 

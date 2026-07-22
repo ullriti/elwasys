@@ -38,11 +38,13 @@ public class OfflineJournal {
     private final Logger logger = LoggerFactory.getLogger(getClass());
 
     private final Path file;
+    private final Path deadLetterFile;
     private final Gson gson;
     private final Object lock = new Object();
 
     public OfflineJournal(Path file) {
         this.file = file;
+        this.deadLetterFile = file.resolveSibling(file.getFileName() + ".deadletter");
         this.gson = OfflineJsonSupport.gson();
     }
 
@@ -146,6 +148,37 @@ public class OfflineJournal {
                         idempotencyKey, e);
             }
         }
+    }
+
+    /**
+     * Verschiebt einen dauerhaft fachlich fehlgeschlagenen Eintrag (Poison-Entry, Issue #17)
+     * aus dem aktiven Journal in eine separate Dead-Letter-Datei ({@code
+     * offline-journal.jsonl.deadletter}) und entfernt ihn aus dem aktiven Journal. So verklemmt
+     * ein einzelner, beim Backend niemals annehmbarer Eintrag (z. B. ein gelöschtes Gerät/
+     * Programm, ein Ende ohne auflösbaren Start) nicht mehr das gesamte Journal: alle
+     * nachfolgenden, gültigen Einträge (auch die anderer Nutzer und die Enden bereits online
+     * gestarteter Waschgänge) werden weiterhin nachgemeldet. Die Dead-Letter-Datei bleibt für
+     * eine spätere manuelle Sichtung/Diagnose erhalten (Grund je Zeile mitgeschrieben).
+     */
+    public void moveToDeadLetter(OfflineJournalEntry entry, String reason) {
+        synchronized (this.lock) {
+            try {
+                DeadLetterRecord record = new DeadLetterRecord(reason, LocalDateTime.now(), entry);
+                Files.writeString(this.deadLetterFile, this.gson.toJson(record) + System.lineSeparator(),
+                        StandardOpenOption.CREATE, StandardOpenOption.APPEND, StandardOpenOption.WRITE);
+            } catch (IOException e) {
+                this.logger.error("Konnte einen Poison-Eintrag (Schluessel '{}') nicht in die Dead-Letter-Datei "
+                        + "schreiben - er wird trotzdem aus dem aktiven Journal entfernt.", entry.idempotencyKey(), e);
+            }
+            removeEntry(entry.idempotencyKey());
+        }
+    }
+
+    /**
+     * Ein in die Dead-Letter-Datei verschobener Journal-Eintrag samt Fehlergrund und
+     * Zeitpunkt (Issue #17) - rein für die spätere Diagnose.
+     */
+    private record DeadLetterRecord(String reason, LocalDateTime deadLetteredAt, OfflineJournalEntry entry) {
     }
 
     /**

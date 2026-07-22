@@ -44,7 +44,12 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   gibt es seit 2026-07-22 einen **Demo-Modus** (Profil `demo`, `DemoDataSeeder` + `backend/run-demo.sh`)
   mit wiederverwendbarem Beispielbestand fürs visuelle UI-Prüfen (siehe
   [06-ui-tests.md](06-ui-tests.md) „Demo-Daten", [04-build-and-run.md](04-build-and-run.md) „Demo-Modus").
-- **Nächster Schritt:** Betrieb/Nachpflege auf der Zielarchitektur; neue Vorhaben vorab als
+  Seit 2026-07-22 läuft die **Pre-Launch-Review** (Epic #66): **AP1 (Offline-/Replay-Kern,
+  #16/#17/#18/#54/#59) ist behoben** – privilegierter Replay-Nachbuchungs-Pfad, Client-Replay
+  robust (Dead-Letter/Paar-Reihenfolge/NPE/`clear()`-Race), Zeitstempel-Invariante `stop ≥ start`
+  + Preis-Deckel, Uhren-Plausibilität (siehe [ADR 0016](../architecture/0016-offline-replay-haertung.md)).
+- **Nächster Schritt:** Restliche Pre-Launch-Arbeitspakete (AP2 ff., u.a. #19 deCONZ-Reconnect,
+  #20 Locking) je als eigener PR; danach Betrieb/Nachpflege auf der Zielarchitektur; neue Vorhaben vorab als
   Spec in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten. Die
   Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).
 - **Details:** siehe den jeweils letzten Eintrag im [Worklog](../worklog/README.md).
