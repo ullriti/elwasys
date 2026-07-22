@@ -26,10 +26,14 @@ pg_isready || { echo "PostgreSQL not ready"; exit 1; }
 #    DB role, see backend/application.yml)
 if ! sudo -u postgres psql -lqt | cut -d'|' -f1 | grep -qw elwasys; then
   echo "[run-client-e2e] initializing elwasys database"
-  # Feed the SQL via stdin: the postgres OS user may not have read access to
-  # the repo checkout (e.g. under /home/runner in CI), so read it as the
+  # Apply the Flyway V1 baseline (0.4.0 schema) directly via psql - the SINGLE source of
+  # truth for the legacy/base schema (the former standalone database/database-init.sql was
+  # a byte-equivalent duplicate and was removed). V1 has no CREATE DATABASE preamble, so
+  # create the database first. Feed the SQL via stdin: the postgres OS user may not have
+  # read access to the repo checkout (e.g. under /home/runner in CI), so read it as the
   # invoking user and pipe it in.
-  sudo -u postgres psql -q < "$REPO_ROOT/database/database-init.sql"
+  sudo -u postgres psql -q -c "CREATE DATABASE elwasys;"
+  sudo -u postgres psql -q -d elwasys < "$REPO_ROOT/backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql"
 fi
 # The E2E tests seed/clean fixtures (devices, programs, users, executions,
 # credit_accounting) via JDBC as the postgres superuser, which needs a password

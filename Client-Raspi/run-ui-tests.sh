@@ -34,7 +34,13 @@ pg_isready || { echo "PostgreSQL not ready"; exit 1; }
 #    DB role, see backend/application.yml)
 if ! sudo -u postgres psql -lqt | cut -d'|' -f1 | grep -qw elwasys; then
   echo "[run-ui-tests] initializing elwasys database"
-  sudo -u postgres psql -q < "$REPO_ROOT/database/database-init.sql"
+  # Apply the Flyway V1 baseline (0.4.0 schema) directly via psql - it is the SINGLE
+  # source of truth for the legacy/base schema (the former standalone
+  # database/database-init.sql was a byte-equivalent duplicate and was removed; proven
+  # equivalent via pg_dump). V1 carries no CREATE DATABASE preamble (Flyway migrates an
+  # already-selected DB), so create the database first, then pipe V1 into it.
+  sudo -u postgres psql -q -c "CREATE DATABASE elwasys;"
+  sudo -u postgres psql -q -d elwasys < "$REPO_ROOT/backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql"
 fi
 # The E2E tests seed fixtures via JDBC as the postgres superuser (they need to
 # clean up credit_accounting, which the elwaportal role may not delete). Give

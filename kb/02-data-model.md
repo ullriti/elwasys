@@ -1,9 +1,12 @@
 # 02 – Datenmodell (PostgreSQL)
 
-Quelle: `database/database-init.sql` (DB-Version `0.4.0`; im Phase-5-Nachtrag aus dem
-aufgelösten Common-Modul in das neutrale Top-Level-Verzeichnis `database/` verschoben).
-Upgrades (historisch, seit Phase 2 AP1 nicht mehr fortgeschrieben – siehe „Flyway-Baseline“
-unten): `database/database-upgrade/upgrade_0.3.1_0.3.2.sql`, `upgrade_0.4.0.sql`.
+Quelle: die Flyway-Baseline `backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql`
+(DB-Version `0.4.0`) – seit der Schema-Konsolidierung die **einzige Quelle** des
+0.4.0-Alt-/Basis-Schemas. Das frühere Duplikat `database/database-init.sql` (samt dem gesamten
+Verzeichnis `database/`) war byte-äquivalent zur V1-Baseline und wurde entfernt. Die
+historischen Upgrade-Skripte (`database-upgrade/upgrade_0.3.1_0.3.2.sql`, `upgrade_0.4.0.sql`)
+existieren nicht mehr im Repo; ihr Endzustand (0.4.0) ist ohnehin in die V1-Baseline eingegangen
+(siehe „Flyway-Baseline“ unten).
 
 ## ER-Überblick
 
@@ -185,8 +188,9 @@ dokumentiert:
 
 **Cluster-weite Rollen im geteilten Test-Cluster**: `V6` läuft idempotent und fängt den Fall
 ab, dass eine Rolle in DIESER Datenbank noch Rechte besitzt, aber in einer ANDEREN Datenbank
-desselben Clusters (z. B. die von den Client-Raspi-Testharnesses über `database-init.sql`
-geseedete `elwasys`-Test-DB, solange diese parallel existiert) noch referenziert wird – in
+desselben Clusters (z. B. die von den Client-Raspi-Testharnesses durch direktes Einspielen der
+V1-Baseline per psql geseedete `elwasys`-Test-DB, solange diese parallel existiert) noch
+referenziert wird – in
 diesem Fall wird `DROP ROLE`/`DROP GROUP` für diesen Lauf übersprungen (`RAISE NOTICE`), die
 Rechte in der aktuellen DB sind trotzdem entfernt. In einer echten Produktivumgebung mit
 genau einer `elwasys`-Datenbank tritt das nicht auf, siehe Kommentarkopf der Migration.
@@ -207,13 +211,14 @@ kb/05-migration-plan.md (Änderungslog, Phase 2 AP1); hier die für das Datenmod
 Zusammenfassung:
 
 - **Baseline-Migration**: `backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql`.
-  Inhaltlich eine 1:1-Übernahme der geteilten SQL-Fixture (zum Zeitpunkt der Ableitung unter
-  `Common/resources/database-init.sql`, heute `database/database-init.sql`) (ohne die
-  psql-only `CREATE DATABASE`/`\connect`-Zeilen, die für eine bereits per JDBC-URL gewählte
-  Ziel-DB nicht gebraucht werden). **Nicht** separat aus den beiden
-  `database-upgrade/*.sql`-Skripten rekonstruiert: `database-init.sql` enthält bereits deren
-  Endzustand (0.4.0), ein frischer Lauf beider Wege ergibt also per Konstruktion dasselbe
-  Schema – siehe Verifikation unten. Einzige technische Anpassung: die Rollenanlage
+  Historisch abgeleitet aus der damaligen geteilten SQL-Fixture (zum Zeitpunkt der Ableitung
+  unter `Common/resources/database-init.sql`, später kurzzeitig `database/database-init.sql`)
+  (ohne die psql-only `CREATE DATABASE`/`\connect`-Zeilen, die für eine bereits per JDBC-URL
+  gewählte Ziel-DB nicht gebraucht werden). Seit der Schema-Konsolidierung ist diese Fixture
+  entfernt und V1 die **einzige Quelle** des 0.4.0-Schemas. **Nicht** separat aus den beiden
+  damaligen `database-upgrade/*.sql`-Skripten rekonstruiert: die Fixture enthielt bereits deren
+  Endzustand (0.4.0), ein frischer Lauf beider Wege ergab also per Konstruktion dasselbe
+  Schema. Einzige technische Anpassung: die Rollenanlage
   (`CREATE GROUP`/`CREATE USER` für `elwaclients`/`elwaclient1`/`elwaportal`/`elwaapi`) ist in
   einen `DO`-Block mit Existenzprüfung (`pg_roles`) gefasst, weil PostgreSQL-Rollen
   Cluster-weit sind (nicht pro Datenbank) und ein zweiter Lauf gegen denselben Cluster sonst
@@ -221,13 +226,18 @@ Zusammenfassung:
   `auto_end_power_threashold` blieb hier bewusst erhalten (eingefrorene 0.4.0-Baseline);
   Phase 5 AP3 hat ihn per `V8` auf dem Migrationspfad vorwärts korrigiert (siehe
   Änderungslog).
-- **Zwei Betriebsszenarien**, beide mit `backend/verify-schema-baseline.sh` verifiziert:
-  1. **Frische, leere DB**: Flyway führt `V1` normal aus → schema-äquivalent zu einer frischen
-     `database-init.sql`-DB (verifiziert per `pg_dump --schema-only`-Diff; einzige Abweichung
-     ist Flywayss eigene Buchführungstabelle `flyway_schema_history` + deren PK/Index, die
-     bewusst nicht Teil des Anwendungsschemas ist).
-  2. **Bestehende Alt-Weg-DB** (über `database-init.sql` + ggf. `database-upgrade/*.sql`
-     angelegt, mit Daten): `spring.flyway.baseline-on-migrate=true` (siehe
+- **Zwei Betriebsszenarien**, historisch per Schema-Diff geprüft (das damalige Vergleichsskript
+  `backend/verify-schema-baseline.sh` verglich `database-init.sql` gegen die Baseline; es wurde
+  mit der Schema-Konsolidierung entfernt – gegenstandslos, seit beide dieselbe Quelle sind.
+  Maßgebliches Verifikationswerkzeug ist heute die Cutover-Verifikation
+  `deploy/cutover/verify-cutover-migration.sh`, siehe unten):
+  1. **Frische, leere DB**: Flyway führt `V1` normal aus → das Anwendungsschema entspricht genau
+     dem der V1-Baseline; einzige Abweichung ist Flywayss eigene Buchführungstabelle
+     `flyway_schema_history` + deren PK/Index, die bewusst nicht Teil des Anwendungsschemas ist.
+  2. **Bestehende (pre-Flyway) 0.4.0-DB** (historisch über `database-init.sql` + ggf.
+     `database-upgrade/*.sql` angelegt, mit Daten; die Test-/Cutover-Harnesses simulieren eine
+     solche ungetrackte DB heute, indem sie die V1-Baseline direkt per psql einspielen – DB
+     vorher per `CREATE DATABASE` anlegen, dann V1 hineinpipen): `spring.flyway.baseline-on-migrate=true` (siehe
      `backend/src/main/resources/application.yml`) markiert sie beim ersten Start als bereits
      auf `baselineVersion=1` migriert, ohne `V1` erneut auszuführen oder Daten zu verändern.
      Verifiziert: Backend startet sauber (Health-Endpoint UP), `flyway_schema_history` enthält
@@ -250,11 +260,11 @@ Zusammenfassung:
   `db.version = '0.4.0'` bleibt in der Flyway-Baseline erhalten (für den Fall, dass ihn
   doch irgendein Alt-Code oder externes Werkzeug liest), wird aber **ab sofort nicht mehr
   fortgeschrieben** – zukünftige Schemaänderungen laufen ausschließlich über weitere
-  Flyway-Migrationen (`V2__...`, `V3__...`, …). `database/database-upgrade/*.sql`
-  wird nicht mehr gepflegt; die vorhandenen Dateien (`upgrade_0.3.1_0.3.2.sql`,
-  `upgrade_0.4.0.sql`) bleiben unverändert als historisches Artefakt im Repo (Bestands-DBs,
-  die noch über sie hochgezogen werden, landen ohnehin beim Endstand 0.4.0, den die Baseline
-  abbildet).
+  Flyway-Migrationen (`V2__...`, `V3__...`, …). Die alten `database-upgrade/*.sql`-Skripte
+  (`upgrade_0.3.1_0.3.2.sql`, `upgrade_0.4.0.sql`) wurden mit dem Verzeichnis `database/` aus
+  dem Repo entfernt; ihr Endzustand (0.4.0) ist ohnehin in die V1-Baseline eingegangen
+  (Bestands-DBs, die historisch über sie hochgezogen wurden, landen beim selben Endstand 0.4.0,
+  den die Baseline abbildet).
 - **`V2__widen_users_password_column.sql`** (Phase 2 AP3, 2026-07-20): `ALTER TABLE users
   ALTER COLUMN password TYPE VARCHAR(255)` (war `VARCHAR(50)`). Befund: Argon2id-kodierte
   Passwort-Hashes (neues Format, siehe kb/03-modules.md „Auth“) sind mit Spring Securitys

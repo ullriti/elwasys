@@ -46,8 +46,10 @@ runcmd:
   # Repo klonen
   - [ bash, -lc, "mkdir -p /opt/elwasys && chown -R ubuntu:ubuntu /opt/elwasys" ]
   - [ bash, -lc, "sudo -u ubuntu git clone https://github.com/ullriti/elwasys.git /opt/elwasys/src || true" ]
-  # Datenbank initialisieren (Schema + Rollen + Seed-Daten)
-  - [ bash, -lc, "sudo -u postgres psql -f /opt/elwasys/src/database/database-init.sql || true" ]
+  # Datenbank initialisieren (Schema + Rollen + Seed-Daten) über die Flyway-V1-Baseline
+  # (0.4.0-Schema, die einzige Quelle; das frühere database/database-init.sql-Duplikat wurde
+  # entfernt). V1 hat keine CREATE-DATABASE-Präambel, daher DB zuerst anlegen.
+  - [ bash, -lc, "sudo -u postgres psql -c 'CREATE DATABASE elwasys' || true; sudo -u postgres psql -d elwasys -f /opt/elwasys/src/backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql || true" ]
   # Maven-Cache vorwärmen: Parent-POM installieren, Client-Deps auflösen
   - [ bash, -lc, "cd /opt/elwasys/src && sudo -u ubuntu mvn -q -B -N install -DskipTests || true" ]
   - [ bash, -lc, "cd /opt/elwasys/src && sudo -u ubuntu mvn -q -B -f Client-Raspi/pom.xml dependency:go-offline || true" ]

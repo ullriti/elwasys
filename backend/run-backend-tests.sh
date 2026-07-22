@@ -36,7 +36,7 @@ sudo -u postgres psql -q -c "ALTER USER postgres WITH PASSWORD 'postgres';"
 
 # Fresh, empty database for every run: this is the "Flyway migrates a brand-new database"
 # scenario (see kb/02-data-model.md). The "baselineOnMigrate against an existing/legacy
-# database" scenario is verified separately, see backend/verify-schema-baseline.sh.
+# database" scenario is exercised by the cutover verification (deploy/cutover/verify-cutover-migration.sh).
 sudo -u postgres psql -q -c "DROP DATABASE IF EXISTS ${DB_NAME};"
 sudo -u postgres psql -q -c "CREATE DATABASE ${DB_NAME};"
 

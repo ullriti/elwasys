@@ -70,7 +70,7 @@ if table_exists "flyway_schema_history"; then
   fi
 else
   echo "  flyway_schema_history existiert NOCH NICHT - das ist der erwartete Zustand einer"
-  echo "  über database-init.sql angelegten Bestands-DB vor dem ersten Start des neuen"
+  echo "  über den Alt-Weg (Schema 0.4.0) angelegten Bestands-DB vor dem ersten Start des neuen"
   echo "  Backends. Beim ersten Start baselined Flyway diese DB auf Version 1 und wendet"
   echo "  danach V2..V10 automatisch an (baseline-on-migrate, siehe application.yml)."
 fi

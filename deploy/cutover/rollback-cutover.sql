@@ -34,11 +34,11 @@ BEGIN;
 -- ============================================================================================
 -- V10__drop_app_remnants.sql umkehren: Auth-Key-Trigger/-Funktionen + App-Relikt-Spalten auf
 -- users + Tabellen reservations/foreign_authkeys + config-Zeilen authkey.prefix/
--- reservation.duration wieder anlegen. random_string() (siehe database/
--- database-init.sql) wurde von V10 NICHT entfernt und wird hier vorausgesetzt.
+-- reservation.duration wieder anlegen. random_string() (siehe V1-Baseline
+-- V1__baseline_schema_0_4_0.sql) wurde von V10 NICHT entfernt und wird hier vorausgesetzt.
 -- ============================================================================================
 
--- Reihenfolge wie im Original (database/database-init.sql): erst die Spalte
+-- Reihenfolge wie in der V1-Baseline (V1__baseline_schema_0_4_0.sql): erst die Spalte
 -- users.auth_key (wird von der Triggerfunktion per NEW.auth_key beschrieben), dann die
 -- Funktionen, dann der Trigger selbst.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS app_id VARCHAR(50) DEFAULT NULL;
@@ -145,7 +145,7 @@ WHERE username = 'admin'
 -- ============================================================================================
 -- V6__harden_db_roles.sql umkehren: Alt-Rollen elwaclient1 (Passwort 'elwaclient1', Gruppe
 -- elwaclients), Gruppe elwaclients, User elwaapi (Passwort 'api1234') + deren Grants wieder
--- anlegen (DDL/Grants aus database/database-init.sql übernommen). Rollen können nicht
+-- anlegen (DDL/Grants aus der V1-Baseline (V1__baseline_schema_0_4_0.sql) übernommen). Rollen können nicht
 -- per "CREATE ROLE IF NOT EXISTS" abgesichert werden (PostgreSQL kennt diese Syntax nicht) -
 -- daher Existenz-Wächter per DO-Block wie in V6 selbst.
 -- ============================================================================================
@@ -183,7 +183,7 @@ $do$;
 
 -- GRANT ist selbst idempotent (ein bereits vorhandenes Privileg erneut zu vergeben ist ein
 -- No-Op, kein Fehler) - kein zusätzlicher Wächter nötig. Reihenfolge/Inhalt 1:1 aus
--- database/database-init.sql übernommen. Setzt voraus, dass "reservations" bereits
+-- der V1-Baseline (V1__baseline_schema_0_4_0.sql) übernommen. Setzt voraus, dass "reservations" bereits
 -- existiert (siehe V10-Umkehrung oben, GRANT INSERT, DELETE ON reservations TO elwaapi).
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO GROUP elwaclients;
 GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO GROUP elwaclients;

@@ -78,13 +78,15 @@ mvn -f pom.xml package -pl backend -DskipTests
   `PricingService`/`CreditService`/`PermissionService`/`ExecutionService`, siehe
   kb/05-migration-plan.md Änderungslog AP2).
 
-**Flyway-Baseline-Verifikation** (Schema-Äquivalenz Alt-Weg ↔ Flyway, `baselineOnMigrate`
-gegen eine Bestands-DB) – dokumentiertes, reproduzierbares Skript, kein Dauertest:
+**Flyway-Baseline-Verifikation** (`baselineOnMigrate` + Datenerhalt gegen eine simulierte
+Bestands-DB) – dokumentiertes, reproduzierbares Skript, kein Dauertest:
 ```bash
-backend/verify-schema-baseline.sh
+deploy/cutover/verify-cutover-migration.sh
 ```
-Details/Ergebnis siehe kb/02-data-model.md und kb/05-migration-plan.md (Änderungslog, Phase 2
-AP1).
+Das frühere `backend/verify-schema-baseline.sh` (verglich `database-init.sql` per Schema-Dump
+gegen die Baseline) wurde mit der Alt-Schema-Konsolidierung entfernt – gegenstandslos, seit die
+V1-Baseline die einzige Schema-Quelle ist. Details/Ergebnis siehe kb/02-data-model.md und
+kb/05-migration-plan.md (Änderungslog, Phase 2 AP1).
 
 **Lokal starten** (Konfiguration siehe `backend/src/main/resources/application.yml`, per
 Umgebungsvariable überschreibbar):
@@ -96,9 +98,9 @@ java -jar backend/target/elwasys-backend.jar
 # Health-Check:
 curl http://localhost:8080/actuator/health
 ```
-Gegen eine über `database-init.sql` angelegte Bestands-DB migriert Flyway beim ersten Start
-per `baselineOnMigrate` (kein DDL, keine Datenänderung); gegen eine leere DB durchläuft Flyway
-die Baseline-Migration `V1__baseline_schema_0_4_0.sql` normal.
+Gegen eine bestehende (pre-Flyway) 0.4.0-Bestands-DB migriert Flyway beim ersten Start per
+`baselineOnMigrate` (kein DDL, keine Datenänderung); gegen eine leere DB durchläuft Flyway die
+Baseline-Migration `V1__baseline_schema_0_4_0.sql` normal.
 
 **Achtung seit Phase 3 AP1 (Vaadin-Flow-Portal-Grundgerüst)**: der obige Start (Dev-Modus,
 `vaadin.productionMode` nicht gesetzt) scheitert in DIESER Sandbox-Umgebung beim
@@ -185,7 +187,7 @@ kb/05-migration-plan.md).
 > `deploy/terminal/README.md`, `deploy/smoke/README.md`).
 
 `deploy/cutover/` bündelt die Werkzeuge für die eigentliche **Produktivumschaltung** einer
-bereits über den Alt-Weg (`database-init.sql`) angelegten Bestands-DB auf die neue,
+bereits vor Flyway angelegten (pre-Flyway) 0.4.0-Bestands-DB auf die neue,
 Flyway-verwaltete Architektur – Details/Runbook in `deploy/cutover/README.md`,
 Hintergrund/Roadmap in kb/05-migration-plan.md ("Phase 6 – Produktivumschaltung"):
 - **`01-preflight-check.sh`**: rein lesender Readiness-Report (Flyway-Status, noch
@@ -198,10 +200,10 @@ Hintergrund/Roadmap in kb/05-migration-plan.md ("Phase 6 – Produktivumschaltun
 - **`verify-cutover-migration.sh`**: das wartbare Cutover-Verifikationsskript – baut lokal
   eine Testkopie des Bestandsschemas, fügt Bestandsdaten ein, startet das Backend-Jar
   dagegen und prüft per Assert-Liste Flyway-Historie/Datenerhalt/Schema-Härtung (21 Asserts,
-  PASS/FAIL + Exit-Code). Anders als das ältere `backend/verify-schema-baseline.sh` (Phase-
-  2-Relikt, vergleicht Schema-Dumps 1:1 – dessen Prämisse gilt seit V2 nicht mehr) prüft
-  dieses Skript explizite, wartbare Assert-Aussagen; beide Skripte bleiben nebeneinander
-  bestehen (unterschiedlicher Zweck).
+  PASS/FAIL + Exit-Code). Es ist heute das maßgebliche Verifikationswerkzeug für den Cutover;
+  das ältere `backend/verify-schema-baseline.sh` (Phase-2-Relikt, verglich Schema-Dumps 1:1)
+  wurde mit der Alt-Schema-Konsolidierung entfernt – seine Prämisse (`database-init.sql` vs.
+  Baseline) ist gegenstandslos, seit die V1-Baseline die einzige Schema-Quelle ist.
 - **`rollback-cutover.sql`** / **`rollback-cutover.sh`** (AP2): idempotentes Reverse-DDL für
   einen abgebrochenen Cutover – macht V3..V10 rückgängig (Alt-Rollen/-Trigger/-Tabellen/
   -Spalten wieder anlegen, `flyway_schema_history` droppen), ohne Geschäftsdaten zu
@@ -303,8 +305,11 @@ Env-Overrides (u. a. für Trocken-Tests): `ELWA_ROOT`, `ELWA_RESTART_CMD`, `ELWA
 `ELWA_LATEST_VERSION_CMD`, `ELWA_UPDATE_DEADLINE`, `ELWA_MARKER_FILE`, `ELWA_UPDATE_SCRIPT`.
 
 ### Datenbank
-PostgreSQL, initialisiert über `database/database-init.sql` (legt DB `elwasys`,
-Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).
+PostgreSQL, initialisiert über die Flyway-V1-Baseline
+`backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql` (legt Schema, Rollen
+`elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an; die DB `elwasys` wird zuvor per
+`CREATE DATABASE` angelegt, da V1 keine `CREATE DATABASE`/`\connect`-Präambel hat). Im
+Backend-Betrieb übernimmt Flyway die Baseline beim ersten Start automatisch.
 
 ## Deployment (Produktion)
 
@@ -346,7 +351,7 @@ docker compose up -d --build
 curl http://localhost:8080/actuator/health
 ```
 Eine leere Datenbank wird beim ersten Start vollständig per Flyway-Baseline-Migration
-angelegt (kein gemountetes `database-init.sql` - würde sich mit dem bereits per
+angelegt (kein separates, gemountetes Seed-SQL-Skript - das würde sich mit dem bereits per
 `POSTGRES_DB`/`_USER` angelegten Datenbanknamen beißen und wäre doppelte Schemaverwaltung
 neben Flyway). Variante **„Anbindung an eine Bestands-DB"**: `ELWASYS_DB_URL`/`_USER`/
 `_PASSWORD` in `.env` auf die externe Instanz setzen und nur den `backend`-Service starten

@@ -46,7 +46,8 @@ JavaFX-State-Machine bis `SELECT_DEVICE`.
 - **Gateway**: der projekteigene **`FhemSimulator`** (fake fhem über Telnet) — start-/
   stoppbar gemacht (`start(port)`/`stop()`). Der Client nutzt den fhem-Pfad, weil kein
   deCONZ-Server konfiguriert ist.
-- **DB**: lokale PostgreSQL, geseedet aus `database-init.sql` (Location „Default").
+- **DB**: lokale PostgreSQL, geseedet aus der Flyway-V1-Baseline
+  (`backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql`, Location „Default").
 - **Config**: temporäres `elwasys.properties` (via `user.dir`-Property); stabile Client-UID
   (`.client-uid`) + Reset der Standort-Registrierung im Setup → idempotent, reihenfolge-
   unabhängig.
@@ -150,7 +151,8 @@ bringen dafür jetzt ein echtes, laufendes Backend mit:
 
 - **`Client-Raspi/ci-support/start-test-backend.sh`** (neu, `source`d von allen drei
   Skripten): baut den Backend-Jar, startet EIN Backend-Prozess für den gesamten Testlauf
-  (Flyway migriert dieselbe Test-Datenbank, die `database-init.sql` initialisiert hat),
+  (Flyway migriert dieselbe Test-Datenbank, die zuvor per direktem Einspielen der V1-Baseline
+  angelegt wurde),
   seedet per `token-cli` genau einen Standort-Token für „Default" und exportiert
   `ELWASYS_TEST_BACKEND_URL`/`ELWASYS_TEST_BACKEND_TOKEN` (gelesen von
   `application.TestBackend`, siehe dortiger Klassen-Javadoc). Ein `EXIT`-Trap stoppt das
@@ -224,7 +226,7 @@ javafx.web` – ein Standard-JDK kann ein `java -jar` dieses Application-Subclas
 nicht starten: `Error: JavaFX runtime components are missing`, siehe Skript-Kommentar für die
 volle Begründung), bereitet eine frische, leere Postgres-Testdatenbank vor (analog zu
 `backend/run-backend-tests.sh` – Flyway migriert sie über den Testkontext, kein
-`database-init.sql`-Seeding nötig, der Test legt Standort/Token selbst über die echten
+separates Seed-Skript nötig, der Test legt Standort/Token selbst über die echten
 Repositories an) und startet die Suite unter `xvfb-run` (`mvn -f backend/pom.xml test
 -Dtest=TerminalMaintenanceRealClientE2ETest`) – der reale Client-Subprozess braucht ein
 Display, `-Dtest=...` überschreibt gezielt den in `backend/pom.xml` konfigurierten
@@ -290,9 +292,11 @@ Entscheidung (Auftraggeber, historisch): **Playwright (Node/TypeScript)**. Proje
 
 - **Browser**: vorinstalliertes Chromium (`/opt/pw-browsers/chromium`) via
   `executablePath` – kein `playwright install` nötig.
-- **Orchestrierung**: `scripts/start-portal.sh` (idempotent) startet PostgreSQL, seedet die
-  `elwasys`-DB aus `database-init.sql`, schreibt `/etc/elwaportal/elwaportal.properties`,
-  installiert Common und startet `mvn jetty:run`. Playwright `webServer` wartet auf
+- **Orchestrierung** (historisch, mit dem Alt-Portal entfernt): `scripts/start-portal.sh`
+  (idempotent) startete PostgreSQL, seedete die `elwasys`-DB aus der damaligen
+  `database-init.sql`-Fixture (die es heute nicht mehr gibt – das 0.4.0-Schema kommt jetzt
+  ausschließlich aus der Flyway-V1-Baseline), schrieb `/etc/elwaportal/elwaportal.properties`,
+  installierte Common und startete `mvn jetty:run`. Playwright `webServer` wartet auf
   `:8080`, führt die Tests aus und fährt Jetty wieder herunter. Mit `E2E_NO_WEBSERVER=1`
   gegen einen bereits laufenden Server testbar.
 - **Vaadin-7-Selektoren**: keine stabilen IDs → Lokatoren über Vaadin-CSS-Klassen
@@ -328,9 +332,10 @@ aufgebaut (Playwright/Node/TS, gleiches `package.json`-Muster, gleiche Chromium-
   **Produktionsmodus** (`-Pproduction` – der einzige in dieser Sandbox
   lizenzcheck-freie Build-Weg, siehe kb/05-migration-plan.md „Phase 3 AP2") und startet den
   Jar im Vordergrund auf `SERVER_PORT`. Der Flyway-Baseline-Lauf beim ersten Start seedet
-  bereits `admin`/`admin`, die Gruppe „Default" und den Standort „Default" (1:1 aus
-  `database-init.sql` übernommen, siehe `V1__baseline_schema_0_4_0.sql`) – kein separates
-  Seed-SQL-Skript nötig wie bei der Alt-Suite.
+  bereits `admin`/`admin`, die Gruppe „Default" und den Standort „Default" (Seed-Daten des
+  0.4.0-Schemas, heute einzige Quelle `V1__baseline_schema_0_4_0.sql`; historisch aus der
+  früheren `database-init.sql`-Fixture abgeleitet) – kein separates Seed-SQL-Skript nötig wie
+  bei der Alt-Suite.
 - **`backend/e2e/global-setup.ts`**: seedet die zwei zusätzlichen Nicht-Admin-Testnutzer
   (`e2e_portal_user`, `e2e_pwchange_user`, Passwort „test", SHA1-Alt-Hash – wird vom neuen
   Backend im Parallelbetrieb unverändert akzeptiert, siehe Phase 2 AP3) für P15–P19. Läuft

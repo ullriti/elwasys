@@ -55,9 +55,13 @@ jobs:
           pg_isready || { echo "PostgreSQL not ready"; exit 1; }
           if ! sudo -u postgres psql -lqt | cut -d'|' -f1 | grep -qw elwasys; then
             echo "Seeding elwasys database"
-            # Pipe via stdin so the file is read as the runner user; the
-            # postgres OS user cannot read the checkout under /home/runner.
-            sudo -u postgres psql -q < database/database-init.sql
+            # Apply the Flyway V1 baseline (0.4.0 schema) directly - the single source of
+            # truth for the base schema (the former database/database-init.sql duplicate was
+            # removed). V1 has no CREATE DATABASE preamble, so create the DB first. Pipe via
+            # stdin so the file is read as the runner user (postgres OS user cannot read the
+            # checkout under /home/runner).
+            sudo -u postgres psql -q -c "CREATE DATABASE elwasys;"
+            sudo -u postgres psql -q -d elwasys < backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql
           fi
 
       - name: Run Client tests (headless via Xvfb)

@@ -33,7 +33,9 @@ CLAUDE_CODE_REMOTE=true CLAUDE_PROJECT_DIR="$PWD" ./.claude/hooks/session-start.
 Datei: `kb/cloud-init/cloud-config.yaml`.
 
 Provisioniert eine frische Ubuntu-VM mit JDK 21, Maven, PostgreSQL, Xvfb + GTK/Grafik-
-Bibliotheken, klont das Repo, initialisiert die DB (`database/database-init.sql`) und wärmt den
+Bibliotheken, klont das Repo, initialisiert die DB durch direktes Einspielen der Flyway-V1-Baseline
+(`backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql` – die DB `elwasys` wird
+vorher per `CREATE DATABASE` angelegt, da V1 keine `CREATE DATABASE`-Präambel hat) und wärmt den
 Maven-Cache. Enthält `run-ui-tests.sh` zum headless Ausführen der Client-UI-Tests.
 
 Beispiel (Multipass):

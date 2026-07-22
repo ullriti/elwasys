@@ -2,7 +2,7 @@
 
 Werkzeuge für die **Produktivumschaltung** (kb/05-migration-plan.md, "Phase 6 –
 Produktivumschaltung (Cutover)"): das bestehende, über den Alt-Weg
-(`database/database-init.sql`, Schema-Endstand 0.4.0) angelegte Produktiv-Setup
+(Schema-Endstand 0.4.0, entspricht der Flyway-V1-Baseline) angelegte Produktiv-Setup
 (physische Raspi-Terminals + laufendes Alt-Portal/DB) auf die neue Architektur (Backend mit
 Flyway-verwaltetem Schema, Terminals über REST-API/Standort-Token statt Direkt-DB-Zugriff)
 umstellen - ohne Datenverlust.
@@ -111,16 +111,14 @@ ungenutzte Standort-Zeilen.
 ```bash
 deploy/cutover/verify-cutover-migration.sh
 ```
-Baut lokal eine Testkopie des Bestandsschemas (`database/database-init.sql`, DB-Name
-per `CUTOVER_VERIFY_DB`, Default `elwasys_cutover_verify`), füllt sie mit realistischen
-Bestandsdaten, startet das Backend-Jar dagegen (Port per `CUTOVER_VERIFY_PORT`, Default
-18090) und prüft per `psql`-Asserts: Flyway-Historie (BASELINE@1 + V2..V10 alle
-`success=true`), dass die Bestandsdaten unverändert erhalten bleiben, und dass die
-Schema-Härtung (Typo-Fix, `client_*`-Spalten weg, App-Reste weg, Alt-Rollen-Grants weg,
-admin-Passwort NULL) tatsächlich wirkt. Anders als das historische
-`backend/verify-schema-baseline.sh` (Phase-2-Relikt, vergleicht Schema-Dumps 1:1 - das
-funktioniert seit V2 nicht mehr, siehe dessen Header) prüft dieses Skript explizite,
-wartbare Assert-Aussagen statt eine mittlerweile falsche Gleichheitsannahme.
+Baut lokal eine Testkopie des Bestandsschemas (die Flyway-V1-Baseline direkt per `psql`
+eingespielt, DB-Name per `CUTOVER_VERIFY_DB`, Default `elwasys_cutover_verify`), füllt sie
+mit realistischen Bestandsdaten, startet das Backend-Jar dagegen (Port per
+`CUTOVER_VERIFY_PORT`, Default 18090) und prüft per `psql`-Asserts: Flyway-Historie
+(BASELINE@1 + V2..V10 alle `success=true`), dass die Bestandsdaten unverändert erhalten
+bleiben, und dass die Schema-Härtung (Typo-Fix, `client_*`-Spalten weg, App-Reste weg,
+Alt-Rollen-Grants weg, admin-Passwort NULL) tatsächlich wirkt. Das Skript prüft explizite,
+wartbare Assert-Aussagen und ist das maßgebliche Cutover-Verifikationswerkzeug.
 
 Die Test-DB `elwasys_cutover_verify` wird am Ende **nicht** gedroppt - sie ist die Grundlage
 für `verify-rollback.sh` (Phase 6 AP2, siehe unten).

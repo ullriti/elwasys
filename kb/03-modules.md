@@ -31,11 +31,14 @@ Die von diesen Klassen benötigten Bibliotheken sind seither direkte Client-Rasp
 (u. a. Commons Lang3 direkt; der PostgreSQL-JDBC-Treiber nur noch **test-scope**, da nur die
 E2E-Harness per JDBC seedet).
 
-**Geteilte SQL-Fixture**: die ehemalige `Common/resources/database-init.sql` (+
-`database-upgrade/`) wurde ins neue neutrale Top-Level-Verzeichnis `database/` verschoben (jetzt
-`database/database-init.sql` und `database/database-upgrade/`, mit eigenem `database/README.md`);
-sie bleibt Seed-Quelle der Test-Harnesses. Die toten `ISO_7010_*.svg` (Alt-Portal-Reste) wurden
-gelöscht.
+**Geteiltes Seed-Schema**: seit der Schema-Konsolidierung gibt es für das 0.4.0-Alt-/Basis-Schema
+nur noch **eine Quelle** – die Flyway-Baseline
+`backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql`. Die früher hier genutzte
+SQL-Fixture (`Common/resources/database-init.sql`, später kurzzeitig `database/database-init.sql`
+samt `database/database-upgrade/`) war ein byte-äquivalentes Duplikat und wurde mitsamt dem
+Verzeichnis `database/` entfernt. Test-Harnesses, die eine ungetrackte 0.4.0-DB brauchen, spielen
+V1 direkt per psql ein (DB vorher per `CREATE DATABASE` anlegen). Die toten `ISO_7010_*.svg`
+(Alt-Portal-Reste) wurden gelöscht.
 
 ## Client-Raspi (`org.kabieror.elwasys.raspiclient`)
 
@@ -362,9 +365,10 @@ für die bisherigen 40-Zeichen-SHA1-Hex-Hashes, aber Argon2id-Strings mit den ob
 Parametern sind empirisch gemessen konstant 97 Zeichen lang. Additive Flyway-Migration
 `V2__widen_users_password_column.sql` (`ALTER TABLE users ALTER COLUMN password TYPE
 VARCHAR(255)`) behoben – abwärtskompatibel, der Alt-Code prüft die Spaltenlänge nicht
-selbst. Siehe kb/05-migration-plan.md ("Entscheidungen") für die vollständige Abwägung und
-`backend/verify-schema-baseline.sh` für die dadurch entstehende (erwartete) Anmerkung zur
-Schema-Divergenz gegenüber dem reinen Alt-Weg.
+selbst. Siehe kb/05-migration-plan.md ("Entscheidungen") für die vollständige Abwägung; die
+dadurch entstehende Schema-Divergenz gegenüber dem reinen Alt-Weg wird heute von der
+Cutover-Verifikation `deploy/cutover/verify-cutover-migration.sh` mit abgedeckt (das frühere
+`backend/verify-schema-baseline.sh` wurde mit der Alt-Schema-Konsolidierung entfernt).
 
 **Abhängigkeiten** (Spring Boot **3.5.16**, per BOM-Import in `dependencyManagement`
 eingebunden – nicht über `spring-boot-starter-parent`, da das Modul bereits `elwasys-parent`
@@ -1117,9 +1121,10 @@ clientseitig gerenderte Web-Komponente, kein klassisches Server-HTML-Formular mi
 scrapebarem CSRF-Feld) bleibt der späteren Playwright-E2E-Suite vorbehalten (kb/08-test-plan.md, P18).
 
 **Build/Test/Run**: siehe kb/04-build-and-run.md (Abschnitt „Backend bauen, testen, lokal
-starten“). `backend/run-backend-tests.sh` für den Docker-losen lokalen Testweg,
-`backend/verify-schema-baseline.sh` für den dokumentierten Schema-Äquivalenz-/
-`baselineOnMigrate`-Nachweis.
+starten“). `backend/run-backend-tests.sh` für den Docker-losen lokalen Testweg;
+`deploy/cutover/verify-cutover-migration.sh` für den `baselineOnMigrate`-/Datenerhalt-Nachweis
+gegen eine simulierte Bestands-DB (das frühere `backend/verify-schema-baseline.sh` wurde mit der
+Alt-Schema-Konsolidierung entfernt).
 
 #### Stammdaten-Views (AP2, 2026-07-20)
 
