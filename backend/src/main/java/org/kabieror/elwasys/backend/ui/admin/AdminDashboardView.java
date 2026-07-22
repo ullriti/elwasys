@@ -275,7 +275,10 @@ public class AdminDashboardView extends VerticalLayout {
         VerticalLayout devicePanel = new VerticalLayout();
         devicePanel.addClassName("dashboard-device-panel");
         devicePanel.getElement().getThemeList().add("spacing-s");
-        devicePanel.setWidth("24em");
+        // Keine feste Breite mehr: die Karten sind über das Theme (portal-theme.css)
+        // responsiv (zwei pro Reihe auf breiten Bildschirmen, eine pro Reihe schmal) - 1:1 wie
+        // das Alt-Portal (Portal/.../dashboard.scss: .device-container 50%/100%). Eine feste
+        // Breite (früher 24em) ließ die Verlaufstabelle abgeschnitten wirken.
         populateDevicePanel(devicePanel, deviceStatus);
         this.devicePanelsByDeviceId.put(deviceStatus.device().getId(), devicePanel);
         return devicePanel;
@@ -289,6 +292,15 @@ public class AdminDashboardView extends VerticalLayout {
      */
     private void populateDevicePanel(VerticalLayout devicePanel, DeviceStatus deviceStatus) {
         devicePanel.removeAll();
+
+        // Status-Klasse für den farbigen oberen Kartenrand (gleiche Palette wie das Terminal:
+        // frei = grün, besetzt = rot, deaktiviert = grau; siehe portal-theme.css) - auch beim
+        // Live-Update (refreshDevice) neu gesetzt, daher zuerst alte Klassen entfernen.
+        devicePanel.removeClassNames("device-status-free", "device-status-occupied",
+                "device-status-disabled");
+        String statusClass = !deviceStatus.device().isEnabled() ? "device-status-disabled"
+                : deviceStatus.isOccupied() ? "device-status-occupied" : "device-status-free";
+        devicePanel.addClassName(statusClass);
 
         HorizontalLayout header = new HorizontalLayout();
         header.setWidthFull();

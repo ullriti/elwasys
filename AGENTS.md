@@ -83,6 +83,10 @@ Client-Raspi (inkl. Cross-Component) und Backend (JUnit + Playwright-E2E) bei je
   [`docs/kb/README.md`](docs/kb/README.md) überschreiben und Nennenswertes in
   [`CHANGELOG.md`](CHANGELOG.md) unter `[Unreleased]` festhalten. Betroffene
   KB-Dokumente (00–08) mitpflegen.
+  **CHANGELOG-Einträge kurz halten** – ein bis zwei Zeilen je Änderung (das *Was*,
+  Keep-a-Changelog-Stil); feinkörnige technische Details gehören in den Änderungslog in
+  [`docs/kb/05-migration-plan.md`](docs/kb/05-migration-plan.md), die verdichtete
+  Journal-Sicht ins Worklog – nicht ins CHANGELOG duplizieren.
 - **Entscheidungen des Auftraggebers / Architektur** als **ADR** in
   [`docs/architecture/`](docs/architecture/) festhalten (fortlaufend nummeriert).
 - **Wissen gehört ins Repo, nicht in den lokalen Speicher:** Erkenntnisse,

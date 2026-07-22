@@ -40,6 +40,15 @@ im [Worklog](docs/worklog/README.md).
   Historie (früher „Status-Log"/„Änderungslog") → append-only [Worklog](docs/worklog/README.md)
   und dieses CHANGELOG; Auftraggeber-/Architektur-Entscheidungen → ADRs. Wissen gehört ins
   Repo, nicht in lokalen User-Speicher.
+- Portal-Design an das Terminal angeglichen: gemeinsame Farbpalette (Blau `#4488dd`, Status-
+  Grün/-Rot/-Grau wie das Terminal); Dashboard-Gerätekarten responsiv (50 %/100 %) mit
+  status-farbigem Oberrand und voller Breitennutzung.
+
+### Fixed
+- Portal-Erscheinungsbild wiederhergestellt (vorher nackte Lumo-Standardoptik ohne Stylesheet):
+  vertrautes Design via Laufzeit-Inline-CSS statt kompiliertem `@Theme` (umgeht den
+  Vaadin-24.10-Lizenzcheck). Details:
+  [Worklog](docs/worklog/2026-07-22-portal-design.md), docs/kb/05-migration-plan.md.
 
 ## 2026-07-22 — Phase 6: Produktivumschaltung (AP1–AP7)
 
