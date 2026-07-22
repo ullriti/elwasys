@@ -10,6 +10,7 @@ import javafx.scene.control.ListView;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.Pane;
 
+import org.kabieror.elwasys.common.Utilities;
 import org.kabieror.elwasys.raspiclient.api.ApiException;
 import org.kabieror.elwasys.raspiclient.application.ActionContainer;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
@@ -180,6 +181,11 @@ public class MainFormController extends AbstractMainFormController {
     private Logger logger = LoggerFactory.getLogger(this.getClass());
     private ClientDevice[] devices = new ClientDevice[4];
     /**
+     * Ob die additiven Klick-/Auswahl-Handler bereits installiert wurden (Issue #27) - siehe
+     * {@link #installComponentHandlersOnce()}.
+     */
+    private boolean componentHandlersInstalled = false;
+    /**
      * Service, der die Warte-Seite anzeigt.
      */
     private ScheduledExecutorService waitPaneService;
@@ -291,7 +297,8 @@ public class MainFormController extends AbstractMainFormController {
                         ElwaManager.instance.getExecutionManager()
                                 .abortExecution(ElwaManager.instance.getExecutionManager()
                                         .getRunningExecution(this.selectedDevice));
-                        this.stateManager.gotoState(MainFormState.SELECT_DEVICE);
+                        // gotoState mutiert UI-Zustand/Labels - muss auf den FX-Thread (Issue #52).
+                        Platform.runLater(() -> this.stateManager.gotoState(MainFormState.SELECT_DEVICE));
                     } catch (final Exception ex) {
                         this.logger.error("Could not abort the running execution.", ex);
                         Platform.runLater(() -> this.displayError("Interner Fehler",
@@ -460,8 +467,11 @@ public class MainFormController extends AbstractMainFormController {
                 final Thread actionThread = new Thread(() -> {
                     ElwaManager.instance.getExecutionManager().abortExecution(ElwaManager.instance.getExecutionManager()
                                     .getRunningExecution(this.selectedDevice));
-                    this.stateManager.gotoState(MainFormState.SELECT_DEVICE);
-                    this.endWait();
+                    // gotoState/endWait mutieren UI - auf den FX-Thread verlagern (Issue #52).
+                    Platform.runLater(() -> {
+                        this.stateManager.gotoState(MainFormState.SELECT_DEVICE);
+                        this.endWait();
+                    });
                 });
                 this.beginWait();
                 actionThread.start();
@@ -479,8 +489,40 @@ public class MainFormController extends AbstractMainFormController {
      * Initialisiert die Komponenten
      */
     private void initializeComponents() {
-        // 1. Gerätekacheln initialisieren.
-        // Zellenfabrik erstellen
+        // Additive Klick-/Auswahl-Handler genau einmal installieren (Issue #27).
+        this.installComponentHandlersOnce();
+
+        // Geräte-Kacheln mit Daten befüllen (bei jedem Aufruf, auch im Retry-Pfad)
+        try {
+            this.loadDevices();
+            for (int i = 0; i < 4; i++) {
+                this.updateDevicePane(i);
+            }
+        } catch (final ApiException e1) {
+            this.logger.error("Error during loading data from the backend.", e1);
+            this.displayError("Kommunikationsfehler", e1.getLocalizedMessage(),
+                    new ActionContainer(() -> Platform.runLater(this::initializeComponents)),
+                    false);
+        }
+
+        // Programmliste: Zellenfabrik + Datenmodell (setCellFactory/setItems ersetzen jeweils,
+        // sind also gefahrlos wiederholbar).
+        this.programList.setCellFactory(c -> new ProgramListItem());
+        this.programListData = FXCollections.observableArrayList();
+        this.programList.setItems(this.programListData);
+    }
+
+    /**
+     * Installiert die additiven Klick-/Auswahl-Handler genau einmal.
+     * {@code addEventHandler}/{@code addListener} hängen bei jedem Aufruf einen WEITEREN Handler
+     * an - ein erneutes {@link #initiate()} nach einem Restart (bzw. der Retry-Pfad von
+     * {@link #initializeComponents()}) würde die Gerätekacheln sonst mit doppelten Klickhandlern
+     * versehen und die Programmauswahl mehrfach verarbeiten (Issue #27).
+     */
+    private void installComponentHandlersOnce() {
+        if (this.componentHandlersInstalled) {
+            return;
+        }
         this.device1container.addEventHandler(MouseEvent.MOUSE_CLICKED, e -> {
             this.selectedDevice = this.devices[0];
             this.onDeviceSelected();
@@ -497,36 +539,12 @@ public class MainFormController extends AbstractMainFormController {
             this.selectedDevice = this.devices[3];
             this.onDeviceSelected();
         });
-
-        // Geräte-Kacheln mit Daten befüllen
-        try {
-            this.loadDevices();
-            for (int i = 0; i < 4; i++) {
-                this.updateDevicePane(i);
-            }
-        } catch (final ApiException e1) {
-            this.logger.error("Error during loading data from the backend.", e1);
-            this.displayError("Kommunikationsfehler", e1.getLocalizedMessage(),
-                    new ActionContainer(() -> Platform.runLater(this::initializeComponents)),
-                    false);
-        }
-
-        // 2. Programmliste initialisieren
-        // Zellenfabrik erstellen
-        this.programList.setCellFactory(c -> new ProgramListItem());
-
-        // Auf Änderungen der Auswahl reagieren
         this.programList.getSelectionModel().selectedItemProperty().addListener(e -> {
             if (this.programList.getSelectionModel().getSelectedItem() != null) {
                 this.stateManager.gotoState(MainFormState.PROGRAM_SELECTED);
             }
         });
-
-        // Programmliste erstellen
-        this.programListData = FXCollections.observableArrayList();
-
-        this.programList.setItems(this.programListData);
-
+        this.componentHandlersInstalled = true;
     }
 
     /**
@@ -722,7 +740,8 @@ public class MainFormController extends AbstractMainFormController {
             this.runningWaitPaneDelay.cancel(false);
         }
         this.runningWaitPaneDelay = this.waitPaneService
-                .schedule(() -> this.waitPane.setVisible(true), 200, TimeUnit.MILLISECONDS);
+                .schedule(() -> Platform.runLater(() -> this.waitPane.setVisible(true)), 200,
+                        TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -774,13 +793,15 @@ public class MainFormController extends AbstractMainFormController {
                                 .retryFinishExecution(execution);
                     } catch (final IOException e) {
                         this.logger.error("Could not finish the execution " + execution.getId(), e);
-                        this.displayError("Kommunikationsfehler", e.getLocalizedMessage(), ac,
-                                false);
+                        // displayError mutiert UI - auf den FX-Thread verlagern (Issue #52).
+                        Platform.runLater(() -> this.displayError("Kommunikationsfehler",
+                                e.getLocalizedMessage(), ac, false));
                     } catch (final Exception e) {
                         this.logger.error("Could not finish the execution " + execution.getId(), e);
-                        this.displayError("Interner Fehler", e.getLocalizedMessage(), ac, false);
+                        Platform.runLater(() -> this.displayError("Interner Fehler",
+                                e.getLocalizedMessage(), ac, false));
                     } finally {
-                        this.endWait();
+                        Platform.runLater(this::endWait);
                     }
                 });
                 this.beginWait();
@@ -836,7 +857,10 @@ public class MainFormController extends AbstractMainFormController {
                         this.selectedProgram = this.reloadSelectedProgramFor(this.registeredUser);
                     } catch (final ApiException e1) {
                         if (e1.is(404, "card-not-found")) {
-                            this.logger.warn("There is no user associated to card " + e.getCardId() + ".");
+                            // Karten-Id maskiert loggen (Issue #56): WARN landet im INFO-Log, das
+                            // per Fernwartung (LOG_REQUEST) abrufbar ist.
+                            this.logger.warn("There is no user associated to card "
+                                    + Utilities.maskCardId(e.getCardId()) + ".");
                             this.registeredUser = null;
                             Platform.runLater(() -> this.stateManager
                                     .gotoState(MainFormState.CONFIRMATION_CARD_UNKNOWN));

@@ -66,61 +66,7 @@ public abstract class ConfigurationManager {
 
     public abstract InputStream getDefaultsFileStream();
 
-    /**
-     * Der zu verwendende SMTP-Server
-     * 
-     * @return Der zu verwendende SMTP-Server
-     */
-    public String getSmtpServer() {
-        return this.props.getProperty("smtp.server");
-    }
-
-    /**
-     * Der Port, auf dem der SMTP-Server anzusprechen ist.
-     * 
-     * @return Der Port, auf dem der SMTP-Server anzusprechen ist.
-     */
-    public int getSmtpPort() {
-        return Integer.parseInt(this.props.getProperty("smtp.port"));
-    }
-
-    /**
-     * Der Benutzername zur Authentifizierung beim SMTP-Server.
-     * 
-     * @return Der Benutzername zur Authentifizierung beim SMTP-Server.
-     */
-    public String getSmtpUser() {
-        return this.props.getProperty("smtp.user");
-    }
-
-    /**
-     * Das Passwort zur Authentifizierung beim SMTP-Server.
-     * 
-     * @return Das Passwort zur Authentifizierung beim SMTP-Server.
-     */
-    public String getSmtpPassword() {
-        return this.props.getProperty("smtp.password");
-    }
-
-    /**
-     * Gibt an, ob SSL bei der Verbindung mit dem SMTP-Server verwendet werden
-     * soll.
-     * 
-     * @return ob SSL bei der Verbindung mit dem SMTP-Server verwendet werden
-     *         soll.
-     */
-    public boolean getSmtpUseSsl() {
-        return Boolean.parseBoolean(this.props.getProperty("smtp.useSSL"));
-    }
-
-    /**
-     * Die Absender-Adresse, die ins "Von"-Feld von Emails geschrieben werden
-     * soll.
-     * 
-     * @return Die Absender-Adresse, die ins "Von"-Feld von Emails geschrieben
-     *         werden soll.
-     */
-    public String getSmtpSenderAddress() {
-        return this.props.getProperty("smtp.senderAddress");
-    }
+    // Die frueheren getSmtp*-Getter wurden entfernt (Issue #61): seit Phase 4 AP4 versendet der
+    // Terminal-Client keine Mails mehr (Benachrichtigungen laufen zentral im Backend), die
+    // SMTP-Konfiguration war damit toter Code.
 }

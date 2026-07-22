@@ -308,7 +308,10 @@ public class ApiClient {
         try {
             return this.gson.fromJson(response.body(), responseType);
         } catch (JsonSyntaxException e) {
-            throw new ApiException("Antwort des Backends konnte nicht gelesen werden.", e);
+            // 2xx mit unlesbarem Body: als echter Serverfehler behandeln, NICHT als
+            // Kommunikationsfehler - sonst würde z. B. createExecution offline buchen, obwohl der
+            // Server erreichbar war und die Ausführung evtl. bereits angelegt hat (Issue #53).
+            throw ApiException.malformedResponse("Antwort des Backends konnte nicht gelesen werden.", e);
         }
     }
 

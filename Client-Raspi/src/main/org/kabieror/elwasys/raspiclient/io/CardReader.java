@@ -3,6 +3,7 @@ package org.kabieror.elwasys.raspiclient.io;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.stage.Stage;
+import org.kabieror.elwasys.common.Utilities;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,7 +55,13 @@ public class CardReader {
      *            Der zu benachrichtigende Listener
      */
     public void listenToCardDetectedEvent(ICardDetectedEventListener l) {
-        this.cardDetectedEventListener.add(l);
+        // Idempotent: der CardReader lebt über einen restart() hinweg weiter, während
+        // AbstractMainFormController#initiate() sich bei jedem (erneuten) initiate() als Listener
+        // anmeldet. Ohne diesen contains-Check löste nach einem Restart jede Karte zwei parallele
+        // Login-Threads aus (Issue #27) - analog zum bestehenden Dedupe bei den Ausführungs-Listenern.
+        if (!this.cardDetectedEventListener.contains(l)) {
+            this.cardDetectedEventListener.add(l);
+        }
     }
 
     /**
@@ -129,7 +136,9 @@ public class CardReader {
      *            Die Id der Karte
      */
     private void cardDetected(String id) {
-        this.logger.debug("Card detected: " + id);
+        // Karten-Id maskiert loggen: sie ist das einzige, klonbare Login-Merkmal und darf nicht
+        // im Klartext in ein per Fernwartung abrufbares Log gelangen (Issue #56).
+        this.logger.debug("Card detected: " + Utilities.maskCardId(id));
         for (final ICardDetectedEventListener l : this.cardDetectedEventListener) {
             l.onCardDetected(new CardDetectedEvent(id));
         }

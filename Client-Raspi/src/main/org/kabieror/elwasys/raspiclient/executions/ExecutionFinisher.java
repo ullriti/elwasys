@@ -53,20 +53,12 @@ class ExecutionFinisher implements Runnable {
 
     @Override
     public void run() {
-        synchronized (this.lock) {
-            synchronized (e.getDevice()) {
-                if (this.executed) {
-                    return;
-                }
-                try {
-                    this.executeAction();
-                    this.executed = true;
-                } catch (final Exception e) {
-                    this.logger.error("Execution finisher failed.", e);
-                    for (final IExecutionErrorListener l : this.executionManager.errorListeners) {
-                        l.onExecutionFailed(this.e, e);
-                    }
-                }
+        try {
+            this.runGuarded();
+        } catch (final Exception e) {
+            this.logger.error("Execution finisher failed.", e);
+            for (final IExecutionErrorListener l : this.executionManager.errorListeners) {
+                l.onExecutionFailed(this.e, e);
             }
         }
     }
@@ -78,10 +70,31 @@ class ExecutionFinisher implements Runnable {
 
     /**
      * Versucht das erneute Ausführen der Fertigstellung einer
-     * Programmausführung
+     * Programmausführung. Läuft - anders als früher - unter demselben Lock und mit derselben
+     * {@code executed}-Prüfung wie {@link #run()} (Issue #28): sonst konnte ein manueller Retry
+     * parallel zum noch geplanten {@code run()} laufen und das Finish ZWEIMAL ausführen (zweiter
+     * {@code finishExecution}-Aufruf mit neuem Idempotenz-Key → 409 → Fehleranzeige). Im
+     * Unterschied zu {@link #run()} werden Fehler hier bewusst weitergereicht, damit der
+     * Aufrufer ({@code onExecutionFailed}) sein bestehendes Retry-UX behält.
      */
     void retry() throws IOException, InterruptedException, FhemException {
-        this.executeAction();
+        this.runGuarded();
+    }
+
+    /**
+     * Führt die Fertigstellung genau einmal aus (unter Objekt- und Geräte-Lock, mit
+     * {@code executed}-Wächter). Gemeinsamer Rumpf von {@link #run()} und {@link #retry()}.
+     */
+    private void runGuarded() throws IOException, InterruptedException, FhemException {
+        synchronized (this.lock) {
+            synchronized (e.getDevice()) {
+                if (this.executed) {
+                    return;
+                }
+                this.executeAction();
+                this.executed = true;
+            }
+        }
     }
 
     private void executeAction() throws IOException, InterruptedException, FhemException {

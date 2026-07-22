@@ -12,10 +12,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.security.InvalidParameterException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Vector;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -46,13 +46,18 @@ public class ExecutionManager implements ICloseListener {
      * Alle geplanten Operationen, die zum Ende einer Programmausführung
      * ausgeführt werden
      */
-    final Map<ClientExecution, ExecutionFinisher> executionFinishers = new HashMap<>();
+    // ConcurrentHashMap statt HashMap: auf beide Maps wird konkurrent aus mehreren Threads
+    // zugegriffen (JavaFX-Thread, 4er-Scheduler-Pool für Finisher/geplante Stops/20s-Watchdog,
+    // deCONZ-WS-Thread über onPowerMeasurementAvailable, Backend-WS-Thread über
+    // buildStatusPayload). Eine unsynchronisierte HashMap kann dabei inkonsistent lesen und im
+    // Extremfall bei einem gleichzeitigen Rehash in eine Endlosschleife laufen (Issue #28).
+    final Map<ClientExecution, ExecutionFinisher> executionFinishers = new ConcurrentHashMap<>();
 
     /**
      * Alle geplanten Beendigungen von Ausführungen aufgrund von geringer
      * Leistung.
      */
-    final Map<ClientExecution, ScheduledFuture<?>> plannedStops = new HashMap<>();
+    final Map<ClientExecution, ScheduledFuture<?>> plannedStops = new ConcurrentHashMap<>();
 
     private IDevicePowerManager devicePowerManager;
 
@@ -83,7 +88,10 @@ public class ExecutionManager implements ICloseListener {
                                 state = this.devicePowerManager.getState(d);
                             } catch (InterruptedException | FhemException | IOException e1) {
                                 this.logger.error(String.format("[%1s] Could not check power state.", d.getName()), e1);
-                                return;
+                                // continue statt return: ein einzelnes nicht erreichbares Gerät darf
+                                // die "Steckdose fremdeingeschaltet?"-Prüfung der übrigen Geräte nicht
+                                // abbrechen (Issue #51).
+                                continue;
                             }
                             if (state == DevicePowerState.ON) {
                                 // Schalte Gerät aus.

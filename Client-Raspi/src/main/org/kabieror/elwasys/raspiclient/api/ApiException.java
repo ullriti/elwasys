@@ -26,12 +26,14 @@ public class ApiException extends IOException {
     private final int httpStatus;
     private final String typeSlug;
     private final String title;
+    private final boolean malformedResponse;
 
     public ApiException(String message) {
         super(message);
         this.httpStatus = 0;
         this.typeSlug = null;
         this.title = null;
+        this.malformedResponse = false;
     }
 
     public ApiException(String message, Throwable cause) {
@@ -39,6 +41,7 @@ public class ApiException extends IOException {
         this.httpStatus = 0;
         this.typeSlug = null;
         this.title = null;
+        this.malformedResponse = false;
     }
 
     public ApiException(int httpStatus, String typeSlug, String title, String detail) {
@@ -46,6 +49,25 @@ public class ApiException extends IOException {
         this.httpStatus = httpStatus;
         this.typeSlug = typeSlug;
         this.title = title;
+        this.malformedResponse = false;
+    }
+
+    private ApiException(String message, Throwable cause, boolean malformedResponse) {
+        super(message, cause);
+        this.httpStatus = 0;
+        this.typeSlug = null;
+        this.title = null;
+        this.malformedResponse = malformedResponse;
+    }
+
+    /**
+     * Eine als 2xx (Erfolg) empfangene, aber inhaltlich unlesbare Antwort (z. B. kaputtes
+     * JSON). Der Server war erreichbar und hat evtl. bereits gehandelt - dieser Fall darf
+     * daher NICHT als Kommunikationsfehler (Offline-Auslöser) gelten, sondern ist ein echter
+     * Serverfehler (Issue #53).
+     */
+    public static ApiException malformedResponse(String message, Throwable cause) {
+        return new ApiException(message, cause, true);
     }
 
     /**
@@ -66,7 +88,17 @@ public class ApiException extends IOException {
      * gemeldet, auch wenn er lokal gegen den Snapshot geprüft wurde.
      */
     public boolean isCommunicationFailure() {
-        return this.httpStatus == 0;
+        // Eine kaputte 2xx-Antwort hat zwar keinen HTTP-Status (0), ist aber KEIN
+        // Kommunikationsfehler - der Server war ja erreichbar (Issue #53).
+        return this.httpStatus == 0 && !this.malformedResponse;
+    }
+
+    /**
+     * Ob es sich um eine als Erfolg (2xx) empfangene, aber inhaltlich unlesbare Antwort
+     * handelt (siehe {@link #malformedResponse(String, Throwable)}).
+     */
+    public boolean isMalformedResponse() {
+        return this.malformedResponse;
     }
 
     /**

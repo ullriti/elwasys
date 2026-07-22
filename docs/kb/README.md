@@ -48,8 +48,15 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   #16/#17/#18/#54/#59) ist behoben** – privilegierter Replay-Nachbuchungs-Pfad, Client-Replay
   robust (Dead-Letter/Paar-Reihenfolge/NPE/`clear()`-Race), Zeitstempel-Invariante `stop ≥ start`
   + Preis-Deckel, Uhren-Plausibilität (siehe [ADR 0016](../architecture/0016-offline-replay-haertung.md)).
-- **Nächster Schritt:** Restliche Pre-Launch-Arbeitspakete (AP2 ff., u.a. #19 deCONZ-Reconnect,
-  #20 Locking) je als eigener PR; danach Betrieb/Nachpflege auf der Zielarchitektur; neue Vorhaben vorab als
+  **AP2 (Terminal-Stabilität & Aufräumen, #19/#27/#28/#51/#52/#53/#55/#56/#57/#58/#61) ist
+  behoben** – deCONZ-WS-Reconnect nach Abbruch (#19), kein WS-Client-/Listener-Leak beim
+  portal-ausgelösten Neustart (#27), Terminal-Nebenläufigkeit gehärtet (`ConcurrentHashMap` +
+  Retry-Guard gegen Doppel-Finish, #28), Watchdog-`continue` (#51), FX-Thread-Disziplin (#52),
+  kaputte 2xx nicht mehr als Offline (#53), Journal-`DSYNC` (#55), RFID-Log-Maskierung +
+  deterministisches INFO-Log (#56), Resume-Null-Check (#57), CSPRNG-deCONZ-Passwort (#58),
+  toter SMTP-Code raus (#61).
+- **Nächster Schritt:** Restliche Pre-Launch-Arbeitspakete (AP3 ff. laut Epic #66) je als
+  eigener PR; danach Betrieb/Nachpflege auf der Zielarchitektur; neue Vorhaben vorab als
   Spec in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten. Die
   Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).
 - **Details:** siehe den jeweils letzten Eintrag im [Worklog](../worklog/README.md).

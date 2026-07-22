@@ -4,6 +4,7 @@ import javafx.application.Platform;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.fxml.FXML;
+import org.kabieror.elwasys.common.Utilities;
 import org.kabieror.elwasys.raspiclient.api.ApiException;
 import org.kabieror.elwasys.raspiclient.application.ActionContainer;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
@@ -401,7 +402,10 @@ public class MainFormController extends AbstractMainFormController implements IM
                     });
                 } catch (final ApiException e1) {
                     if (e1.is(404, "card-not-found")) {
-                        this.logger.warn("There is no user associated to card " + e.getCardId() + ".");
+                        // Karten-Id maskiert loggen (Issue #56): WARN landet im INFO-Log, das
+                        // per Fernwartung (LOG_REQUEST) abrufbar ist.
+                        this.logger.warn("There is no user associated to card "
+                                + Utilities.maskCardId(e.getCardId()) + ".");
                         Platform.runLater(() -> {
                             this.registeredUser.set(null);
                             this.toolbarPaneController.visualizeUnknownId();
