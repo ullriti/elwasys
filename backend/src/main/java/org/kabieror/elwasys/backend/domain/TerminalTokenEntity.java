@@ -102,6 +102,15 @@ public class TerminalTokenEntity {
         this.lastUsedAt = LocalDateTime.now();
     }
 
+    /**
+     * Setzt {@code last_used_at} auf einen expliziten Zeitpunkt (Issue #45, Pre-Launch AP4) -
+     * erlaubt {@code TerminalTokenService}, eine injizierte Zeitquelle zu verwenden und den
+     * Schreibvorgang zu drosseln (siehe dort).
+     */
+    public void touchLastUsed(LocalDateTime timestamp) {
+        this.lastUsedAt = timestamp;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {

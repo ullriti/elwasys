@@ -14,4 +14,13 @@ public final class Fixtures {
     public static String unique(String prefix) {
         return prefix + "-" + UUID.randomUUID().toString().substring(0, 8);
     }
+
+    /**
+     * Eindeutige, formal gültige Kartennummer (hexadezimal, siehe
+     * {@code CardLoginRequest}-Validierung, Issue #21) - ohne Bindestriche/Buchstaben
+     * außerhalb {@code [0-9A-Fa-f]}, damit sie die strenge API-Validierung passiert.
+     */
+    public static String uniqueCardId() {
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+    }
 }

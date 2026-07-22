@@ -19,7 +19,9 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
 import java.util.List;
 import org.kabieror.elwasys.backend.exception.InvalidOrExpiredResetTokenException;
+import org.kabieror.elwasys.backend.exception.PasswordTooShortException;
 import org.kabieror.elwasys.backend.service.PasswordResetService;
+import org.kabieror.elwasys.backend.service.PasswordService;
 
 /**
  * Öffentliche Ansicht zum Setzen eines neuen Passworts über einen per Email verschickten
@@ -59,6 +61,8 @@ public class ResetPasswordView extends VerticalLayout implements BeforeEnterObse
         setJustifyContentMode(JustifyContentMode.CENTER);
 
         this.tfNewPassword1.setMaxLength(50);
+        this.tfNewPassword1.setMinLength(PasswordService.MIN_PASSWORD_LENGTH);
+        this.tfNewPassword1.setHelperText("Mindestens " + PasswordService.MIN_PASSWORD_LENGTH + " Zeichen.");
         this.tfNewPassword1.setWidthFull();
 
         this.tfNewPassword2.setMaxLength(50);
@@ -103,6 +107,10 @@ public class ResetPasswordView extends VerticalLayout implements BeforeEnterObse
 
         try {
             this.passwordResetService.resetPassword(this.token, this.tfNewPassword1.getValue());
+        } catch (PasswordTooShortException e) {
+            this.tfNewPassword1.setInvalid(true);
+            this.tfNewPassword1.setErrorMessage(e.getMessage());
+            return;
         } catch (InvalidOrExpiredResetTokenException e) {
             showError(e.getMessage());
             return;

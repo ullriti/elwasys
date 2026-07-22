@@ -135,12 +135,35 @@ public class TerminalMaintenanceService {
 
     /**
      * Wird vom {@link TerminalWebSocketHandler} für jede eingehende {@code LOG_RESPONSE}/
-     * {@code RESTART_RESPONSE} aufgerufen: erfüllt ein wartendes {@link #sendAndAwait}, falls
-     * die Korrelations-Id ({@code inReplyTo}) zu einer offenen Anfrage passt. Nachrichten ohne
-     * (mehr) passende Anfrage (z.B. nach Timeout bereits entfernt) werden ignoriert.
+     * {@code RESTART_RESPONSE}/{@code STATUS_RESPONSE} aufgerufen: erfüllt ein wartendes
+     * {@link #sendAndAwait}, falls die Korrelations-Id ({@code inReplyTo}) zu einer offenen
+     * Anfrage passt. Nachrichten ohne (mehr) passende Anfrage (z.B. nach Timeout bereits
+     * entfernt) werden ignoriert.
+     *
+     * <p><b>Standort-Validierung (Issue #26, Pre-Launch AP4):</b> beim Absenden der Anfrage
+     * wurde der Ziel-Standort unter der Korrelations-Id vermerkt
+     * ({@link #pendingRequestLocations}). Eine Antwort erfüllt das wartende Future nur, wenn
+     * ihr Absender-Standort ({@code senderLocationId}, aus der authentifizierten WebSocket-
+     * Session) mit diesem Ziel-Standort übereinstimmt. So kann ein (kompromittiertes oder
+     * fehlerhaftes) Terminal eines FREMDEN Standorts eine Anfrage an einen anderen Standort
+     * nicht mit untergeschobenen Daten beantworten - die fremde Antwort wird verworfen und
+     * geloggt, die offene Anfrage bleibt bestehen (und läuft regulär in ihren Timeout).
+     *
+     * @param senderLocationId Standort der WebSocket-Session, über die die Antwort eintraf
+     * @param message          die eingegangene Antwortnachricht
      */
-    public void completeIfPending(TerminalWsMessage message) {
+    public void completeIfPending(Integer senderLocationId, TerminalWsMessage message) {
         if (message.id() == null) {
+            return;
+        }
+        Integer expectedLocationId = this.pendingRequestLocations.get(message.id());
+        if (expectedLocationId == null) {
+            // Keine offene Anfrage (mehr) unter dieser Id - nichts zu tun.
+            return;
+        }
+        if (!expectedLocationId.equals(senderLocationId)) {
+            LOG.warn("Ignoring maintenance reply for correlation id {} from location {} - expected location {}.",
+                    message.id(), senderLocationId, expectedLocationId);
             return;
         }
         CompletableFuture<TerminalWsMessage> future = this.pendingRequests.remove(message.id());

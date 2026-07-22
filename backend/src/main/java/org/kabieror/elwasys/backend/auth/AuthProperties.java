@@ -1,5 +1,6 @@
 package org.kabieror.elwasys.backend.auth;
 
+import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -27,11 +28,42 @@ public class AuthProperties {
 
     private boolean rehashOnLogin = false;
 
+    /**
+     * Brute-Force-Schutz des Portal-Logins (Pre-Launch AP4, Issue #25, siehe
+     * {@link ElwasysAuthenticationProvider}): Zahl der fehlgeschlagenen Anmeldeversuche pro
+     * Benutzername innerhalb von {@link #loginLockoutWindow}, ab der weitere Versuche
+     * (auch mit korrektem Passwort) temporär abgewiesen werden. Konservativer Default, der
+     * legitime Vertipper nicht behindert, automatisiertes Durchprobieren aber ausbremst.
+     */
+    private int maxFailedLoginAttempts = 5;
+
+    /**
+     * Zeitfenster für {@link #maxFailedLoginAttempts}. Nach Ablauf (gerechnet ab dem ersten
+     * gezählten Fehlversuch des Fensters) ist ein erneuter Login wieder möglich.
+     */
+    private Duration loginLockoutWindow = Duration.ofMinutes(15);
+
     public boolean isRehashOnLogin() {
         return this.rehashOnLogin;
     }
 
     public void setRehashOnLogin(boolean rehashOnLogin) {
         this.rehashOnLogin = rehashOnLogin;
+    }
+
+    public int getMaxFailedLoginAttempts() {
+        return this.maxFailedLoginAttempts;
+    }
+
+    public void setMaxFailedLoginAttempts(int maxFailedLoginAttempts) {
+        this.maxFailedLoginAttempts = maxFailedLoginAttempts;
+    }
+
+    public Duration getLoginLockoutWindow() {
+        return this.loginLockoutWindow;
+    }
+
+    public void setLoginLockoutWindow(Duration loginLockoutWindow) {
+        this.loginLockoutWindow = loginLockoutWindow;
     }
 }

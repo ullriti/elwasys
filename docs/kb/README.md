@@ -62,16 +62,22 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   nach Löschung ohne 404, #29/#41), Betragsvalidierung in Service+Dialog (#22),
   Benachrichtigung per `AFTER_COMMIT`-Event außerhalb der Finish-Transaktion (#36) – siehe
   [ADR 0017](../architecture/0017-abrechnungs-integritaet-locking.md).
-  Für **AP4 (Auth & Security)** sind die drei offenen 🧩-Auftraggeberfragen **geklärt**
-  (noch nicht umgesetzt): Passwort-Reset-Enumeration wird neutralisiert (#24),
-  Passwort-Mindestlänge ≥ 8 serverseitig erzwungen (#44), Standort-Token bleibt bei der
-  minimalen Variante (Restrisiko dokumentiert + akzeptiert, kein `expires_at`/UI, #43) –
-  siehe [ADR 0018](../architecture/0018-ap4-auth-security-entscheidungen.md).
-- **Nächster Schritt:** AP4-Umsetzung (die geklärten 🧩-Punkte + Härtungen
-  #21/#23/#25/#26/#42/#45/#46/#47/#48), danach restliche Pre-Launch-Arbeitspakete (AP5 ff.
-  laut Epic #66) je als eigener PR; danach Betrieb/Nachpflege auf der Zielarchitektur; neue
-  Vorhaben vorab als Spec in [`../specs/`](../specs/README.md) und Entscheidungen als ADR
-  festhalten. Die Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).
+  **AP4 (Auth & Security, #21/#23/#24/#25/#26/#42/#44/#45/#46/#47/#48) ist behoben** – die drei
+  🧩-Auftraggeberentscheidungen ([ADR 0018](../architecture/0018-ap4-auth-security-entscheidungen.md))
+  umgesetzt (Reset-Enumeration neutralisiert + Rate-Limit #24, Passwort-Mindestlänge ≥ 8 #44,
+  Standort-Token minimal/Restrisiko dokumentiert #43) samt Härtungen: regex-freier Kartenlogin
+  mit strenger Formatvalidierung (#21), Guard gegen case-only-Username-Kollision (#23),
+  In-Memory-Brute-Force-Limit für den Portal-Login mit **neutraler** Sperr-Meldung (kein
+  Enumeration-Orakel, #25), verdrahtete Fernwartungs-Standortprüfung (#26), uuid-Validierung
+  (#42), gedrosseltes Token-`last_used_at` (#45), Alphabet-Fix (#46), Reset-Robustheit bei
+  doppelter Adresse (#47). Restrisiken (Timing-Orakel Login/Reset, #48 Sessions, #46 Klartext-
+  Admin-Mail, #23 TOCTOU) bewusst akzeptiert und in
+  [05-migration-plan.md](05-migration-plan.md) („Restrisiken Auth & Security") festgehalten.
+- **Nächster Schritt:** restliche Pre-Launch-Arbeitspakete – AP5 (Portal-Performance/CRUD/
+  Datenmodell) und AP6 (Deployment/Betrieb/Cutover, inkl. Vaadin-Lizenz-🧩) – je als eigener
+  PR, **AP7 (KB)** zuletzt; danach Betrieb/Nachpflege auf der Zielarchitektur; neue Vorhaben
+  vorab als Spec in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.
+  Die Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).
 - **Details:** siehe den jeweils letzten Eintrag im [Worklog](../worklog/README.md).
 
 ## Regeln für die KB

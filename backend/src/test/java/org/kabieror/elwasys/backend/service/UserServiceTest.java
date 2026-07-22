@@ -8,6 +8,7 @@ import org.kabieror.elwasys.backend.domain.DiscountType;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
 import org.kabieror.elwasys.backend.exception.DuplicateCardIdException;
+import org.kabieror.elwasys.backend.exception.DuplicateUsernameException;
 import org.kabieror.elwasys.backend.repository.UserGroupRepository;
 import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.kabieror.elwasys.backend.support.AbstractBackendIT;
@@ -88,6 +89,55 @@ class UserServiceTest extends AbstractBackendIT {
                 new String[] {cardId}, false, group);
 
         assertThat(updated.getCardIds()).containsExactly(cardId);
+    }
+
+    /**
+     * Issue #23 (Pre-Launch AP4): der case-insensitive Login würde bei zwei nur in der
+     * Schreibweise abweichenden Benutzernamen dauerhaft crashen. Der Service-Guard verhindert,
+     * dass eine solche Kollision überhaupt entsteht - hier existiert bereits "anna" (klein
+     * gespeichert), das Anlegen von "Anna" muss sprechend scheitern.
+     */
+    @Test
+    void creatingAUserWhoseUsernameOnlyDiffersInCaseFails() {
+        UserGroupEntity group = group();
+        String base = Fixtures.unique("anna");
+        this.userService.create("Anna Existing", base.toLowerCase(), null, new String[0], false, group);
+
+        assertThatThrownBy(() -> this.userService.create("Anna Duplicate", base.toUpperCase(), null, new String[0],
+                false, group)).isInstanceOf(DuplicateUsernameException.class);
+    }
+
+    @Test
+    void updatingAUserKeepingItsOwnUsernameDoesNotFail() {
+        UserGroupEntity group = group();
+        String username = Fixtures.unique("keep");
+        UserEntity user = this.userService.create("Keeper", username, null, new String[0], false, group);
+
+        // Der eigene, unveränderte (nur anders geschriebene) Name darf nicht mit sich selbst
+        // kollidieren.
+        UserEntity updated = this.userService.update(user, "Keeper Renamed", username.toUpperCase(), null,
+                new String[0], false, group);
+
+        assertThat(updated.getName()).isEqualTo("Keeper Renamed");
+    }
+
+    /**
+     * Issue #21 (Pre-Launch AP4): {@code assertCardIdsAreFree} nutzt {@code findByCardId}, das
+     * früher regex-basiert war. Eine Kartennummer mit Regex-Metazeichen ({@code .*}) hätte
+     * damit fälschlich jede bestehende Karte als Kollision gemeldet. Mit der regex-freien
+     * Suche wird ".*" literal behandelt und kollidiert nicht mit einer echten Karte.
+     */
+    @Test
+    void creatingAUserWithARegexMetacharacterCardIdDoesNotFalselyCollide() {
+        UserGroupEntity group = group();
+        this.userService.create("Card Owner", Fixtures.unique("owner"), null,
+                new String[] {Fixtures.unique("REALCARD")}, false, group);
+
+        // ".*" ist keine echte Karte -> darf NICHT als Duplikat der obigen Karte gelten.
+        UserEntity created = this.userService.create("Regex Owner", Fixtures.unique("regex"), null,
+                new String[] {".*"}, false, group);
+
+        assertThat(created.getId()).isNotNull();
     }
 
     @Test

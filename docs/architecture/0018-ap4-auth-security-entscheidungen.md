@@ -79,6 +79,14 @@ Vom Auftraggeber am **2026-07-22** festgelegt (siehe auch
   Riegel gegen einen Token-Leak-Missbrauch außer der physischen Token-Haltung und der
   Rotation/Widerruf-Disziplin. `expires_at` und ein Admin-UI bleiben mögliche spätere
   Ausbaustufen, falls sich der Betrieb anders entscheidet.
+- **Konsistenz mit dem Brute-Force-Limit (#25):** Damit die Neutralisierung aus #24 nicht an
+  anderer Stelle unterlaufen wird, wirft auch die Login-Sperre (#25) bewusst dieselbe
+  generische `BadCredentialsException` wie ein normaler Fehlversuch – andernfalls wäre ein
+  „gesperrt"-Signal (der Zähler wird nur für existierende Konten geführt) ein Enumeration-
+  Orakel (Code-Review-Befund AP4). Die verbleibenden **Timing**-Orakel (Login wie Reset:
+  unbekanntes Konto kehrt ohne Argon2/Versand schneller zurück) sind bewusst akzeptiert und in
+  der Restrisiko-Tabelle in [`../kb/05-migration-plan.md`](../kb/05-migration-plan.md)
+  („Restrisiken Auth & Security") festgehalten.
 
 Herkunft: Pre-Launch-Review AP4 (Epic #66, Issues #24, #43, #44), Auftraggeber-Festlegung
 2026-07-22; korrigiert die Admin-UI-Aussage aus ADR 0008.

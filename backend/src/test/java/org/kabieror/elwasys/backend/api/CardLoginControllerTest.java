@@ -26,9 +26,34 @@ class CardLoginControllerTest extends AbstractApiIT {
         LocationEntity location = newLocation();
         IssuedTerminalToken token = newToken(location);
 
+        // Formal gültige (hex) aber nicht vergebene Kartennummer -> 404 card-not-found.
         this.mockMvc.perform(post("/api/v1/card-login").header("Authorization", authHeader(token))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"cardId\":\"no-such-card\"}")).andExpect(
+                .contentType(MediaType.APPLICATION_JSON).content("{\"cardId\":\"deadbeef\"}")).andExpect(
                 status().isNotFound()).andExpect(jsonPath("$.type").value("urn:elwasys:card-not-found"));
+    }
+
+    /**
+     * Regressionstest für die Regex-Injection (Issue #21, Pre-Launch AP4): eine als
+     * Kartennummer übergebene Regex ({@code .*}) hätte mit der alten Query jeden beliebigen
+     * Benutzer angemeldet. Sie wird jetzt bereits von der strengen Formatvalidierung
+     * ({@code CardLoginRequest}, {@code @Pattern}) an der API-Grenze mit {@code 400} abgewiesen
+     * - der Angriff erreicht die Persistenz gar nicht erst (die regex-freie Query ist die
+     * zweite Verteidigungslinie, siehe {@code UserRepositoryCardIdTest}).
+     */
+    @Test
+    void regexMetacharacterCardIdIsRejectedWith400() throws Exception {
+        LocationEntity location = newLocation();
+        IssuedTerminalToken token = newToken(location);
+        UserGroupEntity group = newGroup();
+        // Ein echter Benutzer mit einer echten Karte ist vorhanden - trotzdem darf ".*" ihn
+        // NICHT anmelden.
+        newUserWithCard(group, Fixtures.uniqueCardId());
+        location.getValidUserGroups().add(group);
+        this.locationRepository.save(location);
+
+        this.mockMvc.perform(post("/api/v1/card-login").header("Authorization", authHeader(token))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"cardId\":\".*\"}")).andExpect(
+                status().isBadRequest());
     }
 
     @Test
@@ -36,7 +61,7 @@ class CardLoginControllerTest extends AbstractApiIT {
         LocationEntity location = newLocation();
         IssuedTerminalToken token = newToken(location);
         UserGroupEntity group = newGroup();
-        String cardId = Fixtures.unique("card");
+        String cardId = Fixtures.uniqueCardId();
         UserEntity user = newUserWithCard(group, cardId);
         user.setBlocked(true);
         this.userRepository.save(user);
@@ -53,7 +78,7 @@ class CardLoginControllerTest extends AbstractApiIT {
         LocationEntity location = newLocation(); // keine erlaubte Gruppe hinzugefügt
         IssuedTerminalToken token = newToken(location);
         UserGroupEntity group = newGroup();
-        String cardId = Fixtures.unique("card");
+        String cardId = Fixtures.uniqueCardId();
         newUserWithCard(group, cardId);
 
         this.mockMvc.perform(post("/api/v1/card-login").header("Authorization", authHeader(token))
@@ -69,7 +94,7 @@ class CardLoginControllerTest extends AbstractApiIT {
                 new UserGroupEntity(Fixtures.unique("group"), DiscountType.NONE, 0));
         location.getValidUserGroups().add(group);
         this.locationRepository.save(location);
-        String cardId = Fixtures.unique("card");
+        String cardId = Fixtures.uniqueCardId();
         UserEntity user = newUserWithCard(group, cardId);
         this.creditService.inpayment(user, new java.math.BigDecimal("12.50"));
 

@@ -9,6 +9,7 @@ import org.kabieror.elwasys.backend.domain.DiscountType;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
 import org.kabieror.elwasys.backend.exception.InvalidCurrentPasswordException;
+import org.kabieror.elwasys.backend.exception.PasswordTooShortException;
 import org.kabieror.elwasys.backend.repository.UserGroupRepository;
 import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.kabieror.elwasys.backend.support.AbstractBackendIT;
@@ -82,6 +83,43 @@ class PasswordServiceTest extends AbstractBackendIT {
 
         UserEntity reloaded = this.userRepository.findById(user.getId()).orElseThrow();
         assertThat(reloaded.getPassword()).startsWith("$argon2id$");
+    }
+
+    /**
+     * Issue #44 / ADR 0018 (Pre-Launch AP4): ein zu kurzes Passwort (&lt; 8 Zeichen) wird
+     * zentral in {@link PasswordService#setNewPassword} abgewiesen; der bestehende Hash bleibt
+     * unverändert.
+     */
+    @Test
+    void setNewPasswordRejectsATooShortPassword() {
+        UserEntity user = newUserWithPassword("old-secret");
+        String originalHash = user.getPassword();
+
+        assertThatThrownBy(() -> this.passwordService.setNewPassword(user, "short")).isInstanceOf(
+                PasswordTooShortException.class);
+
+        UserEntity reloaded = this.userRepository.findById(user.getId()).orElseThrow();
+        assertThat(reloaded.getPassword()).as("hash must be unchanged after a rejected password").isEqualTo(
+                originalHash);
+    }
+
+    @Test
+    void changeOwnPasswordRejectsATooShortNewPassword() {
+        UserEntity user = newUserWithPassword("old-secret");
+
+        assertThatThrownBy(() -> this.passwordService.changeOwnPassword(user, "old-secret", "1234567")).isInstanceOf(
+                PasswordTooShortException.class);
+    }
+
+    @Test
+    void setNewPasswordAcceptsAPasswordAtTheMinimumLength() {
+        UserEntity user = newUserWithPassword("old-secret");
+
+        // Genau 8 Zeichen -> erlaubt.
+        this.passwordService.setNewPassword(user, "12345678");
+
+        UserEntity reloaded = this.userRepository.findById(user.getId()).orElseThrow();
+        assertThat(this.passwordVerificationService.verify("12345678", reloaded.getPassword()).matches()).isTrue();
     }
 
     @Test
