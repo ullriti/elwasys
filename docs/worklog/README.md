@@ -45,3 +45,4 @@ verdichtete Journal-Sicht.
 | 2026-07-22 | [phase-6-produktivumschaltung](2026-07-22-phase-6-produktivumschaltung.md) | Cutover-Werkzeuge, Terminal-Update/Auto-Update+Rollback, Post-Deploy-Smoke, Runbook |
 | 2026-07-22 | [phase-5-6-qa-review](2026-07-22-phase-5-6-qa-review.md) | QA-Review Phase 5/6: Watchdog-BLOCKER/MAJOR + MINOR/NITPICKs behoben, Backend 200/200 |
 | 2026-07-22 | [agentic-baseline-setup](2026-07-22-agentic-baseline-setup.md) | agentic-baseline übernommen: AGENTS.md, docs/-Wissenssystem, .claude/-Agenten, KB entwirrt (Worklog/CHANGELOG/ADRs) |
+| 2026-07-22 | [demo-daten-ui-checks](2026-07-22-demo-daten-ui-checks.md) | Demo-Modus (Profil `demo`): DemoDataSeeder + run-demo.sh, wiederverwendbarer Beispielbestand fürs visuelle UI-Prüfen, DemoDataSeederTest (5) |

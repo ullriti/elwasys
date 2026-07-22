@@ -132,6 +132,27 @@ ein `mvn package -DskipTests` allein reicht nur für kurzlebige Aufrufe (z. B. `
 das sich nach wenigen Sekunden selbst beendet und daher nie in die Nähe des ~60s-Fensters
 kommt).
 
+### Demo-Modus (Profil `demo`, Beispieldaten fürs visuelle UI-Prüfen)
+
+Zum visuellen Prüfen von UI-Änderungen (Admin-/Benutzer-Portal, Dashboard) gibt es ein
+Profil `demo`, das beim Start einen realistischen, wiederverwendbaren Beispielbestand
+anlegt (`DemoDataSeeder`, siehe dessen Klassen-Javadoc): 4 Benutzergruppen (mit allen
+Rabattarten), 3 Standorte, 5 Programme (FIXED/DYNAMIC), 6 Geräte (fhem/deCONZ, eines
+deaktiviert), 5 Benutzer (inkl. gesperrtem Gast) mit Guthaben, abgeschlossener
+Ausführungshistorie und laufenden Ausführungen (Dashboard zeigt „Besetzt"). Bewusst **keine**
+Flyway-Migration – Demo-Daten gehören nicht ins Produktivschema; der Seeder läuft nur unter
+dem Profil `demo` und ist idempotent (ein Neustart verdoppelt nichts).
+
+```bash
+backend/run-demo.sh              # PostgreSQL + Demo-DB (elwasys_demo) + Backend (Profil demo) auf :8080
+RESET_DEMO_DB=1 backend/run-demo.sh   # Demo-DB vorher verwerfen → frischer Bestand
+```
+
+Portal danach unter <http://localhost:8080>; Login **admin/admin** (Admin) bzw.
+`anna`/`ben`/`clara`/`david`/`eva` mit Passwort **`demo`**. Das Skript baut (wie alle länger
+laufenden Backend-Starts in dieser Sandbox) mit `-Pproduction`, siehe die Produktions-Hinweise
+oben. Details zur Selektor-/Screenshot-Strategie: docs/kb/06-ui-tests.md.
+
 **Backend-Tests seit AP4**: `backend/run-backend-tests.sh` führt jetzt **96/96** Tests aus (52
 aus AP1–AP3 + 44 neu aus AP4: Standort-Token-Auth, REST-API v1, WebSocket-Endpunkt – siehe
 docs/kb/05-migration-plan.md Änderungslog).

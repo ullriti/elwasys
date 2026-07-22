@@ -3,6 +3,37 @@
 Ziel: Das **bestehende** Verhalten der Software durch UI-Tests festhalten
 (Characterization Tests), bevor umgebaut wird – und dabei die UI besser verstehen.
 
+## Demo-Daten fürs visuelle UI-Prüfen (Profil `demo`, 2026-07-22)
+
+Ergänzend zu den automatisierten Suiten unten gibt es einen wiederverwendbaren
+**Demo-Datenbestand** zum **visuellen** Prüfen von Portal-/Dashboard-Änderungen, ohne die
+Daten jedes Mal von Hand anzulegen (Auftrag: „für bessere Tests und UI-Checks Demo-Daten
+anlegen").
+
+- **`DemoDataSeeder`** (`backend/.../demo/`, `@Profile("demo")`, `ApplicationRunner`): legt
+  beim Start einen zusammenhängenden Beispielbestand an – 4 Benutzergruppen (alle Rabattarten
+  `NONE`/`FIX`/`FACTOR`), 3 Standorte, 5 Programme (`FIXED`/`DYNAMIC`), 6 Geräte (fhem/deCONZ,
+  eines deaktiviert), 5 Benutzer (inkl. gesperrtem Gast) mit Guthaben, abgeschlossener
+  Ausführungshistorie und **laufenden** Ausführungen (Dashboard zeigt „Besetzt" inkl.
+  Restzeit). Nutzt durchgängig die echten Repositories/Services (Argon2id-Passwörter,
+  `CreditService`-Buchungen, `PricingService`-Preise) → Guthabenstände/Preise sind konsistent.
+  Bewusst **keine** Flyway-Migration (Demo-Daten gehören nicht ins Produktivschema); **idempotent**
+  über einen Marker-Benutzer (`anna`).
+- **Warum ein Seeder statt SQL-Fixture**: die Daten durchlaufen exakt dieselben Wege wie
+  produktive Daten und bleiben dadurch konsistent; Login funktioniert mit bekannten
+  Argon2id-Passwörtern (admin/admin bzw. `<benutzer>`/`demo`).
+- **Start**: `backend/run-demo.sh` (PostgreSQL + Demo-DB `elwasys_demo` + Backend Profil `demo`
+  auf :8080, `-Pproduction` wie alle länger laufenden Sandbox-Backends). Portal:
+  <http://localhost:8080>. `RESET_DEMO_DB=1` erzwingt einen frischen Bestand. Siehe
+  docs/kb/04-build-and-run.md „Demo-Modus".
+- **Regressionstest**: `DemoDataSeederTest` (extends `AbstractBackendIT`, `@ActiveProfiles("demo")`)
+  prüft Marker-Benutzer/Gruppe/Guthaben, gesperrten Gast, deaktiviertes Gerät, ein „besetztes"
+  Dashboard-Gerät und die Idempotenz eines zweiten Laufs (5 Tests, Teil von
+  `backend/run-backend-tests.sh`).
+- **Verifiziert (2026-07-22)**: Backend im Profil `demo` hochgefahren, per Playwright/Chromium
+  als admin eingeloggt und Dashboard/Benutzer/Geräte/Programme gerendert (Screenshots) –
+  „Besetzt"/„Frei", Rabatt-korrekte Guthaben, „Gesperrt"- und „Deaktiviert"-Zustände sichtbar.
+
 ## Client (JavaFX) – TestFX (Fokus zuerst)
 
 Der Raspi-Client ist eine JavaFX-Anwendung mit FXML-Views und einer klaren State-Machine
