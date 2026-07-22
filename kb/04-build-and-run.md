@@ -252,6 +252,27 @@ java -Djavafx.platform=gtk \
 4 AP5 entfallen – er diente ausschließlich der Verifikation des TLS-Zertifikats der jetzt
 entfallenen Datenbankverbindung.)
 
+**Terminal-Supervisor (`run.sh`-Loop, seit Phase 6 AP3)**: `setup.sh` generiert `run.sh`
+nicht mehr als Einmalstart, sondern als **Supervising-Loop** (bewusst kein systemd, maximale
+Kompatibilität mit dem X/JavaFX-Touch-Autologin-Modell – Bedienfluss unverändert). Eine
+`while true`-Schleife startet den obigen `java`-Befehl im Vordergrund; beendet sich die JVM
+(Crash oder gezielt von außen), wartet sie 2s und startet den **dann aktuell per Symlink
+`raspi-client.latest.jar` verlinkten** Jar erneut (Symlink pro Iteration neu aufgelöst). Der
+`sudo killall java`-Cleanup läuft nur EINMALIG vor der Schleife. **Supervisor-Vertrag (für
+Watchdog/Update, Grundlage für Phase 6 AP4/AP5):** ein externer Neustart == den laufenden
+`java`-Prozess beenden (z. B. `sudo killall java`/`pkill -f raspi-client`); die Loop relauncht
+automatisch – ein Jar-Update hängt also nur den Symlink um und beendet die JVM. `killall java`
+trifft nur die JVM, nicht den bash-Supervisor.
+
+**Re-Provisionierung / Bestandsgerät auf die neue Architektur bringen (`deploy/terminal/`,
+seit Phase 6 AP3)**: eigenes Runbook `deploy/terminal/README.md`. Für bereits im Feld
+provisionierte Altgeräte (nur Java 17) hebt `deploy/terminal/upgrade-jre.sh` das JRE idempotent
+auf Java 21 an (dieselbe apt-Quelle/derselbe Schlüssel wie `setup.sh` `install_java`) und
+verifiziert danach robust `java -version >= 21` – **zwingender erster Schritt vor dem Rollout
+eines mit Sprachlevel 21 gebauten Release-Jars** (löst das Java-17-Restrisiko der Phase-1-
+Risikotabelle auf, siehe „Bekannte Build-Risiken" unten). Ein frisches Gerät braucht das
+nicht: `setup.sh` installiert Java 21 ohnehin.
+
 ### Datenbank
 PostgreSQL, initialisiert über `Common/resources/database-init.sql` (legt DB `elwasys`,
 Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).
@@ -435,7 +456,10 @@ JDK-Version am 2026-07-20 im Phase-1-QA-Review korrigiert)*:
   Raspberry-Pi-Terminals laufen noch mit dem alten Java-17-JRE – ein
   Fat-Jar-Update ohne erneuten `setup.sh`-Lauf bzw. manuelles JRE-Upgrade auf
   diesen Geräten würde das Terminal beim Start crashen lassen). Für neu
-  provisionierte/aktualisierte Terminals ist das jetzt behoben; ein
-  JRE-Upgrade-Pfad für bereits im Feld befindliche Geräte ist **nicht**
-  Bestandteil dieses Fixes und sollte vor dem nächsten Release explizit
-  geklärt werden (z. B. in `setup.sh`/Update-Doku ergänzen).
+  provisionierte Terminals ist das seit Phase 1 behoben. **Seit Phase 6 AP3
+  vollständig aufgelöst**: der JRE-Upgrade-Pfad für bereits im Feld befindliche
+  Bestandsgeräte existiert jetzt als `deploy/terminal/upgrade-jre.sh` (idempotent,
+  verifiziert danach robust `java -version >= 21`; zwingender erster Schritt vor
+  dem Rollout eines Sprachlevel-21-Jars) mit Runbook `deploy/terminal/README.md` –
+  siehe „Terminal-Supervisor / Re-Provisionierung" oben und die Risikotabelle in
+  kb/05-migration-plan.md (Zeile als aufgelöst markiert).
