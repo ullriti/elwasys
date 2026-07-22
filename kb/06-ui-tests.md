@@ -429,6 +429,31 @@ npx playwright show-report  # letzten HTML-Report öffnen
 Details/Begründungen siehe die Kommentare in `backend/e2e/playwright.config.ts`,
 `backend/e2e/scripts/start-backend.sh` und `backend/e2e/global-setup.ts`.
 
+### Post-Deploy-Smoke-Teilmenge (Phase 6 AP6, Rollout-Gate)
+
+Zusätzlich zur vollen P1–P20-Suite gibt es eine **schlanke, strikt READ-ONLY** Teilmenge, die
+NICHT die eigene Umgebung hochfährt, sondern gegen eine **bereits laufende, extern deployte**
+Umgebung läuft – das Rollout-Gate nach einem Deployment (siehe `deploy/smoke/README.md`,
+kb/05-migration-plan.md „Phase 6"/„AP6"). Rein additiv; die Haupt-Suite (`playwright.config.ts`,
+`global-setup.ts`, `tests/`) bleibt unverändert.
+
+- **`backend/e2e/playwright.smoke.config.ts`** – eigene Config: **KEIN** `webServer` (Umgebung
+  läuft schon), **KEIN** `globalSetup` (kein direkter DB-Seed), `baseURL` aus `E2E_BASE_URL`
+  (Default `http://localhost:8080`, der Compose-Produktions-Port), `testDir: './tests-smoke'`,
+  Chromium via `executablePath` wie die Haupt-Config, `workers:1`, `retries` per `SMOKE_RETRIES`
+  (Default 0).
+- **`backend/e2e/tests-smoke/smoke.spec.ts`** – 4 Liveness-Checks, **KEINE** Mutationen, **KEINE**
+  global-setup-Fixtures, **KEINE** Annahmen über konkrete Seed-/Produktivdaten (robust gegen
+  beliebige echte Daten): (1) Login-Seite rendert (P1-artig); (2) Admin-Login
+  (`SMOKE_ADMIN_USER`/`SMOKE_ADMIN_PASSWORD`, Default admin/admin) → Dashboard/Admin-Side-Nav
+  (P2-artig); (3) Kern-Admin-Sektionen Benutzer/Geräte/Programme rendern per nur lesender
+  Navigation (P5-artig, `current`-Attribut); (4) Dashboard rendert (Portal↔DB-Pfad lebt). Nutzt
+  `login()` aus `tests/helpers.ts`.
+- Aufruf: `cd backend/e2e && E2E_BASE_URL=<url> SMOKE_ADMIN_*=… npm run smoke`, oder – mit
+  vorgeschaltetem Health-Check als Gesamt-Gate – `deploy/smoke/post-deploy-smoke.sh`
+  (`GET /actuator/health` = `status:UP` UND Playwright grün → Exit 0). In der Sandbox (kein
+  Docker) gegen einen Produktionsmodus-`java -jar`-Server verifiziert: Health UP + 4/4 grün.
+
 ## Ausführung headless (Remote/CI)
 - Client-TestFX mit Monocle → **kein** X-Server nötig.
 - Falls doch ein Display gebraucht wird: **Xvfb** (virtuelles Framebuffer-Display) als

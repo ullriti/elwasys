@@ -404,6 +404,25 @@ kubectl run elwasys-token-cli --rm -it --restart=Never -n elwasys \
 ```
 Das Klartext-Token erscheint GENAU EINMAL in der Ausgabe.
 
+### Backend: Post-Deploy-Smoke-Test (Rollout-Gate, Phase 6 AP6)
+
+Portal/Backend haben bewusst **kein** eigenes Upgrade-/Rollback-Skript – Rollout und Rollback
+laufen über die Plattform (docker-compose-Redeploy bzw. `helm rollback`). Nach jedem Deployment
+verifiziert stattdessen `deploy/smoke/post-deploy-smoke.sh` die **frisch deployte, laufende**
+Umgebung; **erst nach GRÜNEM Smoke-Test gilt der Rollout als erfolgreich**:
+
+```bash
+# nach docker-compose-Redeploy (Produktions-Port 8080) bzw. Helm-Upgrade:
+BASE_URL=http://<host>:8080 deploy/smoke/post-deploy-smoke.sh
+# Produktiv-Admin-Passwort setzen (Default admin/admin):
+BASE_URL=https://portal.example.org SMOKE_ADMIN_PASSWORD='<pw>' deploy/smoke/post-deploy-smoke.sh
+```
+
+Zwei Schritte, beide müssen grün sein (Exit 0 nur dann): (1) `GET $BASE_URL/actuator/health` →
+`"status":"UP"` (mit Retries); (2) die schlanke, strikt READ-ONLY Playwright-Teilmenge
+(`backend/e2e` `npm run smoke`, Config `playwright.smoke.config.ts`, Tests `tests-smoke/`, siehe
+kb/06-ui-tests.md). Bei FAIL: über die Plattform zurückrollen. Runbook: `deploy/smoke/README.md`.
+
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` *(seit 2026-07-20, JDK-Version am 2026-07-20 im
