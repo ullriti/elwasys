@@ -13,6 +13,18 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Fixed
+- Geld-/Abrechnungs-Integrität (Pre-Launch-Review AP3, Issues #20/#22/#29/#36/#41, ADR 0017):
+  Geld-/Belegungspfade gegen Nebenläufigkeit abgesichert – pessimistische Nutzer-Zeilensperre
+  (Guthabencheck/Auszahlung/Abbuchung), frisch gesperrte Ausführung beim Beenden und
+  Advisory-Lock je Gerät im Start-Pfad verhindern Doppelstart, Doppelabrechnung und negatives
+  Guthaben (#20).
+- Idempotenz gehärtet: gleiche Schlüssel werden serialisiert (kein HTTP 500 mehr durch eine
+  vergiftete Transaktion), ein Schlüssel > 64 Zeichen wird mit 400 abgelehnt (#29); ein Replay
+  prüft den Vorgang (`operation`, sonst 409) und liefert die gespeicherte Antwort auch nach
+  Löschung einer Referenz-Entität statt 404 (#41).
+- Guthaben-Buchungen validieren den Betrag (`> 0`) in Service und Dialog – kein umgekehrter
+  oder leerer Buchungssatz mehr (#22). Ende-/Abbruch-Benachrichtigungen (SMTP/Pushover) laufen
+  per `AFTER_COMMIT`-Event außerhalb der DB-Transaktion; ein Rollback versendet nichts mehr (#36).
 - Terminal-Stabilität & Aufräumen (Pre-Launch-Review AP2, Issues #19/#27/#28/#51/#52/#53/#55/#56/#57/#58/#61):
   deCONZ-WebSocket verbindet nach einem Abbruch/Neustart wieder neu, sodass die
   Programm-Ende-Erkennung nicht dauerhaft ausfällt (#19); ein portal-ausgelöster Neustart

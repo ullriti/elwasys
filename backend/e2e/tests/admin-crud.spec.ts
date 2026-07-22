@@ -119,6 +119,31 @@ test('admin can top up a user credit (P8)', async ({ page }) => {
   await expect(cells[4]).toContainText('5,00');
 });
 
+test('admin cannot top up with a non-positive amount (P8, Issue #22)', async ({ page }) => {
+  const stamp = Date.now();
+  const name = `E2E GuthabenNeg ${stamp}`;
+  await createUser(page, name, `e2e_creditneg_${stamp}`);
+
+  const creditBtn = await rowActionButton(page, name, 1); // "Guthaben aufladen"
+  await creditBtn.click();
+
+  const win = dialog(page);
+  await expect(win.locator('h2[slot="title"]')).toHaveText(`Guthaben von ${name}`);
+
+  // Ein negativer Betrag muss abgelehnt werden (er kehrte sonst die Buchung um, Issue #22):
+  // Feldfehler, Dialog bleibt offen, nichts wird gebucht.
+  await win.getByLabel('Betrag').fill('-5');
+  await win.getByRole('button', { name: 'Buchen' }).click();
+  await expect(win.getByText('Der Betrag muss größer als 0 sein.')).toBeVisible();
+  await expect(win.locator('h2[slot="title"]')).toHaveText(`Guthaben von ${name}`);
+
+  // Dialog schließen; das Guthaben ist unverändert (0,00).
+  await win.getByRole('button', { name: 'Abbrechen' }).click();
+  await expectNoDialog(page);
+  const cells = await gridRowCells(page, name);
+  await expect(cells[4]).toContainText('0,00');
+});
+
 test('admin can create a user group (P9)', async ({ page }) => {
   const groupName = `E2E-Gruppe-${Date.now()}`;
 

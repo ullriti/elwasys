@@ -119,6 +119,46 @@ class ExecutionControllerIdempotencyTest extends AbstractApiIT {
     }
 
     @Test
+    void oversizedIdempotencyKeyIsRejectedWith400AndTheExecutionStaysFinishable() throws Exception {
+        // Issue #29 (Szenario B): ein Schlüssel > 64 Zeichen sprengt die VARCHAR(64)-Spalte.
+        // Ohne Vorab-Prüfung scheiterte erst saveAndFlush und die Operation bliebe in einer
+        // dauerhaften 500-Schleife nicht persistierbar - hier: 400 VOR der Aktion, danach ist
+        // die Ausführung ganz normal (mit gültigem Schlüssel) beendbar.
+        Setup s = fullyAllowedSetup(new BigDecimal("3.00"));
+        this.creditService.inpayment(s.user(), new BigDecimal("50.00"));
+        ExecutionEntity execution = this.executionService.startExecution(
+                this.executionService.createExecution(s.device(), s.program(), s.user()));
+        String tooLong = "x".repeat(65);
+
+        this.mockMvc.perform(post("/api/v1/executions/" + execution.getId() + "/finish").header("Authorization",
+                authHeader(s.token())).header("Idempotency-Key", tooLong)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value("urn:elwasys:invalid-idempotency-key"));
+
+        this.mockMvc.perform(post("/api/v1/executions/" + execution.getId() + "/finish").header("Authorization",
+                authHeader(s.token())).header("Idempotency-Key", UUID.randomUUID().toString()))
+                .andExpect(status().isOk());
+        assertThat(this.creditService.getCredit(s.user())).isEqualByComparingTo(new BigDecimal("47.00"));
+    }
+
+    @Test
+    void reusingAnIdempotencyKeyForADifferentOperationReturns409() throws Exception {
+        // Issue #41: derselbe Schlüssel für einen anderen Vorgang darf nicht die Fremd-Antwort
+        // zurückliefern und die neue Aktion stillschweigend überspringen - stattdessen 409.
+        Setup s = fullyAllowedSetup(new BigDecimal("3.00"));
+        this.creditService.inpayment(s.user(), new BigDecimal("50.00"));
+        ExecutionEntity execution = this.executionService.startExecution(
+                this.executionService.createExecution(s.device(), s.program(), s.user()));
+        String key = UUID.randomUUID().toString();
+
+        this.mockMvc.perform(post("/api/v1/executions/" + execution.getId() + "/finish").header("Authorization",
+                authHeader(s.token())).header("Idempotency-Key", key)).andExpect(status().isOk());
+
+        this.mockMvc.perform(post("/api/v1/executions/" + execution.getId() + "/reset").header("Authorization",
+                authHeader(s.token())).header("Idempotency-Key", key)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.type").value("urn:elwasys:idempotency-key-reused"));
+    }
+
+    @Test
     void resetIsIdempotentAndDoesNotBookTwice() throws Exception {
         Setup s = fullyAllowedSetup(new BigDecimal("3.00"));
         this.creditService.inpayment(s.user(), new BigDecimal("50.00"));

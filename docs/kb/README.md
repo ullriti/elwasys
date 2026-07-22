@@ -55,7 +55,14 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   kaputte 2xx nicht mehr als Offline (#53), Journal-`DSYNC` (#55), RFID-Log-Maskierung +
   deterministisches INFO-Log (#56), Resume-Null-Check (#57), CSPRNG-deCONZ-Passwort (#58),
   toter SMTP-Code raus (#61).
-- **Nächster Schritt:** Restliche Pre-Launch-Arbeitspakete (AP3 ff. laut Epic #66) je als
+  **AP3 (Geld-/Abrechnungs-Integrität, #20/#22/#29/#36/#41) ist behoben** – pessimistisches
+  Nutzer-Zeilen-Locking auf den Geldpfaden + Advisory-Lock je Gerät im Start-Pfad und frisch
+  gesperrter Finish (gegen Doppelstart/Doppelabrechnung/negatives Guthaben, #20), Idempotenz
+  gehärtet (Key-Längen-400, Advisory-Lock gegen Race/kein 500, `operation`-Prüfung + Replay
+  nach Löschung ohne 404, #29/#41), Betragsvalidierung in Service+Dialog (#22),
+  Benachrichtigung per `AFTER_COMMIT`-Event außerhalb der Finish-Transaktion (#36) – siehe
+  [ADR 0017](../architecture/0017-abrechnungs-integritaet-locking.md).
+- **Nächster Schritt:** Restliche Pre-Launch-Arbeitspakete (AP4 ff. laut Epic #66) je als
   eigener PR; danach Betrieb/Nachpflege auf der Zielarchitektur; neue Vorhaben vorab als
   Spec in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten. Die
   Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).

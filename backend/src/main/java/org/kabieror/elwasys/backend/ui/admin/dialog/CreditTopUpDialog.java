@@ -96,9 +96,20 @@ public class CreditTopUpDialog extends Dialog {
             this.bfAmount.setErrorMessage("Bitte einen Betrag eingeben.");
             return;
         }
-        this.bfAmount.setInvalid(false);
 
         BigDecimal amount = this.bfAmount.getValue();
+        // Issue #22: nur positive Beträge zulassen. Ein negativer Betrag kehrte sonst die
+        // Buchung um (eine "Einzahlung" von -50 umgeht den Auszahlungs-Wächter, eine
+        // "Auszahlung" von -50 bucht +50 mit widersprüchlichem Buchungstext), 0 erzeugte einen
+        // leeren Buchungssatz. CreditService#inpayment/#payout prüfen dies zusätzlich
+        // server-seitig, hier die unmittelbare Feld-Rückmeldung.
+        if (amount.signum() <= 0) {
+            this.bfAmount.setInvalid(true);
+            this.bfAmount.setErrorMessage("Der Betrag muss größer als 0 sein.");
+            return;
+        }
+        this.bfAmount.setInvalid(false);
+
         boolean payout = PAYOUT_OPTION.equals(this.rgAction.getValue());
         try {
             if (payout) {

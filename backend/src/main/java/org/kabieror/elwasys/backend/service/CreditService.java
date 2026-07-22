@@ -13,6 +13,7 @@ import org.kabieror.elwasys.backend.events.CreditChangedEvent;
 import org.kabieror.elwasys.backend.exception.NotEnoughCreditException;
 import org.kabieror.elwasys.backend.repository.CreditAccountingEntryRepository;
 import org.kabieror.elwasys.backend.repository.ExecutionRepository;
+import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,16 +30,45 @@ public class CreditService {
 
     private final CreditAccountingEntryRepository creditAccountingEntryRepository;
     private final ExecutionRepository executionRepository;
+    private final UserRepository userRepository;
     private final PricingService pricingService;
     private final ApplicationEventPublisher eventPublisher;
 
     public CreditService(CreditAccountingEntryRepository creditAccountingEntryRepository,
-            ExecutionRepository executionRepository, PricingService pricingService,
+            ExecutionRepository executionRepository, UserRepository userRepository, PricingService pricingService,
             ApplicationEventPublisher eventPublisher) {
         this.creditAccountingEntryRepository = creditAccountingEntryRepository;
         this.executionRepository = executionRepository;
+        this.userRepository = userRepository;
         this.pricingService = pricingService;
         this.eventPublisher = eventPublisher;
+    }
+
+    /**
+     * Sperrt die Zeile eines (echten, persistierten) Benutzers pessimistisch bis zum
+     * Transaktionsende (Issue #20 - AP3, siehe
+     * {@link org.kabieror.elwasys.backend.repository.UserRepository#findWithLockById}). Für
+     * einen virtuellen ({@code id < 0}) oder noch transienten ({@code id == null}) Benutzer -
+     * für den ohnehin nie gebucht wird, siehe {@link #payExecution} - ein No-Op.
+     */
+    private void lockUser(UserEntity user) {
+        if (user.getId() != null && user.getId() >= 0) {
+            this.userRepository.findWithLockById(user.getId());
+        }
+    }
+
+    /**
+     * Wächter für {@link #inpayment}/{@link #payout} (Issue #22 - AP3): ein Betrag {@code <= 0}
+     * ist fachlich unsinnig und kehrte die Buchung sonst um (eine "Einzahlung" von -50 bucht
+     * -50 und umgeht den Auszahlungs-Wächter; eine "Auszahlung" von -50 bucht +50 mit
+     * widersprüchlichem Buchungstext; 0 erzeugt einen leeren Buchungssatz). Server-seitiger
+     * Schutz zusätzlich zur UI-Validierung in {@code CreditTopUpDialog}, damit auch REST-/
+     * Terminal-Pfade abgesichert sind.
+     */
+    private static void requirePositive(BigDecimal amount) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new IllegalArgumentException("Der Betrag muss größer als 0 sein.");
+        }
     }
 
     /**
@@ -109,6 +139,11 @@ public class CreditService {
                 // A free execution has not to be payed.
                 return;
             }
+            // Issue #20: Nutzer-Zeile sperren, bevor gebucht wird - serialisiert die Abbuchung
+            // gegen parallele Guthaben-Operationen desselben Benutzers (u.a. gegen ein zweites,
+            // konkurrierendes finish, das ohne die frische, gesperrte Ausführung sonst ein
+            // zweites Mal abrechnen könnte).
+            lockUser(user);
             String description = execution.getProgram().getName() + " auf " + execution.getDevice().getName() + " ("
                     + execution.getDevice().getLocation().getName() + ") bezahlt von " + user.getName() + ".";
             this.creditAccountingEntryRepository.save(
@@ -123,6 +158,7 @@ public class CreditService {
      */
     @Transactional
     public CreditAccountingEntryEntity inpayment(UserEntity user, BigDecimal amount, String text) {
+        requirePositive(amount);
         CreditAccountingEntryEntity entry = this.creditAccountingEntryRepository.save(
                 new CreditAccountingEntryEntity(user, null, amount, LocalDateTime.now(), text));
         this.eventPublisher.publishEvent(new CreditChangedEvent(user.getId()));
@@ -145,6 +181,11 @@ public class CreditService {
      */
     @Transactional
     public CreditAccountingEntryEntity payout(UserEntity user, BigDecimal amount, String text) {
+        requirePositive(amount);
+        // Issue #20: Nutzer-Zeile VOR der Guthabenprüfung sperren, damit Prüfung und Buchung
+        // serialisiert sind - sonst passieren zwei parallele Auszahlungen beide die Prüfung und
+        // das Guthaben wird trotz NotEnoughCreditException-Logik negativ.
+        lockUser(user);
         if (getCredit(user).compareTo(amount) < 0) {
             throw new NotEnoughCreditException();
         }
