@@ -6,6 +6,7 @@
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",
+    "smoke": "playwright test --config=playwright.smoke.config.ts",
     "report": "playwright show-report"
   },
   "devDependencies": {

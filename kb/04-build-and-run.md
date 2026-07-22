@@ -176,6 +176,49 @@ einer frischen Installation ist das der einzige Weg, dem Seed-`admin`-Benutzer �
 Passwort zu geben (siehe `V7__remove_default_admin_password.sql`, kb/02-data-model.md,
 kb/05-migration-plan.md).
 
+### Cutover-Werkzeuge (Phase 6 AP1/AP2)
+
+> **Übergreifendes Runbook (Phase 6 AP7):** Die sequenzierte End-to-End-Anleitung für die
+> gesamte Produktivumschaltung (Strangler-Reihenfolge Portal/Backend → Terminals, je Schritt
+> Gate + Rollback, plus Rollback-Entscheidungsbaum und Wartungsfenster-Checkliste) steht in
+> **`deploy/CUTOVER-RUNBOOK.md`**. Es orchestriert die hier und unter „Deployment" beschriebenen
+> DB-/Terminal-/Gate-Werkzeuge und verlinkt die drei Detail-Runbooks (`deploy/cutover/README.md`,
+> `deploy/terminal/README.md`, `deploy/smoke/README.md`).
+
+`deploy/cutover/` bündelt die Werkzeuge für die eigentliche **Produktivumschaltung** einer
+bereits über den Alt-Weg (`database-init.sql`) angelegten Bestands-DB auf die neue,
+Flyway-verwaltete Architektur – Details/Runbook in `deploy/cutover/README.md`,
+Hintergrund/Roadmap in kb/05-migration-plan.md ("Phase 6 – Produktivumschaltung"):
+- **`01-preflight-check.sh`**: rein lesender Readiness-Report (Flyway-Status, noch
+  vorhandene Alt-Artefakte, Dateninventar inkl. Standorte ohne aktives Token, Warnungen).
+- **`02-issue-terminal-tokens.sh`** / **`03-set-admin-password.sh`**: dünne Wrapper um die
+  oben dokumentierten `token-cli`-/`admin-cli`-Profile (Standorte auflisten + Token
+  ausstellen bzw. interaktive Passwort-Abfrage statt Klartext-Argument).
+- **`04-review-obsolete-locations.sql`**: read-only Review potenziell ungenutzter
+  `locations`-Zeilen (kein automatisches Löschen).
+- **`verify-cutover-migration.sh`**: das wartbare Cutover-Verifikationsskript – baut lokal
+  eine Testkopie des Bestandsschemas, fügt Bestandsdaten ein, startet das Backend-Jar
+  dagegen und prüft per Assert-Liste Flyway-Historie/Datenerhalt/Schema-Härtung (21 Asserts,
+  PASS/FAIL + Exit-Code). Anders als das ältere `backend/verify-schema-baseline.sh` (Phase-
+  2-Relikt, vergleicht Schema-Dumps 1:1 – dessen Prämisse gilt seit V2 nicht mehr) prüft
+  dieses Skript explizite, wartbare Assert-Aussagen; beide Skripte bleiben nebeneinander
+  bestehen (unterschiedlicher Zweck).
+- **`rollback-cutover.sql`** / **`rollback-cutover.sh`** (AP2): idempotentes Reverse-DDL für
+  einen abgebrochenen Cutover – macht V3..V10 rückgängig (Alt-Rollen/-Trigger/-Tabellen/
+  -Spalten wieder anlegen, `flyway_schema_history` droppen), ohne Geschäftsdaten zu
+  verlieren; V2 bleibt bewusst unangetastet. Braucht – anders als 01-03 – eine Verbindung mit
+  CREATEROLE-Rechten (die V6-Umkehrung legt Rollen an). Details je Umkehrung als Kommentare in
+  `rollback-cutover.sql`, Einsatz-Anleitung (inkl. Backup-Restore als primäre Alternative,
+  Caveats) in `deploy/cutover/README.md`, Abschnitt "Rollback".
+- **`verify-rollback.sh`** (AP2): Gegenstück zu `verify-cutover-migration.sh` – verifiziert
+  den Rückweg gegen die von `verify-cutover-migration.sh` hinterlassene Test-DB: Asserts
+  (Alt-Schema wieder da + Geschäftsdaten erhalten), Idempotenz-Beweis (zweiter Lauf), Re-
+  Cutover-Beweis (Backend erneut gegen die zurückgebaute DB starten – Flyway migriert wieder
+  sauber bis V10).
+
+Alle Skripte verwenden dieselben Umgebungsvariablen wie das Backend selbst
+(`ELWASYS_DB_URL`/`_USER`/`_PASSWORD`, siehe oben).
+
 ## Umgebung (dieser Remote-Container)
 
 - **OS**: Ubuntu 24.04.4 LTS
@@ -215,6 +258,50 @@ java -Djavafx.platform=gtk \
 (Der `-Djavax.net.ssl.trustStore*`-Flag samt Truststore-Erzeugung in `setup.sh` ist seit Phase
 4 AP5 entfallen – er diente ausschließlich der Verifikation des TLS-Zertifikats der jetzt
 entfallenen Datenbankverbindung.)
+
+**Terminal-Supervisor (`run.sh`-Loop, seit Phase 6 AP3)**: `setup.sh` generiert `run.sh`
+nicht mehr als Einmalstart, sondern als **Supervising-Loop** (bewusst kein systemd, maximale
+Kompatibilität mit dem X/JavaFX-Touch-Autologin-Modell – Bedienfluss unverändert). Eine
+`while true`-Schleife startet den obigen `java`-Befehl im Vordergrund; beendet sich die JVM
+(Crash oder gezielt von außen), wartet sie 2s und startet den **dann aktuell per Symlink
+`raspi-client.latest.jar` verlinkten** Jar erneut (Symlink pro Iteration neu aufgelöst). Der
+`sudo killall java`-Cleanup läuft nur EINMALIG vor der Schleife. **Supervisor-Vertrag (für
+Watchdog/Update, Grundlage für Phase 6 AP4/AP5):** ein externer Neustart == den laufenden
+`java`-Prozess beenden (z. B. `sudo killall java`/`pkill -f raspi-client`); die Loop relauncht
+automatisch – ein Jar-Update hängt also nur den Symlink um und beendet die JVM. `killall java`
+trifft nur die JVM, nicht den bash-Supervisor.
+
+**Re-Provisionierung / Bestandsgerät auf die neue Architektur bringen (`deploy/terminal/`,
+seit Phase 6 AP3)**: eigenes Runbook `deploy/terminal/README.md`. Für bereits im Feld
+provisionierte Altgeräte (nur Java 17) hebt `deploy/terminal/upgrade-jre.sh` das JRE idempotent
+auf Java 21 an (dieselbe apt-Quelle/derselbe Schlüssel wie `setup.sh` `install_java`) und
+verifiziert danach robust `java -version >= 21` – **zwingender erster Schritt vor dem Rollout
+eines mit Sprachlevel 21 gebauten Release-Jars** (löst das Java-17-Restrisiko der Phase-1-
+Risikotabelle auf, siehe „Bekannte Build-Risiken" unten). Ein frisches Gerät braucht das
+nicht: `setup.sh` installiert Java 21 ohnehin.
+
+**Client-Jar-Update (`deploy/terminal/update.sh`, seit Phase 6 AP4)**: hebt ein bereits
+provisioniertes Terminal auf ein neues fat-jar, ohne `setup.sh` erneut zu fahren
+(`--version <tag>` von GitHub oder `--jar <Pfad>` offline). Jar-Layout: versionierte
+`raspi-client-<version>.jar` bleiben liegen, Symlink `raspi-client.latest.jar` → aktuell,
+`raspi-client.previous.jar` → vorige Version (Rollback-Ziel). Neustart über den Supervisor-
+Vertrag (java beenden → Loop startet das neu verlinkte Jar).
+
+**Auto-Update mit Rollback (`deploy/terminal/auto-update-watchdog.sh`, seit Phase 6 AP5)**:
+bewusst schlanke Shell-/Cron-Variante (kein systemd). Für periodischen Cron-Aufruf als
+Terminal-User gedacht (Beispiel `*/30 * * * *`, siehe Runbook). Ein Lauf: aktuelle Version
+aus `raspi-client.latest.jar` ableiten → Ziel-Version ermitteln (primär GitHub-Releases-
+`latest`, optionaler ops/backend-Override `${ELWA_ROOT}/.update-target` hat Vorrang) → bei
+neuerer Version `update.sh --version` aufrufen und den erfolgreichen Start über den
+**Readiness-Marker** verifizieren: der Client schreibt beim Erreichen von `SELECT_DEVICE`
+eine Datei `${ELWA_ROOT}/.terminal-ready` mit frischem `mtime`
+(`TerminalReadinessMarker`, siehe kb/03); bleibt der `mtime`-Fortschritt binnen
+`ELWA_UPDATE_DEADLINE` (Default 180 s) aus, **Rollback** auf `raspi-client.previous.jar`
+(plus Konfig-Snapshot `elwasys.properties.previous`) + java killen + Recovery bestätigen +
+klarer FAILURE-Log unter `${ELWA_ROOT}/log/`. Lockfile `${ELWA_ROOT}/.watchdog.lock` gegen
+parallele Cron-Läufe; stiller No-op bei up-to-date bzw. wenn kein java läuft (Terminal aus).
+Env-Overrides (u. a. für Trocken-Tests): `ELWA_ROOT`, `ELWA_RESTART_CMD`, `ELWA_JAVA_PGREP`,
+`ELWA_LATEST_VERSION_CMD`, `ELWA_UPDATE_DEADLINE`, `ELWA_MARKER_FILE`, `ELWA_UPDATE_SCRIPT`.
 
 ### Datenbank
 PostgreSQL, initialisiert über `Common/resources/database-init.sql` (legt DB `elwasys`,
@@ -324,6 +411,25 @@ kubectl run elwasys-token-cli --rm -it --restart=Never -n elwasys \
 ```
 Das Klartext-Token erscheint GENAU EINMAL in der Ausgabe.
 
+### Backend: Post-Deploy-Smoke-Test (Rollout-Gate, Phase 6 AP6)
+
+Portal/Backend haben bewusst **kein** eigenes Upgrade-/Rollback-Skript – Rollout und Rollback
+laufen über die Plattform (docker-compose-Redeploy bzw. `helm rollback`). Nach jedem Deployment
+verifiziert stattdessen `deploy/smoke/post-deploy-smoke.sh` die **frisch deployte, laufende**
+Umgebung; **erst nach GRÜNEM Smoke-Test gilt der Rollout als erfolgreich**:
+
+```bash
+# nach docker-compose-Redeploy (Produktions-Port 8080) bzw. Helm-Upgrade:
+BASE_URL=http://<host>:8080 deploy/smoke/post-deploy-smoke.sh
+# Produktiv-Admin-Passwort setzen (Default admin/admin):
+BASE_URL=https://portal.example.org SMOKE_ADMIN_PASSWORD='<pw>' deploy/smoke/post-deploy-smoke.sh
+```
+
+Zwei Schritte, beide müssen grün sein (Exit 0 nur dann): (1) `GET $BASE_URL/actuator/health` →
+`"status":"UP"` (mit Retries); (2) die schlanke, strikt READ-ONLY Playwright-Teilmenge
+(`backend/e2e` `npm run smoke`, Config `playwright.smoke.config.ts`, Tests `tests-smoke/`, siehe
+kb/06-ui-tests.md). Bei FAIL: über die Plattform zurückrollen. Runbook: `deploy/smoke/README.md`.
+
 ## CI (GitHub Actions)
 
 `.github/workflows/ci.yml` *(seit 2026-07-20, JDK-Version am 2026-07-20 im
@@ -399,7 +505,10 @@ JDK-Version am 2026-07-20 im Phase-1-QA-Review korrigiert)*:
   Raspberry-Pi-Terminals laufen noch mit dem alten Java-17-JRE – ein
   Fat-Jar-Update ohne erneuten `setup.sh`-Lauf bzw. manuelles JRE-Upgrade auf
   diesen Geräten würde das Terminal beim Start crashen lassen). Für neu
-  provisionierte/aktualisierte Terminals ist das jetzt behoben; ein
-  JRE-Upgrade-Pfad für bereits im Feld befindliche Geräte ist **nicht**
-  Bestandteil dieses Fixes und sollte vor dem nächsten Release explizit
-  geklärt werden (z. B. in `setup.sh`/Update-Doku ergänzen).
+  provisionierte Terminals ist das seit Phase 1 behoben. **Seit Phase 6 AP3
+  vollständig aufgelöst**: der JRE-Upgrade-Pfad für bereits im Feld befindliche
+  Bestandsgeräte existiert jetzt als `deploy/terminal/upgrade-jre.sh` (idempotent,
+  verifiziert danach robust `java -version >= 21`; zwingender erster Schritt vor
+  dem Rollout eines Sprachlevel-21-Jars) mit Runbook `deploy/terminal/README.md` –
+  siehe „Terminal-Supervisor / Re-Provisionierung" oben und die Risikotabelle in
+  kb/05-migration-plan.md (Zeile als aufgelöst markiert).

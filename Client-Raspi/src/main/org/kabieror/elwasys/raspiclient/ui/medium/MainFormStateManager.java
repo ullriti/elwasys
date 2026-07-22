@@ -156,6 +156,10 @@ class MainFormStateManager implements IMainFormStateManager {
                     if (finalTransMethod.apply(newState)) {
                         this.previousState = this.state;
                         this.state = newState;
+                        if (newState.equals(MainFormState.SELECT_DEVICE)) {
+                            // Bedienbereit erreicht -> Readiness-Marker fuer den Auto-Update-Watchdog (Phase 6 AP5).
+                            org.kabieror.elwasys.raspiclient.application.TerminalReadinessMarker.markReady();
+                        }
                     } else {
                         this.logger.error("Die Zustandsänderung von '" + this.state.name() + "' nach '" + newState.name() +
                                 "' ist nicht möglich.");

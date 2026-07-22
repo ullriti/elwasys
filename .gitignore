@@ -48,3 +48,8 @@ backend/pnpm-lock.yaml
 backend/types.d.ts
 backend/vite.generated.ts
 backend/tsconfig.json
+
+# Terminal readiness marker (Phase 6 AP5): runtime artifact written by
+# TerminalReadinessMarker when the client reaches SELECT_DEVICE. On a device it
+# lives in /opt/elwasys/; in dev/test runs it lands in the working directory.
+.terminal-ready

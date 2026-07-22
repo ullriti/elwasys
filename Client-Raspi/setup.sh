@@ -241,15 +241,45 @@ EOT
 </configuration>
 EOT
 
-    # run.sh script
+    # run.sh script (Supervising-Loop, Phase 6 AP3)
+    #
+    # Startet die JavaFX-Touch-App in einer Schleife im Vordergrund. Der
+    # Bedienfluss/das UI sind identisch zum frueheren Einmalstart - es kommt nur
+    # Respawn (Ausfallsicherheit + Update-Uebernahme) hinzu, kein systemd noetig.
+    #
+    # Supervisor-Vertrag (fuer Watchdog/Update, siehe deploy/terminal/README.md):
+    #   Ein externer Neustart == den laufenden java-Prozess beenden (z.B.
+    #   "sudo killall java" oder "pkill -f raspi-client"). Die run.sh-Loop faengt
+    #   das ab, wartet kurz und relauncht den AKTUELL per Symlink verlinkten Jar.
+    #   Ein Update haengt also nur den Symlink raspi-client.latest.jar um und
+    #   beendet den java-Prozess - die naechste Iteration liest das Symlink-Ziel
+    #   NEU und startet automatisch das neue Jar. "killall java" trifft die JVM,
+    #   nicht diesen bash-Supervisor - die Schleife laeuft weiter.
     run_script="./run.sh"
     tee "$run_script" > /dev/null <<EOT
 #!/bin/bash
+# elwasys Terminal-Supervisor - siehe deploy/terminal/README.md (Supervisor-Vertrag).
+# Erzeugt von Client-Raspi/setup.sh (config_elwasys).
 
+cd $ELWA_ROOT
+
+# Alt-Java-Prozesse EINMALIG vor der Schleife aufraeumen - NICHT im
+# Schleifenkoerper (sonst wuerde ein Relaunch sich selbst abschiessen). Trifft
+# nur die JVM, nicht diesen bash-Supervisor.
 sudo killall java 2> /dev/null
 
-java -Djavafx.platform=gtk -Dlogback.configurationFile=$ELWA_ROOT/logback.xml \
-        -jar raspi-client.latest.jar -verbose > log/stdout 2> log/errout
+while true; do
+    # Symlink raspi-client.latest.jar pro Iteration NEU aufloesen: ein
+    # Symlink-Wechsel (Update) zwischen zwei Iterationen greift damit
+    # automatisch beim naechsten Start.
+    java -Djavafx.platform=gtk -Dlogback.configurationFile=$ELWA_ROOT/logback.xml \
+            -jar raspi-client.latest.jar -verbose > log/stdout 2> log/errout
+
+    # JVM hat sich beendet (Crash oder gezielt von aussen fuer Update/Watchdog).
+    # Kurz warten (Fehler-Schleifen entzerren), dann den dann aktuell
+    # verlinkten Jar erneut starten.
+    sleep 2
+done
 EOT
     chmod +x "$run_script"
 
