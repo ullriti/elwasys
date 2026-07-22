@@ -84,9 +84,13 @@ fi
 
 main() {
     log_state "Aktuelle Java-Version pruefen ..."
-    if require_java_at_least 21 2>/dev/null; then
+    # T2 (QA-Review): nur EIN Aufruf von require_java_at_least (statt zweimal
+    # "java -version" auszufuehren) - die OK-Zeile wird aus dem ersten Aufruf
+    # aufgehoben und danach ausgegeben.
+    local ok_msg
+    if ok_msg="$(require_java_at_least 21 2>/dev/null)"; then
         echo "Java 21+ ist bereits aktiv - nichts zu tun (idempotent)."
-        require_java_at_least 21
+        echo "${ok_msg}"
         exit 0
     fi
     echo "Java < 21 (oder nicht ermittelbar) - installiere bellsoft-java21-runtime-full ..."

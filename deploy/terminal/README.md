@@ -76,6 +76,18 @@ Iteration liest das Symlink-Ziel **neu** und startet das neue Jar. `killall java
 trifft nur die JVM, nicht den bash-Supervisor (der einmalige `killall`-Cleanup
 läuft bewusst **vor** der Schleife, nicht in ihr).
 
+**stdout/stderr der Loop (N3, QA-Nacharbeit):** `run.sh` schreibt `log/stdout`/
+`log/errout` seit der Phase-6-Nacharbeit **anhängend** (`>>`/`2>>`), nicht mehr
+abschneidend – ein Update-/Crash-Neustart löscht damit nicht mehr das rohe
+STDOUT/STDERR des vorigen Laufs (Anwendungslogs laufen ohnehin separat über
+`logback.xml`; diese Rohdateien fangen zusätzlich alles, was direkt auf
+STDOUT/STDERR landet, z. B. einen JVM-Absturz vor der Logging-Initialisierung –
+genau das Postmortem-Artefakt, das nach einem fehlgeschlagenen Auto-Update
+gebraucht wird). Gegen unbegrenztes Wachstum rotiert die Loop vor jedem
+(Re-)Start die jeweilige Datei einmalig nach `.1`, sobald sie eine Schwelle
+überschreitet (`ELWA_LOG_MAX_BYTES`, Default 5 MiB) – einfache Shell-Prüfung,
+kein externes `logrotate` auf dem Gerät nötig.
+
 ## `update.sh` – neues Client-Jar ausrollen
 
 `deploy/terminal/update.sh` hebt ein **bereits provisioniertes** Terminal auf ein
@@ -152,17 +164,89 @@ einzige Client-Java-Zusatz ist ein kleiner **Readiness-Marker** (siehe unten).
    parallele Cron-Läufe.
 5. Läuft **keine JVM** (Terminal aus), wird das Update auf einen späteren Lauf
    verschoben – **kein erzwungener Start**.
-6. **Update mit Verifikation** (Ziel neuer): Konfig-Snapshot
+6. **Leerlauf-Gate** (siehe Abschnitt „Leerlauf-Gate" unten): läuft am Standort ein
+   Gerät oder war der Bedienfluss sehr kürzlich aktiv, wird dieser Tick
+   übersprungen (kein `update.sh`, kein `java`-Kill) – der nächste Cron-Lauf
+   versucht es erneut.
+7. **Update mit Verifikation** (Ziel neuer): Konfig-Snapshot
    (`elwasys.properties` → `.previous`), `restart_epoch`+Marker-mtime merken,
    `update.sh --version <ziel>` (rotiert `latest`/`previous` + Neustart), dann bis
    zu `ELWA_UPDATE_DEADLINE` Sekunden (Default 180) darauf warten, dass der
    **Readiness-Marker** einen mtime **> `restart_epoch`** bekommt.
-7. **Erfolg** → loggen, Snapshot aufräumen, Exit 0.
-8. **Fehlschlag** (Deadline überschritten) → **ROLLBACK**: `latest` zurück auf das
-   `previous`-Ziel, Konfig ggf. aus `.previous` zurückspielen, `java` killen
-   (Supervisor relauncht die vorige Version), erneut kurz auf den Marker warten
-   (Recovery bestätigen); klarer **FAILURE**-Log auf stderr **und** in
-   `${ELWA_ROOT}/log/auto-update-watchdog.log`; Exit != 0.
+8. **Erfolg** → loggen, Snapshot aufräumen, Exit 0.
+9. **Fetch-/Download-Fehlschlag ohne jede Änderung** (siehe „B1" unten): schlägt
+   `update.sh` fehl, **ohne** dass sich `latest` geändert hat (z. B. Netzwerk-
+   /Tag-/Platzproblem beim Download, noch vor jedem Symlink-Wechsel), wird
+   **nicht** zurückgerollt und **kein** `java` beendet – nur eine WARNUNG
+   geloggt, Exit 1. Der nächste Cron-Lauf versucht den Fetch erneut.
+10. **Echter Fehlschlag** (`latest` wurde umgehängt, aber der Readiness-Marker
+    erreicht die Deadline nicht) → **ROLLBACK**: `latest` zurück auf das
+    `previous`-Ziel, Konfig ggf. aus `.previous` zurückspielen, `java` killen
+    (Supervisor relauncht die vorige Version), erneut kurz auf den Marker warten
+    (Recovery bestätigen); klarer **FAILURE**-Log auf stderr **und** in
+    `${ELWA_ROOT}/log/auto-update-watchdog.log`; Exit != 0.
+
+### B1 – Fetch-Fehlschlag ≠ fehlgeschlagenes Deploy (QA-Nacharbeit)
+
+Ein bloßer Download-/Netzwerkfehler von `update.sh` (schlechtes DNS, abgelaufener/
+umbenannter Release-Tag, volle Platte – jeweils **vor** jedem Symlink-Wechsel)
+darf **nicht** denselben Rollback-Pfad auslösen wie ein echtes fehlgeschlagenes
+Deploy: sonst würde ein bereits gesundes, laufendes Terminal bei jedem Cron-Tick
+grundlos auf die (ältere) `previous`-Version heruntergestuft und neu gestartet –
+potenziell endlos, solange der Fetch fehlschlägt. Der Watchdog unterscheidet die
+beiden Fälle daher anhand des `latest`-Symlink-Ziels vor/nach dem `update.sh`-
+Aufruf: hat sich das Ziel **nicht** geändert, war es ein reiner No-op-Fehlschlag
+→ WARNUNG + Exit 1, **kein** Symlink-Anfassen, **kein** `java`-Kill. Nur wenn
+`latest` tatsächlich umgehängt wurde, der Marker danach aber nicht vorrückt, gilt
+es als echter fehlgeschlagener Deploy und der Rollback-Pfad greift.
+
+### Leerlauf-Gate (M1, QA-Nacharbeit)
+
+**Problem:** Der einzige Gate vor einem Update-Neustart war ursprünglich „läuft
+überhaupt eine JVM" – kein Blick auf den Bedienzustand des Terminals. Ein Nutzer,
+der gerade authentifiziert, ein Programm wählt oder ein Gerät laufen hat, konnte
+von einem unbeaufsichtigten Cron-Tick jederzeit unterbrochen werden. Der
+Cutover-Runbook-Grundsatz „die Terminal-Charge erst anfassen, wenn ihre Geräte
+frei sind" (`deploy/CUTOVER-RUNBOOK.md`) galt bisher nur für die einmalige,
+manuelle Migration – nicht für diesen wiederkehrenden, automatischen Mechanismus.
+
+**Umgesetztes Signal:** Vor dem eigentlichen Update prüft der Watchdog (Funktion
+`terminal_is_busy`, per `ELWA_IDLE_GATE_ENABLED=1` standardmäßig aktiv):
+
+1. **Laufende Ausführung** – anonyme Geräteübersicht des Standorts
+   (`GET /api/v1/devices/overview`, Standort-Token aus `elwasys.properties`,
+   dasselbe, das der Client selbst benutzt). Ist irgendein Gerät `occupied:true`,
+   gilt der Standort als beschäftigt.
+2. **Sehr kürzliche Bedienung** – Alter des Readiness-Marker-mtime
+   (`ELWA_RECENT_INTERACTION_SECONDS`, Default 60s): wurde er gerade erst
+   aktualisiert (Client hat SELECT_DEVICE gerade erst wieder erreicht), war
+   jemand sehr kürzlich am Terminal.
+
+Trifft eines der beiden Signale zu (oder ist der Status nicht ermittelbar –
+Backend nicht erreichbar, kein `backend.token` konfiguriert, kaputte Antwort),
+wird der Tick **fail-safe übersprungen**: kein `update.sh`-Aufruf, kein
+`java`-Kill; der nächste Cron-Lauf prüft erneut. Unsicherheit führt **nie** zum
+Durchlassen, nur zum Verschieben.
+
+**Bekannte Restrisiko-Lücke:** Beide Signale decken laufende Ausführungen und
+die Zeit unmittelbar nach einer Bedienung ab, **nicht** aber das kurze Fenster
+*vor* dem Start einer Ausführung – ein Nutzer, der gerade seine Karte auflegt,
+sich authentifiziert oder ein Programm auswählt (noch keine laufende Ausführung,
+Marker noch nicht wieder aktualisiert), kann in diesem schmalen Zeitfenster
+weiterhin von einem Update-Neustart getroffen werden. Das ist ein bewusst
+akzeptiertes Restrisiko (kein client-seitiger Code-Zusatz nötig, siehe
+Auftraggeber-Entscheidung „kein Overkill"), keine Erfindung eines fragilen
+Zusatzsignals. **Datensicherheit ist davon nicht betroffen** (Backend bleibt die
+Quelle der Wahrheit, siehe Phase 4 AP4–AP6), lediglich die UI-Sitzung würde auf
+`STARTUP` zurückgesetzt (erneute Anmeldung nötig).
+
+**Betriebsempfehlung:** Den Cron so legen, dass er außerhalb der Hauptnutzungs-
+zeiten der jeweiligen Waschküche läuft (z. B. nachts), um die Kollisions-
+wahrscheinlichkeit weiter zu senken – das Gate ersetzt umsichtige Zeitplanung
+nicht, es reduziert nur das Restrisiko innerhalb eines Ticks. Das Gate lässt
+sich für Sonderfälle (erzwungenes Update, kein Backend-Zugriff möglich) über
+`ELWA_IDLE_GATE_ENABLED=0` abschalten – dann gilt wieder das alte Verhalten
+(nur der JVM-läuft-Check).
 
 ### Der Readiness-Marker (`SELECT_DEVICE` → `.terminal-ready`)
 
@@ -192,9 +276,19 @@ sudoers gegeben). Beispiel – alle 30 Minuten:
 (Pfad zum Skript an die Ablage anpassen; `update.sh` wird per Default **neben**
 dem Watchdog gesucht, überschreibbar via `ELWA_UPDATE_SCRIPT`.)
 
+**Empfehlung (siehe „Leerlauf-Gate" oben):** den Cron-Zeitpunkt bewusst in
+nutzungsarme Zeiten der jeweiligen Waschküche legen (z. B. nachts), auch wenn
+das Leerlauf-Gate bereits die meisten Kollisionen abfängt – das schmale
+Restrisiko-Fenster kurz vor dem Start einer Ausführung (Kartenauflegen/Login/
+Programmwahl) bleibt sonst bestehen.
+
 **Env-Overrides** (Tests/Sonderfälle): `ELWA_ROOT`, `ELWA_RESTART_CMD`,
 `ELWA_JAVA_PGREP`, `ELWA_LATEST_VERSION_CMD`, `ELWA_UPDATE_DEADLINE`,
-`ELWA_MARKER_FILE`, `ELWA_UPDATE_SCRIPT`, `ELWA_GITHUB_REPO`.
+`ELWA_MARKER_FILE`, `ELWA_UPDATE_SCRIPT`, `ELWA_GITHUB_REPO`,
+`ELWA_IDLE_GATE_ENABLED` (Default `1`), `ELWA_DEVICE_OVERVIEW_CMD` (Default:
+eingebaute curl-Abfrage gegen `backend.url`/`backend.token`),
+`ELWA_DEVICE_OVERVIEW_TIMEOUT` (Default `5`), `ELWA_RECENT_INTERACTION_SECONDS`
+(Default `60`).
 
 **Vor einem Java-Versionssprung** zuerst [`upgrade-jre.sh`](upgrade-jre.sh)
 ausführen (Java 21) – der Watchdog rollt nur das Jar, nicht das JRE.
@@ -223,3 +317,15 @@ Version-Ermittlung (kurze Deadline) nachgewiesen: Szenario A (gutes Update →
 (up-to-date → stiller No-op) und die Lockfile-Sperre gegen parallele Läufe – ohne
 echte Downloads/apt/sudo, ohne hängende Prozesse. Details im Änderungslog
 „Phase 6 AP3"/„Phase 6 AP4"/„Phase 6 AP5" in kb/05-migration-plan.md.
+
+**QA-Nacharbeiten (B1/M1/N3, siehe kb/05 Änderungslog „Phase 6 QA-Nacharbeiten"):**
+zusätzlich zu obigen Szenarien A–C wurde in derselben Trocken-Umgebung
+nachgewiesen: Szenario **C-neu** (`update.sh` scheitert, OHNE `latest` zu ändern
+→ WARNUNG + Exit 1, `latest`/`previous` unverändert, **kein** `${ELWA_RESTART_CMD}`
+ausgeführt – der B1-Regressionstest) und Szenario **D** (Leerlauf-Gate: Gerät als
+`occupied:true` gemeldet bzw. Marker sehr frisch → Update verschoben, Exit 0,
+weder `update.sh` noch `${ELWA_RESTART_CMD}` aufgerufen). Für `run.sh` (N3) wurde
+zusätzlich nachgewiesen, dass zwei aufeinanderfolgende Läufe `log/stdout`
+anhängen statt abzuschneiden, und dass eine künstlich über die Schwelle
+vergrößerte Logdatei beim nächsten Loop-Durchlauf nach `.1` rotiert wird, bevor
+neu geschrieben wird.

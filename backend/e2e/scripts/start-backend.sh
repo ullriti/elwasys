@@ -53,7 +53,8 @@ sudo -u postgres psql -q -c "CREATE DATABASE ${DB_NAME};"
 #    path for the backend's own JUnit suite).
 mvn -q -B -f "$REPO_ROOT/pom.xml" package -pl backend -Pproduction -DskipTests
 
-# 4./5. Run the backend (foreground; Playwright tears this down after the run).
+# Env vars shared by steps 4 and 5 below (foreground run; Playwright tears this down after
+# the run).
 export ELWASYS_DB_URL="jdbc:postgresql://localhost:5432/${DB_NAME}"
 export ELWASYS_DB_USER="postgres"
 export ELWASYS_DB_PASSWORD="postgres"
@@ -73,5 +74,6 @@ echo "[start-backend] seeding admin/admin login (admin-cli)"
 java -jar "$REPO_ROOT/backend/target/elwasys-backend.jar" \
     --spring.profiles.active=admin-cli --username=admin --password=admin
 
+# 5. Run the backend (foreground; Playwright tears this down after the run).
 echo "[start-backend] starting backend on :${PORT}"
 exec java -jar "$REPO_ROOT/backend/target/elwasys-backend.jar"

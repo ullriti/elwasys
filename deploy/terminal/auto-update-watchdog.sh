@@ -31,6 +31,24 @@
 # Umgebung NICHT ausgefuehrt, nur trocken verifiziert (Temp-ELWA_ROOT, Fake-Jars,
 # Fake-java, Fake-Version-Cmd, kurze Deadline). Siehe Aenderungslog "Phase 6 AP5"
 # in kb/05-migration-plan.md.
+#
+# QA-Nacharbeiten (Phase-6-Review, siehe kb/05 Aenderungslog "Phase 6 QA-Nacharbeiten"):
+#   - B1 (Blocker behoben): ein blosser Fetch-/Download-Fehlschlag von update.sh
+#     (Netz/Tag/Platte - VOR jedem Symlink-Wechsel) wird jetzt von einem echten
+#     fehlgeschlagenen Deploy unterschieden. Nur wenn update.sh den latest-Symlink
+#     tatsaechlich umgehaengt hat, der Marker danach aber nicht vorrueckt, wird
+#     zurueckgerollt + java beendet. Ein reiner No-op-Fehlschlag (latest
+#     unveraendert) wird nur gewarnt + non-zero beendet - kein Symlink-Anfassen,
+#     kein java-Kill; der naechste Cron-Lauf versucht den Fetch erneut.
+#   - M1 (Major behoben): zusaetzliches Leerlauf-Gate VOR dem eigentlichen Update.
+#     Ist ein Geraet des Standorts belegt (Backend GET .../devices/overview,
+#     "occupied":true) ODER wurde der Readiness-Marker sehr kuerzlich aktualisiert
+#     (kuerzliche Bedienung), wird das Update auf den naechsten Cron-Lauf
+#     verschoben - KEIN java-Kill. Jede Unsicherheit (Backend nicht erreichbar,
+#     kein Token konfiguriert) faellt fail-safe auf "beschaeftigt" zurueck. Das
+#     deckt laufende Ausfuehrungen und die Zeit unmittelbar nach einer Bedienung
+#     ab; die kurze Login-/Programmwahl-Phase VOR dem Start einer Ausfuehrung
+#     bleibt ein dokumentiertes Restrisiko (siehe deploy/terminal/README.md).
 set -euo pipefail
 
 # ==============================================================================
@@ -68,6 +86,32 @@ ELWA_MARKER_FILE="${ELWA_MARKER_FILE:-${ELWA_ROOT}/.terminal-ready}"
 # Pfad zu update.sh (Default: neben diesem Skript).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ELWA_UPDATE_SCRIPT="${ELWA_UPDATE_SCRIPT:-${SCRIPT_DIR}/update.sh}"
+
+# --- Leerlauf-Gate (M1, siehe deploy/terminal/README.md) --------------------
+
+# 1 (Default) = Leerlauf-Gate aktiv (fail-safe: jede Unsicherheit -> verschieben,
+# nie durchlassen). 0 = Gate abschalten (altes Verhalten: nur der JVM-laeuft-Check
+# oben) - z.B. fuer erzwungene Updates oder wenn kein Backend-Zugriff moeglich ist.
+ELWA_IDLE_GATE_ENABLED="${ELWA_IDLE_GATE_ENABLED:-1}"
+
+# Kommando, dessen STDOUT die anonyme Geraete-Uebersicht des Standorts als JSON
+# liefert (Backend GET /api/v1/devices/overview, Standort-Token). Leer (Default)
+# => eingebaute curl-Abfrage gegen backend.url/backend.token aus
+# ${ELWA_ROOT}/elwasys.properties. Exit != 0 ODER leere Ausgabe zaehlt als
+# "Status nicht ermittelbar" (faellt fail-safe auf "beschaeftigt" zurueck). Fuer
+# Trocken-Tests ueberschreibbar - am robustesten mit einer Fixture-DATEI statt
+# einem Inline-JSON-Literal (rohe "{"/","/"[" wuerden von der Bash-Klammer-
+# Expansion in "eval" sonst leicht verstuemmelt), z.B.
+# 'cat /pfad/zu/fixture-occupied.json' oder schlicht 'false' (nicht ermittelbar).
+ELWA_DEVICE_OVERVIEW_CMD="${ELWA_DEVICE_OVERVIEW_CMD:-}"
+
+# Timeout (Sekunden) fuer die eingebaute curl-Abfrage der Geraete-Uebersicht.
+ELWA_DEVICE_OVERVIEW_TIMEOUT="${ELWA_DEVICE_OVERVIEW_TIMEOUT:-5}"
+
+# Marker-mtime juenger als dieser Wert (Sekunden) gilt als "gerade eben bedient"
+# und wird - zusaetzlich zum Belegt-Status - als Leerlauf-Gate-Signal gewertet
+# (Default an sessionTimeout in elwasys.properties angelehnt).
+ELWA_RECENT_INTERACTION_SECONDS="${ELWA_RECENT_INTERACTION_SECONDS:-60}"
 
 LATEST_LINK="raspi-client.latest.jar"
 PREVIOUS_LINK="raspi-client.previous.jar"
@@ -151,6 +195,74 @@ cleanup_lock() {
     rmdir "${LOCK_DIR}" 2>/dev/null || true
 }
 
+# Liest einen einzelnen Wert aus elwasys.properties (Format "key: value" bzw.
+# "key=value", wie von Client-Raspi/setup.sh geschrieben). $1 ist ein
+# regex-tauglicher Schluessel (Punkte vorab escapen, z.B. 'backend\.url').
+# Leer, wenn die Datei oder der Schluessel fehlt.
+properties_get() {
+    local key="$1"
+    [[ -f "${CONFIG_FILE}" ]] || return 0
+    sed -n "s/^[[:space:]]*${key}[[:space:]]*[:=][[:space:]]*//p" "${CONFIG_FILE}" 2>/dev/null \
+        | head -n1 | tr -d '\r'
+}
+
+# Liefert die anonyme Geraete-Uebersicht des Standorts als JSON auf stdout
+# (siehe ELWA_DEVICE_OVERVIEW_CMD oben). Leere Ausgabe/Exit != 0 bei jedem
+# Fehler (kein Override, kein Token, kein curl, Netzfehler) - der Aufrufer
+# behandelt das fail-safe als "nicht ermittelbar".
+device_overview_json() {
+    if [[ -n "${ELWA_DEVICE_OVERVIEW_CMD}" ]]; then
+        # set -f (noglob) fuer den Override-Aufruf: robuste Zusatz-Absicherung
+        # gegen Pfadnamen-Expansion, falls ein Override-Kommando doch einmal
+        # ein unquotiertes Glob-Zeichen ausgibt (siehe Fixture-Datei-Empfehlung
+        # oben - eval kann JSON-Klammern sonst per Bash-Klammer-Expansion
+        # verstuemmeln, was "set -f" allein NICHT abdeckt).
+        # (Exit-Code von eval bewusst in "rc" gemerkt, damit "set +f" ihn NICHT
+        # ueberschreibt, bevor er per "return" nach aussen gereicht wird.)
+        local rc
+        set -f
+        eval "${ELWA_DEVICE_OVERVIEW_CMD}" 2>/dev/null
+        rc=$?
+        set +f
+        return "${rc}"
+    fi
+    local backend_url backend_token
+    backend_url="$(properties_get 'backend\.url')"
+    backend_token="$(properties_get 'backend\.token')"
+    [[ -n "${backend_url}" && -n "${backend_token}" ]] || return 1
+    curl --silent --fail --max-time "${ELWA_DEVICE_OVERVIEW_TIMEOUT}" \
+        -H "Authorization: Bearer ${backend_token}" \
+        "${backend_url%/}/api/v1/devices/overview" 2>/dev/null
+}
+
+# Fail-safe Leerlauf-Pruefung (M1): Exit 0 == "vermutlich beschaeftigt, Update
+# verschieben". Exit 1 == "vermutlich frei, Update darf laufen". JEDE
+# Unsicherheit (Backend/Netz nicht erreichbar, kein Token konfiguriert, kaputte
+# Antwort) faellt auf Exit 0 (beschaeftigt) zurueck - nie durchlassen im Zweifel.
+terminal_is_busy() {
+    local marker_ts marker_age
+    marker_ts="$(marker_mtime)"
+    if (( marker_ts > 0 )); then
+        marker_age=$(( $(date +%s) - marker_ts ))
+        if (( marker_age < ELWA_RECENT_INTERACTION_SECONDS )); then
+            log "Leerlauf-Gate: Readiness-Marker ist erst ${marker_age}s alt (< ${ELWA_RECENT_INTERACTION_SECONDS}s) - werte als kuerzliche Bedienung."
+            return 0
+        fi
+    fi
+
+    local overview
+    overview="$(device_overview_json)"
+    if [[ -z "${overview}" ]]; then
+        log "Leerlauf-Gate: Geraetestatus nicht ermittelbar (Backend/Netz/Token?) - werte vorsichtshalber als beschaeftigt."
+        return 0
+    fi
+    if [[ "${overview}" == *'"occupied":true'* ]]; then
+        log "Leerlauf-Gate: mindestens ein Geraet dieses Standorts ist aktuell belegt (occupied:true)."
+        return 0
+    fi
+    return 1
+}
+
 # ==============================================================================
 # Vorbereitung
 # ==============================================================================
@@ -224,12 +336,29 @@ if ! ${ELWA_JAVA_PGREP} > /dev/null 2>&1; then
 fi
 
 # ==============================================================================
+# Leerlauf-Gate (M1): beschaeftigtes Terminal nicht anfassen
+# ==============================================================================
+# Analog zum manuellen Cutover-Grundsatz ("die Terminal-Charge erst anfassen,
+# wenn ihre Geraete frei sind", CUTOVER-RUNBOOK.md) - hier fuer den
+# wiederkehrenden, unbeaufsichtigten Cron-Lauf: laeuft am Standort ein Geraet
+# ODER wurde der Terminal-Marker sehr kuerzlich aktualisiert, wird das Update
+# auf den naechsten Cron-Lauf verschoben. KEIN java-Kill in diesem Fall.
+if [[ "${ELWA_IDLE_GATE_ENABLED}" == "1" ]] && terminal_is_busy; then
+    log "Update auf ${target_version} verschoben (Leerlauf-Gate) - naechster Cron-Lauf versucht es erneut."
+    exit 0
+fi
+
+# ==============================================================================
 # Update mit Verifikation
 # ==============================================================================
 
 # 1) Konfig-Snapshot (fuer die "+ Konfiguration"-Formulierung der Roadmap;
 #    update.sh aendert die Konfig zwar nicht, Snapshot dennoch fuer Vollstaendigkeit
 #    und als Rollback-Absicherung).
+#    T1 (QA-Review): update.sh ruehrt elwasys.properties heute nachweislich nicht an
+#    (siehe update.sh-Header) - der Restore-Zweig unten ist deshalb aktuell
+#    unerreichbarer, aber bewusst belassener Vorwaerts-Schutz fuer den Fall, dass
+#    ein kuenftiges update.sh die Konfig doch einmal beruehrt.
 if [[ -f "${CONFIG_FILE}" ]]; then
     cp -f "${CONFIG_FILE}" "${CONFIG_SNAPSHOT}" 2>/dev/null || true
 fi
@@ -240,7 +369,7 @@ marker_before="$(marker_mtime)"
 log "Starte Update auf ${target_version} (restart_epoch=${restart_epoch}, marker_before=${marker_before})."
 
 # 3) update.sh aufrufen (rotiert latest/previous + Neustart-Trigger). Overrides
-#    durchreichen. Schlaegt update.sh selbst fehl, gilt das als Fehlschlag.
+#    durchreichen.
 update_ok=1
 if ELWA_ROOT="${ELWA_ROOT}" \
    ELWA_GITHUB_REPO="${ELWA_GITHUB_REPO}" \
@@ -249,7 +378,19 @@ if ELWA_ROOT="${ELWA_ROOT}" \
    bash "${ELWA_UPDATE_SCRIPT}" --version "${target_version}"; then
     update_ok=0
 else
-    alert "FEHLER: update.sh --version ${target_version} ist fehlgeschlagen - leite Rollback ein."
+    # B1-Fix: ein Fehlschlag von update.sh ist NICHT automatisch ein fehlgeschlagenes
+    # Deploy - update.sh kann auch VOR jedem Symlink-Wechsel scheitern (Download/Netz/
+    # Tag/Platte, siehe update.sh "Neues Jar bereitstellen"). Unterscheiden anhand des
+    # latest-Symlinks: hat sich sein Ziel NICHT geaendert, wurde nie etwas ausgerollt -
+    # dann NICHT in den Rollback-/java-Kill-Pfad, sondern nur warnen + non-zero beenden,
+    # der naechste Cron-Lauf versucht den Fetch erneut.
+    latest_after_attempt="$(link_target "${LATEST_LINK}")"
+    if [[ "${latest_after_attempt}" == "${current_jar}" ]]; then
+        alert "WARNUNG: update.sh --version ${target_version} ist fehlgeschlagen, OHNE ${LATEST_LINK} zu aendern (weiterhin ${current_jar} - vermutlich Download-/Netzwerkfehler vor jedem Symlink-Wechsel). KEIN Rollback, KEIN java-Neustart - naechster Cron-Lauf versucht den Fetch erneut."
+        exit 1
+    else
+        alert "FEHLER: update.sh --version ${target_version} ist fehlgeschlagen, NACHDEM ${LATEST_LINK} bereits auf ${latest_after_attempt} umgehaengt wurde (ungewoehnlich) - behandle wie einen fehlgeschlagenen Start, leite Rollback ein."
+    fi
 fi
 
 # 4) Verifizierter Start: auf einen frischen Marker-mtime (> restart_epoch) warten.
@@ -290,7 +431,8 @@ fi
 log "Rollback: setze ${LATEST_LINK} zurueck -> ${previous_jar}"
 ln -sfn "${previous_jar}" "${LATEST_LINK}"
 
-# b) Konfig aus Snapshot zurueckspielen, falls sie sich geaendert hat.
+# b) Konfig aus Snapshot zurueckspielen, falls sie sich geaendert hat. (T1: in der
+#    Praxis aktuell immer unveraendert, siehe Kommentar beim Snapshot oben.)
 if [[ -f "${CONFIG_SNAPSHOT}" ]]; then
     if [[ -f "${CONFIG_FILE}" ]] && cmp -s "${CONFIG_SNAPSHOT}" "${CONFIG_FILE}"; then
         : # unveraendert - nichts zu tun

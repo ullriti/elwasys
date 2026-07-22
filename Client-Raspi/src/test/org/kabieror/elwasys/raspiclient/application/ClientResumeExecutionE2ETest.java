@@ -49,11 +49,6 @@ public class ClientResumeExecutionE2ETest {
 
         workDir = Files.createTempDirectory("elwasys-resume-e2e");
         Files.writeString(workDir.resolve("elwasys.properties"), String.join("\n",
-                "database.server=localhost:5432",
-                "database.name=elwasys",
-                "database.user=elwaclient1",
-                "database.password=elwaclient1",
-                "database.useSsl=false",
                 "backend.url=" + TestBackend.url(),
                 "backend.token=" + TestBackend.token(),
                 "location=Default",
