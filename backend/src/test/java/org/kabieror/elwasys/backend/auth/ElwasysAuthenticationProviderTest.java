@@ -20,7 +20,7 @@ import org.springframework.security.core.Authentication;
 
 /**
  * Integrationstests für {@link ElwasysAuthenticationProvider} gegen ein echtes PostgreSQL
- * (siehe kb/05-migration-plan.md, AP3). Diese Klasse deckt den PRODUKTIVEN Default-Zustand
+ * (siehe docs/kb/05-migration-plan.md, AP3). Diese Klasse deckt den PRODUKTIVEN Default-Zustand
  * ab ({@code elwasys.auth.rehash-on-login=false}, siehe application.yml) - für den
  * eingeschalteten Migrationspfad siehe {@link ElwasysAuthenticationProviderRehashEnabledTest}.
  */
@@ -59,7 +59,7 @@ class ElwasysAuthenticationProviderTest extends AbstractBackendIT {
     @Test
     void rehashOnLoginDefaultsToFalse() {
         // Zusicherung, dass der harte Rahmenbedingungs-Default nicht versehentlich per
-        // application.yml/Umgebungsvariable umgekippt wurde - siehe kb/05-migration-plan.md,
+        // application.yml/Umgebungsvariable umgekippt wurde - siehe docs/kb/05-migration-plan.md,
         // "Entscheidungen".
         assertThat(this.authProperties.isRehashOnLogin()).isFalse();
     }

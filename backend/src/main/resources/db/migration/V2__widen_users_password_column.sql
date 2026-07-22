@@ -1,4 +1,4 @@
--- AP3 (Auth: Argon2id-Hashing + SHA1-Migrationspfad, siehe kb/05-migration-plan.md).
+-- AP3 (Auth: Argon2id-Hashing + SHA1-Migrationspfad, siehe docs/kb/05-migration-plan.md).
 --
 -- Befund: die Bestandsspalte "users.password" ist VARCHAR(50) - ausreichend fuer die
 -- bisherigen SHA1-Hex-Hashes (konstant 40 Zeichen), aber zu klein fuer Argon2id-kodierte
@@ -13,8 +13,8 @@
 -- statt exakt 97, falls Parameter/Format sich spaeter aendern) aendert weder bestehende
 -- Werte noch das Verhalten des Alt-Codes: Portal/Client lesen/schreiben die Spalte nur als
 -- String ohne eigene Laengenpruefung (Common.User#checkPassword/#changePassword,
--- Utilities#sha1 - siehe kb/05), ein 40-Zeichen-SHA1-Hash passt weiterhin klaglos in die
+-- Utilities#sha1 - siehe docs/kb/05), ein 40-Zeichen-SHA1-Hash passt weiterhin klaglos in die
 -- breitere Spalte. Damit bleibt der Parallelbetrieb (Alt-Portal schreibt/liest SHA1 direkt
--- in/aus dieser Spalte) unangetastet - siehe kb/05-migration-plan.md, "Entscheidungen" fuer
+-- in/aus dieser Spalte) unangetastet - siehe docs/kb/05-migration-plan.md, "Entscheidungen" fuer
 -- die vollstaendige Abwaegung dieses Befunds.
 ALTER TABLE users ALTER COLUMN password TYPE VARCHAR(255);

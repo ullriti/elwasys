@@ -12,7 +12,7 @@ import org.kabieror.elwasys.backend.service.UserService;
 /**
  * Kopfzeilen-Komponente für {@link org.kabieror.elwasys.backend.ui.admin.AdminLayout} und
  * {@link org.kabieror.elwasys.backend.ui.user.UserLayout} (Phase 3 AP1, erweitert AP4, siehe
- * kb/05-migration-plan.md): zeigt den Namen des angemeldeten Benutzers als aufklappbares Menü
+ * docs/kb/05-migration-plan.md): zeigt den Namen des angemeldeten Benutzers als aufklappbares Menü
  * mit "Einstellungen"/"Passwort ändern"/"Logout" - fachlicher Nachfolger des Benutzermenüs in
  * {@code Portal/.../components/MainMenu} (Alt-Portal), dessen drei Menüpunkte hier 1:1
  * übernommen sind (AP1 hatte hier bewusst nur Logout, siehe Änderungslog "Phase 3 AP1"/"AP4").

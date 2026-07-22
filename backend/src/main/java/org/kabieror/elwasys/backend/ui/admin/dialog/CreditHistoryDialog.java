@@ -15,7 +15,7 @@ import org.kabieror.elwasys.backend.service.CreditService;
  * ("Umsätze ansehen") - fachlicher Nachfolger von
  * {@code Portal/.../components/CreditAccountingWindow} (Alt-Portal). Zeigt
  * {@link CreditService#getAccountingEntries} unverändert an (neueste zuerst); da Buchungen
- * unveränderlich sind (siehe kb/02-data-model.md), bietet dieser Dialog bewusst KEINE
+ * unveränderlich sind (siehe docs/kb/02-data-model.md), bietet dieser Dialog bewusst KEINE
  * Bearbeitungs- oder Löschfunktion - nur eine Liste, identisch zum Alt-Fenster.
  */
 public class CreditHistoryDialog extends Dialog {

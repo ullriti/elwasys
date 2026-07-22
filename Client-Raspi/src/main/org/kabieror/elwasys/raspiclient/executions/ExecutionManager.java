@@ -158,7 +158,7 @@ public class ExecutionManager implements ICloseListener {
      * Ausführungen (Tür öffnen) rein lokal, für reale Ausführungen über die API (siehe
      * {@link ClientExecution} Klassenkommentar).
      * <p>
-     * Phase 4 AP6 (siehe kb/05-migration-plan.md): eine {@link ClientExecution#isOfflinePendingReplay()
+     * Phase 4 AP6 (siehe docs/kb/05-migration-plan.md): eine {@link ClientExecution#isOfflinePendingReplay()
      * offline gebuchte} Ausführung hat noch keine echte Backend-Id - statt eines (unsinnigen)
      * Live-Aufrufs mit einer Platzhalter-Id wird ihr bereits im Journal hinterlegter
      * {@code START}-Eintrag wieder entfernt (sonst würde ein späterer Replay eine nie

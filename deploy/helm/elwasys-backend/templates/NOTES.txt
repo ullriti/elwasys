@@ -10,8 +10,8 @@ Health prüfen:
   curl http://localhost:8080/actuator/health
 {{- end }}
 
-Standort-Token erzeugen/widerrufen (Terminal-Registrierung, siehe kb/04-build-and-run.md
-"Standort-Tokens erzeugen/widerrufen" und kb/05-migration-plan.md AP4). Läuft als
+Standort-Token erzeugen/widerrufen (Terminal-Registrierung, siehe docs/kb/04-build-and-run.md
+"Standort-Tokens erzeugen/widerrufen" und docs/kb/05-migration-plan.md AP4). Läuft als
 Einmal-Befehl im bereits gebauten Image gegen dieselbe Datenbank wie das Deployment - über
 "kubectl run" mit demselben Image, statt in einen laufenden Pod zu exec'en (der
 Haupt-Prozess dort läuft bereits als Webserver, kein zusätzlicher Java-Prozess im selben

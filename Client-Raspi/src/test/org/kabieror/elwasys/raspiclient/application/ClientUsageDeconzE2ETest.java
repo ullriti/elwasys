@@ -40,13 +40,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * exactly, so a regression that is specific to one gateway path shows up as
  * a failure in only one of the two test classes.
  * <p>
- * Background/rationale: Phase 4 AP1 (see kb/05-migration-plan.md) requires
+ * Background/rationale: Phase 4 AP1 (see docs/kb/05-migration-plan.md) requires
  * the client's core E2E scenarios to run against both configured gateways
  * (fhem simulator already existed; the deCONZ simulator is new, see
  * {@link DeconzSimulator}). Rather than parametrizing the existing fhem
  * tests, this AP adds dedicated deCONZ sibling test classes - keeping the
  * proven fhem suite completely untouched while still driving the exact same
- * real application code path per gateway. See kb/06-ui-tests.md for the
+ * real application code path per gateway. See docs/kb/06-ui-tests.md for the
  * organizational decision.
  *
  * Run: xvfb-run mvn test -Dtest=ClientUsageDeconzE2ETest (or via
@@ -260,7 +260,7 @@ public class ClientUsageDeconzE2ETest {
             s.executeUpdate("INSERT INTO credit_accounting (user_id, amount, description) VALUES ("
                     + userId + ", 100, 'E2E seed')");
 
-            // Phase 4 CI-Stabilität (deCONZ Test-Isolation, siehe kb/05 Änderungslog): entferne
+            // Phase 4 CI-Stabilität (deCONZ Test-Isolation, siehe docs/kb/05 Änderungslog): entferne
             // unfertige Ausführungen auf Geräten OHNE deCONZ-Id am Standort, bevor dieses
             // deCONZ-Terminal startet. Der Start-Wiederaufnahme-Scan von ElwaManager#initiate()
             // ist standortweit; eine von einer FRÜHEREN, fhem-basierten Testklasse hinterlassene

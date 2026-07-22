@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Guthabenabfrage (AP4, siehe kb/05-migration-plan.md), entspricht {@code User#getCredit()}
+ * Guthabenabfrage (AP4, siehe docs/kb/05-migration-plan.md), entspricht {@code User#getCredit()}
  * im Alt-Code. Bewusst NICHT auf den Standort des Terminal-Tokens beschränkt: Guthaben ist
  * eine personenbezogene, standortunabhängige Größe (im Gegensatz zu Geräten/Ausführungen,
  * siehe {@link TerminalScopeGuard}) - jedes gültige Terminal-Token darf das Guthaben eines

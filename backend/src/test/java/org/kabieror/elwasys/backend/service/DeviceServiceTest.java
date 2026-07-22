@@ -20,7 +20,7 @@ import org.kabieror.elwasys.backend.support.Fixtures;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * Tests für {@link DeviceService} (Phase 3 AP2, siehe kb/05-migration-plan.md) - fachlicher
+ * Tests für {@link DeviceService} (Phase 3 AP2, siehe docs/kb/05-migration-plan.md) - fachlicher
  * Nachfolger von {@code Portal/.../components/DeviceWindow} (Testfälle P10/P11).
  */
 class DeviceServiceTest extends AbstractBackendIT {

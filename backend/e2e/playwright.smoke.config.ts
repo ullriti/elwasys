@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * Playwright configuration for the POST-DEPLOY SMOKE subset (Phase 6 AP6, siehe
- * kb/05-migration-plan.md "Phase 6" und kb/06-ui-tests.md) - fährt die schlanke, strikt
+ * docs/kb/05-migration-plan.md "Phase 6" und docs/kb/06-ui-tests.md) - fährt die schlanke, strikt
  * READ-ONLY Liveness-Teilmenge (tests-smoke/) gegen eine BEREITS LAUFENDE, extern deployte
  * Umgebung. Das ist das Rollout-Gate: Ein Rollout (docker-compose-Redeploy bzw. Helm-Upgrade)
  * gilt erst nach GRÜNEM Smoke-Test als erfolgreich (aufgerufen über

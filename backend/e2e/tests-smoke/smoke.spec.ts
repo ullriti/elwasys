@@ -2,8 +2,8 @@ import { test, expect } from '@playwright/test';
 import { login } from '../tests/helpers';
 
 /**
- * POST-DEPLOY-SMOKE-Teilmenge (Phase 6 AP6, siehe kb/05-migration-plan.md "Phase 6" und
- * kb/06-ui-tests.md) - eine SCHLANKE, strikt READ-ONLY Liveness-Prüfung, die nach einem
+ * POST-DEPLOY-SMOKE-Teilmenge (Phase 6 AP6, siehe docs/kb/05-migration-plan.md "Phase 6" und
+ * docs/kb/06-ui-tests.md) - eine SCHLANKE, strikt READ-ONLY Liveness-Prüfung, die nach einem
  * Deployment gegen die frisch deployte, laufende Umgebung läuft (baseURL aus E2E_BASE_URL,
  * siehe playwright.smoke.config.ts).
  *

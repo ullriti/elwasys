@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Authentifiziert gegen die Bestandstabelle {@code users} (über {@link UserRepository} +
  * {@link PasswordVerificationService}) - fachliche Grundlage für das künftige Vaadin-Flow-
- * Admin-Portal (Phase 3, siehe kb/05-migration-plan.md, AP3). Fachlicher Nachfolger von
+ * Admin-Portal (Phase 3, siehe docs/kb/05-migration-plan.md, AP3). Fachlicher Nachfolger von
  * {@code Portal/.../SessionManager#login} + {@code common.User#checkPassword}.
  *
  * <p><b>Regeln, aus dem Alt-Portal-Code nachvollzogen</b> ({@code SessionManager#login}
@@ -41,7 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
  *       Nutzer werden abgewiesen" für das NEUE Portal-Fundament - diese Implementierung
  *       setzt das um und weist gesperrte Benutzer aktiv ab. Das ist damit KEINE 1:1-
  *       Verhaltensbewahrung, sondern eine bewusste, hier dokumentierte Verschärfung; siehe
- *       kb/05-migration-plan.md ("Entscheidungen") für die vollständige Abwägung.</li>
+ *       docs/kb/05-migration-plan.md ("Entscheidungen") für die vollständige Abwägung.</li>
  * </ul>
  *
  * <p>Bei erfolgreicher Anmeldung wird zusätzlich {@code last_login} aktualisiert - 1:1 wie

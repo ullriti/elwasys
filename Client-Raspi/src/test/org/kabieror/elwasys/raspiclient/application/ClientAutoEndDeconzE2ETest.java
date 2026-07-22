@@ -48,7 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the plain "device draws no power" scenario alone would already satisfy.
  *
  * Run: xvfb-run mvn test -Dtest=ClientAutoEndDeconzE2ETest
- * See kb/06-ui-tests.md, kb/08-test-plan.md.
+ * See docs/kb/06-ui-tests.md, docs/kb/08-test-plan.md.
  */
 public class ClientAutoEndDeconzE2ETest {
 
@@ -199,7 +199,7 @@ public class ClientAutoEndDeconzE2ETest {
             s.executeUpdate("INSERT INTO credit_accounting (user_id, amount, description) VALUES ("
                     + userId + ", 100, 'E2E seed')");
 
-            // Phase 4 CI-Stabilität (deCONZ Test-Isolation, siehe kb/05 Änderungslog): entferne
+            // Phase 4 CI-Stabilität (deCONZ Test-Isolation, siehe docs/kb/05 Änderungslog): entferne
             // unfertige Ausführungen auf Geräten OHNE deCONZ-Id am Standort, bevor dieses
             // deCONZ-Terminal startet. Der Start-Wiederaufnahme-Scan von ElwaManager#initiate()
             // ist standortweit; eine von einer FRÜHEREN, fhem-basierten Testklasse hinterlassene

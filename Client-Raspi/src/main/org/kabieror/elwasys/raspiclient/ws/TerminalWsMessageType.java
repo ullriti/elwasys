@@ -2,7 +2,7 @@ package org.kabieror.elwasys.raspiclient.ws;
 
 /**
  * Nachrichtentypen des Terminal-WebSocket-Protokolls (Phase 4 AP5, Client-seitiges Gegenstück
- * zu {@code backend.ws.TerminalWsMessageType} - siehe kb/03-modules.md für die vollständige
+ * zu {@code backend.ws.TerminalWsMessageType} - siehe docs/kb/03-modules.md für die vollständige
  * Protokoll-Doku, dort als Backend-Wahrheit gepflegt). Die Konstantennamen müssen 1:1 mit dem
  * Backend übereinstimmen, da beide Seiten den Typ als JSON-String (Enum-Name) über die
  * Verbindung austauschen.

@@ -26,7 +26,7 @@
 		</dependency>
 		<!-- test-scope only: the headless E2E harness seeds/cleans DB fixtures directly
 		     via JDBC. The terminal's own production code no longer touches the database
-		     (since Phase 4 AP4/AP5, see kb/05-migration-plan.md); the driver was
+		     (since Phase 4 AP4/AP5, see docs/kb/05-migration-plan.md); the driver was
 		     previously pulled in transitively via the now-dissolved "common" module.
 		     Version is managed by the parent POM. -->
 		<dependency>
@@ -39,7 +39,7 @@
 			<artifactId>pi4j-core</artifactId>
 			<version>1.0</version>
 		</dependency>
-		<!-- UI test harness: JUnit 5 + TestFX (headless via Xvfb, see kb/06-ui-tests.md) -->
+		<!-- UI test harness: JUnit 5 + TestFX (headless via Xvfb, see docs/kb/06-ui-tests.md) -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>
@@ -65,7 +65,7 @@
 			     required by logback-classic >= 1.3. Overrides the elwasys-parent
 			     dependencyManagement (1.7.12) for this module only, via Maven's
 			     nearest-wins dependency mediation, so Common is unaffected -
-			     see kb/05-migration-plan.md, Änderungslog "Phase 4 AP2". -->
+			     see docs/kb/05-migration-plan.md, Änderungslog "Phase 4 AP2". -->
 			<version>2.0.18</version>
 		</dependency>
 		<dependency>
@@ -85,9 +85,9 @@
 			<artifactId>javafx-controls</artifactId>
 			<!-- Phase 4 AP2: 20 -> 23.0.2, the latest stable JavaFX release whose
 			     bytecode (class file major version 65) still runs on the fixed
-			     Java 21 runtime (kb/05 "Technologie-Entscheidungen"); JavaFX 24+
+			     Java 21 runtime (docs/kb/05 "Technologie-Entscheidungen"); JavaFX 24+
 			     requires JDK 22+ and would break the Raspi client. See
-			     kb/05-migration-plan.md, Änderungslog "Phase 4 AP2". -->
+			     docs/kb/05-migration-plan.md, Änderungslog "Phase 4 AP2". -->
 			<version>23.0.2</version>
 		</dependency>
 		<dependency>

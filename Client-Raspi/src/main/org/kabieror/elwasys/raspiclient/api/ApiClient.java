@@ -31,7 +31,7 @@ import java.util.UUID;
 
 /**
  * Schlanke REST-Client-Schicht für die Backend-API v1 (Phase 4 AP4, siehe
- * kb/05-migration-plan.md "Client-Cutover"). Ersetzt {@code Common.DataManager} als
+ * docs/kb/05-migration-plan.md "Client-Cutover"). Ersetzt {@code Common.DataManager} als
  * Datenzugriffspfad des Terminals - mit der einen dokumentierten Ausnahme der
  * Fernwartungs-Registrierung ({@code LocationManager}/{@code MaintenanceServerManager}),
  * die bis AP5 auf dem Alt-TCP-Protokoll direkt gegen die Datenbank bleibt.
@@ -93,7 +93,7 @@ public class ApiClient {
 
     /**
      * Standort-Snapshot für die Offline-Buchungs-Vorbereitung (Phase 4 AP3/AP6, siehe
-     * kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"). Wird
+     * docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"). Wird
      * periodisch aufgerufen und von {@code offline.OfflineSnapshotStore} persistiert.
      */
     public SnapshotDto getSnapshot() throws ApiException {
@@ -125,7 +125,7 @@ public class ApiClient {
     /**
      * Wie {@link #createExecution(int, int, int, LocalDateTime)}, aber mit einem vom
      * Aufrufer vorgegebenen Idempotenz-Schlüssel statt einer frisch erzeugten UUID (Phase 4
-     * AP6, siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"
+     * AP6, siehe docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"
      * Punkt 4 "Nachmeldung (Replay)"): der Aufrufer braucht den Schlüssel VOR dem Aufruf
      * (z. B. um ihn im Ereignis-Journal zu hinterlegen, falls die Anfrage wegen eines
      * Kommunikationsfehlers fehlschlägt), damit ein späterer Replay mit demselben Schlüssel
@@ -219,7 +219,7 @@ public class ApiClient {
      * Anzahl zusätzlicher Versuche bei einem transienten I/O-Fehler (siehe
      * {@link #isTransientCommunicationFailure(IOException)}) - bewusst nur einer: ein
      * einmaliges, sofortiges Retry genügt, um die beobachtete CI-Flakiness abzufangen (siehe
-     * kb/05-migration-plan.md, Änderungslog "Phase 4 CI-Stabilität"), ohne den Normalpfad bei
+     * docs/kb/05-migration-plan.md, Änderungslog "Phase 4 CI-Stabilität"), ohne den Normalpfad bei
      * einem echt nicht erreichbaren Backend spürbar zu verlangsamen.
      */
     private static final int TRANSIENT_RETRY_COUNT = 1;
@@ -232,7 +232,7 @@ public class ApiClient {
             } catch (IOException e) {
                 lastError = e;
                 if (attempt < TRANSIENT_RETRY_COUNT && isTransientCommunicationFailure(e)) {
-                    // Beobachtet in CI (siehe kb/05-migration-plan.md, Änderungslog "Phase 4
+                    // Beobachtet in CI (siehe docs/kb/05-migration-plan.md, Änderungslog "Phase 4
                     // CI-Stabilität"): unter Last kann eine vom java.net.http-Verbindungspool
                     // wiederverwendete Keep-Alive-Verbindung serverseitig bereits geschlossen
                     // worden sein, bevor der Client sie erneut nutzt - der Schreibvorgang

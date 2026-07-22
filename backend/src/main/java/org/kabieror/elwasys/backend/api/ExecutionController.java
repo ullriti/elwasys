@@ -44,7 +44,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Execution-Lebenszyklus über die Terminal-API (AP4, siehe kb/05-migration-plan.md):
+ * Execution-Lebenszyklus über die Terminal-API (AP4, siehe docs/kb/05-migration-plan.md):
  * starten/beenden/abbrechen/zurücksetzen, jeweils über {@link ExecutionService}/
  * {@link CreditService} (1:1-Portierung der Alt-Code-Fachregeln aus AP2, inkl. Abrechnung).
  *
@@ -68,7 +68,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <p><b>Original-Zeitstempel (AP3, Phase 4, additiv)</b>: {@link ExecutionStartRequest#clientTimestamp()}
  * bzw. {@link ExecutionEndRequest#clientTimestamp()} lassen das Terminal den tatsächlichen
  * Ereigniszeitpunkt mitschicken (statt der Serverzeit beim Empfang) - Vorbereitung für die
- * Offline-Nachmeldung aus AP6 (siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen
+ * Offline-Nachmeldung aus AP6 (siehe docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen
  * am Terminal"). Fehlt das Feld, verwendet der Server wie bisher seine eigene Uhr.
  *
  * <p><b>Benachrichtigungen (AP3, Phase 4)</b>: ein reguläres Ende ({@link #finish}) bzw. ein

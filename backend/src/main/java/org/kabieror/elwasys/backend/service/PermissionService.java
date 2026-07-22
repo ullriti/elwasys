@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 /**
  * 1:1-Portierung der Berechtigungsprüfungen, die im Alt-Code über den Client verstreut
  * sind (nicht in {@code DataManager}, sondern direkt in den UI-Controllern - siehe
- * kb/05-migration-plan.md, AP2): {@code MainFormController} (Standort-Login),
+ * docs/kb/05-migration-plan.md, AP2): {@code MainFormController} (Standort-Login),
  * {@code DeviceListEntry} (Gerätezugriff), {@code Device#getPrograms(User)}
  * (Programmauswahl).
  */
@@ -42,7 +42,7 @@ public class PermissionService {
      * dem Gerät zugeordneten Programme, deren zulässige Benutzergruppen die Gruppe des
      * Benutzers enthalten.
      *
-     * <p>Beobachtung (siehe kb/05-migration-plan.md): der Alt-Code filtert hier NICHT
+     * <p>Beobachtung (siehe docs/kb/05-migration-plan.md): der Alt-Code filtert hier NICHT
      * zusätzlich auf {@code program.isEnabled()} - ein deaktiviertes Programm bleibt für
      * den Client sichtbar/wählbar, solange es dem Gerät zugeordnet und die Benutzergruppe
      * berechtigt ist. Das wird hier bewusst identisch nachgebildet (kein zusätzlicher

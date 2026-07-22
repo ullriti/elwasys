@@ -4,7 +4,7 @@
 # klont das Repo und initialisiert die Datenbank.
 #
 # Verwendung (Beispiel, cloud-fähiger Hypervisor / Multipass / Cloud-Provider):
-#   multipass launch --name elwasys --cloud-init kb/cloud-init/cloud-config.yaml
+#   multipass launch --name elwasys --cloud-init deploy/cloud-init/cloud-config.yaml
 # oder als user-data bei EC2/GCE/Hetzner etc.
 
 package_update: true

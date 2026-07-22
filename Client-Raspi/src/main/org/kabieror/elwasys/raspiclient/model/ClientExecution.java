@@ -22,7 +22,7 @@ import java.time.LocalDateTime;
  * lokal vermerkt, es entsteht nie ein Datenbankeintrag und nie eine Abrechnung.
  *
  * <p><b>Offline gebuchte Ausführungen</b> ({@link #isOfflinePendingReplay()}, Phase 4 AP6,
- * siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"): anders als
+ * siehe docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"): anders als
  * eine virtuelle Ausführung sind das ECHTE, abzurechnende Buchungen, nur eben lokal
  * angelegt, während das Backend nicht erreichbar war ({@code offline.OfflineGateway}
  * #createExecution). Sie tragen noch KEINE echte Backend-Id ({@link #getId()} liefert einen

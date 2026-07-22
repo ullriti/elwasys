@@ -22,7 +22,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * End-to-End-Beweis über die echte HTTP-/Servlet-Schicht (siehe kb/05-migration-plan.md,
+ * End-to-End-Beweis über die echte HTTP-/Servlet-Schicht (siehe docs/kb/05-migration-plan.md,
  * AP3, "Login-/Session-Handling"): {@link SecurityConfig} + {@link ElwasysAuthenticationProvider}
  * zusammen - Actuator-Health bleibt öffentlich erreichbar, alles andere verlangt per
  * Default eine Anmeldung, und ein Formular-Login mit gültigen Zugangsdaten erzeugt eine

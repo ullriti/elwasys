@@ -29,7 +29,7 @@ Client-Raspi/res/
 
 # Deployment-eigene Dateien (nicht Teil des Java-Builds)
 deploy/
-kb/
+docs/kb/
 doc/
 *.md
 LICENSE.md

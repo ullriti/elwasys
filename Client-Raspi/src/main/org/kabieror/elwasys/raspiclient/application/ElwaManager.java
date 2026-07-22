@@ -86,7 +86,7 @@ public class ElwaManager {
 
     /**
      * Die ausgehende WebSocket-Verbindung zum Backend (Phase 4 AP5, siehe
-     * kb/05-migration-plan.md "Arbeitspakete Phase 4", AP5-Auftrag). Ersetzt die ehemalige
+     * docs/kb/05-migration-plan.md "Arbeitspakete Phase 4", AP5-Auftrag). Ersetzt die ehemalige
      * Fernwartungs-Registrierung über {@code LocationManager}/{@code MaintenanceServerManager}
      * (Direkt-DB-Zugriff, Terminal lauschte als TCP-Server) - damit ist der letzte
      * Direkt-DB-Zugriff des Terminals entfallen, siehe {@link TerminalWebSocketClient}.
@@ -94,7 +94,7 @@ public class ElwaManager {
     private TerminalWebSocketClient terminalWebSocketClient;
 
     /**
-     * Offline-Robustheit (Phase 4 AP6, siehe kb/05-migration-plan.md "Konzeptskizze:
+     * Offline-Robustheit (Phase 4 AP6, siehe docs/kb/05-migration-plan.md "Konzeptskizze:
      * Offline-Buchungen am Terminal"): persistenter Standort-Snapshot, persistentes
      * Ereignis-Journal und die daraus gespeiste Offline-Entscheidungslogik/das Journal-Replay.
      * Greifen NUR, wenn ein {@link ApiClient}-Aufruf mit
@@ -180,9 +180,9 @@ public class ElwaManager {
             this.apiClient = new ApiClient(this.configurationManager.getBackendUrl(),
                     this.configurationManager.getBackendToken());
 
-            // Offline-Robustheit (Phase 4 AP6, siehe kb/05-migration-plan.md "Konzeptskizze:
+            // Offline-Robustheit (Phase 4 AP6, siehe docs/kb/05-migration-plan.md "Konzeptskizze:
             // Offline-Buchungen am Terminal"): Snapshot/Journal liegen bewusst UNVERSCHLÜSSELT
-            // im Arbeitsverzeichnis (Auftraggeber-Entscheidung, siehe kb/05-migration-plan.md
+            // im Arbeitsverzeichnis (Auftraggeber-Entscheidung, siehe docs/kb/05-migration-plan.md
             // "Festlegungen zu den Offline-Detailfragen" - das Terminal-Dateisystem gilt wie
             // bisher als vertrauenswürdig).
             Path workDir = Path.of(System.getProperty("user.dir"));
@@ -190,7 +190,7 @@ public class ElwaManager {
             this.offlineJournal = new OfflineJournal(workDir.resolve("offline-journal.jsonl"));
             this.offlineGateway = new OfflineGateway(this.apiClient, this.offlineSnapshotStore, this.offlineJournal);
 
-            // Ausgehende Fernwartungs-Verbindung (Phase 4 AP5, siehe kb/05-migration-plan.md
+            // Ausgehende Fernwartungs-Verbindung (Phase 4 AP5, siehe docs/kb/05-migration-plan.md
             // "Arbeitspakete Phase 4", AP5): ersetzt die ehemalige, Direkt-DB-basierte
             // Registrierung (LocationManager/MaintenanceServerManager). Läuft mit derselben
             // backend.url/backend.token-Konfiguration wie die REST-API (kein neuer Konfig-
@@ -207,7 +207,7 @@ public class ElwaManager {
             // nicht erreichbares Backend führt wie zuvor eine nicht erreichbare
             // Datenbank zum ERROR-Zustand, siehe Testfall C15).
             //
-            // Phase 4 AP6 (siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
+            // Phase 4 AP6 (siehe docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
             // Terminal" Punkt 5 "Zeitfenster"): ist das Backend nicht erreichbar, aber ein
             // noch nicht abgelaufener Snapshot vorhanden, fährt das Terminal trotzdem hoch
             // (Offline-Modus) statt in den Fehlerzustand zu gehen - das C15-Fehlerbild bleibt
@@ -219,7 +219,7 @@ public class ElwaManager {
                     throw e;
                 }
                 this.logger.warn("Backend beim Start nicht erreichbar - fahre im Offline-Modus hoch "
-                        + "(Phase 4 AP6, siehe kb/05-migration-plan.md).", e);
+                        + "(Phase 4 AP6, siehe docs/kb/05-migration-plan.md).", e);
             }
             // Best effort: falls das Backend doch erreichbar war (oder gerade wieder wurde),
             // gleich einen frischen Snapshot laden, statt auf den ersten periodischen Abgleich
@@ -248,7 +248,7 @@ public class ElwaManager {
             // Alt-Client (der ALLE Geräte systemweit über alle Standorte hinweg
             // scannte, siehe DataManager#getDevices()) ist dieser Scan jetzt korrekt
             // auf den eigenen Standort beschränkt (kommt implizit aus dem
-            // Standort-Token) - siehe kb/05-migration-plan.md, Änderungslog "Phase 4
+            // Standort-Token) - siehe docs/kb/05-migration-plan.md, Änderungslog "Phase 4
             // AP4" für die Einordnung dieses Befunds.
             for (ClientDevice d : this.getManagedDevices()) {
                 DeviceOverviewDto overview = this.lastOverviewFor(d.getId());
@@ -356,7 +356,7 @@ public class ElwaManager {
 
     /**
      * Gibt die Offline-Entscheidungslogik/das Journal-Replay zurück (Phase 4 AP6, siehe
-     * kb/05-migration-plan.md). Wird von {@code executions.ExecutionFinisher} für Stufe A/B
+     * docs/kb/05-migration-plan.md). Wird von {@code executions.ExecutionFinisher} für Stufe A/B
      * ("laufende Ausführungen lokal zu Ende führen" bzw. "Offline-Buchungen") benötigt.
      */
     public OfflineGateway getOfflineGateway() {
@@ -366,7 +366,7 @@ public class ElwaManager {
     /**
      * Kartenlogin: online über die API, oder - falls das Backend nicht erreichbar ist -
      * offline gegen den zuletzt geladenen Snapshot (Phase 4 AP6, siehe
-     * kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"). Liefert
+     * docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"). Liefert
      * denselben {@link UserDto}-Vertrag wie zuvor {@code ApiClient#cardLogin} direkt - Aufrufer
      * (z. B. {@code MainFormController#onCardDetected}) bleiben dadurch unverändert.
      */
@@ -383,7 +383,7 @@ public class ElwaManager {
 
     /**
      * Die für einen Benutzer nutzbaren Geräte: online über die API, oder offline gegen den
-     * Snapshot (Phase 4 AP6, siehe kb/05-migration-plan.md). Liefert denselben
+     * Snapshot (Phase 4 AP6, siehe docs/kb/05-migration-plan.md). Liefert denselben
      * {@link DeviceDto}-Vertrag wie zuvor {@code ApiClient#getDevices} direkt.
      */
     public List<DeviceDto> getDevicesForUser(int userId) throws ApiException {
@@ -400,7 +400,7 @@ public class ElwaManager {
     /**
      * Bucht eine neue Ausführung: online über die API, oder - falls das Backend nicht
      * erreichbar ist - offline gegen den Snapshot (Phase 4 AP6, Stufe B, siehe
-     * kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"). Der
+     * docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"). Der
      * Idempotenz-Schlüssel wird VOR dem eigentlichen Versuch erzeugt (statt wie sonst erst
      * innerhalb von {@code ApiClient}), damit er im Fehlerfall auch für den
      * Offline-Journal-Eintrag zur Verfügung steht.
@@ -539,7 +539,7 @@ public class ElwaManager {
             if (!e.isCommunicationFailure()) {
                 throw e;
             }
-            // Phase 4 AP6 (siehe kb/05-migration-plan.md): Backend nicht erreichbar - falle
+            // Phase 4 AP6 (siehe docs/kb/05-migration-plan.md): Backend nicht erreichbar - falle
             // auf die im letzten Snapshot enthaltenen Geräte zurück, sofern noch nutzbar.
             overview = this.offlineGateway.getDevicesOverview(e);
         }

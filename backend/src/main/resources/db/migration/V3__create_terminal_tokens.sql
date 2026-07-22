@@ -1,8 +1,8 @@
--- Phase 2 AP4 (siehe kb/05-migration-plan.md): Standort-Token-Auth für die Terminal-REST-API
+-- Phase 2 AP4 (siehe docs/kb/05-migration-plan.md): Standort-Token-Auth für die Terminal-REST-API
 -- (/api/v1/**) und den WebSocket-Endpunkt. Rein additiv, keine bestehende Tabelle wird
 -- angefasst - der Alt-Code (Common/Client-Raspi/Portal) bekommt von dieser Tabelle nichts mit.
 --
--- Design (siehe kb/02-data-model.md, kb/03-modules.md für Details):
+-- Design (siehe docs/kb/02-data-model.md, docs/kb/03-modules.md für Details):
 --  * Ein Standort kann MEHRERE gültige Tokens haben (n:1 zu locations) - das ermöglicht
 --    Rotation ohne Downtime: ein neues Token anlegen, Terminal umstellen, dann das alte per
 --    revoked_at deaktivieren, statt ein einzelnes Token blind zu überschreiben.

@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * fast.
  *
  * Run: ./run-client-e2e.sh   (or xvfb-run mvn test -Dtest=ClientAutoEndE2ETest)
- * See kb/08-test-plan.md.
+ * See docs/kb/08-test-plan.md.
  */
 public class ClientAutoEndE2ETest {
 

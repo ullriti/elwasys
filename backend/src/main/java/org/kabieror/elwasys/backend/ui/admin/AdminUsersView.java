@@ -36,7 +36,7 @@ import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
 /**
- * Benutzerverwaltung (Phase 3 AP2/AP3, siehe kb/05-migration-plan.md) - fachlicher Nachfolger
+ * Benutzerverwaltung (Phase 3 AP2/AP3, siehe docs/kb/05-migration-plan.md) - fachlicher Nachfolger
  * von {@code Portal/.../views/UsersView} (Alt-Portal, Testfälle P6-P8).
  *
  * <p>Guthaben wird in der Liste angezeigt ({@link CreditService#getCredit(UserEntity)}, 1:1
@@ -51,7 +51,7 @@ import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
  * {@link ExpiredExecutionsDialog} - fachlicher Nachfolger von {@code ExpiredExecutionsWindow}
  * bzw. der Warn-Icon-Logik in {@code Portal/.../views/UsersView#fillItemWithUserData}).
  *
- * <p><b>Seit Phase 3 AP5</b> (siehe kb/05-migration-plan.md, "Live-Updates zwischen Sessions"):
+ * <p><b>Seit Phase 3 AP5</b> (siehe docs/kb/05-migration-plan.md, "Live-Updates zwischen Sessions"):
  * die Liste lädt sich über den {@link UiBroadcaster} automatisch neu, wenn IRGENDEINE Session -
  * das Portal-UI oder (bei Guthaben-/Ausführungs-Ereignissen) ein Terminal über die REST-API -
  * einen Benutzer ändert, ein Guthaben bucht oder eine Ausführung ändert (letztere beiden

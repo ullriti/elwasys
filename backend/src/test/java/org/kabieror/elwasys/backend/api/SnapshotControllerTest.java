@@ -18,7 +18,7 @@ import org.kabieror.elwasys.backend.support.Fixtures;
 /**
  * Standort-Snapshot für die Offline-Buchungs-Vorbereitung (AP3, Phase 4, siehe
  * {@link org.kabieror.elwasys.backend.api.dto.SnapshotDto} Javadoc und
- * kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal").
+ * docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal").
  */
 class SnapshotControllerTest extends AbstractApiIT {
 

@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Ausgehende WebSocket-Verbindung des Terminals zum Backend (Phase 4 AP5, siehe
- * kb/05-migration-plan.md "Arbeitspakete Phase 4", AP5, und kb/03-modules.md für das
+ * docs/kb/05-migration-plan.md "Arbeitspakete Phase 4", AP5, und docs/kb/03-modules.md für das
  * vollständige Nachrichtenprotokoll). Ersetzt {@code MaintenanceServerManager} (Terminal
  * lauschte als TCP-Server, Portal wählte über eine in {@code locations} registrierte IP an) -
  * die Richtung dreht sich um: das Terminal baut die Verbindung selbst auf und hält sie, genau

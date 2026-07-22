@@ -13,10 +13,10 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * Verteilt {@link DomainEvent}s an alle offenen Vaadin-Sessions (Phase 3 AP5, siehe
- * kb/05-migration-plan.md, Roadmap-Punkt "Live-Updates zwischen Sessions") - fachlicher
+ * docs/kb/05-migration-plan.md, Roadmap-Punkt "Live-Updates zwischen Sessions") - fachlicher
  * Nachfolger der {@code Portal/.../events/I*UpdatedEventListener}-Interfaces des Alt-Portals.
  *
- * <p><b>Befund zum Alt-Portal</b> (siehe kb/03-modules.md, Abschnitt "Live-Updates zwischen
+ * <p><b>Befund zum Alt-Portal</b> (siehe docs/kb/03-modules.md, Abschnitt "Live-Updates zwischen
  * Sessions (AP5)"): trotz der Komponenten-Inventur-Zeile "Vaadin-Push" und einer
  * {@code vaadin-push}-Abhängigkeit im Alt-{@code pom.xml} setzt das Alt-Portal
  * {@code @Push} NIRGENDS ein und die {@code events/I*UpdatedEventListener}-Interfaces sind

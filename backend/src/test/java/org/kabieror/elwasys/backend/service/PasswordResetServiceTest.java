@@ -25,7 +25,7 @@ import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * Tests für {@link PasswordResetService} (Phase 3 AP4, Testfall P19, siehe
- * kb/05-migration-plan.md) - fachlicher Nachfolger von
+ * docs/kb/05-migration-plan.md) - fachlicher Nachfolger von
  * {@code Portal/.../components/PasswordForgotWindow}/{@code ResetPasswordWindow}/dem
  * Admin-Passwort-Reset-Teil von {@code UserWindow}. Läuft mit echtem SMTP-Mock (GreenMail,
  * siehe {@code spring.mail.*}-Override unten) durch den vollen Spring-Kontext, damit auch der

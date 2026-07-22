@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * and NOT logging anyone in.
  *
  * Run: ./run-client-e2e.sh   (or xvfb-run mvn test -Dtest=ClientLoginVariantsE2ETest)
- * See kb/08-test-plan.md.
+ * See docs/kb/08-test-plan.md.
  */
 public class ClientLoginVariantsE2ETest {
 

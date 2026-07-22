@@ -1,9 +1,9 @@
 #!/bin/bash
-# Cutover: Admin-/Benutzer-Passwort setzen (Phase 6 AP1, siehe kb/05-migration-plan.md
+# Cutover: Admin-/Benutzer-Passwort setzen (Phase 6 AP1, siehe docs/kb/05-migration-plan.md
 # "Produktivumschaltung"). Seit Phase 5 (V7__remove_default_admin_password.sql) hat eine
 # frische bzw. gehärtete Installation KEIN bekanntes Default-Admin-Passwort mehr - das MUSS
 # vor der Inbetriebnahme gesetzt werden, sonst ist kein Portal-Login möglich. Dünner Wrapper
-# um das bestehende admin-cli-Profil (AdminPasswordCliRunner, siehe kb/04-build-and-run.md
+# um das bestehende admin-cli-Profil (AdminPasswordCliRunner, siehe docs/kb/04-build-and-run.md
 # "Admin-/Benutzer-Passwort setzen").
 #
 # Verbindung per Umgebungsvariablen (dieselben wie das Backend selbst kennt, siehe

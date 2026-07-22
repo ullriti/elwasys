@@ -20,7 +20,7 @@ import org.springframework.web.socket.TextMessage;
 
 /**
  * Portal-seitige Vermittlung von Fernwartungs-Anfragen (Status/Logs/Neustart) über den
- * bestehenden Terminal-WebSocket-Kanal (Phase 3 AP4, siehe kb/05-migration-plan.md,
+ * bestehenden Terminal-WebSocket-Kanal (Phase 3 AP4, siehe docs/kb/05-migration-plan.md,
  * Roadmap-Punkt "Fernwartung (Status/Logs/Restart über Backend-Kanal)"). Fachlicher
  * Nachfolger von {@code Portal/.../MaintenanceConnectionManager} + der
  * {@code IClientConnection#sendQuery}/{@code #sendCommand}-Aufrufe in
@@ -30,7 +30,7 @@ import org.springframework.web.socket.TextMessage;
  *
  * <p><b>Bewusst NICHT portiert</b>: das Alt-TCP-Protokoll selbst
  * ({@code MaintenanceConnectionManager}/{@code MaintenanceServer}) - das Alt-Portal bleibt
- * dafür bis zum Cutover in Betrieb (siehe kb/05-migration-plan.md, "Entscheidungen"). Die
+ * dafür bis zum Cutover in Betrieb (siehe docs/kb/05-migration-plan.md, "Entscheidungen"). Die
  * Alt-Clients verbinden sich außerdem erst in Phase 4 überhaupt mit dem neuen Backend-WS-Kanal
  * - in der Praxis ist ein Standort hier also i.d.R. NICHT verbunden
  * ({@link #requestLog}/{@link #requestRestart} werfen dann sofort
@@ -103,7 +103,7 @@ public class TerminalMaintenanceService {
     /**
      * Fordert den aktuellen Status (Client-Version, Ids laufender Ausführungen) des Terminals
      * eines Standorts an - fachlicher Nachfolger von {@code GetStatusRequest}/
-     * {@code GetStatusResponse} (Phase 4 AP5, siehe kb/05-migration-plan.md
+     * {@code GetStatusResponse} (Phase 4 AP5, siehe docs/kb/05-migration-plan.md
      * "Arbeitspakete Phase 4", AP5). Anders als {@link #isConnected}/{@link #connectedSince}
      * (reine Verbindungspräsenz, das genügt der Portal-UI für die "Verbunden"-Anzeige, siehe
      * {@code AdminDashboardView}) liefert dies echte, vom Terminal selbst gemeldete Daten - die

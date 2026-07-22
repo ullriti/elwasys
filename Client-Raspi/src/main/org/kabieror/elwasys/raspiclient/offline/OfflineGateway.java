@@ -27,7 +27,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Offline-Entscheidungslogik und Journal-Replay (Phase 4 AP6, siehe kb/05-migration-plan.md
+ * Offline-Entscheidungslogik und Journal-Replay (Phase 4 AP6, siehe docs/kb/05-migration-plan.md
  * "Konzeptskizze: Offline-Buchungen am Terminal" Punkte 2, 4 und 6, sowie den AP6-Auftrag).
  * Zentrale Anlaufstelle, die {@code application.ElwaManager} für Kartenlogin, Geräte-/
  * Programmlisten und das Anlegen neuer Ausführungen benutzt, WENN der direkte
@@ -281,7 +281,7 @@ public class OfflineGateway {
 
     /**
      * Überträgt das komplette Journal in Reihenfolge über die Execution-Endpunkte (siehe
-     * kb/03-modules.md "Idempotenz + Replay"). Bricht bei JEDEM Fehler (Kommunikations- wie
+     * docs/kb/03-modules.md "Idempotenz + Replay"). Bricht bei JEDEM Fehler (Kommunikations- wie
      * fachlicher Fehler) sofort ab und lässt das Journal UNVERÄNDERT - der nächste Versuch
      * beginnt wieder ganz von vorn. Das ist sicher (nicht nur "wieder-anlaufend"), weil das
      * Backend über den {@code Idempotency-Key}-Header dedupliziert (siehe

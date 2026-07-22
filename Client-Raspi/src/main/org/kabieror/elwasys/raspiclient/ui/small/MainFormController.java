@@ -372,7 +372,7 @@ public class MainFormController extends AbstractMainFormController {
                     final ClientExecution ex;
                     try {
                         // Faellt bei einem Kommunikationsfehler auf eine Offline-Buchung gegen
-                        // den Snapshot zurueck (Phase 4 AP6, siehe kb/05-migration-plan.md
+                        // den Snapshot zurueck (Phase 4 AP6, siehe docs/kb/05-migration-plan.md
                         // "Konzeptskizze: Offline-Buchungen am Terminal").
                         ex = ElwaManager.instance.createExecution(this.registeredUser, this.selectedDevice,
                                 this.selectedProgram);
@@ -666,7 +666,7 @@ public class MainFormController extends AbstractMainFormController {
      */
     private ClientProgram reloadSelectedProgramFor(ClientUser user) throws ApiException {
         // Faellt bei einem Kommunikationsfehler auf den lokalen Offline-Snapshot zurueck
-        // (Phase 4 AP6, siehe kb/05-migration-plan.md).
+        // (Phase 4 AP6, siehe docs/kb/05-migration-plan.md).
         for (var d : ElwaManager.instance.getDevicesForUser(user.getId())) {
             if (d.id() == this.selectedDevice.getId()) {
                 for (var p : d.programs()) {
@@ -825,7 +825,7 @@ public class MainFormController extends AbstractMainFormController {
                 final Runnable searchUserRunnable = () -> {
                     try {
                         // Faellt bei einem Kommunikationsfehler auf den lokalen
-                        // Offline-Snapshot zurueck (Phase 4 AP6, siehe kb/05-migration-plan.md).
+                        // Offline-Snapshot zurueck (Phase 4 AP6, siehe docs/kb/05-migration-plan.md).
                         var userDto = ElwaManager.instance.cardLogin(e.getCardId());
                         this.registeredUser = ClientUser.of(userDto);
                         // Das vor dem Kartenlogin gewählte Programm wurde ohne Gruppenrabatt

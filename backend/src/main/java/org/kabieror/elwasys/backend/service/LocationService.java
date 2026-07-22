@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Stammdaten-Verwaltung für Standorte (Phase 3 AP2, siehe kb/05-migration-plan.md) -
+ * Stammdaten-Verwaltung für Standorte (Phase 3 AP2, siehe docs/kb/05-migration-plan.md) -
  * fachlicher Nachfolger von {@code Portal/.../components/LocationWindow} (Testfall P14).
  * "Standorte" ist als eigener Menüpunkt/View NEU (im Alt-Portal nur über einen
  * Dashboard-Dialog erreichbar) - siehe {@code AdminLayout}-Javadoc; dieser Service liefert
@@ -28,7 +28,7 @@ public class LocationService {
 
     /**
      * Default-Wert für {@code offline.max-duration} (Phase 4 AP6, Auftraggeber-Vorgabe -
-     * siehe kb/05-migration-plan.md). Entspricht dem Spalten-Default der additiven Migration
+     * siehe docs/kb/05-migration-plan.md). Entspricht dem Spalten-Default der additiven Migration
      * {@code V5__add_offline_max_duration_to_locations.sql}.
      */
     public static final int DEFAULT_OFFLINE_MAX_DURATION_MINUTES = 60;
@@ -61,7 +61,7 @@ public class LocationService {
 
     /**
      * Wie {@link #create(String, Set)}, mit zusätzlich einstellbarer
-     * {@code offline.max-duration} (Phase 4 AP6, additiv - siehe kb/05-migration-plan.md
+     * {@code offline.max-duration} (Phase 4 AP6, additiv - siehe docs/kb/05-migration-plan.md
      * "Festlegungen zu den Offline-Detailfragen").
      */
     @Transactional

@@ -1,5 +1,5 @@
 -- Rollback-/Rückbau-SQL für einen ABGEBROCHENEN Cutover (Phase 6 AP2, siehe
--- kb/05-migration-plan.md "Phase 6 - Produktivumschaltung (Cutover)"). Macht die additiven
+-- docs/kb/05-migration-plan.md "Phase 6 - Produktivumschaltung (Cutover)"). Macht die additiven
 -- Flyway-Migrationen V3..V10 (siehe backend/src/main/resources/db/migration/) so weit
 -- rückgängig, dass die DB wieder dem ALTEN Feld-Schema entspricht, wie es das Alt-Portal +
 -- der Alt-Client (JDBC-Direktzugriff) erwarten - OHNE Geschäftsdaten zu verlieren

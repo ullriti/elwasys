@@ -40,11 +40,11 @@ public class DeconzRegistrationService implements IDeviceRegistrationService {
 
     /**
      * Registriert die per Pairing gefundene deCONZ-Geräte-Id auf dem Gerät (Phase 4 AP4,
-     * siehe kb/05-migration-plan.md "Client-Cutover"). Fachlicher Nachfolger von
+     * siehe docs/kb/05-migration-plan.md "Client-Cutover"). Fachlicher Nachfolger von
      * {@code Common.Device#modify(...)} (Alt-Code: alle Gerätefelder unverändert außer der
      * neuen deCONZ-Id) - jetzt über den additiven Endpunkt
      * {@code POST /api/v1/devices/{id}/deconz-uuid} (die AP3-Inventur hatte diesen Pfad
-     * übersehen, siehe kb/05-migration-plan.md, Änderungslog "Phase 4 AP4").
+     * übersehen, siehe docs/kb/05-migration-plan.md, Änderungslog "Phase 4 AP4").
      */
     @Override
     public CompletableFuture<Boolean> registerDevice(ClientDevice device) {

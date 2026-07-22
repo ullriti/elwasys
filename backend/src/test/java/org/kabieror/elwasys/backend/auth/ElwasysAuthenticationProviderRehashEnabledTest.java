@@ -17,7 +17,7 @@ import org.springframework.test.context.TestPropertySource;
 
 /**
  * Deckt den eingeschalteten SHA1-&gt;Argon2id-Migrationspfad ab
- * ({@code elwasys.auth.rehash-on-login=true}) - siehe kb/05-migration-plan.md, AP3
+ * ({@code elwasys.auth.rehash-on-login=true}) - siehe docs/kb/05-migration-plan.md, AP3
  * "Entscheidungen": das Flag ist produktiv per Default AUS (siehe
  * {@link ElwasysAuthenticationProviderTest#rehashOnLoginDefaultsToFalse}), wird hier aber
  * gezielt für diese Testklasse eingeschaltet, um sowohl den Migrationspfad selbst als auch

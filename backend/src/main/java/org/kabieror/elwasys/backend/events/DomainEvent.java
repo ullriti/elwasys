@@ -3,7 +3,7 @@ package org.kabieror.elwasys.backend.events;
 /**
  * Gemeinsame Basis aller fachlichen Ereignisse, die die Services (Stammdaten-CRUD,
  * Guthaben-Buchungen, Execution-Lebenszyklus) nach jeder erfolgreichen Änderung veröffentlichen
- * (Phase 3 AP5, siehe kb/05-migration-plan.md). Fachlicher Nachfolger der
+ * (Phase 3 AP5, siehe docs/kb/05-migration-plan.md). Fachlicher Nachfolger der
  * {@code Portal/.../events/I*UpdatedEventListener}-Interfaces des Alt-Portals - dort allerdings
  * nur ein reiner Same-Session-Callback (ein Dialog/Fenster benachrichtigt sein aufrufendes
  * Fenster direkt, kein Vaadin-{@code @Push}, siehe {@link org.kabieror.elwasys.backend.ui.push.UiBroadcaster}

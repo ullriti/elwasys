@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Verwaltet Standort-Tokens für die Terminal-REST-API/den WebSocket-Endpunkt (Phase 2 AP4,
- * siehe kb/05-migration-plan.md, Technologie-Entscheidung "API-Auth: Terminal statisches
+ * siehe docs/kb/05-migration-plan.md, Technologie-Entscheidung "API-Auth: Terminal statisches
  * Token pro Standort (rotierbar)").
  *
  * <p><b>Speicherung</b>: nur ein SHA-256-Hash (hex, 64 Zeichen) des Klartext-Tokens landet in

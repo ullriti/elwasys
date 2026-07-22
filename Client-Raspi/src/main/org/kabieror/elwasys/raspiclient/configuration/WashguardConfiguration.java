@@ -142,7 +142,7 @@ public class WashguardConfiguration extends ConfigurationManager {
     }
 
     /**
-     * Die Basis-URL des Backends (Phase 4 AP4, siehe kb/05-migration-plan.md
+     * Die Basis-URL des Backends (Phase 4 AP4, siehe docs/kb/05-migration-plan.md
      * "Client-Cutover"), z. B. {@code http://localhost:8080/}. Ersetzt die frühere
      * Direkt-DB-Anbindung als primären Datenzugriffspfad des Terminals.
      *
@@ -156,7 +156,7 @@ public class WashguardConfiguration extends ConfigurationManager {
      * Der Standort-Token dieses Terminals für die Backend-API v1
      * ({@code Authorization: Bearer <token>}, siehe {@code backend.auth.terminal
      * .TerminalTokenService}) - ersetzt die frühere Anmeldung mit DB-Zugangsdaten. Erzeugt
-     * über {@code token-cli} (siehe kb/04-build-and-run.md).
+     * über {@code token-cli} (siehe docs/kb/04-build-and-run.md).
      *
      * @return Den Standort-Token dieses Terminals.
      */
@@ -211,7 +211,7 @@ public class WashguardConfiguration extends ConfigurationManager {
     /**
      * Wie oft (in Sekunden) der periodische Offline-Abgleich läuft (Snapshot aktualisieren +
      * ausstehendes Ereignis-Journal nachmelden, sobald das Backend wieder erreichbar ist -
-     * Phase 4 AP6, siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
+     * Phase 4 AP6, siehe docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
      * Terminal"). Default 20s, wie der bestehende Hintergrundabgleich in
      * {@code executions.ExecutionManager}; konfigurierbar, damit Tests das Intervall
      * verkürzen können.

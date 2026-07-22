@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Stammdaten-Verwaltung für Programme (Phase 3 AP2, siehe kb/05-migration-plan.md) -
+ * Stammdaten-Verwaltung für Programme (Phase 3 AP2, siehe docs/kb/05-migration-plan.md) -
  * fachlicher Nachfolger von {@code Portal/.../components/ProgramWindow} (Testfall P12).
  */
 @Service
@@ -91,7 +91,7 @@ public class ProgramService {
      * {@code Portal/.../views/ProgramsView#deleteProgram}: ein Programm, das noch mindestens
      * einem Gerät zugeordnet ist, wird nicht gelöscht (obwohl die DB selbst das über
      * {@code ON DELETE CASCADE} auf {@code device_program_rel} zulassen würde, siehe
-     * kb/02-data-model.md) - das ist eine fachliche Schutzregel, keine technische
+     * docs/kb/02-data-model.md) - das ist eine fachliche Schutzregel, keine technische
      * Notwendigkeit.
      *
      * @throws EntityInUseException wenn das Programm noch mindestens einem Gerät zugeordnet

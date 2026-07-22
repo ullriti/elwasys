@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  *  - the expected named nodes exist ({@code #entryPane}, {@code #detailBox}),
  *  - the default max-price string is the zero-currency format.
  *
- * See kb/06-ui-tests.md.
+ * See docs/kb/06-ui-tests.md.
  */
 public class ProgramListEntryFxmlTest extends ApplicationTest {
 

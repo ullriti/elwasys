@@ -7,7 +7,7 @@ import org.kabieror.elwasys.common.ProgramType;
 
 /**
  * Gegenstück zu {@code backend.api.dto.SnapshotProgramDto} (Phase 4 AP6, siehe
- * kb/05-migration-plan.md). {@code validUserGroupIds} referenziert
+ * docs/kb/05-migration-plan.md). {@code validUserGroupIds} referenziert
  * {@link SnapshotUserGroupDto#id()}. Preisfelder (Flagfall/Rate/Zeiteinheit) entsprechen 1:1
  * {@link ProgramDto}, damit {@code offline.OfflinePricing} dieselbe Rechnung wie das Backend
  * ({@code PricingService}) nachvollziehen kann.

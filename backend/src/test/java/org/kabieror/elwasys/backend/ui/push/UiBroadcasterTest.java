@@ -20,12 +20,12 @@ import org.kabieror.elwasys.backend.events.LocationChangedEvent;
 /**
  * Reiner Unit-Test (kein Spring-Kontext) für {@link UiBroadcaster} - deckt die beiden in AP5
  * geforderten Verhalten ab: "Broadcaster verteilt an registrierte Listener" und "Abmelden
- * funktioniert" (siehe kb/05-migration-plan.md, "Live-Updates zwischen Sessions"). Das Testen
+ * funktioniert" (siehe docs/kb/05-migration-plan.md, "Live-Updates zwischen Sessions"). Das Testen
  * von {@code @TransactionalEventListener} selbst (Springs eigener Mechanismus, AFTER_COMMIT)
  * ist NICHT Gegenstand dieses Tests - das prüft {@code DomainEventsIT} mit einem echten
  * Spring-Kontext. {@link UI#access(Command)} wird mit Mockito synchron ausgeführt simuliert -
  * ein echtes {@link UI} bräuchte eine gesperrte {@code VaadinSession}, die es außerhalb eines
- * echten Servlet-Containers nicht gibt (bewusst vermieden, siehe kb/05-migration-plan.md,
+ * echten Servlet-Containers nicht gibt (bewusst vermieden, siehe docs/kb/05-migration-plan.md,
  * Lizenz-Befund: kein Test rendert eine echte Vaadin-Route).
  */
 class UiBroadcasterTest {

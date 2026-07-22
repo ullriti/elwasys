@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  * To make this possible without real hardware, the test:
  *  - points the client at the test backend ({@link TestBackend}, REST API +
  *    Standort-Token - since Phase 4 AP4/AP5 the client no longer connects to
- *    the database directly, see kb/05-migration-plan.md),
+ *    the database directly, see docs/kb/05-migration-plan.md),
  *  - runs the in-project {@link FhemSimulator} as a fake gateway (the fhem
  *    path is used because no deConz server is configured),
  *  - writes an elwasys.properties into a temporary working directory.
@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  * or directly:
  *   xvfb-run -a mvn -f Client-Raspi/pom.xml test -Dtest=ClientAppE2ETest
  *
- * See kb/06-ui-tests.md.
+ * See docs/kb/06-ui-tests.md.
  */
 public class ClientAppE2ETest {
 

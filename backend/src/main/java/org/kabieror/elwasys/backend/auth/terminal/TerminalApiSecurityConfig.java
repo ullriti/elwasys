@@ -29,7 +29,7 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
  * eigenständig über ihr Standort-Token ({@link TerminalTokenAuthenticationFilter}).
  *
  * <p><b>Zwei Fallstricke, die beim Aufbau dieser Klasse auftraten (siehe
- * kb/05-migration-plan.md, Änderungslog/AP4, für die volle Herleitung)</b>:
+ * docs/kb/05-migration-plan.md, Änderungslog/AP4, für die volle Herleitung)</b>:
  * <ol>
  *   <li>{@link #disableAutoFilterRegistration}: jede Spring-Bean vom Typ
  *       {@code jakarta.servlet.Filter} wird von Spring Boot standardmäßig ZUSÄTZLICH als

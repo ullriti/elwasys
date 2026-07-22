@@ -1,10 +1,10 @@
-# Default-Werte für den elwasys-backend-Chart (Phase 2 AP6, siehe kb/05-migration-plan.md).
+# Default-Werte für den elwasys-backend-Chart (Phase 2 AP6, siehe docs/kb/05-migration-plan.md).
 # Diese Datei ist zugleich die Values-Dokumentation (jeder Abschnitt ist kommentiert) - siehe
 # Chart.yaml/kb/04-build-and-run.md für den größeren Kontext.
 
 # -- Anzahl Backend-Replicas. Das Backend ist zustandslos gegenüber Kubernetes (aller Zustand
 # lebt in PostgreSQL bzw. in-memory pro Pod für die Terminal-WebSocket-Registry, siehe
-# kb/03-modules.md) - mehr als 1 Replica ist möglich, aber Terminals mit offener WS-Verbindung
+# docs/kb/03-modules.md) - mehr als 1 Replica ist möglich, aber Terminals mit offener WS-Verbindung
 # zu Pod A würden bei einer Fernwartungsanfrage über Pod B nicht gefunden (kein geteilter
 # Verbindungsstatus zwischen Pods). Für den produktiven Start (kleine Installation, ein
 # Standort) ist replicaCount 1 die pragmatische Wahl; Mehrfach-Replica-Unterstützung für die
@@ -15,7 +15,7 @@ replicaCount: 1
 image:
   # Platzhalter-Repository - an die tatsächliche Registry anpassen (siehe
   # .github/workflows/ci.yml/maven-publish.yml für den Image-Build; Veröffentlichung nach GHCR
-  # ist als offener Punkt in kb/05-migration-plan.md dokumentiert).
+  # ist als offener Punkt in docs/kb/05-migration-plan.md dokumentiert).
   repository: ghcr.io/kabieror/elwasys-backend
   # Leer = Chart.appVersion (siehe Chart.yaml). Explizit setzen, um von der Chart-Version
   # unabhängig ein bestimmtes Image zu pinnen (empfohlen für Produktion statt "latest").
@@ -54,7 +54,7 @@ service:
   type: ClusterIP
   port: 8080
 
-# Ingress: TLS-Konzept für Kubernetes (siehe kb/05-migration-plan.md Zielarchitektur Punkt 5
+# Ingress: TLS-Konzept für Kubernetes (siehe docs/kb/05-migration-plan.md Zielarchitektur Punkt 5
 # "TLS über Reverse Proxy oder Ingress"). Standardmäßig deaktiviert, weil ein Ingress-
 # Controller + (optional) cert-manager als Cluster-Voraussetzung nicht Teil dieses Charts
 # ist. Zwei dokumentierte Wege, TLS zu bekommen:
@@ -108,8 +108,8 @@ probes:
     failureThreshold: 3
 
 # -- Datenbankverbindung. Dieser Chart bringt bewusst KEIN PostgreSQL-Sub-Chart mit
-# (Begründung, siehe auch kb/05-migration-plan.md "Entscheidungen"):
-#   1. Das Backend ist der EINZIGE DB-Client der Zielarchitektur (siehe kb/05, Punkt 1 der
+# (Begründung, siehe auch docs/kb/05-migration-plan.md "Entscheidungen"):
+#   1. Das Backend ist der EINZIGE DB-Client der Zielarchitektur (siehe docs/kb/05, Punkt 1 der
 #      "Wesentlichen Änderungen") - eine im selben Helm-Release mitgelieferte, an den Pod-
 #      Lifecycle gekoppelte Postgres-Instanz würde genau die Frage aufwerfen, die die
 #      Migration eigentlich lösen soll ("wer ist Owner der Datenbank, wann läuft sie, wie
@@ -130,7 +130,7 @@ probes:
 # und danach den erzeugten Service/Secret unten eintragen (host = Service-DNS-Name,
 # existingSecret = von diesem Chart erzeugtes Secret). Für Bestands-DBs: host/port/name direkt
 # auf die vorhandene Instanz setzen - Flywaus baselineOnMigrate übernimmt sie unverändert
-# (siehe kb/02-data-model.md, kb/04-build-and-run.md).
+# (siehe docs/kb/02-data-model.md, docs/kb/04-build-and-run.md).
 database:
   host: postgres.example.svc.cluster.local
   port: 5432
@@ -183,7 +183,7 @@ pushover:
 # mittlerweile entfernten Alt-Portal, siehe AuthProperties-Javadoc) ist mit dessen
 # Abschaltung (Phase 3) und Entfernung (Phase 5 AP1) entfallen. Ob/wann re-hashOnLogin
 # produktiv aktiviert wird, ist eine Entscheidung der eigentlichen Produktivumschaltung
-# (Phase 6, siehe kb/05-migration-plan.md "Entscheidungen", AP3) - der Chart-Default bleibt
+# (Phase 6, siehe docs/kb/05-migration-plan.md "Entscheidungen", AP3) - der Chart-Default bleibt
 # daher unverändert AUS.
 auth:
   rehashOnLogin: false

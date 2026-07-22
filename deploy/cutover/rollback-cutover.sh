@@ -1,6 +1,6 @@
 #!/bin/bash
 # Cutover: Rollback-/Rückbau-Skript für einen ABGEBROCHENEN Cutover (Phase 6 AP2, siehe
-# kb/05-migration-plan.md "Produktivumschaltung (Cutover)"). Spielt
+# docs/kb/05-migration-plan.md "Produktivumschaltung (Cutover)"). Spielt
 # deploy/cutover/rollback-cutover.sql (idempotentes Reverse-DDL für V3..V10) gegen die
 # Ziel-DB ein - macht sie wieder zum ALTEN Feld-Schema (Alt-Portal-WAR + Alt-Client mit
 # JDBC-Direktzugriff), OHNE Geschäftsdaten zu verlieren. Details/Herleitung jeder einzelnen

@@ -22,7 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Stammdaten-Verwaltung für Benutzergruppen (Phase 3 AP2, siehe kb/05-migration-plan.md) -
+ * Stammdaten-Verwaltung für Benutzergruppen (Phase 3 AP2, siehe docs/kb/05-migration-plan.md) -
  * fachlicher Nachfolger von {@code Portal/.../components/UserGroupWindow} (Testfall P9).
  *
  * <p>Anders als {@link DeviceEntity}/{@link ProgramEntity}/{@link LocationEntity} besitzt
@@ -90,7 +90,7 @@ public class UserGroupService {
      * (das Alt-Code-SQL {@code SELECT id FROM user_groups WHERE id<>? LIMIT 1} - siehe
      * {@link org.kabieror.elwasys.backend.repository.UserGroupRepository#findFirstByIdNotOrderByIdAsc}),
      * dann wird die Gruppe gelöscht (die n:m-Zuordnungen zu Standorten/Geräten/Programmen
-     * fallen per {@code ON DELETE CASCADE} weg, siehe kb/02-data-model.md).
+     * fallen per {@code ON DELETE CASCADE} weg, siehe docs/kb/02-data-model.md).
      *
      * @throws EntityInUseException wenn es keine andere Benutzergruppe gibt, der die
      *                              Benutzer zugewiesen werden könnten (im Alt-Code hätte das

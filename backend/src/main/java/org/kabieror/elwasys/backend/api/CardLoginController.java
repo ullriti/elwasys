@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Kartenlogin (AP4, siehe kb/05-migration-plan.md) - fachlicher Nachfolger von
+ * Kartenlogin (AP4, siehe docs/kb/05-migration-plan.md) - fachlicher Nachfolger von
  * {@code MainFormController#onCardDetected} im Client-Alt-Code: Kartennummer -&gt;
  * Benutzerdaten inkl. Guthaben, gesperrte Nutzer und standortfremde Benutzergruppen werden
  * wie im Terminal-Altcode abgewiesen.

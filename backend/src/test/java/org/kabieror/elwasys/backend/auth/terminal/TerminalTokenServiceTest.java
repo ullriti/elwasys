@@ -12,7 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * Persistenz-/Kryptografieverhalten von {@link TerminalTokenService} (AP4, siehe
- * kb/05-migration-plan.md): Token-Erzeugung, -Prüfung, Rotation (mehrere aktive Tokens je
+ * docs/kb/05-migration-plan.md): Token-Erzeugung, -Prüfung, Rotation (mehrere aktive Tokens je
  * Standort) und Widerruf.
  */
 class TerminalTokenServiceTest extends AbstractBackendIT {

@@ -389,7 +389,7 @@ public class MainFormController extends AbstractMainFormController implements IM
                     // prüfen kann (siehe DeviceListEntry#applyUserStyle).
                     // ElwaManager#cardLogin/#getDevicesForUser fallen bei einem Kommunikations-
                     // fehler auf den lokalen Offline-Snapshot zurück (Phase 4 AP6, siehe
-                    // kb/05-migration-plan.md) - für diesen Controller unverändert, derselbe
+                    // docs/kb/05-migration-plan.md) - für diesen Controller unverändert, derselbe
                     // Vertrag wie zuvor der direkte ApiClient-Aufruf.
                     var usableDeviceIds = ElwaManager.instance.getDevicesForUser(newUser.getId()).stream()
                             .filter(d -> d.usableByUser()).map(d -> d.id()).collect(java.util.stream.Collectors.toSet());
@@ -462,7 +462,7 @@ public class MainFormController extends AbstractMainFormController implements IM
      * dort liefert die Guthaben-Abfrage aber keine Information mehr darüber, ob der
      * Benutzer inzwischen gelöscht wurde (kein "user not found" ist über
      * {@code GET /api/v1/users/{id}/credit} sinnvoll unterscheidbar von anderen 404-Fällen,
-     * ein untesteter Rand­fall - siehe kb/05-migration-plan.md, Änderungslog "Phase 4 AP4"):
+     * ein untesteter Rand­fall - siehe docs/kb/05-migration-plan.md, Änderungslog "Phase 4 AP4"):
      * ein 404 wird sicherheitshalber wie eine Löschung behandelt (Abmelden), jeder andere
      * Fehler wird nur geloggt.
      */

@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit;
  * {@code DeconzApiAdapter}, {@code DeconzEventListener},
  * {@code DeconzDevicePowerManager}, {@code DeconzRegistrationService} -
  * through the booking / auto-end / abort flow (test plan C1/C4/C5, C11,
- * C12; see kb/08-test-plan.md), without a real ConBee/deCONZ installation.
+ * C12; see docs/kb/08-test-plan.md), without a real ConBee/deCONZ installation.
  *
  * <h2>Modeled endpoints</h2>
  * <ul>
@@ -45,7 +45,7 @@ import java.util.concurrent.TimeUnit;
  *     <li>{@code PUT /api/{token}/config} - pairing/registration
  *     (permitjoin); accepted (200) but otherwise a no-op - device
  *     registration is not exercised by the booking/auto-end/abort flow this
- *     simulator targets (Phase 4 AP1 scope, see kb/05-migration-plan.md).
+ *     simulator targets (Phase 4 AP1 scope, see docs/kb/05-migration-plan.md).
  *     {@link #sendDeviceAddedEvent(String)} is available for a future test
  *     that does want to exercise {@code DeconzRegistrationService}.</li>
  *     <li>{@code GET /api/{token}/lights/{id}} - current on/off +

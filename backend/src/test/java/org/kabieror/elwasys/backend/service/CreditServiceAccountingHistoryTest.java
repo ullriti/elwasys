@@ -18,7 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * Tests für {@link CreditService#getAccountingEntries} und {@link CreditService#getLastInpayment}
- * (Phase 3 AP3, siehe kb/05-migration-plan.md) - fachliche Nachfolger von
+ * (Phase 3 AP3, siehe docs/kb/05-migration-plan.md) - fachliche Nachfolger von
  * {@code DataManager#getAccountingEntries}/{@code #getLastInpayment}, verwendet vom
  * "Umsätze ansehen"-Dialog ({@code CreditHistoryDialog}, Alt-Vorbild
  * {@code CreditAccountingWindow}) und vom Benutzer-Dashboard ({@code UserDashboardView},

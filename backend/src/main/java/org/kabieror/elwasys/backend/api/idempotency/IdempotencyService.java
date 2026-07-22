@@ -14,8 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Dedupliziert terminal-gemeldete Execution-Ereignisse (Start/Ende/Abbruch/Reset,
- * Phase 4 AP3, siehe kb/05-migration-plan.md "Idempotenz + Replay" und
- * kb/03-modules.md). Ein Terminal kann eine Meldung mehrfach senden (z.B. nach einem
+ * Phase 4 AP3, siehe docs/kb/05-migration-plan.md "Idempotenz + Replay" und
+ * docs/kb/03-modules.md). Ein Terminal kann eine Meldung mehrfach senden (z.B. nach einem
  * Verbindungsabbruch, bevor die ursprüngliche Antwort ankam) - über den vom Terminal
  * erzeugten {@code Idempotency-Key}-Header (eine UUID pro fachlichem Ereignis, siehe
  * {@code ExecutionController}) wird die ZUERST berechnete Antwort erneut ausgeliefert,
@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p><b>Ohne Header vollständig transparent</b>: fehlt der Header (bzw. ist er leer), wird
  * {@code action} einfach ausgeführt, ohne irgendetwas zu persistieren - das bestehende
  * Verhalten der Execution-Endpunkte (AP4) bleibt für Aufrufer ohne diesen Header 1:1
- * erhalten (additiv, siehe kb/05-migration-plan.md Rahmenbedingungen).
+ * erhalten (additiv, siehe docs/kb/05-migration-plan.md Rahmenbedingungen).
  *
  * <p><b>Bekannte Grenze (dokumentiert, nicht Teil dieses Arbeitspakets)</b>: dies ist KEINE
  * verteilte Sperre. Zwei tatsächlich GLEICHZEITIGE Anfragen mit demselben Schlüssel können

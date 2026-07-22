@@ -15,7 +15,7 @@ import org.kabieror.elwasys.backend.support.Fixtures;
 import org.springframework.http.MediaType;
 
 /**
- * Kartenlogin über die Terminal-API (AP4, siehe kb/05-migration-plan.md) - fachlicher
+ * Kartenlogin über die Terminal-API (AP4, siehe docs/kb/05-migration-plan.md) - fachlicher
  * Nachfolger von {@code MainFormController#onCardDetected}: unbekannte Kartennummer,
  * gesperrter Benutzer, standortfremde Benutzergruppe, erfolgreicher Login inkl. Guthaben.
  */

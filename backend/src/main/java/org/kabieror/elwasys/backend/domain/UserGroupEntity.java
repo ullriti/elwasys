@@ -12,7 +12,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /**
- * Entspricht der Tabelle {@code user_groups} (siehe kb/02-data-model.md) sowie
+ * Entspricht der Tabelle {@code user_groups} (siehe docs/kb/02-data-model.md) sowie
  * {@code org.kabieror.elwasys.common.UserGroup} im Alt-Code.
  */
 @Entity

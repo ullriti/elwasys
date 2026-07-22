@@ -4,12 +4,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 /**
- * Konfiguration des Auth-Moduls (AP3, siehe kb/05-migration-plan.md).
+ * Konfiguration des Auth-Moduls (AP3, siehe docs/kb/05-migration-plan.md).
  *
  * <p><b>{@code elwasys.auth.rehash-on-login}</b> (Default: {@code false}): steuert, ob ein
  * erfolgreich per Alt-Format (SHA1) verifiziertes Passwort transaktional auf Argon2id
  * migriert wird ({@link ElwasysAuthenticationProvider}). Der Default ist bewusst AUS -
- * siehe die ausführliche Begründung in kb/05-migration-plan.md ("Entscheidungen": Re-Hash
+ * siehe die ausführliche Begründung in docs/kb/05-migration-plan.md ("Entscheidungen": Re-Hash
  * hinter Flag). Historischer Grund: solange das Alt-Portal denselben Nutzer per direktem
  * SHA1-String-Vergleich gegen dieselbe Datenbankspalte einloggte (Parallelbetrieb, siehe
  * CLAUDE.md/kb/05 Leitplanke "Backend anfangs nur lesend/additiv"), hätte ein Re-Hash durch
@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
  * wäre dann fehlgeschlagen). Das Alt-Portal ist seit Phase 5 AP1 vollständig entfernt, der
  * ursprüngliche Sperrgrund entfällt damit; ob/wann das Flag produktiv aktiviert wird, ist
  * eine Entscheidung der eigentlichen Produktivumschaltung (Phase 6, siehe
- * kb/05-migration-plan.md), nicht Teil eines einzelnen Arbeitspakets - der Code-Default
+ * docs/kb/05-migration-plan.md), nicht Teil eines einzelnen Arbeitspakets - der Code-Default
  * bleibt daher bewusst unverändert AUS.
  */
 @Component

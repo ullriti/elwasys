@@ -24,7 +24,7 @@ import org.kabieror.elwasys.backend.service.UserGroupService;
  * ist NEU (das Alt-Fenster kannte nur "Bearbeiten", siehe {@code AdminLayout}-Javadoc) - die
  * eigenständige Standort-Ansicht ist eine vom Auftraggeber gewünschte UX-Verbesserung.
  *
- * <p>Feld "Offline-Maximaldauer" (Phase 4 AP6, additiv - siehe kb/05-migration-plan.md
+ * <p>Feld "Offline-Maximaldauer" (Phase 4 AP6, additiv - siehe docs/kb/05-migration-plan.md
  * "Festlegungen zu den Offline-Detailfragen"): Auftraggeber-Auflage, dass
  * {@code offline.max-duration} über das Portal konfigurierbar sein muss. In Minuten, Default
  * {@link LocationService#DEFAULT_OFFLINE_MAX_DURATION_MINUTES}, wird an das Terminal über

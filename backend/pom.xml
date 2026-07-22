@@ -15,18 +15,18 @@
 	<packaging>jar</packaging>
 	<name>elwasys backend</name>
 	<description>
-		Spring-Boot-Backend (Phase 2 des Modernisierungsplans, siehe kb/05-migration-plan.md) -
+		Spring-Boot-Backend (Phase 2 des Modernisierungsplans, siehe docs/kb/05-migration-plan.md) -
 		das zentrale Backend der Zielarchitektur: REST-API/WebSocket für die Client-Raspi-
 		Terminals plus das eingebettete Vaadin-Flow-Admin-Portal (seit Phase 3), auf derselben
 		PostgreSQL-Datenbank wie die Terminals. Ursprünglich (Phase 2 AP1) im Strangler-Muster
-		parallel zum inzwischen entfernten Alt-Portal-Modul begonnen (siehe kb/03-modules.md).
+		parallel zum inzwischen entfernten Alt-Portal-Modul begonnen (siehe docs/kb/03-modules.md).
 		Erbt das elwasys-Parent-POM (Java 21 per Default), bindet Spring Boot bewusst per
 		BOM-Import statt über spring-boot-starter-parent ein, damit das gemeinsame Parent-POM
 		die Wurzel des Vererbungsbaums bleibt.
 	</description>
 
 	<properties>
-		<!-- Aktuelles Spring Boot 3.x (siehe kb/05-migration-plan.md, Technologie-
+		<!-- Aktuelles Spring Boot 3.x (siehe docs/kb/05-migration-plan.md, Technologie-
 		     Entscheidungen: "Spring Boot 3.x"). -->
 		<spring-boot.version>3.5.16</spring-boot.version>
 		<!-- AP4 (REST-API v1): ohne dieses Flag wirft Spring MVC zur Laufzeit ein
@@ -36,7 +36,7 @@
 		     brauchen es nicht). Nur für dieses Modul gesetzt, betrifft Common/Client-Raspi
 		     nicht. -->
 		<maven.compiler.parameters>true</maven.compiler.parameters>
-		<!-- Phase 3 AP1 (Portal-Neubau, siehe kb/05-migration-plan.md): Vaadin Flow 24,
+		<!-- Phase 3 AP1 (Portal-Neubau, siehe docs/kb/05-migration-plan.md): Vaadin Flow 24,
 		     bestätigt als Portal-Stack. Neuester 24.x-Release zum Zeitpunkt dieses
 		     Arbeitspakets (24-Linie bleibt auf Spring Boot 3.2-3.5 kompatibel; 25.x wäre ein
 		     Major-Sprung mit eigenen Kompatibilitätsfragen, hier bewusst nicht gewählt). -->
@@ -90,7 +90,7 @@
 				<scope>import</scope>
 			</dependency>
 
-			<!-- Vaadin Flow 24 (Phase 3 AP1, siehe kb/05-migration-plan.md): pinnt u.a.
+			<!-- Vaadin Flow 24 (Phase 3 AP1, siehe docs/kb/05-migration-plan.md): pinnt u.a.
 			     vaadin-spring-boot-starter auf eine zu Spring Boot 3.5 passende Version. -->
 			<dependency>
 				<groupId>com.vaadin</groupId>
@@ -115,7 +115,7 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
-		<!-- Auth (AP3, siehe kb/05-migration-plan.md): Argon2id-Hashing (spring-security-crypto,
+		<!-- Auth (AP3, siehe docs/kb/05-migration-plan.md): Argon2id-Hashing (spring-security-crypto,
 		     transitiv über diesen Starter) + Session-Login-Fundament fürs künftige Vaadin-Flow-
 		     Portal (Phase 3). Sichert per Default alles außer /actuator/health ab (siehe
 		     SecurityConfig) - noch keine fachlichen HTTP-Endpunkte, die kommen erst in AP4. -->
@@ -152,7 +152,7 @@
 			<scope>runtime</scope>
 		</dependency>
 
-		<!-- JPA (AP2: Entities + Repositories fürs Bestandsschema, siehe kb/05). -->
+		<!-- JPA (AP2: Entities + Repositories fürs Bestandsschema, siehe docs/kb/05). -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -164,7 +164,7 @@
 			<artifactId>spring-boot-starter-validation</artifactId>
 		</dependency>
 
-		<!-- Benachrichtigungsdienst (AP5, siehe kb/05-migration-plan.md): E-Mail-Kanal.
+		<!-- Benachrichtigungsdienst (AP5, siehe docs/kb/05-migration-plan.md): E-Mail-Kanal.
 		     Bringt JavaMailSender (Autokonfiguration via spring.mail.* in application.yml)
 		     statt des Alt-Codes commons-mail (siehe Common.Utilities#sendEmail). Der
 		     Pushover-Kanal braucht keine zusätzliche Dependency (java.net.http, siehe
@@ -174,20 +174,20 @@
 			<artifactId>spring-boot-starter-mail</artifactId>
 		</dependency>
 
-		<!-- WebSocket-Endpunkt für Terminals (AP4, siehe kb/05-migration-plan.md). -->
+		<!-- WebSocket-Endpunkt für Terminals (AP4, siehe docs/kb/05-migration-plan.md). -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-websocket</artifactId>
 		</dependency>
 
-		<!-- Admin-Portal-UI (Phase 3 AP1, siehe kb/05-migration-plan.md): Vaadin Flow im
+		<!-- Admin-Portal-UI (Phase 3 AP1, siehe docs/kb/05-migration-plan.md): Vaadin Flow im
 		     Backend eingebettet statt eines separaten Frontend-Stacks (Vorgabe "Java
 		     Backend"). Bringt u.a. Spring-Integration (Routen-basierte @SpringComponent-
 		     Scans, Session-Handling) und die Vaadin-Servlet-Autokonfiguration mit.
 
 		     Ausschluss "hilla" (TypeScript/React-Gegenstück zu Flow, wird hier NICHT
 		     eingesetzt - Auftrag/Entscheidung ist explizit Vaadin FLOW, siehe
-		     kb/05-migration-plan.md): der volle "vaadin-spring-boot-starter" bringt Hilla per
+		     docs/kb/05-migration-plan.md): der volle "vaadin-spring-boot-starter" bringt Hilla per
 		     Default mit. Ohne diesen Ausschluss wirft
 		     com.vaadin.flow.spring.security.RequestUtil#isAllowedHillaView beim Auswerten der
 		     Sicherheitskette eine IllegalStateException ("The application Lookup instance is
@@ -202,7 +202,7 @@
 		     vaadin-core-internal -> vaadin-core eingebunden): wird hier nirgends verwendet,
 		     daher sauber ausgeschlossen statt es funktionslos im Klassenpfad mitzuschleppen.
 
-		     WICHTIGER BEFUND (siehe kb/05-migration-plan.md, Abschnitt "Offene Punkte/Risiken
+		     WICHTIGER BEFUND (siehe docs/kb/05-migration-plan.md, Abschnitt "Offene Punkte/Risiken
 		     Phase 3 AP1" für die vollständige Herleitung): unabhängig von diesem Ausschluss
 		     verlangt Vaadin 24.10.x (flow-server) im Dev-Modus beim allerersten
 		     VaadinServlet#init() einen ONLINE-Lizenzcheck gegen vaadin.com
@@ -272,7 +272,7 @@
 			<scope>test</scope>
 		</dependency>
 
-		<!-- AP5-Tests (Benachrichtigungsdienst, siehe kb/05-migration-plan.md): echter
+		<!-- AP5-Tests (Benachrichtigungsdienst, siehe docs/kb/05-migration-plan.md): echter
 		     lokaler Test-SMTP-Server, um E-Mail-Betreff/-Body/-Empfänger byte-genau zu
 		     prüfen (statt nur Mocks). Nicht Teil des Spring-Boot-BOM, daher fest
 		     gepinnt. -->
@@ -300,7 +300,7 @@
 				</executions>
 			</plugin>
 
-			<!-- Vaadin Flow (Phase 3 AP1, siehe kb/05-migration-plan.md): erzeugt beim
+			<!-- Vaadin Flow (Phase 3 AP1, siehe docs/kb/05-migration-plan.md): erzeugt beim
 			     "package"-Build die frontend-Tooling-Konfiguration (prepare-frontend) und im
 			     Dev-Modus ein Vorab-Bundle (build-frontend), damit der erste App-Start nicht
 			     auf einen frisch startenden npm/Vite-Vorgang warten muss. LÄUFT NICHT bei

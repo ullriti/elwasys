@@ -21,7 +21,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * Authentifiziert Anfragen an {@code /api/v1/**} über ein Standort-Token (Phase 2 AP4, siehe
- * kb/05-migration-plan.md, Technologie-Entscheidung "API-Auth"). Ist ausschließlich in
+ * docs/kb/05-migration-plan.md, Technologie-Entscheidung "API-Auth"). Ist ausschließlich in
  * {@link TerminalApiSecurityConfig}s zustandsloser Sicherheitskette registriert - für alle
  * anderen Pfade (Admin-Portal, Actuator) bleibt {@code SecurityConfig} (AP3) unverändert
  * zuständig.
@@ -29,7 +29,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * <p><b>Entscheidung - Header</b>: das Token wird als Standard-{@code Authorization}-Header
  * im Bearer-Schema erwartet ({@code Authorization: Bearer <token>}), nicht als proprietärer
  * Header. Begründung: das ist der von HTTP-Clients/-Bibliotheken (inkl.
- * {@code java.net.http}, das der Client laut kb/05-migration-plan.md ohnehin für die
+ * {@code java.net.http}, das der Client laut docs/kb/05-migration-plan.md ohnehin für die
  * Backend-Anbindung nutzen soll) nativ unterstützte Mechanismus, funktioniert unverändert für
  * den WebSocket-Handshake (ein Java-{@code WebSocket}-Client kann beliebige Header beim
  * Handshake setzen - anders als ein Browser-{@code WebSocket}, der das nicht kann; das ist

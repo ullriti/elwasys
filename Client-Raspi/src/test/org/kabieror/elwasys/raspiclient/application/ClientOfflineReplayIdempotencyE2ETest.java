@@ -20,8 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * Client-Test für Phase 4 AP6, Abnahme-Szenario (d) "Replay-Idempotenz (doppelte Meldung →
- * keine Doppelbuchung)" (siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
- * Terminal" Punkt 4 und kb/08-test-plan.md).
+ * keine Doppelbuchung)" (siehe docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
+ * Terminal" Punkt 4 und docs/kb/08-test-plan.md).
  * <p>
  * <b>Bewusst kein TestFX/JavaFX-E2E-Test</b> (kleinste belastbare Testform, siehe Auftrag):
  * das Szenario "ein Journal-Eintrag wurde beim Backend bereits erfolgreich verarbeitet, aber

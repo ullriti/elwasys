@@ -30,7 +30,7 @@ CLAUDE_CODE_REMOTE=true CLAUDE_PROJECT_DIR="$PWD" ./.claude/hooks/session-start.
 
 ## B) Portable `#cloud-config` (Ubuntu-VM) — für eigene Infrastruktur
 
-Datei: `kb/cloud-init/cloud-config.yaml`.
+Datei: `deploy/cloud-init/cloud-config.yaml`.
 
 Provisioniert eine frische Ubuntu-VM mit JDK 21, Maven, PostgreSQL, Xvfb + GTK/Grafik-
 Bibliotheken, klont das Repo, initialisiert die DB durch direktes Einspielen der Flyway-V1-Baseline
@@ -40,7 +40,7 @@ Maven-Cache. Enthält `run-ui-tests.sh` zum headless Ausführen der Client-UI-Te
 
 Beispiel (Multipass):
 ```bash
-multipass launch --name elwasys --cloud-init kb/cloud-init/cloud-config.yaml
+multipass launch --name elwasys --cloud-init deploy/cloud-init/cloud-config.yaml
 ```
 Bei EC2/GCE/Hetzner als *user-data* verwenden.
 

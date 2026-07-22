@@ -26,10 +26,10 @@ import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
 /**
- * Geräteverwaltung (Phase 3 AP2, siehe kb/05-migration-plan.md) - fachlicher Nachfolger von
+ * Geräteverwaltung (Phase 3 AP2, siehe docs/kb/05-migration-plan.md) - fachlicher Nachfolger von
  * {@code Portal/.../views/DevicesView} (Alt-Portal, Testfälle P10/P11).
  *
- * <p><b>Seit Phase 3 AP5</b> (siehe kb/05-migration-plan.md, "Live-Updates zwischen Sessions"):
+ * <p><b>Seit Phase 3 AP5</b> (siehe docs/kb/05-migration-plan.md, "Live-Updates zwischen Sessions"):
  * die Liste lädt sich über den {@link UiBroadcaster} automatisch neu, wenn irgendeine Session
  * ein Gerät anlegt, bearbeitet oder löscht.
  */

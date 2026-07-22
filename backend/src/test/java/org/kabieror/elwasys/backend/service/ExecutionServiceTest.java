@@ -30,7 +30,7 @@ import org.springframework.beans.factory.annotation.Autowired;
  * Ende/Abbruch/Reset, abgelaufene Ausführungen) - 1:1 portiert aus
  * {@code org.kabieror.elwasys.common.Execution} und den Datenbank-Anteilen von
  * {@code DataManager}/{@code ExecutionManager}/{@code ExecutionFinisher} im Client, siehe
- * kb/05-migration-plan.md, AP2.
+ * docs/kb/05-migration-plan.md, AP2.
  */
 class ExecutionServiceTest extends AbstractBackendIT {
 
@@ -121,7 +121,7 @@ class ExecutionServiceTest extends AbstractBackendIT {
     @Test
     void resetExecutionMarksItFinishedWithoutStartOrStopLikeLegacyExecutionReset() {
         // Beobachtung (siehe ExecutionService#resetExecution Javadoc und
-        // kb/05-migration-plan.md "Beobachtungen"): trotz des Methodennamens "reset" wird
+        // docs/kb/05-migration-plan.md "Beobachtungen"): trotz des Methodennamens "reset" wird
         // finished=TRUE gesetzt, nicht FALSE - 1:1 wie der Alt-Code
         // (org.kabieror.elwasys.common.Execution#reset()).
         UserEntity user = newUser();
@@ -252,7 +252,7 @@ class ExecutionServiceTest extends AbstractBackendIT {
 
     @Test
     void startExecutionWithClientTimestampUsesItInsteadOfServerNow() {
-        // AP3, Phase 4 (additiv, siehe kb/05-migration-plan.md "Idempotenz + Replay" und
+        // AP3, Phase 4 (additiv, siehe docs/kb/05-migration-plan.md "Idempotenz + Replay" und
         // ExecutionStartRequest#clientTimestamp Javadoc): ein vom Terminal mitgelieferter
         // Original-Zeitstempel wird 1:1 übernommen statt der Serverzeit.
         UserEntity user = newUser();

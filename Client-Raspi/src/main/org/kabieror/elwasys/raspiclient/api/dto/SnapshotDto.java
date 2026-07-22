@@ -5,7 +5,7 @@ import java.util.List;
 
 /**
  * Gegenstück zu {@code backend.api.dto.SnapshotDto} (Phase 4 AP6, siehe
- * kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"). Wird periodisch
+ * docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal"). Wird periodisch
  * über {@code ApiClient#getSnapshot()} geladen und von {@code offline.OfflineSnapshotStore}
  * persistiert (Grundlage für Kartenlogin/Berechtigungs-/Guthabenprüfung, wenn das Backend
  * nicht erreichbar ist - siehe {@code offline.OfflineGateway}).

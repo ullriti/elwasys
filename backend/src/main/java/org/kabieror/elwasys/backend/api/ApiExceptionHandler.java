@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 /**
  * Übersetzt alle fachlichen Terminal-API-Fehler ({@link ApiException} und Unterklassen, siehe
  * {@code org.kabieror.elwasys.backend.api.exception}) in RFC-7807-{@link ProblemDetail}
- * -Antworten (AP4, siehe kb/05-migration-plan.md: "Fehlerbilder konsistent (Problem-Details
+ * -Antworten (AP4, siehe docs/kb/05-migration-plan.md: "Fehlerbilder konsistent (Problem-Details
  * o. ä.)"). Nur für Controller unter {@code org.kabieror.elwasys.backend.api} aktiv - das
  * künftige Vaadin-Flow-Portal (Phase 3) bekommt bei Bedarf eine eigene Fehlerbehandlung.
  *
