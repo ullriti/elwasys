@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * Gegenstück zu {@code backend.api.dto.SnapshotDeviceDto} (Phase 4 AP6, siehe
- * kb/05-migration-plan.md). {@code validUserGroupIds}/{@code programIds} referenzieren
+ * docs/kb/05-migration-plan.md). {@code validUserGroupIds}/{@code programIds} referenzieren
  * {@link SnapshotUserGroupDto#id()}/{@link SnapshotProgramDto#id()} aus demselben
  * {@link SnapshotDto} - genug, um die Berechtigungsprüfung offline gruppenbasiert
  * nachzubilden (siehe {@code offline.OfflineGateway}).

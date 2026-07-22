@@ -19,11 +19,11 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 /**
- * Entspricht der Tabelle {@code programs} (Waschprogramm/Tarif, siehe kb/02-data-model.md)
+ * Entspricht der Tabelle {@code programs} (Waschprogramm/Tarif, siehe docs/kb/02-data-model.md)
  * sowie {@code org.kabieror.elwasys.common.Program} im Alt-Code. Die eigentliche
  * Preisberechnung (inkl. Rabatt/Rundungsverhalten) liegt bewusst NICHT auf der Entity,
  * sondern in {@code PricingService} (1:1-Portierung von {@code Program.getPrice}) - siehe
- * kb/05-migration-plan.md.
+ * docs/kb/05-migration-plan.md.
  */
 @Entity
 @Table(name = "programs")

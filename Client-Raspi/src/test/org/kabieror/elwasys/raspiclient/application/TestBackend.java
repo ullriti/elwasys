@@ -2,7 +2,7 @@ package org.kabieror.elwasys.raspiclient.application;
 
 /**
  * Liefert die Koordinaten des für die Client-Testsuite gemeinsam genutzten Backends (Phase 4
- * AP4, siehe kb/06-ui-tests.md "Testharness"). Der Test-Harness ({@code run-ui-tests.sh}/
+ * AP4, siehe docs/kb/06-ui-tests.md "Testharness"). Der Test-Harness ({@code run-ui-tests.sh}/
  * {@code run-client-e2e.sh}) startet EIN Backend-Jar für den gesamten Testlauf (Flyway
  * migriert dieselbe Test-Datenbank, die auch {@code database-init.sql} initialisiert hat),
  * seedet per {@code token-cli} genau einen Standort-Token für den Standort "Default" und
@@ -45,7 +45,7 @@ final class TestBackend {
         if (token == null || token.isBlank()) {
             throw new IllegalStateException(
                     "Die Umgebungsvariable " + TOKEN_ENV + " ist nicht gesetzt - bitte über " +
-                            "run-ui-tests.sh/run-client-e2e.sh starten (siehe kb/06-ui-tests.md), " +
+                            "run-ui-tests.sh/run-client-e2e.sh starten (siehe docs/kb/06-ui-tests.md), " +
                             "die einen Standort-Token seeden und exportieren.");
         }
         return token;

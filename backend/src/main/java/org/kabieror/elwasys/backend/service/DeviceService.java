@@ -15,12 +15,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Stammdaten-Verwaltung für Geräte (Phase 3 AP2, siehe kb/05-migration-plan.md) - fachlicher
+ * Stammdaten-Verwaltung für Geräte (Phase 3 AP2, siehe docs/kb/05-migration-plan.md) - fachlicher
  * Nachfolger von {@code Portal/.../components/DeviceWindow} (Testfälle P10/P11). Löschen ist
  * bewusst OHNE Wächter (1:1 wie {@code Common.Device#delete}/
  * {@code Portal/.../views/DevicesView#deleteDevice}): laufende/vergangene Ausführungen
  * behalten ihren Bezug per {@code ON DELETE SET DEFAULT} (virtuelles Gerät -1, siehe
- * kb/02-data-model.md), Programm-/Benutzergruppen-Zuordnungen fallen per
+ * docs/kb/02-data-model.md), Programm-/Benutzergruppen-Zuordnungen fallen per
  * {@code ON DELETE CASCADE} weg.
  */
 @Service
@@ -47,7 +47,7 @@ public class DeviceService {
     /**
      * Entspricht {@code DataManager#getDevicesToDisplay(Location)} - alle Geräte eines
      * Standorts, alphabetisch nach Name. Wird vom Admin-Dashboard (Phase 3 AP3, siehe
-     * kb/05-migration-plan.md, {@code DashboardService}) verwendet, um Geräte je Standort zu
+     * docs/kb/05-migration-plan.md, {@code DashboardService}) verwendet, um Geräte je Standort zu
      * gruppieren - fachlich identisch zu {@code AdminDashboardView#buildDeviceInfo} im
      * Alt-Portal.
      */

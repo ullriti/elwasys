@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * 1:1-Portierung von {@code org.kabieror.elwasys.common.Program#getPrice}/
- * {@code #getDynamicPrice} (siehe kb/05-migration-plan.md, AP2). Enthält absichtlich
+ * {@code #getDynamicPrice} (siehe docs/kb/05-migration-plan.md, AP2). Enthält absichtlich
  * dieselben Rundungs-/Rechen-Eigenheiten wie der Alt-Code (siehe Kommentare unten) - das
  * ist Verhalten-bewahren, keine Nachlässigkeit.
  */

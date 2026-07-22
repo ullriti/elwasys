@@ -12,7 +12,7 @@ import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 
 /**
- * Entspricht der Tabelle {@code terminal_tokens} (Phase 2 AP4, siehe kb/02-data-model.md,
+ * Entspricht der Tabelle {@code terminal_tokens} (Phase 2 AP4, siehe docs/kb/02-data-model.md,
  * additive Migration {@code V3__create_terminal_tokens.sql}). Ein Standort-Token
  * authentifiziert ein Raspi-Terminal gegenüber der REST-API ({@code /api/v1/**}) und dem
  * WebSocket-Endpunkt, siehe {@link org.kabieror.elwasys.backend.auth.terminal.TerminalTokenService}.

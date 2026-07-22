@@ -47,7 +47,7 @@ import org.kabieror.elwasys.backend.ws.TerminalNotConnectedException;
 import org.kabieror.elwasys.backend.ws.TerminalRequestTimeoutException;
 
 /**
- * Admin-Dashboard (Phase 3 AP3, siehe kb/05-migration-plan.md) - fachlicher Nachfolger von
+ * Admin-Dashboard (Phase 3 AP3, siehe docs/kb/05-migration-plan.md) - fachlicher Nachfolger von
  * {@code Portal/.../views/AdminDashboardView} (Alt-Portal): zeigt je Standort dessen Geräte
  * mit "Frei"/"Besetzt" (aus der laufenden Execution abgeleitet, Testfall P20), bei einer
  * laufenden Ausführung zusätzlich Programm, Benutzer und Restzeit, sowie je Gerät die
@@ -57,7 +57,7 @@ import org.kabieror.elwasys.backend.ws.TerminalRequestTimeoutException;
  * <p>Die eigentliche Datenbeschaffung liegt in {@link DashboardService} (siehe dessen
  * Klassenkommentar) - diese View aktualisiert beim Seitenaufruf ({@link #loadData()}).
  *
- * <p><b>Seit Phase 3 AP5</b> (siehe kb/05-migration-plan.md, "Live-Updates zwischen Sessions"):
+ * <p><b>Seit Phase 3 AP5</b> (siehe docs/kb/05-migration-plan.md, "Live-Updates zwischen Sessions"):
  * die View meldet sich in {@link #onAttach} beim {@link UiBroadcaster} an und in {@link
  * #onDetach} wieder ab. Bei einem {@link DeviceChangedEvent}/{@link ExecutionChangedEvent}
  * eines Geräts, das gerade auf dieser Seite angezeigt wird, lädt {@link #refreshDevice} GEZIELT
@@ -70,9 +70,9 @@ import org.kabieror.elwasys.backend.ws.TerminalRequestTimeoutException;
  * plus Verbindungsstatus - fachlicher Nachfolger der Wartungsverbindungs-Toolbar des
  * Alt-Dashboards ({@code AdminDashboardLocationPanel#buildToolbar}/{@code #buildStatusInfo}),
  * vermittelt über {@link TerminalMaintenanceService} statt des Alt-TCP-Protokolls (siehe
- * kb/05-migration-plan.md, "Entscheidungen": das Alt-TCP-Protokoll wird NICHT portiert, das
+ * docs/kb/05-migration-plan.md, "Entscheidungen": das Alt-TCP-Protokoll wird NICHT portiert, das
  * Alt-Portal bleibt dafür bis zum Cutover in Betrieb). Statt der Alt-"IP-Adresse" (obsolet,
- * siehe kb/02-data-model.md: {@code client_ip}/{@code -port} entfallen mit der ausgehenden
+ * siehe docs/kb/02-data-model.md: {@code client_ip}/{@code -port} entfallen mit der ausgehenden
  * Verbindung) zeigt diese View "Verbunden seit". Da sich Alt-Terminals laut Roadmap ERST in
  * Phase 4 über diesen Kanal verbinden, zeigt diese Toolbar in der Praxis i.d.R. "Nicht
  * verbunden" - genau der laut Auftrag geforderte klare Zustand.

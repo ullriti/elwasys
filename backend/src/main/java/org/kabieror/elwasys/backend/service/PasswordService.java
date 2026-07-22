@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Ändern des eigenen Passworts durch einen angemeldeten Benutzer (Phase 3 AP4, siehe
- * kb/05-migration-plan.md) - fachlicher Nachfolger von
+ * docs/kb/05-migration-plan.md) - fachlicher Nachfolger von
  * {@code Portal/.../components/ChangePasswordWindow} (Alt-Portal, Testfall P16).
  *
  * <p>1:1 wie im Alt-Fenster wird zuerst das aktuelle Passwort geprüft
@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
  * migriert wurde, kann sein Passwort also weiterhin über das aktuelle SHA1-Passwort ändern).
  * Das NEU gesetzte Passwort wird immer im neuen Argon2id-Format gespeichert (siehe
  * {@link PasswordVerificationService#encodeNew}, "jedes Neusetzen eines Passworts über das
- * Backend soll das neue Format erzeugen" - Auftrag AP3, kb/05-migration-plan.md
+ * Backend soll das neue Format erzeugen" - Auftrag AP3, docs/kb/05-migration-plan.md
  * "Entscheidungen"). <b>Wichtig für den Parallelbetrieb (P16, "erneuter Login mit neuem
  * Passwort klappt")</b>: das Alt-Portal ({@code common.User#checkPassword}) vergleicht ein
  * eingegebenes Passwort per {@code this.password.equals(Utilities.sha1(password))} GEGEN DEN

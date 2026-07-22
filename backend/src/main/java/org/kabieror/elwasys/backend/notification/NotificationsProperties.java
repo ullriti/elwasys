@@ -4,7 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 /**
- * Konfiguration des Benachrichtigungsdienstes (AP5, siehe kb/05-migration-plan.md).
+ * Konfiguration des Benachrichtigungsdienstes (AP5, siehe docs/kb/05-migration-plan.md).
  *
  * <p><b>{@code elwasys.notifications.enabled}</b> (Default: {@code false}): schaltet den
  * gesamten Dienst scharf. <b>Historisch kritisch (Doppelversand):</b> solange Client-Raspi
@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  * Programmende/-abbruch {@link NotificationService} tatsächlich auf - der Dienst ist also
  * produktiv verdrahtet, nur per Flag deaktiviert. Ob/wann das Flag produktiv aktiviert
  * wird, ist eine Entscheidung der eigentlichen Produktivumschaltung (Phase 6, siehe
- * kb/05-migration-plan.md), nicht Teil eines einzelnen Arbeitspakets - der Code-Default
+ * docs/kb/05-migration-plan.md), nicht Teil eines einzelnen Arbeitspakets - der Code-Default
  * bleibt daher bewusst unverändert AUS. Analog zu {@code elwasys.auth.rehash-on-login}
  * (AP3, siehe {@code AuthProperties}).
  *
@@ -74,7 +74,7 @@ public class NotificationsProperties {
          * Entspricht {@code WashguardConfiguration#getPushoverApiToken()} im Alt-Code - dort
          * fest im Quellcode verdrahtet (nicht konfigurierbar). Abweichung hier: bewusst
          * konfigurierbar gemacht (Default leer) statt eines hartkodierten Secrets im
-         * Quellcode - siehe kb/05-migration-plan.md ("Abweichungen").
+         * Quellcode - siehe docs/kb/05-migration-plan.md ("Abweichungen").
          */
         private String apiToken = "";
 

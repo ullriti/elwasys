@@ -36,7 +36,7 @@ import org.springframework.test.context.DynamicPropertySource;
  * eine ausgehende WebSocket-Verbindung zum Backend ({@code TerminalWebSocketClient} im
  * Client-Raspi-Modul) - diese Suite beweist Status/Log/Restart end-to-end über GENAU diesen
  * neuen Weg: {@link TerminalMaintenanceService} (die Portal-seitige Vermittlung, siehe
- * kb/03-modules.md) &rarr; {@code TerminalWebSocketHandler} (Backend-WS) &rarr; ein ECHTER,
+ * docs/kb/03-modules.md) &rarr; {@code TerminalWebSocketHandler} (Backend-WS) &rarr; ein ECHTER,
  * als Subprozess gestarteter Client-Raspi-Prozess &rarr; Antwort zurück.
  *
  * <p><b>Aufbau ("kleinster belastbarer Aufbau", siehe AP5-Auftrag)</b>: dieser Test bootet den

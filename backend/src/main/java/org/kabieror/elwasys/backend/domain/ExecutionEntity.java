@@ -13,10 +13,10 @@ import java.time.LocalDateTime;
 
 /**
  * Entspricht der Tabelle {@code executions} (eine Programm-Ausführung/ein Waschvorgang,
- * siehe kb/02-data-model.md) sowie {@code org.kabieror.elwasys.common.Execution} im
+ * siehe docs/kb/02-data-model.md) sowie {@code org.kabieror.elwasys.common.Execution} im
  * Alt-Code. Die Lebenszyklus-Logik (Start/Ende/Reset, Preis-/Ablauf-Berechnung) liegt
  * bewusst NICHT auf der Entity, sondern in {@code ExecutionService} - siehe
- * kb/05-migration-plan.md.
+ * docs/kb/05-migration-plan.md.
  */
 @Entity
 @Table(name = "executions")

@@ -4,9 +4,9 @@ spring:
 
   # Datenbank: dieselbe PostgreSQL-DB wie die Client-Raspi-Terminals (die Terminals
   # greifen seit Phase 4 nur noch über die REST-API/WS-Kanal des Backends zu, nicht mehr
-  # direkt auf die DB - siehe kb/05-migration-plan.md). Alle drei Werte sind per
+  # direkt auf die DB - siehe docs/kb/05-migration-plan.md). Alle drei Werte sind per
   # Umgebungsvariable überschreibbar; die Defaults passen zur lokalen Entwicklungsumgebung
-  # (siehe kb/04-build-and-run.md). "elwaportal" bleibt der produktive DB-User des Backends.
+  # (siehe docs/kb/04-build-and-run.md). "elwaportal" bleibt der produktive DB-User des Backends.
   datasource:
     url: ${ELWASYS_DB_URL:jdbc:postgresql://localhost:5432/elwasys}
     username: ${ELWASYS_DB_USER:elwaportal}
@@ -15,7 +15,7 @@ spring:
   # JPA/Hibernate (AP2): das Schema kommt AUSSCHLIESSLICH von Flyway (siehe unten) - Hibernate
   # darf es weder generieren noch verändern. ddl-auto=none ist zwar bereits Spring Boots
   # Default für eine "echte" (nicht-eingebettete) Datenbank wie PostgreSQL, wird hier aber
-  # trotzdem explizit gesetzt (siehe kb/05-migration-plan.md, Rahmenbedingungen: "Hibernate
+  # trotzdem explizit gesetzt (siehe docs/kb/05-migration-plan.md, Rahmenbedingungen: "Hibernate
   # ddl-auto bleibt aus/none"). open-in-view=false, weil dieses Arbeitspaket keine Web-Schicht
   # einführt, die davon profitieren würde (die REST-API folgt erst in AP4) - vermeidet
   # außerdem Spring Boots Startup-Warnung.
@@ -28,7 +28,7 @@ spring:
     # RFC-7807-ProblemDetail-Antworten auch für Spring-MVC-Standardfehler (z.B.
     # @Valid-Validierungsfehler, fehlende Pflichtparameter) - ergänzt
     # ApiExceptionHandler, der die fachlichen Terminal-API-Fehler abdeckt (AP4, siehe
-    # kb/05-migration-plan.md).
+    # docs/kb/05-migration-plan.md).
     problemdetails:
       enabled: true
 
@@ -37,12 +37,12 @@ spring:
     # database-upgrade/*.sql) angelegte Bestands-DB hat keine flyway_schema_history-Tabelle,
     # aber bereits alle Tabellen. Flyway markiert sie dann als "auf baselineVersion migriert",
     # ohne V1 (== der Alt-Weg-Endstand 0.4.0) erneut auszuführen. Eine leere/frische DB
-    # durchläuft V1 stattdessen ganz normal. Siehe kb/02-data-model.md.
+    # durchläuft V1 stattdessen ganz normal. Siehe docs/kb/02-data-model.md.
     baseline-on-migrate: true
     baseline-version: 1
     baseline-description: "Bestandsschema 0.4.0 (entspricht der Flyway-V1-Baseline)"
 
-  # Mail-Transport für den Benachrichtigungsdienst (AP5, siehe kb/05-migration-plan.md und
+  # Mail-Transport für den Benachrichtigungsdienst (AP5, siehe docs/kb/05-migration-plan.md und
   # elwasys.notifications unten). Aktiviert die JavaMailSender-Autokonfiguration von Spring
   # Boot (spring.mail.host muss als Property vorhanden sein, sonst wird kein JavaMailSender-
   # Bean erzeugt - leerer String genügt dafür, siehe NotificationsProperties-Javadoc). Bildet
@@ -79,7 +79,7 @@ management:
     mail:
       enabled: false
 
-# Auth (AP3, siehe kb/05-migration-plan.md).
+# Auth (AP3, siehe docs/kb/05-migration-plan.md).
 elwasys:
   auth:
     # SHA1->Argon2id-Migration beim Login: siehe AuthProperties-Javadoc/kb/05-migration-plan.md
@@ -91,7 +91,7 @@ elwasys:
     # dieses Arbeitspakets - der Code-Default bleibt daher unverändert AUS.
     rehash-on-login: ${ELWASYS_AUTH_REHASH_ON_LOGIN:false}
 
-  # Benachrichtigungsdienst (AP5, siehe kb/05-migration-plan.md und NotificationsProperties-
+  # Benachrichtigungsdienst (AP5, siehe docs/kb/05-migration-plan.md und NotificationsProperties-
   # Javadoc). Der Dienst ist seit Phase 4 AP4 an die Terminal-API angebunden (Client-Raspi
   # verschickt seit dem Cutover keine eigenen Benachrichtigungen mehr, siehe ExecutionController).
   # enabled bleibt dennoch bewusst AUS: die Scharfschaltung ist ein operativer Schritt der
@@ -104,7 +104,7 @@ elwasys:
     pushover:
       api-token: ${ELWASYS_PUSHOVER_API_TOKEN:}
 
-  # Passwort-Reset per Email (Phase 3 AP4, siehe kb/05-migration-plan.md und
+  # Passwort-Reset per Email (Phase 3 AP4, siehe docs/kb/05-migration-plan.md und
   # PasswordResetProperties-Javadoc). Anders als "notifications" oben DEFAULT AN: kein
   # Doppelversand-Risiko, weil dieser Mailversand nur durch eine explizite interaktive
   # Portal-Aktion ausgelöst wird (siehe PasswordResetProperties-Javadoc für die vollständige
@@ -114,7 +114,7 @@ elwasys:
     token-validity: ${ELWASYS_PASSWORD_RESET_TOKEN_VALIDITY:PT2H}
     portal-base-url: ${ELWASYS_PORTAL_BASE_URL:http://localhost:8080}
 
-  # Offline-Robustheit (Phase 4 AP6, siehe kb/05-migration-plan.md "Konzeptskizze:
+  # Offline-Robustheit (Phase 4 AP6, siehe docs/kb/05-migration-plan.md "Konzeptskizze:
   # Offline-Buchungen am Terminal" und ClientTimestampPolicy-Javadoc). Die eigentliche
   # "offline.max-duration" ist KEIN globaler Schalter, sondern pro Standort im
   # Standorte-Dialog konfigurierbar (locations.offline_max_duration_minutes, Default 60,
@@ -128,7 +128,7 @@ logging:
     org.kabieror.elwasys: INFO
     org.flywaydb: INFO
 
-# API-Dokumentation (AP4, siehe kb/05-migration-plan.md): beschränkt springdoc auf die
+# API-Dokumentation (AP4, siehe docs/kb/05-migration-plan.md): beschränkt springdoc auf die
 # Terminal-API unter /api/v1/** (kein Katalog interner/künftiger Vaadin-Endpunkte). Erreichbar
 # unter /v3/api-docs (JSON) bzw. /swagger-ui.html - beides läuft über die catch-all
 # SecurityFilterChain aus SecurityConfig (AP3, alles außer /actuator/health erfordert eine

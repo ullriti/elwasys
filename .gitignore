@@ -31,7 +31,8 @@ target/
 .settings/
 .classpath
 .project
-.vscode/
+# .vscode/ is intentionally checked in (shared recommendations); ignore only local leftovers:
+.vscode/*.local
 
 elwasys.properties
 
@@ -40,7 +41,13 @@ elwasys.properties
 # Transient agent worktrees (Claude Code parallel-agent isolation)
 .claude/worktrees/
 
-# Vaadin Flow (Phase 3 AP1, backend module, see kb/05-migration-plan.md): auto-regenerated
+# Secrets / local config
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
+
+# Vaadin Flow (Phase 3 AP1, backend module, see docs/kb/05-migration-plan.md): auto-regenerated
 # frontend tooling output (from "vaadin:prepare-frontend"/"vaadin:build-frontend", bound to
 # the Maven build, see backend/pom.xml) - never hand-edited, always safe to delete/regenerate.
 backend/src/main/frontend/generated/

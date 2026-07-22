@@ -1,6 +1,6 @@
 #!/bin/bash
 # Verifiziert den eigentlichen Cutover-Migrationspfad end-to-end, gegen eine lokale Kopie des
-# Bestandsschemas (Phase 6 AP1, siehe kb/05-migration-plan.md "Produktivumschaltung"). Dies ist
+# Bestandsschemas (Phase 6 AP1, siehe docs/kb/05-migration-plan.md "Produktivumschaltung"). Dies ist
 # das wartbare Cutover-Verifikationsskript: es prüft nicht Schema-Gleichheit gegen ein frisches
 # Flyway-Schema (diese Prämisse gilt seit V2 nicht mehr), sondern die tatsächlich für den
 # Cutover relevanten Eigenschaften explizit per Assert-Liste (siehe unten).
@@ -113,7 +113,7 @@ INSERT INTO credit_accounting (user_id, execution_id, amount, description)
 SQL
 echo "  Bestandsdaten eingefügt."
 
-echo "== 3) Backend-Jar bauen (Produktionsmodus - siehe kb/04-build-and-run.md, laenger laufender Prozess braucht -Pproduction) =="
+echo "== 3) Backend-Jar bauen (Produktionsmodus - siehe docs/kb/04-build-and-run.md, laenger laufender Prozess braucht -Pproduction) =="
 mvn -q -B -f pom.xml package -pl backend -Pproduction -DskipTests
 
 echo "== 4) Backend gegen die Alt-Weg-DB starten (Flyway migriert automatisch: BASELINE@1, dann V2..V10) =="

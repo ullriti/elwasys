@@ -18,7 +18,7 @@
 #        Spring context is started BY the JUnit test itself, not by this script, since the
 #        test needs the TerminalMaintenanceService bean instance directly), 4. run the suite
 #        under Xvfb (the real client subprocess needs a display for JavaFX).
-# See kb/06-ui-tests.md and kb/08-test-plan.md.
+# See docs/kb/06-ui-tests.md and docs/kb/08-test-plan.md.
 set -euo pipefail
 
 cd "$(dirname "$0")"

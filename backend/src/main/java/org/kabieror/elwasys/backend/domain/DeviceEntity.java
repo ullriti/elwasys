@@ -15,7 +15,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Entspricht der Tabelle {@code devices} (siehe kb/02-data-model.md) sowie
+ * Entspricht der Tabelle {@code devices} (siehe docs/kb/02-data-model.md) sowie
  * {@code org.kabieror.elwasys.common.Device} im Alt-Code.
  *
  * <p>Die Spalte hieß im Bestandsschema (bis V7) {@code auto_end_power_threashold}

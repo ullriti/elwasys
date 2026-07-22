@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 
 /**
  * Entspricht der Tabelle {@code terminal_idempotency_keys} (Phase 4 AP3, siehe
- * kb/02-data-model.md, additive Migration {@code V4__create_terminal_idempotency_keys.sql}).
+ * docs/kb/02-data-model.md, additive Migration {@code V4__create_terminal_idempotency_keys.sql}).
  * Speichert die Antwort eines terminal-gemeldeten Execution-Ereignisses (Start/Ende/
  * Abbruch/Reset) unter dessen Idempotenz-Schlüssel, damit eine wiederholte Meldung (z.B.
  * nach einem Verbindungsabbruch vor Erhalt der ursprünglichen Antwort) dedupliziert werden

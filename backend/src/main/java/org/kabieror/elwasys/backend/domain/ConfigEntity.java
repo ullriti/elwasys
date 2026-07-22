@@ -7,8 +7,8 @@ import jakarta.persistence.Table;
 
 /**
  * Entspricht der Schlüssel/Wert-Konfigurationstabelle {@code config} (siehe
- * kb/02-data-model.md). Kein Java-Code (weder Alt noch Neu) liest diese Werte fachlich -
- * siehe kb/02-data-model.md ("config.db.version stillgelegt"). Diese Entity existiert nur
+ * docs/kb/02-data-model.md). Kein Java-Code (weder Alt noch Neu) liest diese Werte fachlich -
+ * siehe docs/kb/02-data-model.md ("config.db.version stillgelegt"). Diese Entity existiert nur
  * der Vollständigkeit halber (Kerntabelle laut Arbeitsauftrag) und wird in AP2 von keinem
  * Service verwendet.
  */

@@ -15,7 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
  * 1:1-Portierung der Kartennummer-Suche aus {@code DataManager#getUserByCardId}: mehrere
  * Kartennummern werden zeilenweise (per {@code \n}) in einer Spalte gespeichert, das
  * Matching erfolgt per Postgres-Regex {@code (?n)^cardId$} - exakter Treffer EINER Zeile,
- * kein Teilstring-Treffer (siehe kb/05-migration-plan.md, AP2, {@link UserRepository}).
+ * kein Teilstring-Treffer (siehe docs/kb/05-migration-plan.md, AP2, {@link UserRepository}).
  */
 class UserRepositoryCardIdTest extends AbstractBackendIT {
 

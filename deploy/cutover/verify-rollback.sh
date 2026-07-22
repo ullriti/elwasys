@@ -1,6 +1,6 @@
 #!/bin/bash
 # Verifiziert den Rollback-/Rückbau-Pfad end-to-end (Phase 6 AP2, siehe
-# kb/05-migration-plan.md "Produktivumschaltung (Cutover)" und deploy/cutover/README.md,
+# docs/kb/05-migration-plan.md "Produktivumschaltung (Cutover)" und deploy/cutover/README.md,
 # Abschnitt "Rollback"). Gegenstück zu verify-cutover-migration.sh (AP1), das den HINWEG
 # verifiziert - dieses Skript verifiziert den RÜCKWEG (rollback-cutover.sh/.sql).
 #

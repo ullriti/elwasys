@@ -13,7 +13,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
 /**
- * Benachrichtigungsdienst (AP5, siehe kb/05-migration-plan.md): 1:1-Portierung der
+ * Benachrichtigungsdienst (AP5, siehe docs/kb/05-migration-plan.md): 1:1-Portierung der
  * Benachrichtigungslogik aus {@code ExecutionFinisher#executeAction()} im Client-Alt-Code
  * (Kanäle E-Mail und Pushover; der dritte Alt-Kanal, eine Push-Benachrichtigung an die
  * elwaApp über die Ionic-API, ist bewusst NICHT portiert - siehe Klassen-Javadoc unten,
@@ -24,7 +24,7 @@ import org.springframework.stereotype.Service;
  * verschickt (Phase 2-4), würde ein zusätzlicher Versand durch das Backend zu
  * Doppelversand führen. Die eigentliche Verdrahtung mit echten Ereignissen (Terminal meldet
  * "Programm beendet"/"abgebrochen" über die API) kommt in Phase 4 - siehe
- * kb/05-migration-plan.md, "Entscheidungen". Zusätzlich schützt
+ * docs/kb/05-migration-plan.md, "Entscheidungen". Zusätzlich schützt
  * {@link NotificationsProperties#isEnabled()} (Default {@code false}): ist der Dienst
  * deaktiviert, wird jeder Aufruf geloggt und ignoriert (siehe {@link #dispatch}).
  *
@@ -51,15 +51,15 @@ import org.springframework.stereotype.Service;
  *       ist NICHT portiert: die mobile App ({@code elwaapi}) wurde laut Auftraggeber als
  *       nicht mehr relevant eingestuft und alle zugehörigen Reste (u.a. {@code app_id},
  *       auf das dieser Kanal aufbaut) wurden in Phase 5 AP4 (V10) entfernt (siehe
- *       kb/05-migration-plan.md, Entscheidungen "Mobile App (`elwaapi`) ist nicht
+ *       docs/kb/05-migration-plan.md, Entscheidungen "Mobile App (`elwaapi`) ist nicht
  *       relevant"). Dieses Arbeitspaket ist zudem explizit auf "SMTP + Pushover"
  *       zugeschnitten (siehe Auftrag).</li>
  *   <li>Die Passwort-Zurücksetzen-/Neues-Passwort-E-Mails aus dem Alt-Portal
  *       ({@code PasswordForgotWindow}, {@code UserWindow}) sind ebenfalls NICHT Teil
  *       dieses Arbeitspakets - sie hängen am (noch nicht existierenden) neuen Portal-Login-
  *       Flow und sind in der Roadmap explizit Phase 3 zugeordnet ("Passwort ändern/
- *       zurücksetzen (E-Mail-Flow)", siehe kb/05-migration-plan.md, Phase 3). Beide
- *       Trigger sind in kb/05-migration-plan.md (AP5-Abschnitt) inventarisiert.</li>
+ *       zurücksetzen (E-Mail-Flow)", siehe docs/kb/05-migration-plan.md, Phase 3). Beide
+ *       Trigger sind in docs/kb/05-migration-plan.md (AP5-Abschnitt) inventarisiert.</li>
  *   <li>Der No-Op-Zeichensatz-Roundtrip des Alt-Codes ({@code new String(x.getBytes(),
  *       Charset.defaultCharset())}) wird nicht nachgebildet - er ist unter einem
  *       durchgängigen Zeichensatz wirkungslos; das Backend verwendet stattdessen konsequent

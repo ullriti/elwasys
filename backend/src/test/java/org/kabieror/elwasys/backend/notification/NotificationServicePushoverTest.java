@@ -26,7 +26,7 @@ import org.kabieror.elwasys.backend.auth.PasswordResetProperties;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 /**
- * Pushover-Kanal des Benachrichtigungsdienstes (AP5, siehe kb/05-migration-plan.md) gegen
+ * Pushover-Kanal des Benachrichtigungsdienstes (AP5, siehe docs/kb/05-migration-plan.md) gegen
  * einen eingebetteten JDK-{@code HttpServer} als Mock (statt der echten Pushover-API).
  *
  * <p>Erwartete Anfrage 1:1 aus dem Bytecode von {@code net.pushover.client

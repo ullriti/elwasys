@@ -10,7 +10,7 @@ import org.kabieror.elwasys.raspiclient.api.dto.SnapshotUserGroupDto;
 
 /**
  * 1:1-Portierung von {@code backend.service.PricingService} für die Offline-Preisberechnung
- * (Phase 4 AP6, siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
+ * (Phase 4 AP6, siehe docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
  * Terminal"). Nötig, weil das Terminal offline keine vom Server vorberechneten Preise
  * bekommt (anders als {@code DeviceDto#programs()}/{@code DeviceOverviewDto#programs()} im
  * Online-Betrieb) - {@code offline.OfflineGateway} baut die entsprechenden DTOs stattdessen

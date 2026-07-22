@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
  * Prüft vom Terminal mitgeschickte Original-Zeitstempel ({@code clientTimestamp}, seit
  * Phase 4 AP3 auf den Execution-Endpunkten) gegen das erlaubte Zeitfenster, bevor
  * {@link org.kabieror.elwasys.backend.api.ExecutionController} sie an
- * {@code ExecutionService} weiterreicht (Phase 4 AP6, siehe kb/05-migration-plan.md
+ * {@code ExecutionService} weiterreicht (Phase 4 AP6, siehe docs/kb/05-migration-plan.md
  * "Konzeptskizze: Offline-Buchungen am Terminal" Punkt 4 "Nachmeldung (Replay)" und
  * "Festlegungen zu den Offline-Detailfragen").
  *

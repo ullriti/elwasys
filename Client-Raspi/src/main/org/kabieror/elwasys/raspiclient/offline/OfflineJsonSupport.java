@@ -7,7 +7,7 @@ import java.time.format.DateTimeFormatter;
 
 /**
  * Gemeinsame Gson-Konfiguration für {@link OfflineSnapshotStore} und {@link OfflineJournal}
- * (Phase 4 AP6, siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
+ * (Phase 4 AP6, siehe docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
  * Terminal"). Derselbe {@link LocalDateTime}-Adapter wie {@code api.ApiClient}, dupliziert
  * statt geteilt, weil {@code ApiClient} ihn bewusst privat hält (kein öffentlicher
  * JSON-Vertrag dieser Klasse).

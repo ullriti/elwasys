@@ -22,7 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * Charakterisierungstests für die Berechtigungs-Matrix (Gruppe/Standort/Gerät/Programm,
- * gesperrte Nutzer, deaktivierte Geräte) - siehe kb/05-migration-plan.md, AP2.
+ * gesperrte Nutzer, deaktivierte Geräte) - siehe docs/kb/05-migration-plan.md, AP2.
  *
  * <p>Diese Regeln sind im Alt-Code NICHT in einer wiederverwendbaren Common-Methode
  * gekapselt, sondern direkt inline in den JavaFX-UI-Controllern des Terminals
@@ -108,7 +108,7 @@ class PermissionServiceTest extends AbstractBackendIT {
 
     @Test
     void availableProgramsAreFilteredByDeviceAssignmentAndUserGroupButNotByProgramEnabledFlag() {
-        // Beobachtung (siehe kb/05-migration-plan.md, PermissionService-Javadoc): der
+        // Beobachtung (siehe docs/kb/05-migration-plan.md, PermissionService-Javadoc): der
         // Alt-Code (Device#getPrograms(User)) filtert NICHT zusätzlich auf
         // program.isEnabled() - ein deaktiviertes, aber dem Gerät zugeordnetes und für die
         // Gruppe freigegebenes Programm bleibt wählbar. Wird hier bewusst nachgebildet.

@@ -13,7 +13,7 @@ import org.springframework.util.StreamUtils;
 
 /**
  * Aktiviert Vaadin Push für das gesamte Admin-Portal (Phase 3 AP5, siehe
- * kb/05-migration-plan.md, Roadmap-Punkt "Live-Updates zwischen Sessions") - ersatzlos ergänzt
+ * docs/kb/05-migration-plan.md, Roadmap-Punkt "Live-Updates zwischen Sessions") - ersatzlos ergänzt
  * das Alt-Portal NICHT (siehe {@link org.kabieror.elwasys.backend.ui.push.UiBroadcaster}
  * Javadoc: dort trotz {@code vaadin-push}-Abhängigkeit nirgends tatsächlich per {@code @Push}
  * aktiviert).
@@ -24,7 +24,7 @@ import org.springframework.util.StreamUtils;
  * reines {@code WEBSOCKET}, ohne dass der Bedienfluss sich unterscheidet.
  *
  * <p><b>Security-/Pfad-Koexistenz mit dem Terminal-WebSocket-Endpunkt</b> (siehe
- * kb/05-migration-plan.md, AP5-Verifikation): Vaadins Push-Endpunkt liegt unter dem
+ * docs/kb/05-migration-plan.md, AP5-Verifikation): Vaadins Push-Endpunkt liegt unter dem
  * servlet-internen Pfad {@code /VAADIN/push} (bzw. dem Atmosphere-Pfad relativ zur
  * Vaadin-Servlet-Zuordnung), der Terminal-WebSocket-Endpunkt dagegen unter
  * {@code /api/v1/terminal-ws} (siehe {@code TerminalWebSocketConfig}) - disjunkte Pfade, keine
@@ -52,7 +52,7 @@ public class ElwasysAppShell implements AppShellConfigurator {
      * Frontend-Bundle zu kompilieren ({@code vaadin:build-frontend}). Genau dieser Schritt löst
      * bei der hier verwendeten Vaadin-Version 24.10.x (als "extended maintenance"/kommerziell
      * eingestuft) einen ONLINE-Lizenzcheck gegen vaadin.com aus (siehe Begründung in der
-     * pom.xml sowie kb/05-migration-plan.md "Phase 3 AP2"). In der Sandbox/CI ist vaadin.com
+     * pom.xml sowie docs/kb/05-migration-plan.md "Phase 3 AP2"). In der Sandbox/CI ist vaadin.com
      * nicht erreichbar (Proxy liefert 403), der Produktionsbuild bricht dann ab. Ohne eigenes
      * Frontend nutzt die Anwendung das mitgelieferte Standard-Bundle, der Lizenzcheck entfällt
      * (deshalb baut die E2E-Pipeline bisher grün). Das Inline-Stylesheet umgeht das komplett:

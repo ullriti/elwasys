@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * app and assert the ExecutionManager picks it up as a running execution.
  *
  * Run: ./run-client-e2e.sh   (or xvfb-run mvn test -Dtest=ClientResumeExecutionE2ETest)
- * See kb/08-test-plan.md.
+ * See docs/kb/08-test-plan.md.
  */
 public class ClientResumeExecutionE2ETest {
 
@@ -84,7 +84,7 @@ public class ClientResumeExecutionE2ETest {
     }
 
     /**
-     * Phase 4 CI-Stabilität (siehe kb/05-migration-plan.md, Änderungslog "Phase 4
+     * Phase 4 CI-Stabilität (siehe docs/kb/05-migration-plan.md, Änderungslog "Phase 4
      * CI-Stabilität (deCONZ)"): dieser Test seedet absichtlich eine DAUERHAFT unfertige
      * Ausführung ({@code finished=FALSE}, siehe {@link #seedFixtures()}), um den
      * Wiederaufnahme-Pfad (Testfall C13) zu prüfen - ohne Aufräumen überlebt dieser

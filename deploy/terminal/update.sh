@@ -1,6 +1,6 @@
 #!/bin/bash
 # Client-Jar-Update fuer BESTEHENDE Raspi-Terminals (Phase 6 AP4, siehe
-# kb/05-migration-plan.md "Phase 6 - Produktivumschaltung").
+# docs/kb/05-migration-plan.md "Phase 6 - Produktivumschaltung").
 #
 # Warum: Ein bereits provisioniertes Terminal (aus setup.sh) soll auf ein neues
 # Client-fat-jar gehoben werden, OHNE das interaktive setup.sh erneut zu fahren -

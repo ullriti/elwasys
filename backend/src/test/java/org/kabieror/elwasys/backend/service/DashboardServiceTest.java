@@ -26,7 +26,7 @@ import org.kabieror.elwasys.backend.support.Fixtures;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * Tests für {@link DashboardService} (Phase 3 AP3, siehe kb/05-migration-plan.md) - fachlicher
+ * Tests für {@link DashboardService} (Phase 3 AP3, siehe docs/kb/05-migration-plan.md) - fachlicher
  * Nachfolger der Datenbeschaffung aus {@code Portal/.../views/AdminDashboardView#loadData}
  * (Alt-Portal, Testfall P20: "Frei"/"Besetzt" wird direkt aus der laufenden Execution in der
  * DB abgeleitet, kein Client-Kontakt nötig).

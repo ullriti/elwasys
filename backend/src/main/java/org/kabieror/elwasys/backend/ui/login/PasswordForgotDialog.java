@@ -18,7 +18,7 @@ import org.kabieror.elwasys.backend.service.PasswordResetService.UserNotFoundFor
  * "Passwort vergessen?"-Knopf der {@link LoginView} (bis AP4 deaktiviert, siehe
  * {@code LoginForm#setForgotPasswordButtonVisible}).
  *
- * <p>P19 verlangt laut kb/08-test-plan.md nur, dass sich dieser Dialog öffnet (kein echter
+ * <p>P19 verlangt laut docs/kb/08-test-plan.md nur, dass sich dieser Dialog öffnet (kein echter
  * Mailversand im Test) - die Absende-Logik selbst wird service-seitig getestet
  * ({@code PasswordResetServiceTest}).
  */

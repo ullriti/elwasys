@@ -4,7 +4,7 @@
 #
 # Liest dieselben drei Umgebungsvariablen, die auch das Backend selbst kennt (siehe
 # backend/src/main/resources/application.yml: ELWASYS_DB_URL/_USER/_PASSWORD) - Defaults
-# passen zur lokalen Entwicklungsumgebung, siehe kb/04-build-and-run.md:
+# passen zur lokalen Entwicklungsumgebung, siehe docs/kb/04-build-and-run.md:
 #   ELWASYS_DB_URL=jdbc:postgresql://localhost:5432/elwasys
 #   ELWASYS_DB_USER=elwaportal
 #   ELWASYS_DB_PASSWORD=elwaportal

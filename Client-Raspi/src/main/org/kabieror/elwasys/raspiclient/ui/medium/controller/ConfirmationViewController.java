@@ -44,7 +44,7 @@ import java.util.ResourceBundle;
 /**
  * Controller der Bestätigungsseite für den Programmstart.
  * <p>
- * Seit Phase 4 AP4 (siehe kb/05-migration-plan.md "Benachrichtigungen") steuern die
+ * Seit Phase 4 AP4 (siehe docs/kb/05-migration-plan.md "Benachrichtigungen") steuern die
  * E-Mail-/Push-Checkboxen nichts mehr fachlich an: der Alt-Code speicherte die
  * Einwilligung ohnehin nur im (nie persistierten) In-Memory-Benutzerobjekt für den
  * unmittelbar folgenden Versand durch {@code ExecutionFinisher} - dieser Versand läuft
@@ -187,7 +187,7 @@ public class ConfirmationViewController implements Initializable, IViewControlle
         int userId = this.mfc.getRegisteredUser().getId();
         int deviceId = this.mfc.getSelectedDevice().getId();
         // Faellt bei einem Kommunikationsfehler auf den lokalen Offline-Snapshot zurueck
-        // (Phase 4 AP6, siehe kb/05-migration-plan.md).
+        // (Phase 4 AP6, siehe docs/kb/05-migration-plan.md).
         List<DeviceDto> devices = ElwaManager.instance.getDevicesForUser(userId);
         for (DeviceDto d : devices) {
             if (d.id() == deviceId) {
@@ -236,7 +236,7 @@ public class ConfirmationViewController implements Initializable, IViewControlle
                 final ClientExecution ex;
                 try {
                     // Faellt bei einem Kommunikationsfehler auf eine Offline-Buchung gegen den
-                    // Snapshot zurueck (Phase 4 AP6, siehe kb/05-migration-plan.md
+                    // Snapshot zurueck (Phase 4 AP6, siehe docs/kb/05-migration-plan.md
                     // "Konzeptskizze: Offline-Buchungen am Terminal").
                     ex = ElwaManager.instance.createExecution(this.mfc.getRegisteredUser(),
                             this.mfc.getSelectedDevice(), this.selectedProgram);

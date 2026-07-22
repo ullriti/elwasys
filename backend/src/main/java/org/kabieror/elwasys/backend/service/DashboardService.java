@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Datenbeschaffung für das Admin-Dashboard (Phase 3 AP3, siehe kb/05-migration-plan.md) -
+ * Datenbeschaffung für das Admin-Dashboard (Phase 3 AP3, siehe docs/kb/05-migration-plan.md) -
  * fachlicher Nachfolger von {@code Portal/.../views/AdminDashboardView#loadData} und
  * {@code AdminDashboardLocationPanel} (Alt-Portal). Liefert je Standort die dort
  * befindlichen Geräte mit ihrem aktuellen Status (Frei/Besetzt, siehe Testfall P20: der
@@ -25,10 +25,10 @@ import org.springframework.transaction.annotation.Transactional;
  * der View: so kann dieselbe Abfrage unverändert von den für AP5 geplanten Live-Updates
  * zwischen Sessions (Ersatz der {@code events/}-Listener + des Vaadin-Push aus dem
  * Alt-Portal) wiederverwendet werden, statt eine zweite Implementierung zu brauchen - siehe
- * kb/05-migration-plan.md, Phase-3-Roadmap ("Kein Live-Push nötig ... baue die
+ * docs/kb/05-migration-plan.md, Phase-3-Roadmap ("Kein Live-Push nötig ... baue die
  * Datenbeschaffung so, dass AP5 sie wiederverwenden kann").
  *
- * <p>NICHT Teil dieses Service (siehe kb/05-migration-plan.md, Roadmap "Dialoge/Funktionen"):
+ * <p>NICHT Teil dieses Service (siehe docs/kb/05-migration-plan.md, Roadmap "Dialoge/Funktionen"):
  * die Wartungsverbindungs-Infos, die das Alt-Dashboard zusätzlich pro Standort zeigte
  * (Verbindungsstatus/IP-Adresse, Log-/Neustart-Menü) - das ist Teil der für AP4 geplanten
  * Fernwartung über den neuen Backend-Kanal, nicht der reinen DB-getriebenen Statusanzeige

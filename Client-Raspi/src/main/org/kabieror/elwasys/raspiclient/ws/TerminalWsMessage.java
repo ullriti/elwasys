@@ -5,7 +5,7 @@ import java.util.UUID;
 
 /**
  * Nachrichtenumschlag des Terminal-WebSocket-Protokolls (Phase 4 AP5, Client-seitiges
- * Gegenstück zu {@code backend.ws.TerminalWsMessage} - siehe kb/03-modules.md). Feldnamen
+ * Gegenstück zu {@code backend.ws.TerminalWsMessage} - siehe docs/kb/03-modules.md). Feldnamen
  * ({@code v}/{@code type}/{@code id}/{@code payload}) sind bewusst identisch zum
  * Jackson-serialisierten Backend-Record gehalten, damit Gson (hier verwendet, siehe
  * {@link TerminalWebSocketClient}) die Nachrichten ohne benutzerdefinierte (De-)Serialisierer

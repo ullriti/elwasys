@@ -13,11 +13,11 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 
 /**
- * Entspricht der Tabelle {@code users} (siehe kb/02-data-model.md) sowie
+ * Entspricht der Tabelle {@code users} (siehe docs/kb/02-data-model.md) sowie
  * {@code org.kabieror.elwasys.common.User} im Alt-Code.
  *
  * <p>Die App-Relikt-Spalten {@code app_id}, {@code access_key}, {@code auth_key} waren
- * bewusst NICHT gemappt (siehe kb/05-migration-plan.md, Rahmenbedingungen) - alle drei
+ * bewusst NICHT gemappt (siehe docs/kb/05-migration-plan.md, Rahmenbedingungen) - alle drei
  * waren nullable und für die Fachlogik (Abrechnung/Berechtigungen/Preisberechnung/
  * Execution-Lebenszyklus) irrelevant. Sie wurden inkl. des DB-Triggers
  * {@code user_authkey_trigger} (befüllte {@code auth_key} bei jedem INSERT) in Phase 5
@@ -81,7 +81,7 @@ public class UserEntity {
     /**
      * EAGER (nicht LAZY): der Alt-Code (siehe {@code User#load}) lädt die Gruppe eines
      * Benutzers immer sofort mit ({@code dataManager.getUserGroupById(...)}), es gibt dort
-     * kein "lazy" Nachladen. Diese Entity bildet das nach - siehe kb/05-migration-plan.md
+     * kein "lazy" Nachladen. Diese Entity bildet das nach - siehe docs/kb/05-migration-plan.md
      * ("Entscheidungen": alle in AP2 fachlich genutzten Assoziationen sind EAGER, analog
      * zum durchgängig eager ladenden Alt-{@code DataManager}; AP2 hat noch keine
      * Web-/Transaktionsgrenze, die LAZY sauber absichern würde - das kann in einem

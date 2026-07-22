@@ -1,5 +1,5 @@
 -- Cutover: Review potenziell obsoleter "locations"-Zeilen (Phase 6 AP1, siehe
--- kb/05-migration-plan.md "Produktivumschaltung").
+-- docs/kb/05-migration-plan.md "Produktivumschaltung").
 --
 -- READ-ONLY: dies ist eine reine SELECT-Abfrage, kein Automatismus. Die spaltenweise
 -- Alt-Registrierungs-Bereinigung (locations.client_uid/client_ip/client_port/client_last_seen)

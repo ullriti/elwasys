@@ -18,7 +18,7 @@ import org.kabieror.elwasys.backend.support.AbstractApiIT;
 import org.springframework.http.MediaType;
 
 /**
- * Execution-Lebenszyklus über die Terminal-API (AP4, siehe kb/05-migration-plan.md):
+ * Execution-Lebenszyklus über die Terminal-API (AP4, siehe docs/kb/05-migration-plan.md):
  * starten/beenden/abbrechen/zurücksetzen inkl. Abrechnung sowie die fachlichen Fehlerfälle
  * (Standort fremdes Gerät, Gerät nicht nutzbar, Programm nicht verfügbar, Gerät belegt,
  * Guthaben nicht ausreichend), orientiert an den Client-E2E-Fällen C9 (zu wenig Guthaben) und

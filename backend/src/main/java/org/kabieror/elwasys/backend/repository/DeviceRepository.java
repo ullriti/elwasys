@@ -12,13 +12,13 @@ public interface DeviceRepository extends JpaRepository<DeviceEntity, Integer> {
      * Lösch-Wächter für Standorte verwendet (siehe {@code LocationService#delete}: ein
      * Standort mit noch zugeordneten Geräten kann nicht gelöscht werden, analog zur
      * fehlenden {@code ON DELETE}-Klausel auf {@code devices.location_id}, siehe
-     * kb/02-data-model.md).
+     * docs/kb/02-data-model.md).
      */
     List<DeviceEntity> findByLocation_IdOrderByName(Integer locationId);
 
     /**
      * Alle Geräte, alphabetisch nach Name - für die Admin-Geräteliste (Portal-UI, siehe
-     * kb/03-modules.md, "Portal-UI").
+     * docs/kb/03-modules.md, "Portal-UI").
      */
     List<DeviceEntity> findAllByOrderByNameAsc();
 

@@ -1,6 +1,6 @@
 -- Entfernt die DB-Reste der mobilen App (elwaapi), die laut Auftraggeber nicht mehr
--- relevant ist (Entscheidung 2026-07-20, siehe kb/05-migration-plan.md "Entscheidungen"
--- sowie kb/02-data-model.md). Der DB-User "elwaapi" selbst wurde bereits in Phase 5 AP2
+-- relevant ist (Entscheidung 2026-07-20, siehe docs/kb/05-migration-plan.md "Entscheidungen"
+-- sowie docs/kb/02-data-model.md). Der DB-User "elwaapi" selbst wurde bereits in Phase 5 AP2
 -- (V6__harden_db_roles.sql) entfernt; diese Migration räumt die verbliebenen
 -- App-Relikt-Objekte auf: den Auth-Key-Trigger/die zugehörigen Funktionen, die
 -- App-Relikt-Spalten auf users, sowie die Reservierungs-/Fremd-Authkey-Tabellen, die die
@@ -21,7 +21,7 @@
 -- backend/src und Common/src ergab keine Treffer außerhalb der eingefrorenen Baseline).
 --
 -- V1__baseline_schema_0_4_0.sql und Common/resources/database-init.sql bleiben als
--- eingefrorene 0.4.0-Baseline unangetastet (siehe kb/04-build-run.md).
+-- eingefrorene 0.4.0-Baseline unangetastet (siehe docs/kb/04-build-run.md).
 
 DROP TRIGGER IF EXISTS user_authkey_trigger ON users;
 DROP FUNCTION IF EXISTS user_authkey_trigger_function();

@@ -21,7 +21,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 /**
  * Idempotenz terminal-gemeldeter Execution-Ereignisse über den {@code Idempotency-Key}-Header
- * (AP3, Phase 4, siehe kb/05-migration-plan.md "Idempotenz + Replay" und
+ * (AP3, Phase 4, siehe docs/kb/05-migration-plan.md "Idempotenz + Replay" und
  * {@link org.kabieror.elwasys.backend.api.idempotency.IdempotencyService} Javadoc).
  */
 class ExecutionControllerIdempotencyTest extends AbstractApiIT {

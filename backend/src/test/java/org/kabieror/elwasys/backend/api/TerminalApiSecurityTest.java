@@ -11,7 +11,7 @@ import org.kabieror.elwasys.backend.support.AbstractApiIT;
 
 /**
  * End-to-End-Beweis der zustandslosen Terminal-Sicherheitskette
- * ({@code TerminalApiSecurityConfig}, AP4, siehe kb/05-migration-plan.md): fehlendes,
+ * ({@code TerminalApiSecurityConfig}, AP4, siehe docs/kb/05-migration-plan.md): fehlendes,
  * unbekanntes, widerrufenes und gültiges Standort-Token, jeweils über die echte
  * HTTP-/Servlet-Schicht (analog {@code SecurityConfigTest} aus AP3).
  */

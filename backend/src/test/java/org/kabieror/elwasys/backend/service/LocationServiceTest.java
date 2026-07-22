@@ -18,7 +18,7 @@ import org.kabieror.elwasys.backend.support.Fixtures;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * Tests für {@link LocationService} (Phase 3 AP2, siehe kb/05-migration-plan.md) - fachlicher
+ * Tests für {@link LocationService} (Phase 3 AP2, siehe docs/kb/05-migration-plan.md) - fachlicher
  * Nachfolger von {@code Portal/.../components/LocationWindow} (Testfall P14), erweitert um
  * Anlegen/Löschen für die neue eigenständige Standort-Ansicht (siehe
  * {@code AdminLayout}-Javadoc: "Standorte" ist im Alt-Portal nur über einen Dashboard-Dialog

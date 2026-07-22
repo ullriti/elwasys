@@ -15,9 +15,9 @@ import org.springframework.web.socket.WebSocketSession;
 
 /**
  * Verbindungsregistry für die ausgehenden Terminal-WebSocket-Verbindungen (AP4, siehe
- * kb/05-migration-plan.md: "Kanal-Fundament ... Verbindungs-Registry (welcher Standort ist
+ * docs/kb/05-migration-plan.md: "Kanal-Fundament ... Verbindungs-Registry (welcher Standort ist
  * verbunden)"). Ersetzt fachlich die alte {@code client_ip}/{@code client_port}-Registrierung
- * in {@code locations} (siehe kb/02-data-model.md, "Weg - obsolet durch ausgehende
+ * in {@code locations} (siehe docs/kb/02-data-model.md, "Weg - obsolet durch ausgehende
  * Client-Verbindung") - hier rein in-memory, weil die Verbindung selbst (nicht ein
  * gespeicherter Endpunkt) die Erreichbarkeit repräsentiert.
  *

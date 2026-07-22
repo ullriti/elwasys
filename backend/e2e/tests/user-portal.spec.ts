@@ -53,7 +53,7 @@ test('the password-forgot dialog opens from the login page and handles errors wi
 });
 
 test('a user can change their own password and log in with it (P16)', async ({ page }) => {
-  // Start from a known state: password "test". Per kb/05-migration-plan.md, this is the ONE
+  // Start from a known state: password "test". Per docs/kb/05-migration-plan.md, this is the ONE
   // test-plan case where the legacy-portal half no longer applies (the new backend stores
   // Argon2id, not SHA1) - only the "log in again with the new password" assertion carries
   // over, now against the new portal exclusively.

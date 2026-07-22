@@ -12,15 +12,15 @@ import org.kabieror.elwasys.backend.service.UserService;
 import org.kabieror.elwasys.backend.ui.component.UserMenuBar;
 
 /**
- * Rahmen-Layout für den Admin-Bereich (Phase 3 AP1, siehe kb/05-migration-plan.md) - fachlicher
+ * Rahmen-Layout für den Admin-Bereich (Phase 3 AP1, siehe docs/kb/05-migration-plan.md) - fachlicher
  * Nachfolger von {@code Portal/.../AdministratorLayout} + {@code components/MainMenu}
  * (Alt-Portal). Die Navigationspunkte entsprechen 1:1 dem alten Hauptmenü (Dashboard,
  * Benutzer, Benutzergruppen, Programme, Geräte); "Standorte" ist als eigener Menüpunkt NEU
  * (im Alt-Portal nur über einen Dialog auf dem Dashboard erreichbar, siehe
  * {@code Portal/.../components/LocationWindow}) - eine bewusste, laut Auftraggeber
- * ausdrücklich erwünschte UX-Verbesserung (siehe kb/05-migration-plan.md, "Entscheidungen",
+ * ausdrücklich erwünschte UX-Verbesserung (siehe docs/kb/05-migration-plan.md, "Entscheidungen",
  * Gestaltungsrahmen Portal-Neubau), keine Funktionsänderung. Inhalte der referenzierten
- * Views sind in diesem Arbeitspaket Platzhalter (siehe kb/05-migration-plan.md
+ * Views sind in diesem Arbeitspaket Platzhalter (siehe docs/kb/05-migration-plan.md
  * Phase-3-Roadmap: AP2/AP3 füllen sie mit den eigentlichen Stammdaten-/CRUD-Ansichten).
  *
  * <p>Zugriff ist auf {@code ROLE_ADMIN} beschränkt - jede Ziel-View trägt zusätzlich selbst

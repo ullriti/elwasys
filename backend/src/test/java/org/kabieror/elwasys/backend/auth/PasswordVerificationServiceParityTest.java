@@ -7,7 +7,7 @@ import org.kabieror.elwasys.backend.auth.PasswordVerificationService.HashAlgorit
 import org.kabieror.elwasys.backend.auth.PasswordVerificationService.VerificationResult;
 
 /**
- * Äquivalenznachweis Alt vs. Neu (analog AP2, siehe kb/05-migration-plan.md, AP3): ein
+ * Äquivalenznachweis Alt vs. Neu (analog AP2, siehe docs/kb/05-migration-plan.md, AP3): ein
  * Hash, den das Alt-Portal-SHA1-Verfahren (im Alt-Code {@code Utilities#sha1}, aufgerufen
  * von {@code User#checkPassword}/{@code #changePassword}) für ein Passwort erzeugt, muss
  * vom neuen {@link PasswordVerificationService} als gültiges SHA1-Legacy-Passwort

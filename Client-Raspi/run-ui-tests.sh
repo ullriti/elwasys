@@ -5,9 +5,9 @@
 #   ./run-ui-tests.sh HeadlessFxSmokeTest   # run a single test class
 #
 # Requires: JDK, Maven, Xvfb (installed by the SessionStart hook / cloud-init).
-# See kb/06-ui-tests.md and kb/07-cloud-init.md.
+# See docs/kb/06-ui-tests.md and docs/kb/07-cloud-init.md.
 #
-# Since Phase 4 AP4 (client cutover to the REST API, see kb/05-migration-plan.md)
+# Since Phase 4 AP4 (client cutover to the REST API, see docs/kb/05-migration-plan.md)
 # the full-app E2E tests (`*E2ETest`) talk to a running elwasys backend instead
 # of the database directly. `mvn test` (no filter) runs those too, so this script
 # now brings up the same reproducible backend as run-client-e2e.sh: start

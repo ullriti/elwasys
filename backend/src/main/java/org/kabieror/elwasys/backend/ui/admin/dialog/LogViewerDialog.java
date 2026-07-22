@@ -6,7 +6,7 @@ import com.vaadin.flow.component.textfield.TextArea;
 import java.util.List;
 
 /**
- * Dialog "Log" (Phase 3 AP4, siehe kb/05-migration-plan.md) - fachlicher Nachfolger von
+ * Dialog "Log" (Phase 3 AP4, siehe docs/kb/05-migration-plan.md) - fachlicher Nachfolger von
  * {@code Portal/.../components/LogViewerWindow} (Alt-Portal): schreibgeschützte Anzeige des
  * über {@code TerminalMaintenanceService#requestLog} vom Terminal geholten Log-Inhalts, eine
  * Zeile pro Listeneintrag, mit Zeilenumbrüchen verbunden - 1:1 wie im Alt-Fenster.

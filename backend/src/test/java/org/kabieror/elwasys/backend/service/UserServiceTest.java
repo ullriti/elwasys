@@ -15,7 +15,7 @@ import org.kabieror.elwasys.backend.support.Fixtures;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * Tests für {@link UserService} (Phase 3 AP2, siehe kb/05-migration-plan.md) - fachlicher
+ * Tests für {@link UserService} (Phase 3 AP2, siehe docs/kb/05-migration-plan.md) - fachlicher
  * Nachfolger von {@code Portal/.../components/UserWindow} (Testfälle P6/P7), ohne den
  * Admin-Passwort-Reset-Teil (AP4).
  */
@@ -105,7 +105,7 @@ class UserServiceTest extends AbstractBackendIT {
         assertThat(this.userService.findAllActive()).doesNotContain(reloaded);
 
         // Der ursprüngliche Benutzername ist jetzt wieder frei - ein neuer Benutzer kann ihn
-        // verwenden (UNIQUE-Constraint auf users.username, siehe kb/02-data-model.md).
+        // verwenden (UNIQUE-Constraint auf users.username, siehe docs/kb/02-data-model.md).
         UserEntity newUserWithSameName = this.userService.create("New User", username, null, new String[0], false,
                 group);
         assertThat(newUserWithSameName.getUsername()).isEqualTo(username);

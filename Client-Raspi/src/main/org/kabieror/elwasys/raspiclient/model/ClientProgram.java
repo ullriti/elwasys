@@ -9,7 +9,7 @@ import java.time.temporal.ChronoUnit;
 
 /**
  * Client-seitiges Gegenstück zu {@code Common.Program} (Phase 4 AP4, siehe
- * kb/05-migration-plan.md "Client-Cutover"). Anders als das Alt-{@code Program} (Active
+ * docs/kb/05-migration-plan.md "Client-Cutover"). Anders als das Alt-{@code Program} (Active
  * Record mit eigenem DB-Zugriff für Preisberechnung/Persistenz) ist dies ein reiner,
  * unveränderlicher Datencontainer, befüllt aus der API-Antwort ({@link ProgramDto}) - die
  * eigentliche Preisberechnung (inkl. Gruppenrabatt) läuft jetzt serverseitig

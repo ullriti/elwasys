@@ -11,10 +11,10 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Persistiert den zuletzt geladenen Standort-{@link SnapshotDto} auf dem Terminal
- * (Phase 4 AP6, siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
+ * (Phase 4 AP6, siehe docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
  * Terminal" Punkt 1 "Lokaler Daten-Snapshot"). Datei liegt im Arbeitsverzeichnis
  * ({@code offline-snapshot.json}, analog {@code .client-uid}/{@code elwasys.properties}) -
- * bewusst UNVERSCHLÜSSELT (Auftraggeber-Entscheidung, siehe kb/05-migration-plan.md
+ * bewusst UNVERSCHLÜSSELT (Auftraggeber-Entscheidung, siehe docs/kb/05-migration-plan.md
  * "Festlegungen zu den Offline-Detailfragen": "Snapshot/Journal liegen unverschlüsselt auf
  * dem Gerät ... dokumentiertes Restrisiko"); {@link SnapshotDto} enthält ohnehin keine
  * Passwort-Hashes (siehe dessen Javadoc).

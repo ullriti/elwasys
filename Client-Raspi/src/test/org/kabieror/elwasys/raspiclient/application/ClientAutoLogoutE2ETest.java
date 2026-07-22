@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * activity.
  *
  * Run: ./run-client-e2e.sh   (or xvfb-run mvn test -Dtest=ClientAutoLogoutE2ETest)
- * See kb/08-test-plan.md.
+ * See docs/kb/08-test-plan.md.
  */
 public class ClientAutoLogoutE2ETest {
 

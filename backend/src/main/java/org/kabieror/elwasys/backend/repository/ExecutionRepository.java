@@ -12,7 +12,7 @@ public interface ExecutionRepository extends JpaRepository<ExecutionEntity, Inte
      * nicht abgeschlossenen Ausführungen eines Benutzers, UNABHÄNGIG davon, ob sie
      * bereits gestartet wurden ({@code start} kann {@code null} sein!). Bewusst kein
      * {@code start IS NOT NULL}-Filter - siehe {@code CreditService#getCredit} und
-     * kb/05-migration-plan.md ("Beobachtungen"): eine gerade erst angelegte, noch nicht
+     * docs/kb/05-migration-plan.md ("Beobachtungen"): eine gerade erst angelegte, noch nicht
      * gestartete Ausführung mindert das Guthaben bereits um ihren Maximalpreis
      * (Vor-Reservierung gegen Überbuchung).
      */

@@ -45,7 +45,7 @@ import org.mockito.ArgumentCaptor;
 
 /**
  * Zeitstempel-Toleranz und Benachrichtigungs-Unterdrückung für Offline-Nachmeldungen (Phase 4
- * AP6, siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal" Punkt 4
+ * AP6, siehe docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am Terminal" Punkt 4
  * und "Festlegungen zu den Offline-Detailfragen" sowie {@link ClientTimestampPolicy}
  * Javadoc). Reiner Mockito-Unit-Test ohne Spring-Kontext, gleiches Muster wie
  * {@link ExecutionControllerNotificationTest} (Begründung siehe dort).

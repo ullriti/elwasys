@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Persistentes, neustartfestes Ereignis-Journal für Start/Ende/Abbruch von Ausführungen
- * (Phase 4 AP6, siehe kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
+ * (Phase 4 AP6, siehe docs/kb/05-migration-plan.md "Konzeptskizze: Offline-Buchungen am
  * Terminal" Punkt 3 "Persistentes Ereignis-Journal" und Auftrag "Stufe A - laufende
  * Executions lokal zu Ende führen"). Dasselbe Journal trägt BEIDE Stufen: laufende, online
  * gestartete Ausführungen, die nur beim Beenden nicht mehr an das Backend gemeldet werden

@@ -9,7 +9,7 @@ import java.security.NoSuchAlgorithmException;
  *
  * <p>Das ehemalige {@code common}-Modul wurde nach Abschluss der Migration aufgelöst
  * (die sechs Utility-Klassen leben jetzt im Client-Raspi-Modul, siehe
- * kb/05-migration-plan.md). Das Backend hat zur Laufzeit ohnehin nie von {@code common}
+ * docs/kb/05-migration-plan.md). Das Backend hat zur Laufzeit ohnehin nie von {@code common}
  * abgehängt; die Auth-Parity-Tests brauchen aber weiterhin genau das Alt-Hash-Format,
  * um zu belegen, dass {@code PasswordVerificationService} Bestandshashes (SHA1, hex,
  * Kleinbuchstaben, ohne Salt) korrekt verifiziert. Diese Kopie hält den Algorithmus

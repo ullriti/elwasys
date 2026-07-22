@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
 
 /**
- * Heartbeat für die Terminal-WebSocket-Verbindungen (AP4, siehe kb/05-migration-plan.md:
+ * Heartbeat für die Terminal-WebSocket-Verbindungen (AP4, siehe docs/kb/05-migration-plan.md:
  * "Ping/Heartbeat"). Sendet allen verbundenen Terminals periodisch ein PING und schließt
  * Verbindungen, die zu lange nicht mehr geantwortet haben (tote/hängende TCP-Verbindungen,
  * die der Server sonst erst durch einen fehlgeschlagenen Sendeversuch bemerken würde).

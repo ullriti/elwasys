@@ -23,7 +23,7 @@ import org.kabieror.elwasys.backend.service.PasswordResetService;
 
 /**
  * Öffentliche Ansicht zum Setzen eines neuen Passworts über einen per Email verschickten
- * Reset-Link (Phase 3 AP4, Testfall P19, siehe kb/05-migration-plan.md) - fachlicher
+ * Reset-Link (Phase 3 AP4, Testfall P19, siehe docs/kb/05-migration-plan.md) - fachlicher
  * Nachfolger von {@code Portal/.../components/ResetPasswordWindow} (Alt-Portal), dort ein
  * modales Fenster über der bereits geladenen Portal-Seite (der Alt-Portal-Link öffnet die
  * Hauptseite mit Query-Parameter {@code ?rp=<key>}, die dieses Fenster dann selbst öffnet -

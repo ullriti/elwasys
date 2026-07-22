@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * accumulates across runs.
  *
  * Run: ./run-client-e2e.sh   (or xvfb-run mvn test -Dtest=ClientUsageE2ETest)
- * See kb/08-test-plan.md.
+ * See docs/kb/08-test-plan.md.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class ClientUsageE2ETest {

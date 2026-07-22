@@ -12,7 +12,7 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 
 /**
  * Registriert den Terminal-WebSocket-Endpunkt unter {@code /api/v1/terminal-ws} (AP4, siehe
- * kb/05-migration-plan.md). Der Pfad liegt bewusst unter {@code /api/v1/**}, damit die
+ * docs/kb/05-migration-plan.md). Der Pfad liegt bewusst unter {@code /api/v1/**}, damit die
  * zustandslose Standort-Token-Sicherheitskette ({@code TerminalApiSecurityConfig}) auch für
  * den Handshake greift - siehe {@link TerminalHandshakeInterceptor}.
  *

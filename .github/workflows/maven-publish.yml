@@ -59,13 +59,13 @@ jobs:
         tag: ${{ github.event.release.tag_name }}
         overwrite: true
 
-    # Backend-Container-Image (Phase 2 AP6, siehe kb/05-migration-plan.md und
+    # Backend-Container-Image (Phase 2 AP6, siehe docs/kb/05-migration-plan.md und
     # backend/Dockerfile). Nutzt denselben, bereits per "versions:set" oben auf die
     # Release-Tag-Version gehobenen Arbeitsbaum als Docker-Build-Kontext, damit Jar-Version
     # und Image-Tag übereinstimmen. Veröffentlichung nach GHCR mit dem eingebauten
     # GITHUB_TOKEN (kein zusätzliches Secret nötig, siehe "packages: write" oben) - andere
     # Registries (z.B. Docker Hub) würden ein separates, hier absichtlich nicht angelegtes
-    # Secret brauchen, siehe kb/05-migration-plan.md ("offene Punkte").
+    # Secret brauchen, siehe docs/kb/05-migration-plan.md ("offene Punkte").
     - name: Compute lowercase image name
       # GHCR verlangt einen durchgängig kleingeschriebenen Image-Pfad; github.repository
       # übernimmt aber die tatsächliche Groß-/Kleinschreibung des Repository-Namens.

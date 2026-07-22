@@ -31,7 +31,7 @@ function collect_data() {
     echo "Since Phase 4 the terminal talks to the elwasys backend exclusively (REST API v1"
     echo "for login/devices/programs/executions, plus an outgoing WebSocket connection for"
     echo "remote maintenance - status/log/restart). Enter its base URL and this terminal's"
-    echo "location token (issued via the backend's token-cli, see kb/04-build-and-run.md)."
+    echo "location token (issued via the backend's token-cli, see docs/kb/04-build-and-run.md)."
     echo "No database access is needed on the terminal any more."
     echo
     read -p "Enter backend base URL (e.g., https://backend-host:8080/): " BACKEND_URL
@@ -150,7 +150,7 @@ function config_elwasys() {
 # Base URL of the elwasys backend (REST API v1 + outgoing WebSocket maintenance
 # connection). Since Phase 4 AP5 this is the terminal's ONLY data access path
 # (login, devices, programs, executions, credit, remote status/log/restart); see
-# kb/05-migration-plan.md "Client-Cutover"/"Arbeitspakete Phase 4" AP4/AP5. No
+# docs/kb/05-migration-plan.md "Client-Cutover"/"Arbeitspakete Phase 4" AP4/AP5. No
 # direct database access remains on the terminal.
 backend.url: $BACKEND_URL
 

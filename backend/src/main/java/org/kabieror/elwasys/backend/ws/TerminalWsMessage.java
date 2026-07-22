@@ -4,7 +4,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Nachrichtenumschlag des Terminal-WebSocket-Protokolls (AP4, siehe kb/03-modules.md für die
+ * Nachrichtenumschlag des Terminal-WebSocket-Protokolls (AP4, siehe docs/kb/03-modules.md für die
  * vollständige Protokoll-Doku): JSON, mit explizitem Typ- und Versionsfeld, damit das Format
  * künftig erweitert werden kann, ohne bestehende Clients zu brechen (neue, unbekannte Felder
  * werden von {@link TerminalWebSocketHandler} ignoriert statt einen Fehler auszulösen).

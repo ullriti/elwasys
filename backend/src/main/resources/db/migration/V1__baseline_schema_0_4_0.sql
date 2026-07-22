@@ -2,7 +2,7 @@
 -- (das bereits den Endstand 0.4.0 enthält, siehe unten) für den Betrieb einer FRISCHEN,
 -- leeren Datenbank über Flyway.
 --
--- Herkunft / Nachvollziehbarkeit (siehe kb/02-data-model.md, kb/05-migration-plan.md):
+-- Herkunft / Nachvollziehbarkeit (siehe docs/kb/02-data-model.md, docs/kb/05-migration-plan.md):
 --   - Quelle ist Common/resources/database-init.sql. Die dortigen "CREATE DATABASE elwasys;"
 --     und "\connect elwasys;" Zeilen entfallen hier: Flyway migriert eine bereits über die
 --     JDBC-URL ausgewählte Datenbank, das Anlegen/Verbinden der DB selbst ist nicht Teil der
@@ -15,9 +15,9 @@
 --     Arbeitspakets) bestätigt: Alt-Weg (database-init.sql, frisch ausgeführt) und diese
 --     Baseline erzeugen ein schema-äquivalentes Ergebnis.
 --   - Der Spaltentypo "auto_end_power_threashold" bleibt bewusst erhalten (wird erst in
---     Phase 5 per eigener Flyway-Migration umbenannt, siehe Roadmap in kb/05).
+--     Phase 5 per eigener Flyway-Migration umbenannt, siehe Roadmap in docs/kb/05).
 --   - config.db.version bleibt als Seed erhalten (Alt-Code liest ihn zwar nirgends, siehe
---     kb/02-data-model.md, aber das Verhalten-bewahren-Gebot verbietet, den Wert einfach
+--     docs/kb/02-data-model.md, aber das Verhalten-bewahren-Gebot verbietet, den Wert einfach
 --     wegzulassen). Ab dieser Migration ist config.db.version nur noch historische
 --     Information; künftige Schemaänderungen laufen ausschließlich über weitere
 --     Flyway-Migrationen (V2, V3, ...), die Alt-Upgrade-Skripte unter

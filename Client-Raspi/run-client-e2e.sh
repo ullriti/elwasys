@@ -1,12 +1,12 @@
 #!/bin/bash
 # Run the Raspi-client END-TO-END test: it launches the real JavaFX application
 # headlessly against the elwasys backend (REST API v1, Phase 4 AP4 - see
-# kb/05-migration-plan.md "Client-Cutover") and the in-project fhem/deCONZ
+# docs/kb/05-migration-plan.md "Client-Cutover") and the in-project fhem/deCONZ
 # simulators. This script makes the environment reproducible:
 #   1. start PostgreSQL, 2. seed the elwasys DB (once), 3. build+start the
 #      backend jar (runs Flyway automatically) and seed a terminal token,
 #      4. run the E2E test under Xvfb.
-# See kb/06-ui-tests.md.
+# See docs/kb/06-ui-tests.md.
 set -euo pipefail
 
 cd "$(dirname "$0")"

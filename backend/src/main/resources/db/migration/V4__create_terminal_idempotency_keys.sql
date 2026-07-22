@@ -1,9 +1,9 @@
--- Phase 4 AP3 (siehe kb/05-migration-plan.md): Idempotenz-Schlüssel für terminal-gemeldete
+-- Phase 4 AP3 (siehe docs/kb/05-migration-plan.md): Idempotenz-Schlüssel für terminal-gemeldete
 -- Execution-Ereignisse (Start/Ende/Abbruch/Reset über /api/v1/executions/**). Rein additiv,
 -- keine bestehende Tabelle wird angefasst - der Alt-Code bekommt von dieser Tabelle nichts
 -- mit.
 --
--- Design (siehe kb/03-modules.md "Idempotenz + Replay" für Details):
+-- Design (siehe docs/kb/03-modules.md "Idempotenz + Replay" für Details):
 --  * Das Terminal erzeugt pro fachlichem Ereignis (z.B. "Programm X auf Gerät Y beendet")
 --    genau EINEN UUID-Idempotenz-Schlüssel und sendet ihn im Header "Idempotency-Key" mit.
 --    Wiederholte Anfragen mit demselben Schlüssel (z.B. nach einem Verbindungsabbruch vor

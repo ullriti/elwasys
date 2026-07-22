@@ -1,7 +1,7 @@
 #!/bin/bash
 # Cutover: Standort-Token für ein Terminal ausstellen (Phase 6 AP1, siehe
-# kb/05-migration-plan.md "Produktivumschaltung"). Dünner Wrapper um das bestehende
-# token-cli-Profil (TerminalTokenCliRunner, siehe kb/04-build-and-run.md "Standort-Tokens
+# docs/kb/05-migration-plan.md "Produktivumschaltung"). Dünner Wrapper um das bestehende
+# token-cli-Profil (TerminalTokenCliRunner, siehe docs/kb/04-build-and-run.md "Standort-Tokens
 # erzeugen/widerrufen") - listet zuerst die vorhandenen Standorte, erzeugt dann für den per
 # --location angegebenen Standort ein neues Token.
 #

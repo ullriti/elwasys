@@ -13,8 +13,8 @@ import org.kabieror.elwasys.backend.ui.component.UserMenuBar;
 
 /**
  * Rahmen-Layout für den Selbstbedienungsbereich normaler Benutzer (Phase 3 AP1, siehe
- * kb/05-migration-plan.md) - fachlicher Nachfolger von {@code Portal/.../UserLayout}
- * (Alt-Portal). Laut Auftraggeber (kb/05-migration-plan.md, "Entscheidungen",
+ * docs/kb/05-migration-plan.md) - fachlicher Nachfolger von {@code Portal/.../UserLayout}
+ * (Alt-Portal). Laut Auftraggeber (docs/kb/05-migration-plan.md, "Entscheidungen",
  * Nutzungsprofil Portal) loggen sich im Wesentlichen nur Admins ein; dieser Bereich bleibt
  * funktional, hat aber niedrigere Parity-Priorität - entsprechend schlank (ein Menüpunkt,
  * wie im Alt-Portal).

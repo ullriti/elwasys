@@ -8,7 +8,7 @@ import org.kabieror.elwasys.backend.auth.PasswordVerificationService.Verificatio
 
 /**
  * Reine Unit-Tests (kein Spring-Kontext, keine DB) für die Format-Erkennung und
- * Verifikationslogik - siehe kb/05-migration-plan.md, AP3.
+ * Verifikationslogik - siehe docs/kb/05-migration-plan.md, AP3.
  */
 class PasswordVerificationServiceTest {
 

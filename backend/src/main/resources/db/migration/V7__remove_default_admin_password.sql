@@ -1,4 +1,4 @@
--- DB-Härtung (Phase 5 AP2, siehe kb/05-migration-plan.md): entfernt das in
+-- DB-Härtung (Phase 5 AP2, siehe docs/kb/05-migration-plan.md): entfernt das in
 -- V1__baseline_schema_0_4_0.sql (Alt-Weg: Common/resources/database-init.sql) fest
 -- eingebettete Default-Admin-Passwort (Klartext "admin", als SHA1-Hash gespeichert).
 --
@@ -14,8 +14,8 @@
 -- V7 läuft direkt im Anschluss) bedeutet das: der admin-Benutzer hat ab sofort KEIN bekanntes
 -- Passwort mehr. Es wird über das neue Admin-CLI gesetzt (siehe
 -- org.kabieror.elwasys.backend.auth.AdminPasswordCliRunner, Profil "admin-cli",
--- kb/04-build-and-run.md für das vollständige Kommando) - bewusste, vom Auftraggeber
--- bestätigte Verhaltensänderung NUR für Neuinstallationen (siehe kb/05-migration-plan.md
+-- docs/kb/04-build-and-run.md für das vollständige Kommando) - bewusste, vom Auftraggeber
+-- bestätigte Verhaltensänderung NUR für Neuinstallationen (siehe docs/kb/05-migration-plan.md
 -- "Entscheidungen").
 UPDATE users
 SET password = NULL

@@ -12,7 +12,7 @@
 #   ./run-backend-tests.sh
 #
 # Requires: JDK 21, Maven, local PostgreSQL 16 (pg_ctlcluster) + sudo, as set up by the
-# SessionStart hook / cloud-init. See kb/04-build-and-run.md, kb/07-cloud-init.md.
+# SessionStart hook / cloud-init. See docs/kb/04-build-and-run.md, docs/kb/07-cloud-init.md.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -20,7 +20,7 @@ cd "$(dirname "$0")/.."
 # Ensure the aggregator parent POM is available in the local Maven repo; "mvn -N install"
 # installs just that parent POM. (The backend never had a runtime dependency on the former
 # "common" module; since the migration dissolved it, the auth parity tests reproduce the
-# legacy SHA1 format locally via LegacySha1 - see kb/05-migration-plan.md.)
+# legacy SHA1 format locally via LegacySha1 - see docs/kb/05-migration-plan.md.)
 mvn -q -B -N -f pom.xml install -DskipTests
 
 DB_NAME="elwasys_backend_it"
@@ -35,7 +35,7 @@ pg_isready
 sudo -u postgres psql -q -c "ALTER USER postgres WITH PASSWORD 'postgres';"
 
 # Fresh, empty database for every run: this is the "Flyway migrates a brand-new database"
-# scenario (see kb/02-data-model.md). The "baselineOnMigrate against an existing/legacy
+# scenario (see docs/kb/02-data-model.md). The "baselineOnMigrate against an existing/legacy
 # database" scenario is exercised by the cutover verification (deploy/cutover/verify-cutover-migration.sh).
 sudo -u postgres psql -q -c "DROP DATABASE IF EXISTS ${DB_NAME};"
 sudo -u postgres psql -q -c "CREATE DATABASE ${DB_NAME};"

@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
  * 1:1-Portierung der Persistenz-seitigen Execution-Lebenszyklus-Logik aus
  * {@code org.kabieror.elwasys.common.Execution} (Start/Stop/Reset/Preis/Ablauf) sowie der
  * Datenbank-Anteile von {@code ExecutionManager}/{@code ExecutionFinisher} im Client (siehe
- * kb/05-migration-plan.md, AP2). Hardwarenahe Teile (Leistungsmessung, Ein-/Ausschalten der
+ * docs/kb/05-migration-plan.md, AP2). Hardwarenahe Teile (Leistungsmessung, Ein-/Ausschalten der
  * Steckdose, automatisches Beenden per Leistungsmessung, Email-/Pushover-Benachrichtigungen)
  * bleiben laut Zielarchitektur im Terminal und sind hier bewusst NICHT nachgebildet.
  */
@@ -41,7 +41,7 @@ public class ExecutionService {
 
     /**
      * Veröffentlicht ein {@link ExecutionChangedEvent} für die gegebene Ausführung (Phase 3
-     * AP5, siehe kb/05-migration-plan.md) - gemeinsame Hilfsmethode für alle
+     * AP5, siehe docs/kb/05-migration-plan.md) - gemeinsame Hilfsmethode für alle
      * lebenszyklus-verändernden Methoden dieser Klasse. Bewusst NICHT in {@link
      * #stopExecution}, weil diese Methode ausschließlich intern von {@link #finishExecution}
      * aufgerufen wird (siehe deren Javadoc) - ein zweites Ereignis für denselben Aufruf wäre
@@ -147,7 +147,7 @@ public class ExecutionService {
     /**
      * 1:1-Portierung von {@code Execution#reset()}.
      *
-     * <p><b>Beobachtung</b> (siehe kb/05-migration-plan.md): der Alt-Code setzt
+     * <p><b>Beobachtung</b> (siehe docs/kb/05-migration-plan.md): der Alt-Code setzt
      * {@code finished} beim Zurücksetzen auf {@code TRUE}, nicht auf {@code FALSE} - trotz
      * des Methodennamens "reset" wird die Ausführung damit als abgeschlossen markiert
      * (ohne je gestartet/beendet worden zu sein). Das ist beabsichtigt: {@code reset()}
@@ -224,7 +224,7 @@ public class ExecutionService {
     /**
      * 1:1-Portierung des Filters im Konstruktor von
      * {@code Portal/.../components/ExpiredExecutionsWindow} (Alt-Portal, Phase 3 AP4, siehe
-     * kb/05-migration-plan.md): alle nicht abgerechneten Ausführungen eines Benutzers,
+     * docs/kb/05-migration-plan.md): alle nicht abgerechneten Ausführungen eines Benutzers,
      * eingeschränkt auf tatsächlich abgelaufene (die reine "läuft noch, ist aber noch nicht
      * abgelaufen"-Menge aus {@link #getNotFinishedExecutions} wird dort zusätzlich
      * herausgefiltert).

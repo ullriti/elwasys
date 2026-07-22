@@ -1,7 +1,7 @@
 # Terminal-Runbook (Phase 6 AP3)
 
 Werkzeuge und Ablauf, um ein **Raspberry-Pi-Terminal auf die neue Architektur zu
-bringen** (kb/05-migration-plan.md, „Phase 6 – Produktivumschaltung (Cutover)",
+bringen** (docs/kb/05-migration-plan.md, „Phase 6 – Produktivumschaltung (Cutover)",
 Roadmap-Punkt „Terminals neu aufsetzen"). Neue Architektur heißt: **Java 21**,
 Datenzugriff ausschließlich über die Backend-REST-API v1 + eine ausgehende
 Wartungs-WebSocket-Verbindung (`backend.url`/`backend.token` in
@@ -11,7 +11,7 @@ Wartungs-WebSocket-Verbindung (`backend.url`/`backend.token` in
 Runbook + der zum Supervisor umgebaute `run.sh`-Generator in `Client-Raspi/setup.sh`.
 Die echten apt-/X-Schritte laufen NUR auf dem Gerät (armhf, Raspberry Pi OS) und
 wurden hier lediglich **trocken/syntaktisch** verifiziert (`bash -n` +
-Funktions-/Ablauf-Trockentests, siehe Änderungslog in kb/05). Das optionale
+Funktions-/Ablauf-Trockentests, siehe Änderungslog in docs/kb/05). Das optionale
 Auto-Update mit Rollback folgt in Phase 6 AP5 und baut auf dem hier eingeführten
 `latest`/`previous`-Jar-Layout auf.
 
@@ -39,7 +39,7 @@ deploy/terminal/update.sh --version <tag>   # bzw. --jar <lokaler Pfad>
 `upgrade-jre.sh` nutzt dieselbe apt-Quelle/denselben Schlüssel wie `setup.sh`
 (`install_java`) und prüft am Ende robust, dass `java -version` eine Major-Version
 `>= 21` meldet – schlägt sonst klar fehl. Damit ist das in Phase 1 dokumentierte
-**Java-17-Restrisiko** (Risikotabelle in kb/05) für das jeweilige Gerät aufgelöst.
+**Java-17-Restrisiko** (Risikotabelle in docs/kb/05) für das jeweilige Gerät aufgelöst.
 
 ## `backend.url` / `backend.token`
 
@@ -316,9 +316,9 @@ Version-Ermittlung (kurze Deadline) nachgewiesen: Szenario A (gutes Update →
 → Rollback auf `previous`, Recovery bestätigt, FAILURE-Log), Szenario C
 (up-to-date → stiller No-op) und die Lockfile-Sperre gegen parallele Läufe – ohne
 echte Downloads/apt/sudo, ohne hängende Prozesse. Details im Änderungslog
-„Phase 6 AP3"/„Phase 6 AP4"/„Phase 6 AP5" in kb/05-migration-plan.md.
+„Phase 6 AP3"/„Phase 6 AP4"/„Phase 6 AP5" in docs/kb/05-migration-plan.md.
 
-**QA-Nacharbeiten (B1/M1/N3, siehe kb/05 Änderungslog „Phase 6 QA-Nacharbeiten"):**
+**QA-Nacharbeiten (B1/M1/N3, siehe docs/kb/05 Änderungslog „Phase 6 QA-Nacharbeiten"):**
 zusätzlich zu obigen Szenarien A–C wurde in derselben Trocken-Umgebung
 nachgewiesen: Szenario **C-neu** (`update.sh` scheitert, OHNE `latest` zu ändern
 → WARNUNG + Exit 1, `latest`/`previous` unverändert, **kein** `${ELWA_RESTART_CMD}`

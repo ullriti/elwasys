@@ -7,8 +7,8 @@
 elwasys manages and bills shared washing machines in communal laundry rooms. It consists of
 Raspberry-Pi touch terminals at the washing machines and a central Spring-Boot backend (REST
 API + WebSocket for the terminals, plus a built-in Vaadin Flow admin portal UI) backed by a
-shared PostgreSQL database. See [kb/00-overview.md](kb/00-overview.md) and
-[kb/01-architecture.md](kb/01-architecture.md) for the full architecture.
+shared PostgreSQL database. See [docs/kb/00-overview.md](docs/kb/00-overview.md) and
+[docs/kb/01-architecture.md](docs/kb/01-architecture.md) for the full architecture.
 
 ## Components
 
@@ -16,7 +16,7 @@ shared PostgreSQL database. See [kb/00-overview.md](kb/00-overview.md) and
   with the official 7" touch screen. It controls wireless sockets that are plugged in front of
   the managed washing machines, talking to the backend exclusively via its REST API and an
   outgoing WebSocket connection (no direct database access) - see
-  [kb/03-modules.md](kb/03-modules.md).
+  [docs/kb/03-modules.md](docs/kb/03-modules.md).
 - **`backend/`** – the central Spring Boot application: the REST API/WebSocket that the
   terminals use, the admin portal UI (Vaadin Flow, built into the backend - there is no
   separate portal module), and the notification service. Owns the PostgreSQL schema via
