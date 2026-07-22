@@ -62,10 +62,16 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   nach Löschung ohne 404, #29/#41), Betragsvalidierung in Service+Dialog (#22),
   Benachrichtigung per `AFTER_COMMIT`-Event außerhalb der Finish-Transaktion (#36) – siehe
   [ADR 0017](../architecture/0017-abrechnungs-integritaet-locking.md).
-- **Nächster Schritt:** Restliche Pre-Launch-Arbeitspakete (AP4 ff. laut Epic #66) je als
-  eigener PR; danach Betrieb/Nachpflege auf der Zielarchitektur; neue Vorhaben vorab als
-  Spec in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten. Die
-  Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).
+  Für **AP4 (Auth & Security)** sind die drei offenen 🧩-Auftraggeberfragen **geklärt**
+  (noch nicht umgesetzt): Passwort-Reset-Enumeration wird neutralisiert (#24),
+  Passwort-Mindestlänge ≥ 8 serverseitig erzwungen (#44), Standort-Token bleibt bei der
+  minimalen Variante (Restrisiko dokumentiert + akzeptiert, kein `expires_at`/UI, #43) –
+  siehe [ADR 0018](../architecture/0018-ap4-auth-security-entscheidungen.md).
+- **Nächster Schritt:** AP4-Umsetzung (die geklärten 🧩-Punkte + Härtungen
+  #21/#23/#25/#26/#42/#45/#46/#47/#48), danach restliche Pre-Launch-Arbeitspakete (AP5 ff.
+  laut Epic #66) je als eigener PR; danach Betrieb/Nachpflege auf der Zielarchitektur; neue
+  Vorhaben vorab als Spec in [`../specs/`](../specs/README.md) und Entscheidungen als ADR
+  festhalten. Die Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).
 - **Details:** siehe den jeweils letzten Eintrag im [Worklog](../worklog/README.md).
 
 ## Regeln für die KB

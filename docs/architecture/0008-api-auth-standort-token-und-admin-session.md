@@ -22,6 +22,12 @@ Rotation ohne Ausfallfenster (neues Token anlegen, Terminal umstellen, altes per
 Phase 2 minimal (`TerminalTokenCliRunner`, Profil `token-cli`); ein Admin-UI kommt mit dem
 Portal.
 
+> **Korrektur 2026-07-22 (Pre-Launch AP4, #43, siehe ADR 0018):** Das hier in Aussicht
+> gestellte Portal-Admin-UI für die Token-Verwaltung wird **nicht** gebaut. Die Verwaltung
+> bleibt bei der CLI (`TerminalTokenCliRunner` / `deploy/cutover/02-issue-terminal-tokens.sh`);
+> Rotation/Widerruf laufen über das Runbook (verpflichtendes `revoked_at` beim Gerätetausch).
+> Der Blast-Radius eines geleakten Tokens bleibt ein bewusst akzeptiertes Restrisiko.
+
 ## Konsequenzen
 
 - Einfache, offline-taugliche Terminal-Auth ohne OAuth-Infrastruktur.
