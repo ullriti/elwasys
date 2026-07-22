@@ -36,7 +36,7 @@ write_files:
       # Bevorzugt Monocle (voll headless); Xvfb dient als Fallback.
       set -euo pipefail
       cd /opt/elwasys/src
-      mvn -q -B -f Common/pom.xml install -DskipTests
+      mvn -q -B -N install -DskipTests
       xvfb-run -a --server-args="-screen 0 1024x768x24" \
         mvn -B -f Client-Raspi/pom.xml test \
           -Dtestfx.headless=true -Dglass.platform=Monocle -Dmonocle.platform=Headless \
@@ -47,9 +47,9 @@ runcmd:
   - [ bash, -lc, "mkdir -p /opt/elwasys && chown -R ubuntu:ubuntu /opt/elwasys" ]
   - [ bash, -lc, "sudo -u ubuntu git clone https://github.com/ullriti/elwasys.git /opt/elwasys/src || true" ]
   # Datenbank initialisieren (Schema + Rollen + Seed-Daten)
-  - [ bash, -lc, "sudo -u postgres psql -f /opt/elwasys/src/Common/resources/database-init.sql || true" ]
-  # Maven-Cache vorwärmen: Common installieren, Client-Deps auflösen
-  - [ bash, -lc, "cd /opt/elwasys/src && sudo -u ubuntu mvn -q -B -f Common/pom.xml install -DskipTests || true" ]
+  - [ bash, -lc, "sudo -u postgres psql -f /opt/elwasys/src/database/database-init.sql || true" ]
+  # Maven-Cache vorwärmen: Parent-POM installieren, Client-Deps auflösen
+  - [ bash, -lc, "cd /opt/elwasys/src && sudo -u ubuntu mvn -q -B -N install -DskipTests || true" ]
   - [ bash, -lc, "cd /opt/elwasys/src && sudo -u ubuntu mvn -q -B -f Client-Raspi/pom.xml dependency:go-offline || true" ]
 
 final_message: "elwasys build/test environment ready after $UPTIME seconds."

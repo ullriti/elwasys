@@ -17,11 +17,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# Since AP2 (JPA entities/services), the backend module has a test-scope dependency on
-# "common" (Alt-vs-Neu-Äquivalenztests, see kb/05-migration-plan.md) - ensure it (and the
-# aggregator parent POM, which a plain "mvn -f Common/pom.xml install" would NOT install)
-# is available in the local Maven repo, same pattern as Client-Raspi/run-ui-tests.sh.
-mvn -q -B -f pom.xml install -pl Common -am -DskipTests
+# Ensure the aggregator parent POM is available in the local Maven repo; "mvn -N install"
+# installs just that parent POM. (The backend never had a runtime dependency on the former
+# "common" module; since the migration dissolved it, the auth parity tests reproduce the
+# legacy SHA1 format locally via LegacySha1 - see kb/05-migration-plan.md.)
+mvn -q -B -N -f pom.xml install -DskipTests
 
 DB_NAME="elwasys_backend_it"
 

@@ -3,55 +3,54 @@
 ## Build-Reihenfolge
 
 Seit Phase 1 (2026-07-20) gibt es ein **Aggregator-/Parent-POM** (`/pom.xml`,
-`packaging=pom`, Module `Common`/`Client-Raspi`/`backend`, gemeinsame Version
-`0.0.0-local-development`, zentrale `dependencyManagement` für
+`packaging=pom`, seit dem Phase-5-Nachtrag nur noch Module `Client-Raspi`/`backend`,
+gemeinsame Version `0.0.0-local-development`, zentrale `dependencyManagement` für
 postgresql/logback/slf4j-api/commons-email, `maven.compiler.release=21` als
-Default). Wichtig: Ein isoliertes `mvn -f Common/pom.xml install` installiert
-**nur** das `common`-Artefakt ins lokale Repo, **nicht** die Parent-POM selbst –
-andere Module, die `common` später als Dependency auflösen (Client-Raspi,
-backend), scheitern dann mit `Could not find artifact
-org.kabieror.elwasys:elwasys-parent:pom:...`. Deshalb immer über den
-Root-Reactor bauen, wenn Common isoliert installiert werden soll:
+Default). Wichtig: Die Module erben von `elwasys-parent`; wer ein Modul isoliert
+baut, braucht die Parent-POM im lokalen Repo, sonst scheitert es mit `Could not
+find artifact org.kabieror.elwasys:elwasys-parent:pom:...`. Die Parent-POM lässt
+sich mit `mvn -N install` (ohne Untermodule) installieren:
 
 ```bash
-# 1. Common (+ Parent-POM) installieren – WICHTIG: über den Root-Reactor,
-#    nicht "mvn -f Common/pom.xml install" allein (siehe Hinweis oben)
-mvn -f pom.xml install -pl Common -am -DskipTests
+# 1. Nur die Aggregator-Parent-POM ins lokale Repo installieren (ohne Untermodule)
+mvn -N install -DskipTests
 
-# 2a. Raspi-Client bauen (fat-jar)
+# 2a. Raspi-Client bauen (fat-jar) – enthält seit dem Phase-5-Nachtrag auch die 6
+#     ehemaligen Common-Klassen (Package org.kabieror.elwasys.common)
 mvn -f Client-Raspi/pom.xml package
 #   → target/raspi-client-<version>-jar-with-dependencies.jar
 
-# 2b. Backend bauen (Spring-Boot-Jar, seit Phase 2 AP1) – der main-Code hat keinen
-#     Common-Bezug, daher reicht für "package"/"package -DskipTests" ein direkter
-#     Aufruf ohne -am. Für "mvn test -pl backend" wird Common vorher benötigt (seit AP2
-#     test-scope-Dependency für Auth-Parity-Tests, siehe unten).
+# 2b. Backend bauen (Spring-Boot-Jar, seit Phase 2 AP1) – hat keine Abhängigkeit auf
+#     ein common-Artefakt (weder Laufzeit noch test-scope), daher genügt ein direkter
+#     Aufruf.
 mvn -f pom.xml package -pl backend
 #   → target/elwasys-backend.jar (ausführbar: java -jar backend/target/elwasys-backend.jar)
 
-# Alternative: kompletter Reactor-Build aller drei Module in einem Aufruf
+# Alternative: kompletter Reactor-Build beider Module in einem Aufruf
 mvn install   # von der Repo-Wurzel aus
 ```
 
 > **Phase 5 AP1 (2026-07-21)**: das Alt-Portal-Modul (`Portal/`, Vaadin 7 WAR) wurde
 > komplett aus dem Repo entfernt (war seit Phase 3 AP6 nur noch als CI-Build-Ziel ohne
-> eigenes E2E vorhanden, siehe kb/03-modules.md). Root-Reactor jetzt 3 statt 4 Module.
+> eigenes E2E vorhanden, siehe kb/03-modules.md).
+> **Phase-5-Nachtrag**: das Common-Modul wurde aufgelöst; seine 6 Klassen liegen jetzt im
+> Client-Raspi-Modul (`Client-Raspi/src/main/org/kabieror/elwasys/common/`). Root-Reactor
+> jetzt **2 Module** (Client-Raspi, backend).
 
 ### Backend bauen, testen, lokal starten (seit Phase 2 AP1, JPA/Services seit AP2, REST-API/WS seit AP4)
 
 Neues Modul `backend/` (Spring Boot 3.x, siehe kb/01-architecture.md, kb/03-modules.md).
-Läuft zur Laufzeit unabhängig von Common/Client-Raspi (eigenes Datenmodell, keine
-Laufzeit-Abhängigkeit) – seit AP2 hat es aber eine **test-scope**-Abhängigkeit auf `common`
-(seit Phase 5 AP1 nur noch für die Auth-Parity-Tests, siehe kb/05-migration-plan.md), die
-für den Testklassenpfad in der lokalen Maven-Repo verfügbar sein muss:
+Läuft zur Laufzeit unabhängig vom Client-Raspi (eigenes Datenmodell, keine
+Laufzeit-Abhängigkeit) und hat seit dem Phase-5-Nachtrag **auch keine test-scope-Abhängigkeit
+auf `common` mehr** – die frühere Auth-Parity-Abhängigkeit ist entfallen, das Alt-SHA1-Format
+wird in den Tests lokal über den Helfer `LegacySha1` reproduziert (siehe kb/03-modules.md):
 
 ```bash
-# Common (+ Parent-POM) erst installieren, sonst schlägt "mvn test -pl backend" beim
-# Auflösen der test-scope-Abhängigkeit auf common fehl (Muster wie bei Client-Raspi):
-mvn -f pom.xml install -pl Common -am -DskipTests
+# Nur die Parent-POM muss im lokalen Repo liegen (siehe oben); ein common-Artefakt wird
+# weder zum Bauen noch zum Testen des Backends gebraucht.
+mvn -N install -DskipTests
 
-# Bauen (nur kompilieren/packen, ohne Tests) - reicht ohne obigen Schritt, da main-Code
-# keinen common-Bezug hat:
+# Bauen (nur kompilieren/packen, ohne Tests):
 mvn -f pom.xml package -pl backend -DskipTests
 
 # Tests: siehe unten – Testcontainers (Default) braucht einen Docker-Daemon.
@@ -60,8 +59,8 @@ mvn -f pom.xml package -pl backend -DskipTests
 **Tests – zwei Wege, je nachdem ob ein Docker-Daemon verfügbar ist:**
 
 - **Mit Docker (z. B. lokaler Rechner, GitHub-Actions-CI)**: Testcontainers startet die
-  PostgreSQL-Instanz automatisch, kein Setup nötig (Common muss trotzdem vorher installiert
-  sein, s. o.):
+  PostgreSQL-Instanz automatisch, kein Setup nötig (nur die Parent-POM muss im lokalen Repo
+  liegen, s. o.):
   ```bash
   mvn -f pom.xml test -pl backend
   ```
@@ -69,7 +68,7 @@ mvn -f pom.xml package -pl backend -DskipTests
   or directory“, kein laufender Daemon)**: Override auf das lokale PostgreSQL 16 über die
   Umgebungsvariable `ELWASYS_TEST_JDBC_URL` (+ `ELWASYS_TEST_DB_USER`/`_DB_PASSWORD`, siehe
   `backend/src/test/.../support/TestPostgres.java`). Das mitgelieferte Skript übernimmt das
-  (Muster: `Client-Raspi/run-ui-tests.sh`, inkl. des Common-Installationsschritts oben):
+  (Muster: `Client-Raspi/run-ui-tests.sh`, inkl. des Parent-POM-Installationsschritts oben):
   ```bash
   backend/run-backend-tests.sh
   ```
@@ -304,7 +303,7 @@ Env-Overrides (u. a. für Trocken-Tests): `ELWA_ROOT`, `ELWA_RESTART_CMD`, `ELWA
 `ELWA_LATEST_VERSION_CMD`, `ELWA_UPDATE_DEADLINE`, `ELWA_MARKER_FILE`, `ELWA_UPDATE_SCRIPT`.
 
 ### Datenbank
-PostgreSQL, initialisiert über `Common/resources/database-init.sql` (legt DB `elwasys`,
+PostgreSQL, initialisiert über `database/database-init.sql` (legt DB `elwasys`,
 Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).
 
 ## Deployment (Produktion)
@@ -326,12 +325,12 @@ Schema, Rollen `elwaclient1`/`elwaportal`/`elwaapi` und Seed-Daten an).
 ### Backend: Container-Image bauen
 
 `backend/Dockerfile` (Build-Kontext ist die **Repo-Wurzel**, nicht `backend/` - der Build
-braucht die Parent-POM und `Common`, siehe den bekannten Root-Reactor-Fallstrick oben):
+braucht die Parent-POM, siehe den bekannten Root-Reactor-Fallstrick oben):
 ```bash
 docker build -f backend/Dockerfile -t elwasys-backend:local .
 ```
 Multi-Stage: Maven-Build (Root-Reactor, zwei Aufrufe wie oben dokumentiert: erst
-`install -pl Common -am -DskipTests`, dann `package -pl backend -DskipTests`) → schlankes
+`mvn -N install -DskipTests` [nur die Parent-POM], dann `package -pl backend -DskipTests`) → schlankes
 `eclipse-temurin:21-jre-jammy`-Runtime-Image, non-root User (UID/GID 1000), `HEALTHCHECK`
 gegen `/actuator/health`. `.dockerignore` an der Repo-Wurzel hält den Build-Kontext klein
 (Client-Raspi-Quellcode wird für den Backend-Build nicht gebraucht, nur dessen `pom.xml`,
@@ -437,14 +436,16 @@ Phase-1-QA-Review korrigiert; Backend-Job seit Phase 2 AP1, 2026-07-20; backend-
 Phase 3 AP6, 2026-07-21; das frühere `portal-legacy-build`-Job mitsamt dem Alt-Portal-Modul
 in Phase 5 AP1, 2026-07-21 entfernt – siehe kb/05-migration-plan.md, kb/06-ui-tests.md)*:
 - Trigger: jeder Pull Request + Pushes auf `master`
-- 4 parallele Jobs: **common** / **client** (inkl. Cross-Component-Suite P21/P22) /
+- 3 parallele Jobs: **client** (inkl. Cross-Component-Suite P21/P22) /
   **backend-e2e** / **backend** – Build + Tests, spiegeln die
   lokalen Runner-Skripte (`run-ui-tests.sh` etc., siehe kb/06) bzw. für Backend
-  `backend/run-backend-tests.sh` als lokales Analogon.
-- **JDK 21** (Liberica) in **allen vier** Jobs – nicht mehr JDK 17: Seit Phase 1
+  `backend/run-backend-tests.sh` als lokales Analogon. Der frühere separate **common**-Job ist
+  mit der Auflösung des Common-Moduls (Phase-5-Nachtrag) entfallen; die 6 ehemaligen
+  Common-Klassen werden jetzt im Rahmen des client-Jobs mitgebaut.
+- **JDK 21** (Liberica) in **allen drei** Jobs – nicht mehr JDK 17: Seit Phase 1
   verlangt der Parent-POM-Default `maven.compiler.release=21` für alle Module. Ein JDK 17
-  kann `--release 21` nicht bedienen (`invalid target release: 21`). Jeder Job baut Common
-  zuerst (`mvn -f pom.xml install -pl Common -am`), braucht also ein >= 21-JDK.
+  kann `--release 21` nicht bedienen (`invalid target release: 21`), daher braucht jeder Job
+  ein >= 21-JDK.
 - **backend-e2e** (seit Phase 3 AP6, 2026-07-21, fachlicher Nachfolger des früheren
   `portal`-Jobs bzw. des seit Phase 5 AP1 entfernten Alt-Portal-Moduls): Playwright-E2E
   (P1–P20) gegen das neue, ins Backend eingebettete Vaadin-Flow-Portal –
@@ -456,8 +457,9 @@ in Phase 5 AP1, 2026-07-21 entfernt – siehe kb/05-migration-plan.md, kb/06-ui-
   backend-e2e-Jobs), weil GitHub-Actions-`ubuntu-24.04`-Runner einen Docker-Daemon mitbringen
   (anders als diese Sandbox-Entwicklungsumgebung, siehe kb/07-cloud-init.md) – das ist der von
   Spring Boot standardmäßig vorgesehene Testweg und braucht dort kein manuelles DB-Setup.
-  `backend` hat keine Reactor-Abhängigkeit auf `common`, der Job baut daher nur `-pl backend`
-  ohne `-am`.
+  `backend` hat keine Reactor-Abhängigkeit auf `common` (und seit dem Phase-5-Nachtrag auch
+  keine test-scope-Abhängigkeit mehr); der Job baut `-pl backend` (das `-am` zieht nur noch die
+  Aggregator-Parent-POM mit).
 - **backend-Job, Image-Build** (seit Phase 2 AP6, 2026-07-20): zusätzlicher Schritt
   `docker build -f backend/Dockerfile -t elwasys-backend:ci .` - baut nur (kein Push),
   beweist aber, dass `backend/Dockerfile` in einer echten Docker-Umgebung tatsächlich baubar
@@ -468,12 +470,12 @@ in Phase 5 AP1, 2026-07-21 entfernt – siehe kb/05-migration-plan.md, kb/06-ui-
 JDK-Version am 2026-07-20 im Phase-1-QA-Review korrigiert)*:
 - Trigger: **nur** bei `release: created`
 - **JDK 21** (Liberica) – aus demselben Grund wie oben (`mvn install -pl
-  Common,Client-Raspi -am` baut Common mit, das Sprachlevel 21 verlangt)
+  Client-Raspi -am` verlangt Sprachlevel 21)
 - `mvn versions:set -DnewVersion=<tag>` im Root setzt die Version in Parent-POM
-  **und** allen drei Modulen konsistent (kein sed-Hack über mehrere POMs mehr);
+  **und** beiden Modulen konsistent (kein sed-Hack über mehrere POMs mehr);
   `Utilities.APP_VERSION` ist eine reine Java-Konstante und bleibt per
   `sed -i -E` gesetzt
-- Reactor-Build `mvn install -pl Common,Client-Raspi -am` (installiert dabei
+- Reactor-Build `mvn install -pl Client-Raspi -am` (installiert dabei
   auch die neu versionierte Parent-POM), lädt das fat-jar als Release-Asset hoch
 - **Backend-Image-Veröffentlichung** (seit Phase 2 AP6, 2026-07-20): baut zusätzlich
   `backend/Dockerfile` (derselbe, bereits per `versions:set` versionierte Arbeitsbaum als

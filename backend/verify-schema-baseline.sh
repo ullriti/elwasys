@@ -1,6 +1,6 @@
 #!/bin/bash
 # Verifies that the Flyway baseline migration (db/migration/V1__baseline_schema_0_4_0.sql) is
-# schema-equivalent to the legacy path (Common/resources/database-init.sql +
+# schema-equivalent to the legacy path (database/database-init.sql +
 # database-upgrade/*.sql), and that the backend starts cleanly against an existing legacy
 # database via baselineOnMigrate. See kb/02-data-model.md ("Flyway-Baseline") and
 # kb/05-migration-plan.md (Phase 2, AP1) for the write-up of the result.
@@ -76,7 +76,7 @@ sudo -u postgres psql -q -c "ALTER USER postgres WITH PASSWORD 'postgres';"
 
 echo "== 1) Legacy path: database-init.sql -> ${OLDWAY_DB} =="
 sudo -u postgres psql -q -c "DROP DATABASE IF EXISTS ${OLDWAY_DB};"
-sudo -u postgres psql -q < Common/resources/database-init.sql
+sudo -u postgres psql -q < database/database-init.sql
 
 echo "== 2) Fresh path: Flyway baseline migration -> ${FLYWAY_DB} =="
 sudo -u postgres psql -q -c "DROP DATABASE IF EXISTS ${FLYWAY_DB};"

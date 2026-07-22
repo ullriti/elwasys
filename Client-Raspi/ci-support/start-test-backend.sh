@@ -10,8 +10,8 @@
 # Intended to be `source`d, not executed directly, so the exported env vars and the EXIT
 # trap (which stops the backend) apply to the calling script's shell.
 #
-# Requires: the elwasys database already seeded (database-init.sql), Common installed into
-# the local Maven repo (see callers).
+# Requires: the elwasys database already seeded (database-init.sql), the aggregator parent
+# POM installed into the local Maven repo (see callers).
 
 TEST_BACKEND_PORT="${TEST_BACKEND_PORT:-8099}"
 export ELWASYS_TEST_BACKEND_URL="http://localhost:${TEST_BACKEND_PORT}/"

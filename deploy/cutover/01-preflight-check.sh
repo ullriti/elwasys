@@ -3,7 +3,7 @@
 #
 # REIN LESEND - dieses Skript verändert NICHTS an der Datenbank (nur SELECT-Abfragen). Es
 # erstellt einen Readiness-Report für den Cutover der Bestands-DB (angelegt über den Alt-Weg
-# Common/resources/database-init.sql) auf das neue Flyway-verwaltete Schema: welche Alt-
+# database/database-init.sql) auf das neue Flyway-verwaltete Schema: welche Alt-
 # Artefakte sind noch da, ein Dateninventar, und Warnungen für alles, was vor dem eigentlichen
 # Cutover (Backend gegen diese DB starten, siehe deploy/cutover/README.md) Aufmerksamkeit
 # braucht.

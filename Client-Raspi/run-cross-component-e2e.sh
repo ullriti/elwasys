@@ -25,9 +25,11 @@ cd "$(dirname "$0")"
 REPO_ROOT="$(cd .. && pwd)"
 PG_VER=16
 
-# 1. Install Common (and the aggregator parent POM, which a plain "mvn -f Common/pom.xml
-#    install" would NOT install) into the local Maven repo.
-mvn -q -B -f "$REPO_ROOT/pom.xml" install -pl Common -am -DskipTests
+# 1. Install the aggregator parent POM into the local Maven repo ("mvn -N install"
+#    installs just that parent POM) so the per-module builds below can resolve it.
+#    (The former "common" module was dissolved after the migration; its classes now
+#    live in Client-Raspi/src/main.)
+mvn -q -B -N -f "$REPO_ROOT/pom.xml" install -DskipTests
 
 # 2. Build the real client fat jar - the process this suite launches as "the terminal".
 mvn -q -B -f "$REPO_ROOT/Client-Raspi/pom.xml" package -DskipTests

@@ -7,7 +7,7 @@
 # tatsächlich für den Cutover relevanten Eigenschaften explizit per Assert-Liste (siehe unten).
 #
 # Ablauf:
-#   1. Test-DB als Kopie des Bestandsschemas anlegen (Common/resources/database-init.sql,
+#   1. Test-DB als Kopie des Bestandsschemas anlegen (database/database-init.sql,
 #      ohne dessen eigene CREATE DATABASE/\connect-Zeilen - die Test-DB wird selbst vorher
 #      angelegt, eigener Name/Port konfigurierbar).
 #   2. VOR der Migration realistische Bestandsdaten einfügen (je eine Zeile: user_group,
@@ -72,7 +72,7 @@ echo "== 1) Test-DB als Kopie des Bestandsschemas -> ${CUTOVER_VERIFY_DB} =="
 sudo -u postgres psql -q -c "DROP DATABASE IF EXISTS ${CUTOVER_VERIFY_DB};"
 sudo -u postgres psql -q -c "CREATE DATABASE ${CUTOVER_VERIFY_DB};"
 # database-init.sql legt selbst "CREATE DATABASE elwasys;" + "\connect elwasys" an (Zeilen 1-4,
-# siehe Common/resources/database-init.sql) - das wollen wir NICHT (eigener DB-Name/Port für
+# siehe database/database-init.sql) - das wollen wir NICHT (eigener DB-Name/Port für
 # diese Verifikation), daher die ersten vier Zeilen überspringen und den Rest (Funktionen,
 # Schema, Seed-Daten, Rollen/Grants) direkt gegen die oben schon angelegte Test-DB einspielen.
 #
@@ -86,7 +86,7 @@ sudo -u postgres psql -q -c "CREATE DATABASE ${CUTOVER_VERIFY_DB};"
 # nicht) - nach so einem Fehler macht psql einfach mit dem nächsten Statement weiter, alle
 # nachfolgenden Schema-/Daten-/Grant-Statements laufen normal durch. Eine echte Produktiv-DB
 # hat nur EINEN Cluster für sich, dort tritt dieser Fall gar nicht erst auf.
-tail -n +5 Common/resources/database-init.sql | sudo -u postgres psql -q -d "${CUTOVER_VERIFY_DB}"
+tail -n +5 database/database-init.sql | sudo -u postgres psql -q -d "${CUTOVER_VERIFY_DB}"
 
 echo "== 2) Realistische Bestandsdaten VOR der Migration einfügen (Beweis für Datenerhalt) =="
 sudo -u postgres psql -v ON_ERROR_STOP=1 -q -d "${CUTOVER_VERIFY_DB}" <<'SQL'
@@ -117,7 +117,6 @@ SQL
 echo "  Bestandsdaten eingefügt."
 
 echo "== 3) Backend-Jar bauen (Produktionsmodus - siehe kb/04-build-and-run.md, laenger laufender Prozess braucht -Pproduction) =="
-mvn -q -B -f pom.xml install -pl Common -am -DskipTests
 mvn -q -B -f pom.xml package -pl backend -Pproduction -DskipTests
 
 echo "== 4) Backend gegen die Alt-Weg-DB starten (Flyway migriert automatisch: BASELINE@1, dann V2..V10) =="

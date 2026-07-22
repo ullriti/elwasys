@@ -2,7 +2,7 @@
 
 Werkzeuge für die **Produktivumschaltung** (kb/05-migration-plan.md, "Phase 6 –
 Produktivumschaltung (Cutover)"): das bestehende, über den Alt-Weg
-(`Common/resources/database-init.sql`, Schema-Endstand 0.4.0) angelegte Produktiv-Setup
+(`database/database-init.sql`, Schema-Endstand 0.4.0) angelegte Produktiv-Setup
 (physische Raspi-Terminals + laufendes Alt-Portal/DB) auf die neue Architektur (Backend mit
 Flyway-verwaltetem Schema, Terminals über REST-API/Standort-Token statt Direkt-DB-Zugriff)
 umstellen - ohne Datenverlust.
@@ -23,7 +23,7 @@ Flyway-Migrationen (DDL + eine Datenänderung, siehe V7) gegen die Produktiv-DB 
 
 ## Voraussetzungen
 
-- Backend-Jar gebaut (`mvn -f pom.xml install -pl Common -am -DskipTests` dann
+- Backend-Jar gebaut (`mvn -N install -DskipTests` dann
   `mvn -f pom.xml package -pl backend -DskipTests`, siehe kb/04-build-and-run.md) bzw. das
   Container-Image (`backend/Dockerfile`), falls per Docker/Kubernetes betrieben.
   Für einen langlebigen Produktivbetrieb **`-Pproduction`** verwenden (siehe
@@ -111,7 +111,7 @@ ungenutzte Standort-Zeilen.
 ```bash
 deploy/cutover/verify-cutover-migration.sh
 ```
-Baut lokal eine Testkopie des Bestandsschemas (`Common/resources/database-init.sql`, DB-Name
+Baut lokal eine Testkopie des Bestandsschemas (`database/database-init.sql`, DB-Name
 per `CUTOVER_VERIFY_DB`, Default `elwasys_cutover_verify`), füllt sie mit realistischen
 Bestandsdaten, startet das Backend-Jar dagegen (Port per `CUTOVER_VERIFY_PORT`, Default
 18090) und prüft per `psql`-Asserts: Flyway-Historie (BASELINE@1 + V2..V10 alle

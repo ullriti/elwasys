@@ -1,8 +1,9 @@
 # 01 – Architektur
 
-> **Zielarchitektur (Stand Phase 5, siehe kb/05-migration-plan.md)**: Root-Reactor mit 3
-> Modulen (Common [minimal], Client-Raspi [Terminal], backend [REST-API/WebSocket für
-> Terminals + eingebettetes Vaadin-Flow-Admin-Portal + Benachrichtigungsdienst]). Das
+> **Zielarchitektur (Stand Phase 5, siehe kb/05-migration-plan.md)**: Root-Reactor mit 2
+> Modulen (Client-Raspi [Terminal, enthält seit dem Phase-5-Nachtrag auch die 6 ehemaligen
+> Common-Klassen], backend [REST-API/WebSocket für Terminals + eingebettetes
+> Vaadin-Flow-Admin-Portal + Benachrichtigungsdienst]). Das
 > ursprüngliche Alt-Portal-Modul (`Portal/`, Vaadin 7) ist seit Phase 3 AP6 als E2E-/
 > Produktivziel abgelöst und seit **Phase 5 AP1 vollständig aus dem Repository entfernt**; die
 > Terminals haben seit Phase 4 AP4/AP5 **keinen Direkt-DB-Zugriff mehr** (nur noch REST-API +
@@ -15,20 +16,21 @@
 
 | Modul | artifactId | Version | Packaging | Java | Kernaufgabe |
 |-------|------------|---------|-----------|------|-------------|
-| Common | `common` | `0.0.0-local-development` | jar | 21 (Parent-POM-Default, seit Phase 1) | Kleine gemeinsame Bibliothek (Enum-Typ, Format-/Konfigurationshilfen) – seit Phase 5 AP1 auf 6 Klassen geschrumpft (kein `DataManager`, keine Alt-Domänenklassen, kein Maintenance-Protokoll mehr), Dependency von Client-Raspi; von `backend` nur noch **test-scope** (Auth-Parity-Test) referenziert |
-| Client-Raspi | `raspi-client` | `0.0.0-local-development` | jar (mit `jar-with-dependencies`) | 21 (seit Phase 1) | Terminal-UI (JavaFX), Gerätesteuerung; seit Phase 4 AP4/AP5 ausschließlich über REST-API + ausgehenden WebSocket mit dem Backend verbunden, kein Direkt-DB-Zugriff mehr |
+| Client-Raspi | `raspi-client` | `0.0.0-local-development` | jar (mit `jar-with-dependencies`) | 21 (seit Phase 1) | Terminal-UI (JavaFX), Gerätesteuerung; seit Phase 4 AP4/AP5 ausschließlich über REST-API + ausgehenden WebSocket mit dem Backend verbunden, kein Direkt-DB-Zugriff mehr. Enthält seit dem Phase-5-Nachtrag auch die 6 ehemaligen Common-Klassen (Package `org.kabieror.elwasys.common`, physisch unter `Client-Raspi/src/main/org/kabieror/elwasys/common/`) |
 | backend | `backend` | `0.0.0-local-development` | jar (Spring-Boot-Repackage) | 21 | Zentrales Backend (Spring Boot): REST-API/WebSocket für Terminals, eingebettetes Vaadin-Flow-Admin-Portal (seit Phase 3), Benachrichtigungsdienst, Flyway-verwaltetes Schema |
+| ~~Common~~ | ~~`common`~~ | – | – | – | **Aufgelöst (Phase-5-Nachtrag)** – die kleine gemeinsame Bibliothek (Enum-Typ, Format-/Konfigurationshilfen) wurde als eigenständiges Modul entfernt; ihre 6 verbliebenen Klassen liegen unverändert im Package `org.kabieror.elwasys.common` jetzt im Client-Raspi-Modul. Nur das Terminal nutzt sie zur Laufzeit; das Backend hatte nie eine Produktiv-Abhängigkeit auf `common` |
 | ~~Portal~~ | ~~`webportal`~~ | – | – | – | **Entfernt (Phase 5 AP1)** – ehemalige eigenständige Vaadin-7-Admin-Weboberfläche, fachlich abgelöst durch das ins Backend eingebettete Portal-UI seit Phase 3 AP6 (volle Feature-Parität, siehe kb/06-ui-tests.md) |
 
-Ein Aggregator-Parent-POM (seit Phase 1) bindet die drei verbliebenen Module zusammen; Bau
-über den Root-Reactor (`mvn install` bzw. `mvn -f pom.xml install -pl <Modul> -am`, siehe
-kb/04-build-and-run.md) – die frühere Versions-Inkonsistenz zwischen Common (Client-Kontext)
-und dem Alt-Portal-Kontext ist mit dessen Entfernung gegenstandslos geworden.
+Ein Aggregator-Parent-POM (seit Phase 1) bindet die zwei verbliebenen Module zusammen; Bau
+über den Root-Reactor (`mvn install` bzw. `mvn -N install -DskipTests` für die reine
+Parent-POM, siehe kb/04-build-and-run.md).
 
 ## Namespaces (Java-Packages)
 
 - `org.kabieror.elwasys.common` – kleine gemeinsame Bibliothek (seit Phase 5 AP1 auf 6 Klassen
-  geschrumpft, siehe kb/03-modules.md); ~~`org.kabieror.elwasys.common.maintenance`~~
+  geschrumpft, siehe kb/03-modules.md); das eigenständige Common-Modul ist im Phase-5-Nachtrag
+  **aufgelöst**, die 6 Klassen liegen seither unverändert im Client-Raspi-Modul
+  (`Client-Raspi/src/main/org/kabieror/elwasys/common/`); ~~`org.kabieror.elwasys.common.maintenance`~~
   (Alt-TCP-Fernwartungsprotokoll) ist mit dem restlichen Alt-Bestand **in Phase 5 AP1
   entfernt**
 - `org.kabieror.elwasys.raspiclient.*` – Raspberry-Pi-Client
@@ -38,12 +40,14 @@ und dem Alt-Portal-Kontext ist mit dessen Entfernung gegenstandslos geworden.
 
 ## Technologie-Stack (Ist-Zustand)
 
-### Common
-Sprachlevel 21 (Parent-POM-Default, seit Phase 1). Deutlich abgespeckt seit Phase 5 AP1 (6
-verbliebene Klassen, siehe kb/03-modules.md) – die `pom.xml`-Dependency-Liste selbst wurde
-dabei nicht angefasst (außerhalb des AP1-Auftrags), Versionen kommen seither über das
-Parent-POM-`dependencyManagement`: PostgreSQL JDBC `42.6.0`, SLF4J `1.7.12`, Logback `1.2.9`,
-Apache Commons Email `1.5`, Commons Lang3 `3.4`, JUnit `4.12`.
+### Common (Modul aufgelöst, Phase-5-Nachtrag)
+Das eigenständige Common-Modul existiert nicht mehr. Seine 6 verbliebenen Klassen (Package
+`org.kabieror.elwasys.common`, siehe kb/03-modules.md) liegen unverändert im Client-Raspi-Modul
+(`Client-Raspi/src/main/org/kabieror/elwasys/common/`) und werden mit dem Client auf Sprachlevel
+21 gebaut. Die von ihnen benötigten Bibliotheken sind seither direkte Client-Raspi-Dependencies
+(u. a. Commons Lang3 als direkte Abhängigkeit; der PostgreSQL-JDBC-Treiber nur noch
+**test-scope**, da die Terminal-Produktion seit Phase 4 nicht mehr auf die DB zugreift und nur
+die E2E-Harness per JDBC seedet).
 
 ### Client-Raspi
 - **JavaFX 23.0.2** (`javafx-controls`, `javafx-fxml`, `javafx-web`) – UI über FXML
@@ -85,7 +89,9 @@ Flow)").
   `/swagger-ui.html`)
 - PostgreSQL-Treiber `42.7.11`, Logback `1.5.34` (mitgeliefert von Spring Boot)
 - Test: JUnit 5, Testcontainers (Default) mit lokalem PostgreSQL-Override für Docker-lose
-  Umgebungen (siehe kb/04-build-and-run.md); `common` nur **test-scope** (Auth-Parity-Test)
+  Umgebungen (siehe kb/04-build-and-run.md); **keine** Abhängigkeit auf `common` mehr – die 3
+  Auth-Parity-Tests reproduzieren das Alt-SHA1-Format seit dem Phase-5-Nachtrag lokal über den
+  Test-Helfer `LegacySha1` (`backend/src/test/.../auth/LegacySha1.java`)
 - Build: `spring-boot-maven-plugin` (repackage) → lauffähiges Jar; Modul-Property
   `maven.compiler.parameters=true` (seit Phase 2 AP4, nötig für `@RequestParam`/
   `@PathVariable` ohne expliziten Namen); `-Pproduction`-Profil für den Vaadin-Produktions-

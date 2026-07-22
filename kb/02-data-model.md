@@ -1,8 +1,9 @@
 # 02 – Datenmodell (PostgreSQL)
 
-Quelle: `Common/resources/database-init.sql` (DB-Version `0.4.0`).
+Quelle: `database/database-init.sql` (DB-Version `0.4.0`; im Phase-5-Nachtrag aus dem
+aufgelösten Common-Modul in das neutrale Top-Level-Verzeichnis `database/` verschoben).
 Upgrades (historisch, seit Phase 2 AP1 nicht mehr fortgeschrieben – siehe „Flyway-Baseline“
-unten): `Common/resources/database-upgrade/upgrade_0.3.1_0.3.2.sql`, `upgrade_0.4.0.sql`.
+unten): `database/database-upgrade/upgrade_0.3.1_0.3.2.sql`, `upgrade_0.4.0.sql`.
 
 ## ER-Überblick
 
@@ -206,7 +207,8 @@ kb/05-migration-plan.md (Änderungslog, Phase 2 AP1); hier die für das Datenmod
 Zusammenfassung:
 
 - **Baseline-Migration**: `backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql`.
-  Inhaltlich eine 1:1-Übernahme von `Common/resources/database-init.sql` (ohne die
+  Inhaltlich eine 1:1-Übernahme der geteilten SQL-Fixture (zum Zeitpunkt der Ableitung unter
+  `Common/resources/database-init.sql`, heute `database/database-init.sql`) (ohne die
   psql-only `CREATE DATABASE`/`\connect`-Zeilen, die für eine bereits per JDBC-URL gewählte
   Ziel-DB nicht gebraucht werden). **Nicht** separat aus den beiden
   `database-upgrade/*.sql`-Skripten rekonstruiert: `database-init.sql` enthält bereits deren
@@ -248,7 +250,7 @@ Zusammenfassung:
   `db.version = '0.4.0'` bleibt in der Flyway-Baseline erhalten (für den Fall, dass ihn
   doch irgendein Alt-Code oder externes Werkzeug liest), wird aber **ab sofort nicht mehr
   fortgeschrieben** – zukünftige Schemaänderungen laufen ausschließlich über weitere
-  Flyway-Migrationen (`V2__...`, `V3__...`, …). `Common/resources/database-upgrade/*.sql`
+  Flyway-Migrationen (`V2__...`, `V3__...`, …). `database/database-upgrade/*.sql`
   wird nicht mehr gepflegt; die vorhandenen Dateien (`upgrade_0.3.1_0.3.2.sql`,
   `upgrade_0.4.0.sql`) bleiben unverändert als historisches Artefakt im Repo (Bestands-DBs,
   die noch über sie hochgezogen werden, landen ohnehin beim Endstand 0.4.0, den die Baseline

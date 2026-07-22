@@ -29,18 +29,18 @@ if ! sudo -u postgres psql -lqt | cut -d'|' -f1 | grep -qw elwasys; then
   # Feed the SQL via stdin: the postgres OS user may not have read access to
   # the repo checkout (e.g. under /home/runner in CI), so read it as the
   # invoking user and pipe it in.
-  sudo -u postgres psql -q < "$REPO_ROOT/Common/resources/database-init.sql"
+  sudo -u postgres psql -q < "$REPO_ROOT/database/database-init.sql"
 fi
 # The E2E tests seed/clean fixtures (devices, programs, users, executions,
 # credit_accounting) via JDBC as the postgres superuser, which needs a password
 # the driver can use over TCP.
 sudo -u postgres psql -q -c "ALTER USER postgres WITH PASSWORD 'postgres';"
 
-# 3. Ensure Common (and its parent POM) are installed, then build the backend jar.
-#    Building via the root reactor (-pl Common -am) also installs the
-#    aggregator parent POM into the local repo, which a plain
-#    "mvn -f Common/pom.xml install" does not.
-mvn -q -B -f "$REPO_ROOT/pom.xml" install -pl Common -am -DskipTests
+# 3. Ensure the aggregator parent POM is installed, then build the backend jar.
+#    "mvn -N install" installs just that parent POM into the local repo so the
+#    per-module builds can resolve it. (The former "common" module was dissolved
+#    after the migration; its classes now live in Client-Raspi/src/main.)
+mvn -q -B -N -f "$REPO_ROOT/pom.xml" install -DskipTests
 # Already in the script directory (cd above), so source relative to it - using
 # "$(dirname "$0")" again here would double-nest the path when the script is invoked
 # with a path prefix (e.g. CI's `bash Client-Raspi/run-client-e2e.sh`).

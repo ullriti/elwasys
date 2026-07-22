@@ -1,26 +1,41 @@
 # 03 – Module im Detail
 
-## Common (`org.kabieror.elwasys.common`)
+## Common (`org.kabieror.elwasys.common`) – Modul aufgelöst (Phase-5-Nachtrag)
 
-Gemeinsame Bibliothek (JAR), Dependency von Client-Raspi (`backend` bezieht sie nur noch
-test-scope, für die Auth-Parity-Tests). Java-Sprachlevel folgt seit Phase 1 dem
-Parent-POM-Default (21).
+Das früher eigenständige Common-Modul (kleine gemeinsame Bibliothek, JAR) wurde im
+Phase-5-Nachtrag **aufgelöst**: der Root-Reactor umfasst seither nur noch die zwei Module
+Client-Raspi und backend. Die 6 verbliebenen Klassen liegen unverändert im Package
+`org.kabieror.elwasys.common`, physisch jetzt unter
+`Client-Raspi/src/main/org/kabieror/elwasys/common/`, und werden mit dem Client (Sprachlevel 21)
+gebaut. **Nur der Terminal-Client nutzt sie zur Laufzeit** – das Backend hat ein eigenes
+Datenmodell und hatte nie eine Produktiv-Abhängigkeit auf `common` (0 Produktiv-Imports); die
+frühere test-scope-Abhängigkeit für 3 Auth-Parity-Tests entfällt, das Alt-SHA1-Format wird dort
+seither lokal über den Test-Helfer `LegacySha1` (`backend/src/test/.../auth/LegacySha1.java`)
+reproduziert.
 
-**In Phase 5 AP1 (2026-07-21) auf das Nötigste geschrumpft**: `DataManager` (zentraler
-Alt-DB-Zugriff), die Alt-Domänenklassen (`User`, `UserGroup`, `Device`, `Location`, `Program`,
-`Execution`, `CreditAccountingEntry`), `DiscountType`, `NotEnoughCreditException` sowie das
-komplette `maintenance/`-Paket (Alt-TCP-Fernwartungsprotokoll) wurden entfernt – sie waren seit
-dem Client-Cutover (Phase 4 AP4/AP5) bzw. mit dem Alt-Portal-Modul (unten) ungenutzt. Details/
-Testzahlen siehe kb/05-migration-plan.md, Änderungslog „Phase 5 AP1".
+Vorgeschichte: **In Phase 5 AP1 (2026-07-21) war Common bereits auf das Nötigste geschrumpft**
+worden – `DataManager` (zentraler Alt-DB-Zugriff), die Alt-Domänenklassen (`User`, `UserGroup`,
+`Device`, `Location`, `Program`, `Execution`, `CreditAccountingEntry`), `DiscountType`,
+`NotEnoughCreditException` sowie das komplette `maintenance/`-Paket (Alt-TCP-
+Fernwartungsprotokoll) wurden entfernt, da seit dem Client-Cutover (Phase 4 AP4/AP5) bzw. mit
+dem Alt-Portal-Modul (unten) ungenutzt. Details/Testzahlen siehe kb/05-migration-plan.md,
+Änderungslog „Phase 5 AP1".
 
-**Verbliebene Klassen** (`src/main/java/org/kabieror/elwasys/common/`):
+**Verbliebene Klassen** (jetzt in `Client-Raspi/src/main/org/kabieror/elwasys/common/`):
 - `ConfigurationManager` – Basis-Konfigurationsverwaltung
 - `Utilities` (enthält `APP_VERSION`, Passwort-Hilfsfunktionen inkl. `sha1`), `FormatUtilities`
 - `ProgramType` – Enum, von Client-Raspi weiterhin genutzt
 - Exceptions: `LocationOccupiedException`, `NoDataFoundException`
 
-**resources/** (unverändert, weiterhin Seed-Quelle der Test-Harnesses):
-`database-init.sql`, `database-upgrade/*.sql`, ISO-Warn-SVGs.
+Die von diesen Klassen benötigten Bibliotheken sind seither direkte Client-Raspi-Dependencies
+(u. a. Commons Lang3 direkt; der PostgreSQL-JDBC-Treiber nur noch **test-scope**, da nur die
+E2E-Harness per JDBC seedet).
+
+**Geteilte SQL-Fixture**: die ehemalige `Common/resources/database-init.sql` (+
+`database-upgrade/`) wurde ins neue neutrale Top-Level-Verzeichnis `database/` verschoben (jetzt
+`database/database-init.sql` und `database/database-upgrade/`, mit eigenem `database/README.md`);
+sie bleibt Seed-Quelle der Test-Harnesses. Die toten `ISO_7010_*.svg` (Alt-Portal-Reste) wurden
+gelöscht.
 
 ## Client-Raspi (`org.kabieror.elwasys.raspiclient`)
 
@@ -232,9 +247,12 @@ kb/05-migration-plan.md, Zielarchitektur). Ursprünglich (Phase 2 AP1) im Strang
 begonnen – dieser Parallelbetrieb ist inzwischen vollständig abgelöst: das Alt-Portal ist seit
 Phase 3 AP6 fachlich abgelöst und seit Phase 5 AP1 aus dem Repo entfernt (siehe Abschnitt
 „Portal" oben), die Terminals sprechen seit Phase 4 AP4/AP5 nicht mehr direkt mit der DB.
-Reactor-Bezug zu `common`: nur **test-scope** (Auth-Parity-Test, siehe unten) – das Backend hat
-sein eigenes, per Flyway verwaltetes Datenmodell, keine Laufzeit-Wiederverwendung der alten
-`Common`-POJOs/`DataManager` (der in `Common` ohnehin seit Phase 5 AP1 entfernt ist).
+Reactor-Bezug zu `common`: **keiner mehr** – das Backend hat sein eigenes, per Flyway
+verwaltetes Datenmodell und hatte nie eine Produktiv-Abhängigkeit auf `common` (0
+Produktiv-Imports). Die frühere test-scope-Abhängigkeit für die Auth-Parity-Tests ist im
+Phase-5-Nachtrag entfallen (das Alt-SHA1-Format wird dort jetzt lokal über den Test-Helfer
+`LegacySha1` reproduziert, siehe unten); das eigenständige Common-Modul ist ohnehin aufgelöst
+(die 6 verbliebenen Klassen liegen im Client-Raspi-Modul, siehe Abschnitt „Common" oben).
 
 **Historischer Baustand, Arbeitspaket für Arbeitspaket** (Details/Testzahlen je AP siehe
 kb/05-migration-plan.md, Änderungslog): Actuator-Health, Flyway-Baseline gegen das
@@ -294,13 +312,14 @@ Alt-Code-Logik (siehe Javadoc der Klassen für exakte Quellenverweise):
   (hardwarenahe Teile – Leistungsmessung, Steckdose schalten, Benachrichtigungen – bleiben
   bewusst im Terminal, siehe Zielarchitektur in kb/05).
 
-**Alt-vs-Neu-Vergleichstests**: `common` ist als **test-scope**-Dependency in
-`backend/pom.xml` eingebunden (nur Testklassenpfad, keine Laufzeit-Abhängigkeit).
-`backend/.../support/LegacyDataManagerFactory` baut eine echte Alt-Code-`DataManager`
-gegen dieselbe Test-Datenbank auf; `PricingServiceParityTest`/`CreditServiceParityTest`
-lesen dieselbe committete Datenzeile einmal über den Alt-Code und einmal über den neuen
-Service und vergleichen bitgenau (Wert **und** `BigDecimal`-Skala). Details/gefundene
-Alt-Code-Eigenheiten siehe kb/05-migration-plan.md (Änderungslog, AP2, „Beobachtungen").
+**Auth-Parity-Tests**: Das Backend bindet `common` **nicht** (mehr) als Dependency ein – auch
+nicht test-scope. Die AP2 ursprünglich über eine echte Alt-Code-`DataManager` (test-scope-
+`common`) geführten Alt-vs-Neu-Vergleiche sind entfallen; die verbliebenen Parity-Prüfungen
+betreffen nur noch das Alt-Passwortformat und reproduzieren dieses byte-genau lokal über den
+Test-Helfer `LegacySha1` (`backend/src/test/.../auth/LegacySha1.java`, 1:1 nachgebildet aus
+`org.kabieror.elwasys.common.Utilities#sha1`), z. B. in
+`PasswordVerificationServiceParityTest`. Details/gefundene Alt-Code-Eigenheiten siehe
+kb/05-migration-plan.md (Änderungslog, AP2, „Beobachtungen").
 
 ### Auth (AP3)
 
@@ -357,10 +376,11 @@ erbt und ein zweiter Parent in Maven nicht möglich ist):
   Spring-Boot-BOM verwaltet (offiziell als „optional, selbst hinzufügen" dokumentiert)
 - `flyway-core` + `flyway-database-postgresql`, PostgreSQL-Treiber
 - Tests: `spring-boot-starter-test`, `spring-security-test` (AP3), `testcontainers`
-  (`junit-jupiter`, `postgresql`), `common` (**test-scope**, AP2: Alt-vs-Neu-
-  Vergleichstests, keine Laufzeit-Abhängigkeit)
+  (`junit-jupiter`, `postgresql`) – **keine** `common`-Abhängigkeit mehr (die frühere
+  AP2-test-scope-Einbindung ist im Phase-5-Nachtrag entfallen, Auth-Parity jetzt über den
+  lokalen Test-Helfer `LegacySha1`, siehe oben)
 - **Wichtig**: `elwasys-parent`s eigene `dependencyManagement` pinnt `logback-classic`/
-  `-core` (1.2.9) und `slf4j-api` (1.7.12) für Common/Client-Raspi fest – zu alt für Spring
+  `-core` (1.2.9) und `slf4j-api` (1.7.12) für den Client-Raspi-Kontext fest – zu alt für Spring
   Boot 3.5 (braucht Logback ≥ 1.5). Ein BOM-Import überschreibt nie eine bereits explizit
   gepinnte Version, daher hat `backend/pom.xml` eigene, dem BOM entsprechende Overrides
   (Logback 1.5.34, slf4j-api 2.0.18, Postgres-Treiber 42.7.11) – Details in
@@ -821,7 +841,7 @@ danach weiterhin Anfragen beantwortet - er tötet den Subprozess NICHT und beoba
 OS-Prozess-Neustart ("Neustart" bedeutet in dieser Anwendung seit jeher ein In-Prozess-
 Reinitialisieren des Hauptfensters, `ElwaManager#restart()`, kein Prozess-Neustart - identischer
 Prüfumfang wie die entfernte Alt-Suite). Harness: `Client-Raspi/run-cross-component-e2e.sh`
-(gleicher Dateiname/Pfad wie zuvor, komplett neuer Inhalt) baut Common + den Client-Jar,
+(gleicher Dateiname/Pfad wie zuvor, komplett neuer Inhalt) baut den Client-Jar,
 bereitet eine frische, leere Postgres-Datenbank vor (Flyway migriert sie über den Testkontext
 - kein manuelles Seeding wie zuvor nötig) und startet die Suite unter `xvfb-run` (der reale
 Client-Subprozess braucht ein Display). `TerminalMaintenanceRealClientE2ETest` ist über

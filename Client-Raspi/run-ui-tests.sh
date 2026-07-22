@@ -34,18 +34,18 @@ pg_isready || { echo "PostgreSQL not ready"; exit 1; }
 #    DB role, see backend/application.yml)
 if ! sudo -u postgres psql -lqt | cut -d'|' -f1 | grep -qw elwasys; then
   echo "[run-ui-tests] initializing elwasys database"
-  sudo -u postgres psql -q < "$REPO_ROOT/Common/resources/database-init.sql"
+  sudo -u postgres psql -q < "$REPO_ROOT/database/database-init.sql"
 fi
 # The E2E tests seed fixtures via JDBC as the postgres superuser (they need to
 # clean up credit_accounting, which the elwaportal role may not delete). Give
 # postgres a password the driver can use over TCP.
 sudo -u postgres psql -q -c "ALTER USER postgres WITH PASSWORD 'postgres';"
 
-# 3. Ensure the Common library (and its parent POM) are available in the local
-# Maven repo. Building via the root reactor (-pl Common -am) also installs
-# the aggregator parent POM, which "mvn -f Common/pom.xml install" alone does
-# not — and Client-Raspi's dependency resolution needs it on the local repo.
-mvn -q -B -f "$REPO_ROOT/pom.xml" install -pl Common -am -DskipTests
+# 3. Ensure the aggregator parent POM is available in the local Maven repo so
+# Client-Raspi's per-module build can resolve it. "mvn -N install" installs just
+# that parent POM. (The former "common" module was dissolved after the migration;
+# its classes now live in Client-Raspi/src/main, so there is nothing else to install.)
+mvn -q -B -N -f "$REPO_ROOT/pom.xml" install -DskipTests
 
 # 4. Build+start the backend jar and seed a terminal token (exports
 #    ELWASYS_TEST_BACKEND_URL/-TOKEN, stops the backend on exit).

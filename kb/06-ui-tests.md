@@ -213,7 +213,9 @@ sowohl in `run-ui-tests.sh`s ungefiltertem `mvn test` als auch in `run-client-e2
   Pfad, komplett neuer Inhalt – siehe unten) treibt jetzt `TerminalMaintenanceRealClientE2ETest`
   im `backend`-Modul an: **3/3** grün (Status/Log/Restart), 2× reproduziert.
 
-**`run-cross-component-e2e.sh` (Phase 4 AP5, neuer Inhalt)**: installiert Common, baut den
+**`run-cross-component-e2e.sh` (Phase 4 AP5, neuer Inhalt)**: installiert die Aggregator-
+Parent-POM (`mvn -N install -DskipTests` – das Common-Modul ist im Phase-5-Nachtrag aufgelöst,
+seine Klassen liegen jetzt im Client-Raspi-Modul), baut den
 Client-Raspi-Jar (`mvn package -DskipTests`, KEIN Backend-Jar-Build/-Start nötig – der
 Backend-Spring-Kontext wird vom JUnit-Test selbst über `@SpringBootTest(webEnvironment=
 RANDOM_PORT)` gestartet, siehe kb/03-modules.md), löst die JavaFX-Plattform-Module aus dem
@@ -321,8 +323,9 @@ aufgebaut (Playwright/Node/TS, gleiches `package.json`-Muster, gleiche Chromium-
   **frische, dedizierte** Datenbank an (`elwasys_backend_e2e`, bei jedem Lauf gedroppt+neu
   angelegt – anders als die Alt-Suite, die eine dauerhafte `elwasys`-DB wiederverwendet und
   E2E-Fixtures per Namenspräfix aufräumt; hier ist „frische DB pro Lauf" einfacher UND
-  robuster für den Stabilitätsnachweis), baut Common + das Backend-Jar im
-  **Produktionsmodus** (`mvn package -Pproduction` – der einzige in dieser Sandbox
+  robuster für den Stabilitätsnachweis), baut das Backend-Jar über den Root-Reactor
+  (`mvn package -pl backend`, löst dabei die Aggregator-Parent-POM mit auf) im
+  **Produktionsmodus** (`-Pproduction` – der einzige in dieser Sandbox
   lizenzcheck-freie Build-Weg, siehe kb/05-migration-plan.md „Phase 3 AP2") und startet den
   Jar im Vordergrund auf `SERVER_PORT`. Der Flyway-Baseline-Lauf beim ersten Start seedet
   bereits `admin`/`admin`, die Gruppe „Default" und den Standort „Default" (1:1 aus
@@ -421,7 +424,7 @@ aufgefallen wäre.
 ```bash
 cd backend/e2e
 npm install                 # einmalig
-npx playwright test         # baut Common+Backend (-Pproduction), startet frische DB+Jar, testet
+npx playwright test         # baut das Backend (-Pproduction), startet frische DB+Jar, testet
 E2E_NO_WEBSERVER=1 npx playwright test   # gegen einen bereits laufenden Server (:8081)
 npx playwright show-report  # letzten HTML-Report öffnen
 ```
