@@ -45,13 +45,10 @@ im [Worklog](docs/worklog/README.md).
   status-farbigem Oberrand und voller Breitennutzung.
 
 ### Fixed
-- Portal-Erscheinungsbild wiederhergestellt: das Vaadin-Flow-Portal hatte CSS-Klassen-Hooks,
-  aber kein Stylesheet (nackte Lumo-Standardoptik). Vertrautes Design (blauer Header, dunkle
-  Sidebar mit hervorgehobenem Aktiv-Punkt, gerahmte Zebra-Tabellen, Login als Karte) via zur
-  Laufzeit injiziertem Inline-Stylesheet (`ElwasysAppShell#configurePage` → `portal-theme.css`)
-  – bewusst kein kompiliertes `@Theme`, um den Vaadin-24.10-Lizenzcheck beim Frontend-Bundle-
-  Build zu vermeiden (Sandbox/CI: vaadin.com nicht erreichbar). Details im Worklog
-  ([portal-design](docs/worklog/2026-07-22-portal-design.md)) und docs/kb/05-migration-plan.md.
+- Portal-Erscheinungsbild wiederhergestellt (vorher nackte Lumo-Standardoptik ohne Stylesheet):
+  vertrautes Design via Laufzeit-Inline-CSS statt kompiliertem `@Theme` (umgeht den
+  Vaadin-24.10-Lizenzcheck). Details:
+  [Worklog](docs/worklog/2026-07-22-portal-design.md), docs/kb/05-migration-plan.md.
 
 ## 2026-07-22 — Phase 6: Produktivumschaltung (AP1–AP7)
 
