@@ -78,6 +78,16 @@ Client-Raspi (inkl. Cross-Component) und Backend (JUnit + Playwright-E2E) bei je
   (Rahmenbedingung des Auftraggebers). Die E2E-Suiten sind der Maßstab.
 - **Tests grün vor und nach jedem Umbau** (Kommandos oben). Neues Verhalten braucht Tests.
 - **Kleine, einzeln baubare Commits** – ein Commit = eine logische Änderung.
+- **Arbeitspakete zerlegen/delegieren:** mehrkomponentige Arbeitspakete (Backend + Terminal
+  + Portal + DevOps) über den [`orchestrator`](.claude/agents/) zerlegen und an die
+  Spezialisten (`backend`/`terminal`/`portal`/`devops`) delegieren – **oder** begründet direkt
+  bearbeiten, wenn die Änderung so eng über die Module gekoppelt ist (z. B. eine gemeinsame
+  Wire-/Protokoll-Naht), dass ein einziger Kontext robuster ist. Die Entscheidung (delegieren
+  vs. direkt) am AP-Anfang **bewusst** treffen und benennen; im Zweifel den Auftraggeber fragen.
+  Mechanik der Agenten: [`docs/agent-setup.md`](docs/agent-setup.md).
+- **Review-Gate vor Abschluss:** vor dem Abschließen/Pushen jedes Arbeitspakets `/review` bzw.
+  den [`code-reviewer`](.claude/agents/) als **blockierenden** Qualitäts-Gate laufen lassen und
+  die Findings beheben (oder begründet zurückweisen) – nicht erst auf Nachfrage.
 - **Wissen aktuell halten:** nach jedem Arbeitspaket einen Eintrag in
   [`docs/worklog/`](docs/worklog/README.md) anlegen, den „Current state" in
   [`docs/kb/README.md`](docs/kb/README.md) überschreiben und Nennenswertes in
