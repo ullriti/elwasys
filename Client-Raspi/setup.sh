@@ -19,7 +19,10 @@ function log_success() {
   echo -e "\n${green}> $@${reset}"
 }
 function generate_password() {
-  password=$(date +%s | sha256sum | base64 | head -c 32 ; echo)
+  # CSPRNG statt eines aus dem Installationszeitpunkt abgeleiteten Werts (Issue #58): das alte
+  # "date +%s | sha256sum" war aus dem (auf Minuten schaetzbaren) Installationszeitpunkt
+  # rekonstruierbar. -hex 16 liefert 32 Zeichen (wie zuvor) ohne Sonderzeichen.
+  password=$(openssl rand -hex 16)
   echo "$password"
 }
 

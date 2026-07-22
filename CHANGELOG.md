@@ -13,6 +13,20 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Fixed
+- Terminal-Stabilität & Aufräumen (Pre-Launch-Review AP2, Issues #19/#27/#28/#51/#52/#53/#55/#56/#57/#58/#61):
+  deCONZ-WebSocket verbindet nach einem Abbruch/Neustart wieder neu, sodass die
+  Programm-Ende-Erkennung nicht dauerhaft ausfällt (#19); ein portal-ausgelöster Neustart
+  erzeugt keinen zweiten WebSocket-Client und keine doppelten Karten-/Klick-Listener mehr
+  (#27); Terminal-Nebenläufigkeit gehärtet – `ConcurrentHashMap` und ein Retry unter Lock
+  verhindern ein doppeltes Execution-Finish (#28); der Fremdeinschalt-Watchdog überspringt
+  ein fehlerhaftes Gerät statt den ganzen Zyklus abzubrechen (#51).
+- Weitere Terminal-Härtung: UI-Mutationen konsequent auf den JavaFX-Thread (#52); eine
+  kaputte 2xx-Antwort löst nicht mehr fälschlich den Offline-Pfad aus (#53); das
+  Offline-Journal schreibt mit `DSYNC` (kein Buchungsverlust bei Stromausfall, #55);
+  RFID-Karten-Ids werden im Log maskiert und die Fernwartung liefert deterministisch das
+  INFO-Log (#56); der Wiederaufnahme-Scan überspringt eine Ausführung mit entferntem Programm
+  statt in den Fehlerzustand zu laufen (#57); das deCONZ-Passwort kommt aus einem CSPRNG
+  (`openssl rand`, #58); tote SMTP-Konfiguration im Terminal-Client entfernt (#61).
 - Offline-Replay-Kern gehärtet (Pre-Launch-Review AP1, Issues #16/#17/#18/#54/#59, ADR 0016):
   Nachmeldungen laufen über einen privilegierten Replay-Pfad (`replay`-Flag), der die
   fachlichen Wächter überspringt, statt das Journal bei einer zwischenzeitlichen

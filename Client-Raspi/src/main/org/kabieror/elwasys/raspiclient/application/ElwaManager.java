@@ -175,6 +175,13 @@ public class ElwaManager {
         DeconzEventListener deconzEventListener = null;
         try {
             this.logger.info("Starting up managers");
+            // Bei einem Restart die Close-Listener des vorigen Laufs verwerfen (Issue #27): sie
+            // wurden von onClose(true) bereits benachrichtigt und werden im weiteren Verlauf
+            // dieses initiate() alle frisch neu registriert. Ohne das sammelten sich über
+            // wiederholte Restarts abgestorbene Manager (ExecutionManager, BacklightManager, ...)
+            // in der Liste an. Der Fernwartungs-WS-Client überlebt den Restart bewusst und wird
+            // darum weiter unten stets erneut angemeldet.
+            this.closeListeners.clear();
             SingleInstanceManager.instance.start(this.configurationManager.getSingleInstancePort());
 
             this.apiClient = new ApiClient(this.configurationManager.getBackendUrl(),
@@ -196,11 +203,21 @@ public class ElwaManager {
             // backend.url/backend.token-Konfiguration wie die REST-API (kein neuer Konfig-
             // Schlüssel nötig) und überlebt einen späteren restart() (siehe
             // TerminalWebSocketClient#onClose).
-            this.terminalWebSocketClient = new TerminalWebSocketClient(this,
-                    this.configurationManager.getBackendUrl(), this.configurationManager.getBackendToken(),
-                    this.configurationManager.getUid());
+            // Nur EINMAL aufbauen: die Verbindung überlebt einen restart() bewusst (siehe
+            // TerminalWebSocketClient#onClose). Ein erneutes initiate() (Restart) darf keinen
+            // zweiten Client erzeugen - sonst konkurrieren zwei Clients (beide stopped=false)
+            // endlos gegeneinander (das Backend schließt beim Registrieren der neuen Verbindung
+            // die jeweils andere) und das Portal sieht das Terminal wechselhaft offline
+            // (Issue #27). Der vorhandene Client wird wiederverwendet.
+            if (this.terminalWebSocketClient == null) {
+                this.terminalWebSocketClient = new TerminalWebSocketClient(this,
+                        this.configurationManager.getBackendUrl(), this.configurationManager.getBackendToken(),
+                        this.configurationManager.getUid());
+                this.terminalWebSocketClient.start();
+            }
+            // Nach dem closeListeners.clear() oben stets (wieder) am Close-Event anmelden, damit
+            // der überlebende Client beim endgültigen Schließen gestoppt wird.
             this.listenToCloseEvent(this.terminalWebSocketClient);
-            this.terminalWebSocketClient.start();
 
             // Erreichbarkeits-Check des Backends beim Start (entspricht dem alten
             // "Standort aus der Datenbank laden"-Schritt, jetzt über die API - ein
@@ -255,6 +272,18 @@ public class ElwaManager {
                 if (overview != null && overview.runningExecutionId() != null) {
                     ExecutionDto execDto = this.apiClient.getExecution(overview.runningExecutionId());
                     ClientProgram program = findProgram(d, execDto.programId());
+                    if (program == null) {
+                        // Das Programm der laufenden Ausführung wurde zwischenzeitlich entfernt/
+                        // deaktiviert. Ohne diesen Check entstünde eine ClientExecution mit
+                        // program=null und damit eine NPE in getRemainingTime() beim
+                        // startExecution - das Terminal käme beim Start in den Fehlerzustand
+                        // (Issue #57). Die Ausführung wird darum mit Warnung übersprungen, das
+                        // Terminal startet sauber.
+                        this.logger.warn("[{}] Ueberspringe Wiederaufnahme der Ausfuehrung {}: das zugehoerige "
+                                + "Programm {} ist am Geraet nicht (mehr) verfuegbar.", d.getName(),
+                                overview.runningExecutionId(), execDto.programId());
+                        continue;
+                    }
                     ClientUser user = ClientUser.display(overview.lastUserId(), overview.lastUserName());
                     ClientExecution execution = ClientExecution.of(execDto, d, program, user);
                     d.onExecutionStarted(execution);

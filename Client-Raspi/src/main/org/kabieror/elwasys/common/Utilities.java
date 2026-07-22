@@ -68,8 +68,38 @@ public class Utilities {
         return RandomStringUtils.randomAlphanumeric(20);
     }
 
+    /**
+     * Maskiert eine RFID-Karten-Id für die Log-Ausgabe: es bleiben höchstens die letzten vier
+     * Zeichen sichtbar, der Rest wird durch {@code *} ersetzt. Die Kartennummer ist das einzige,
+     * klonbare Terminal-Login-Merkmal und darf darum nicht im Klartext in ein per Fernwartung
+     * abrufbares Log gelangen (Issue #56).
+     *
+     * @param cardId Die zu maskierende Karten-Id (darf {@code null} sein).
+     * @return Die maskierte Karten-Id, oder {@code null}, wenn die Eingabe {@code null} war.
+     */
+    public static String maskCardId(String cardId) {
+        if (cardId == null) {
+            return null;
+        }
+        final int visible = 4;
+        if (cardId.length() <= visible) {
+            // Kurze Ids komplett maskieren - sonst wäre die gesamte Id sichtbar.
+            return "*".repeat(cardId.length());
+        }
+        return "*".repeat(cardId.length() - visible) + cardId.substring(cardId.length() - visible);
+    }
+
+    /**
+     * Die aktuelle Logdatei für die Fernwartung ({@code LOG_REQUEST}). Liefert deterministisch
+     * das INFO-Log (Appender-Name {@code "FILE"} in der von {@code setup.sh} erzeugten
+     * logback-Konfiguration) und NICHT das DEBUG-Log: die per Portal abrufbare Datei soll keine
+     * DEBUG-Details (z. B. Karten-Ids) enthalten (Issue #56). Existiert kein so benannter
+     * Appender (z. B. in Testumgebungen), fällt sie auf den ersten gefundenen FileAppender zurück
+     * (bisheriges Verhalten).
+     */
     public static String getCurrentLogFile() {
         final LoggerContext context = (LoggerContext) LoggerFactory.getILoggerFactory();
+        String firstFileAppender = null;
         for (final ch.qos.logback.classic.Logger logger : context.getLoggerList()) {
             for (final Iterator<Appender<ILoggingEvent>> index =
                     logger.iteratorForAppenders(); index.hasNext();) {
@@ -77,10 +107,15 @@ public class Utilities {
                 if (appender instanceof FileAppender<?>) {
                     final FileAppender<ILoggingEvent> fileAppender =
                             (FileAppender<ILoggingEvent>) appender;
-                    return fileAppender.getFile();
+                    if ("FILE".equals(fileAppender.getName())) {
+                        return fileAppender.getFile();
+                    }
+                    if (firstFileAppender == null) {
+                        firstFileAppender = fileAppender.getFile();
+                    }
                 }
             }
         }
-        return null;
+        return firstFileAppender;
     }
 }

@@ -84,12 +84,26 @@ public class DeconzEventListener extends TextWebSocketHandler {
     public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
         this.logger.warn("Transport Error: ", exception);
         super.handleTransportError(session, exception);
+        // Ein Transport-Fehler beendet i. d. R. die Verbindung (afterConnectionClosed folgt) -
+        // trotzdem hier bereits einen Reconnect anstoßen, damit die Programm-Ende-Erkennung
+        // nach einem deCONZ-Neustart/Verbindungsabbruch nicht dauerhaft ausfällt (Issue #19).
+        // Doppeltes Planen ist durch isReconnectRunning ausgeschlossen.
+        scheduleReconnect();
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
         this.logger.warn("Connection to deCONZ closed");
         super.afterConnectionClosed(session, status);
+        if (session.equals(this.webSocketSession)) {
+            this.webSocketSession = null;
+        }
+        // Anders als der Alt-Code plante bisher NUR ein fehlgeschlagener VerbindungsAUFBAU einen
+        // Reconnect - der Abbruch einer bestehenden Verbindung blieb unbehandelt und legte die
+        // Leistungsmessung/Steckdosensteuerung bis zum App-Neustart lahm (Issue #19). Jetzt wird
+        // wie beim Backend-WS-Client (TerminalWebSocketClient) auch hier neu verbunden. Der
+        // Stop-Fall ist abgedeckt: scheduleReconnect() bricht bei heruntergefahrenem Scheduler ab.
+        scheduleReconnect();
     }
 
     @Override
@@ -135,6 +149,12 @@ public class DeconzEventListener extends TextWebSocketHandler {
     }
 
     private void openConnection() {
+        // Nach stop() (Scheduler heruntergefahren) keine Verbindung mehr aufbauen - schließt das
+        // Fenster, in dem ein noch vor stop() eingeplanter Reconnect sonst doch verbinden würde
+        // (Stop-Flag beachten, analog zum TerminalWebSocketClient, Issue #19).
+        if (reconnectScheduler.isShutdown()) {
+            return;
+        }
         logger.info("Starting web socket connection to deCONZ");
         client.execute(this, String.format("ws://%s:%s", host, port))
                 .whenComplete((result, ex) -> {

@@ -74,8 +74,13 @@ public class OfflineJournal {
     private void append(OfflineJournalEntry entry) {
         synchronized (this.lock) {
             try {
+                // DSYNC erzwingt, dass der Journal-Eintrag vor der Rückkehr physisch auf den
+                // Datenträger geschrieben ist. Ohne das könnte ein gerade journalierter
+                // START/FINISH bei einem Stromausfall (Waschkeller ohne USV!) trotz "persistent"
+                // verloren gehen - genau der Moment, den das Journal absichern soll (Issue #55).
                 Files.writeString(this.file, this.gson.toJson(entry) + System.lineSeparator(),
-                        StandardOpenOption.CREATE, StandardOpenOption.APPEND, StandardOpenOption.WRITE);
+                        StandardOpenOption.CREATE, StandardOpenOption.APPEND, StandardOpenOption.WRITE,
+                        StandardOpenOption.DSYNC);
             } catch (IOException e) {
                 this.logger.error("Konnte Ereignis nicht im Offline-Journal ablegen - Ereignis '{}' (Schluessel "
                         + "'{}') droht verloren zu gehen!", entry.type(), entry.idempotencyKey(), e);
