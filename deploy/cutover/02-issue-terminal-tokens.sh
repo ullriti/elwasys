@@ -47,7 +47,7 @@ if [[ ! -f "${JAR}" ]]; then
 fi
 
 echo "Vorhandene Standorte:"
-psql_cutover -tA -F' | ' -c "SELECT id, name FROM locations ORDER BY id;" | while IFS='|' read -r lid lname; do
+psql_cutover -tA -F'|' -c "SELECT id, name FROM locations ORDER BY id;" | while IFS='|' read -r lid lname; do
   echo "  [${lid}] ${lname}"
 done
 echo

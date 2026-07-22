@@ -269,11 +269,34 @@ cd $ELWA_ROOT
 sudo killall java 2> /dev/null
 
 while true; do
+    # N3 (QA-Review Phase 6): vor jedem (Re-)Start die bisherigen stdout/errout
+    # rotieren, WENN sie eine Grenze ueberschritten haben (einfache Groessen-
+    # Schranke statt echtem logrotate - kein externes Tool auf dem Geraet
+    # noetig). So bleibt trotz Anhaengen (statt Abschneiden, siehe unten) die
+    # Groesse ueber viele Relaunches/Crash-Loops hinweg begrenzt; die zuletzt
+    # rotierte Datei (*.1) bleibt als ein zusaetzliches Postmortem-Artefakt
+    # erhalten. Schwelle per ELWA_LOG_MAX_BYTES ueberschreibbar.
+    ELWA_LOG_MAX_BYTES=\${ELWA_LOG_MAX_BYTES:-5242880}
+    for f in log/stdout log/errout; do
+        if [ -f "\$f" ]; then
+            size=\$(wc -c < "\$f" 2>/dev/null || echo 0)
+            if [ "\${size:-0}" -gt "\$ELWA_LOG_MAX_BYTES" ]; then
+                mv -f "\$f" "\$f.1"
+            fi
+        fi
+    done
+
     # Symlink raspi-client.latest.jar pro Iteration NEU aufloesen: ein
     # Symlink-Wechsel (Update) zwischen zwei Iterationen greift damit
     # automatisch beim naechsten Start.
+    # N3: anhaengen (>>) statt abschneiden (>) - ein Update-/Crash-Neustart
+    # loescht damit nicht mehr das rohe stdout/stderr des vorigen Laufs (das
+    # genau das Postmortem-Artefakt ist, das ein fehlgeschlagenes Auto-Update
+    # braucht). Anwendungs-Logs laufen ohnehin separat rollierend ueber
+    # logback.xml; diese Dateien fangen nur, was direkt auf STDOUT/STDERR
+    # landet (z.B. JVM-Absturz vor Logging-Init).
     java -Djavafx.platform=gtk -Dlogback.configurationFile=$ELWA_ROOT/logback.xml \
-            -jar raspi-client.latest.jar -verbose > log/stdout 2> log/errout
+            -jar raspi-client.latest.jar -verbose >> log/stdout 2>> log/errout
 
     # JVM hat sich beendet (Crash oder gezielt von aussen fuer Update/Watchdog).
     # Kurz warten (Fehler-Schleifen entzerren), dann den dann aktuell

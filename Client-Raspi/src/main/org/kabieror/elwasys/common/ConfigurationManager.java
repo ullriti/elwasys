@@ -67,51 +67,6 @@ public abstract class ConfigurationManager {
     public abstract InputStream getDefaultsFileStream();
 
     /**
-     * Gibt den Datenbankserver zurück
-     * 
-     * @return Den Datenbankserver
-     */
-    public String getDatabaseServer() {
-        return this.props.getProperty("database.server");
-    }
-
-    /**
-     * Gibt den Namen der Datenbank zurück
-     * 
-     * @return Den Namen der Datenbank
-     */
-    public String getDatabaseName() {
-        return this.props.getProperty("database.name");
-    }
-
-    /**
-     * Gibt den Datenbankbenutzer zurück
-     * 
-     * @return Den Datenbankbenutzer
-     */
-    public String getDatabaseUser() {
-        return this.props.getProperty("database.user");
-    }
-
-    /**
-     * Gibt das Passwort zur Datenbank zurück
-     * 
-     * @return Das Passwort zur Datenbank
-     */
-    public String getDatabasePassword() {
-        return this.props.getProperty("database.password");
-    }
-
-    /**
-     * Gibt an, ob die Datenbankverbindung verschlüsselt aufgebaut werden soll.
-     *
-     * @return True, wenn die Datenbankverbindung verschlüssel aufgebaut werden soll.
-     */
-    public Boolean getDatabaseUseSsl() {
-        return Boolean.parseBoolean(this.props.getProperty("database.useSsl"));
-    }
-
-    /**
      * Der zu verwendende SMTP-Server
      * 
      * @return Der zu verwendende SMTP-Server

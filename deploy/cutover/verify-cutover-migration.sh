@@ -1,15 +1,15 @@
 #!/bin/bash
 # Verifiziert den eigentlichen Cutover-Migrationspfad end-to-end, gegen eine lokale Kopie des
-# Bestandsschemas (Phase 6 AP1, siehe kb/05-migration-plan.md "Produktivumschaltung"). Anders
-# als backend/verify-schema-baseline.sh (ein Phase-2-Relikt, siehe dessen Header - dessen
-# Prämisse "Alt-Weg-Schema == frisches Flyway-Schema" gilt seit V2 nicht mehr) ist DIES das
-# wartbare Cutover-Verifikationsskript: es prüft nicht Schema-Gleichheit, sondern die
-# tatsächlich für den Cutover relevanten Eigenschaften explizit per Assert-Liste (siehe unten).
+# Bestandsschemas (Phase 6 AP1, siehe kb/05-migration-plan.md "Produktivumschaltung"). Dies ist
+# das wartbare Cutover-Verifikationsskript: es prüft nicht Schema-Gleichheit gegen ein frisches
+# Flyway-Schema (diese Prämisse gilt seit V2 nicht mehr), sondern die tatsächlich für den
+# Cutover relevanten Eigenschaften explizit per Assert-Liste (siehe unten).
 #
 # Ablauf:
-#   1. Test-DB als Kopie des Bestandsschemas anlegen (database/database-init.sql,
-#      ohne dessen eigene CREATE DATABASE/\connect-Zeilen - die Test-DB wird selbst vorher
-#      angelegt, eigener Name/Port konfigurierbar).
+#   1. Test-DB als Kopie des Bestandsschemas anlegen (per Flyway-V1-Baseline, siehe Schritt 1
+#      unten - V1__baseline_schema_0_4_0.sql ist die einzige Quelle des Alt-Schemas, seit das
+#      frühere, byte-äquivalente database/database-init.sql entfernt wurde; die Test-DB wird
+#      selbst vorher angelegt, eigener Name/Port konfigurierbar).
 #   2. VOR der Migration realistische Bestandsdaten einfügen (je eine Zeile: user_group,
 #      Nicht-Admin-Nutzer, Standort, Gerät, Programm, Geräte-Programm-Zuordnung, Ausführung,
 #      Abrechnungsposten) - Beweis für Datenerhalt beim Cutover.
@@ -24,14 +24,13 @@
 #      ein künftiges Rollback-Arbeitspaket (Phase 6 AP2) kann auf ihr aufbauen.
 #
 # Konfigurierbar (kollidiert bewusst nicht mit anderen Test-DBs/-Ports im Repo, siehe deren
-# Skripte: elwasys_backend_it/run-backend-tests.sh, elwasys_flywaybaseline_verify+Port
-# 18080/18081/verify-schema-baseline.sh, elwasys_backend_e2e+Port 8081/backend/e2e):
+# Skripte: elwasys_backend_it/run-backend-tests.sh, elwasys_backend_e2e+Port 8081/backend/e2e):
 #   CUTOVER_VERIFY_DB   Name der Test-DB (Default: elwasys_cutover_verify)
 #   CUTOVER_VERIFY_PORT Port des Backends während der Verifikation (Default: 18090)
 #
 # Requires: JDK 21, Maven, lokales PostgreSQL 16 (pg_ctlcluster) + sudo - wie
-# backend/run-backend-tests.sh / backend/verify-schema-baseline.sh. Reihenfolge-unabhängig
-# wiederholt ausführbar (Test-DB wird bei jedem Lauf per DROP+CREATE frisch angelegt).
+# backend/run-backend-tests.sh. Reihenfolge-unabhängig wiederholt ausführbar (Test-DB wird bei
+# jedem Lauf per DROP+CREATE frisch angelegt).
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."   # Repo-Wurzel (deploy/cutover/.. = deploy, ../.. = Repo-Wurzel)
@@ -172,7 +171,7 @@ assert_eq "flyway_schema_history: genau BASELINE@1 gefolgt von V2..V10, alle suc
     "${EXPECTED_HISTORY}" "${ACTUAL_HISTORY}"
 
 echo "--- Bestandsdaten unverändert (Datenerhalt) ---"
-# Hinweis (wie in backend/verify-schema-baseline.sh): boolean || text konkateniert zu den
+# Hinweis: boolean || text konkateniert zu den
 # SQL-Standardwörtern "true"/"false" - NICHT zu psql's rohem 't'/'f'-Ausgabeformat (das sieht
 # man nur bei einer nackten "SELECT bool_spalte" ohne Konkatenation, siehe col_exists() unten).
 assert_eq "user_groups: WG Musterstrasse mit FACTOR/0.9 erhalten" \

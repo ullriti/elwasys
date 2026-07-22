@@ -37,11 +37,6 @@ public class ClientDatabaseErrorE2ETest {
     static void launchWithUnreachableBackend() throws Exception {
         workDir = Files.createTempDirectory("elwasys-dberror-e2e");
         Files.writeString(workDir.resolve("elwasys.properties"), String.join("\n",
-                "database.server=localhost:5432",
-                "database.name=elwasys",
-                "database.user=elwaclient1",
-                "database.password=elwaclient1",
-                "database.useSsl=false",
                 // Nichts hört auf diesem Port -> die Verbindung wird sofort verweigert.
                 "backend.url=http://localhost:1/",
                 "backend.token=irrelevant-since-unreachable",

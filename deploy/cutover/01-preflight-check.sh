@@ -2,11 +2,11 @@
 # Cutover-Preflight-Check (Phase 6 AP1, siehe kb/05-migration-plan.md "Produktivumschaltung").
 #
 # REIN LESEND - dieses Skript verändert NICHTS an der Datenbank (nur SELECT-Abfragen). Es
-# erstellt einen Readiness-Report für den Cutover der Bestands-DB (angelegt über den Alt-Weg
-# database/database-init.sql) auf das neue Flyway-verwaltete Schema: welche Alt-
-# Artefakte sind noch da, ein Dateninventar, und Warnungen für alles, was vor dem eigentlichen
-# Cutover (Backend gegen diese DB starten, siehe deploy/cutover/README.md) Aufmerksamkeit
-# braucht.
+# erstellt einen Readiness-Report für den Cutover der Bestands-DB (angelegt über den Alt-Weg,
+# beschrieben durch backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql) auf
+# das neue Flyway-verwaltete Schema: welche Alt-Artefakte sind noch da, ein Dateninventar, und
+# Warnungen für alles, was vor dem eigentlichen Cutover (Backend gegen diese DB starten, siehe
+# deploy/cutover/README.md) Aufmerksamkeit braucht.
 #
 # Verbindung per Umgebungsvariablen (dieselben wie das Backend selbst kennt, siehe
 # application.yml) - siehe lib-db-env.sh für Details/Defaults:

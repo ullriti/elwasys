@@ -16,7 +16,7 @@ Modernisierungsprojekts. Vor jeder Arbeit lesen:
 3. Je nach Aufgabe: 01 (Architektur), 02 (Datenmodell), 03 (Module),
    04 (Build/Run), 06 (UI-Tests), 07 (Remote-Umgebung), 08 (Testplan).
 
-**Aktueller Stand (2026-07-21):** Phase 0 (Sicherheitsnetz: Build + E2E-Tests) und
+**Aktueller Stand (2026-07-22):** Phase 0 (Sicherheitsnetz: Build + E2E-Tests) und
 Phase 1 (Fundament: Parent-POM, Java 21, JUnit 5, ElwaManager-DI) sind abgeschlossen,
 alle Grundsatzentscheidungen sind gefallen. **Phase 2 (Backend-Gerüst: AP1–AP6 – Flyway-
 Baseline, JPA-Entities/Geschäftslogik, Auth, REST-API/Standort-Token/WebSocket,
@@ -32,18 +32,23 @@ Daten], AP5 Fernwartung umgedreht [ausgehende WS-Verbindung des Terminals,
 entfällt], AP6 Offline-Robustheit [laufende Executions lokal zu Ende führen + Offline-
 Buchungen]), QA-Review ohne blockierende Befunde. Die Cross-Component-Wartungsverbindung
 (P21/P22) läuft seit AP5 über den neuen Backend-WS-Kanal (Nachfolgesuite im `backend`-Modul,
-`run-cross-component-e2e.sh` umgestellt). **Phase 5 (Aufräumen): alle sechs Arbeitspakete
-(AP1–AP6) sind umgesetzt**, die formale QA-Review der Phase steht noch aus: AP1 Alt-Portal-
-Modul (`Portal/`) + `Common.DataManager`/Maintenance-Altprotokoll komplett aus dem Repo
-entfernt (Root-Reactor jetzt **3 Module**: Common, Client-Raspi, backend; Common auf 6
-Klassen geschrumpft), AP2 DB-Rollen gehärtet (`elwaclient1`/`elwaapi`/Gruppe `elwaclients`
-entfernt, `elwaportal` einziger Anwendungs-DB-User; Default-Admin-Passwort entfernt,
-`admin-cli` zum Setzen), AP3 Spaltentypo-Fix + obsolete `locations.client_*`-Spalten entfernt,
-AP4 `elwaapi`-App-Reste entfernt (`auth_key`-Trigger/-Spalten, `reservations`/
-`foreign_authkeys`), AP5 Release-Pipeline finalisiert, AP6 Doku-Endstand (READMEs/kb/Setup auf
-die Zielarchitektur gebracht). Kein Alt-Portal, kein Direkt-DB-Zugriff der Terminals mehr –
-siehe Roadmap/Änderungslog in kb/05 für Details. **Nächster Schritt: QA-Review Phase 5**,
-danach Phase 6 (Produktivumschaltung), siehe Roadmap in kb/05.
+`run-cross-component-e2e.sh` umgestellt). **Phase 5 (Aufräumen, AP1–AP6) ist abgeschlossen**
+(QA-Review 2026-07-22 ohne blockierende Befunde): AP1 Alt-Portal-Modul (`Portal/`) +
+`Common.DataManager`/Maintenance-Altprotokoll komplett aus dem Repo entfernt (nach dem
+Common-Auflösungs-Nachtrag ist der Root-Reactor jetzt **2 Module**: Client-Raspi, backend –
+die 6 Common-Utility-Klassen liegen in `Client-Raspi/src/main`), AP2 DB-Rollen gehärtet
+(`elwaclient1`/`elwaapi`/Gruppe `elwaclients` entfernt, `elwaportal` einziger Anwendungs-DB-User;
+Default-Admin-Passwort entfernt, `admin-cli` zum Setzen), AP3 Spaltentypo-Fix + obsolete
+`locations.client_*`-Spalten entfernt, AP4 `elwaapi`-App-Reste entfernt (`auth_key`-Trigger/
+-Spalten, `reservations`/`foreign_authkeys`), AP5 Release-Pipeline finalisiert, AP6 Doku-Endstand
+(READMEs/kb/Setup auf die Zielarchitektur gebracht). **Phase 6 (Produktivumschaltung, AP1–AP7)
+ist umgesetzt und QA-reviewt** (2026-07-22): Cutover-DB-Werkzeuge (`deploy/cutover/`,
+Migration/Rollback/Verify), Terminal-Neuaufsetzung + Java-21-Upgrade + `update.sh`/
+`auto-update-watchdog.sh` (`deploy/terminal/`), Post-Deploy-Smoke-Gate (`deploy/smoke/`) und das
+`deploy/CUTOVER-RUNBOOK.md`; die QA-Review fand + behob einen BLOCKER und einen MAJOR im
+unbeaufsichtigten Auto-Update-Watchdog. Kein Alt-Portal, kein Direkt-DB-Zugriff der Terminals mehr –
+siehe Roadmap/Änderungslog in kb/05 für Details. **Nächster Schritt: Phase-6-Produktivumschaltung
+im Feld** (operativer Schritt des Auftraggebers, siehe `deploy/CUTOVER-RUNBOOK.md`).
 
 ## Arbeitsregeln
 

@@ -10,13 +10,16 @@ import org.springframework.test.context.DynamicPropertySource;
  * {@code ELWASYS_TEST_JDBC_URL} in dieser Docker-losen Sandbox-Umgebung -
  * {@code backend/run-backend-tests.sh}).
  *
- * <p>Bewusst OHNE {@code @Transactional}: mehrere Tests in diesem Arbeitspaket (siehe
- * kb/05-migration-plan.md, AP2) vergleichen Alt-Code (eigene, autocommittende JDBC-
- * Connection über {@link LegacyDataManagerFactory}) mit dem neuen Service (Spring-Data-
- * Repositories). Ein rollenderes {@code @Transactional} auf Testebene würde vom Alt-Code
- * nicht gesehene, unfertige Daten erzeugen (jede sichtbare Verbindung ist eine eigene DB-
- * Sitzung). Jeder Repository-Aufruf committet daher für sich (Spring Data JPAs eigene
- * {@code @Transactional} pro Methode) - Testdaten bekommen daher pro Testklasse
+ * <p>Bewusst OHNE {@code @Transactional}: Ursprünglich (Phase 2 AP2, siehe
+ * kb/05-migration-plan.md) verglichen mehrere Tests hier Alt-Code (eine eigene,
+ * autocommittende JDBC-Connection über eine mittlerweile entfernte Test-Hilfsklasse) mit
+ * dem neuen Service (Spring-Data-Repositories). Diese Alt-Code-Vergleichstests
+ * (Parity-Tests) samt ihrer Hilfsklasse wurden in Phase 5 gelöscht, nachdem der Alt-Code
+ * selbst entfernt wurde; die dadurch begründete Notwendigkeit bleibt jedoch bestehen: Ein
+ * rollenderes {@code @Transactional} auf Testebene würde von einer eigenen, direkten
+ * Verbindung nicht gesehene, unfertige Daten erzeugen (jede sichtbare Verbindung ist eine
+ * eigene DB-Sitzung). Jeder Repository-Aufruf committet daher für sich (Spring Data JPAs
+ * eigene {@code @Transactional} pro Methode) - Testdaten bekommen daher pro Testklasse
  * eindeutige Namen (siehe Testklassen), damit parallele/wiederholte Läufe nicht
  * kollidieren.
  *
