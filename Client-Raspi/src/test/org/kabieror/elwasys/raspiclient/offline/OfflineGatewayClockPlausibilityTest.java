@@ -52,4 +52,14 @@ class OfflineGatewayClockPlausibilityTest {
 
         assertTrue(gateway.hasUsableSnapshot(), "a recent snapshot within its offline window stays usable");
     }
+
+    @Test
+    void aStaleSnapshotFromAFastRunningClockIsRejectedAsExpired(@TempDir Path dir) {
+        // Gegenrichtung zu #54: steht die Terminaluhr zu WEIT VORNE, liegt der Snapshot-Zeitpunkt
+        // scheinbar weit in der Vergangenheit (> Offline-Fenster) - der Snapshot gilt dann als
+        // abgelaufen und wird ebenfalls abgelehnt (fail-closed in beide Richtungen).
+        OfflineGateway gateway = gatewayWith(dir, snapshotGeneratedAt(LocalDateTime.now().minusMinutes(200)));
+
+        assertFalse(gateway.hasUsableSnapshot(), "a snapshot older than its offline window is expired");
+    }
 }

@@ -114,6 +114,50 @@ class OfflineGatewayReplayTest {
         assertEquals("f2", remaining.get(0).idempotencyKey(), "the fresh FINISH was not wiped by a blanket clear()");
     }
 
+    @Test
+    void anAbortIsReplayedAsAPairLikeAFinish(@TempDir Path dir) {
+        // Wie die FINISH-Paar-Logik, aber mit einem ABORT als Terminierung - der ABORT nutzt
+        // ebenfalls die beim START-Replay gelernte Backend-Id.
+        OfflineJournal journal = new OfflineJournal(dir.resolve("offline-journal.jsonl"));
+        journal.appendStart("s1", TS, 1, 10, 100);
+        journal.appendFinish(true, "a1", TS.plusHours(1), 1, null, "s1", new BigDecimal("2.00")); // aborted=true
+        RecordingApiClient api = new RecordingApiClient();
+        api.startReplayResultId = 42;
+        OfflineGateway gateway = newGateway(dir, api, journal);
+
+        boolean done = gateway.replay();
+
+        assertTrue(done);
+        assertEquals(1, api.startReplays);
+        assertEquals(1, api.aborts, "the ABORT terminator was replayed via abortExecution");
+        assertEquals(0, api.finishes);
+        assertEquals(42, api.lastFinishExecutionId, "the ABORT must use the id learned from the START replay");
+        assertFalse(journal.hasPendingEntries());
+    }
+
+    @Test
+    void anUnknownEntryTypeIsDeadLetteredNotSilentlyDropped(@TempDir Path dir) throws IOException {
+        // Ein Eintrag mit unbekanntem Typ (z. B. von einem neueren Client nach einem Downgrade)
+        // darf nicht spurlos als "nachgemeldet" gelöscht werden, sondern muss in die
+        // Dead-Letter-Datei wandern.
+        Path journalFile = dir.resolve("offline-journal.jsonl");
+        OfflineJournalEntry unknown = new OfflineJournalEntry("MYSTERY", "m1", TS, 1, 10, 100, null, null, null);
+        Files.writeString(journalFile, OfflineJsonSupport.gson().toJson(unknown) + System.lineSeparator());
+        OfflineJournal journal = new OfflineJournal(journalFile);
+        RecordingApiClient api = new RecordingApiClient();
+        OfflineGateway gateway = newGateway(dir, api, journal);
+
+        boolean done = gateway.replay();
+
+        assertTrue(done, "the journal is drained (the unknown entry is dead-lettered, not left pending)");
+        assertEquals(0, api.startReplays);
+        assertEquals(0, api.finishes);
+        assertFalse(journal.hasPendingEntries(), "the unknown entry is removed from the active journal");
+        Path deadLetter = dir.resolve("offline-journal.jsonl.deadletter");
+        assertTrue(Files.exists(deadLetter), "the unknown entry left a dead-letter trace");
+        assertTrue(Files.readAllLines(deadLetter).stream().anyMatch(l -> l.contains("m1")));
+    }
+
     /**
      * Test-Doppel für {@link ApiClient}, das keine Netzwerkkommunikation macht, sondern die
      * Aufrufe protokolliert und konfigurierbar Ergebnisse/Fehler liefert.

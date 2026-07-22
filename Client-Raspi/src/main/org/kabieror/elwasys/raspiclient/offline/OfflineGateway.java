@@ -407,7 +407,11 @@ public class OfflineGateway {
                     this.apiClient.abortExecution(executionId, entry.clientTimestamp(), entry.idempotencyKey());
                 }
             }
-            default -> this.logger.warn("Unbekannter Journal-Eintragstyp '{}' - wird uebersprungen.", entry.type());
+            // Ein unbekannter Eintragstyp (z. B. ein Eintrag eines neueren Clients nach einem
+            // Downgrade) wird NICHT still verworfen, sondern über den RuntimeException-Zweig in
+            // die Dead-Letter-Datei geschrieben - so bleibt eine Spur erhalten statt den Eintrag
+            // spurlos als "nachgemeldet" zu zählen.
+            default -> throw new IllegalStateException("Unbekannter Journal-Eintragstyp '" + entry.type() + "'.");
         }
     }
 

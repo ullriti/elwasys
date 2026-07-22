@@ -1,6 +1,7 @@
 package org.kabieror.elwasys.backend.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.kabieror.elwasys.backend.api.dto.ExecutionEndRequest;
 import org.kabieror.elwasys.backend.api.dto.ExecutionStartRequest;
+import org.kabieror.elwasys.backend.api.exception.UserBlockedException;
 import org.kabieror.elwasys.backend.api.idempotency.IdempotencyService;
 import org.kabieror.elwasys.backend.auth.terminal.TerminalPrincipal;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
@@ -68,8 +70,6 @@ class ExecutionControllerOfflineReplayTest {
 
     private ExecutionEntity execution;
 
-    private PermissionService permissionService;
-
     private CreditService creditService;
 
     private void setUp(int offlineMaxDurationMinutes) {
@@ -78,7 +78,6 @@ class ExecutionControllerOfflineReplayTest {
         PermissionService permissionService = mock(PermissionService.class);
         PricingService pricingService = mock(PricingService.class);
         CreditService creditService = mock(CreditService.class);
-        this.permissionService = permissionService;
         this.creditService = creditService;
         TerminalScopeGuard scopeGuard = mock(TerminalScopeGuard.class);
 
@@ -262,8 +261,7 @@ class ExecutionControllerOfflineReplayTest {
         setUp(60);
         this.user.setBlocked(true);
 
-        org.junit.jupiter.api.Assertions.assertThrows(
-                org.kabieror.elwasys.backend.api.exception.UserBlockedException.class,
+        assertThrows(UserBlockedException.class,
                 () -> this.controller.start(this.terminal, "live-key-1",
                         new ExecutionStartRequest(1, 1, 1, LocalDateTime.now().minusMinutes(30), Boolean.FALSE)));
 
