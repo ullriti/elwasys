@@ -1,9 +1,11 @@
 package org.kabieror.elwasys.backend.repository;
 
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -13,6 +15,18 @@ public interface UserRepository extends JpaRepository<UserEntity, Integer> {
      * Entspricht {@code DataManager#getUsers}: alle nicht gelöschten Benutzer.
      */
     List<UserEntity> findByDeletedFalse();
+
+    /**
+     * Lädt einen Benutzer und sperrt seine Zeile pessimistisch bis zum Transaktionsende
+     * ({@code SELECT ... FOR UPDATE}, Issue #20 - AP3). Serialisiert alle Guthaben-relevanten
+     * Read-then-Write-Sequenzen dieses Benutzers (Start-Guthabencheck, {@code payout},
+     * {@code payExecution}), damit zwei parallele Buchungen nicht beide denselben Ausgangsstand
+     * lesen und das Guthaben negativ werden lassen. MUSS innerhalb der Transaktion aufgerufen
+     * werden, in der anschließend geprüft und gebucht wird (siehe {@code CreditService}).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM UserEntity u WHERE u.id = :id")
+    Optional<UserEntity> findWithLockById(@Param("id") Integer id);
 
     /**
      * Entspricht {@code DataManager#getUserByCardId}: Suche über eine der (durch

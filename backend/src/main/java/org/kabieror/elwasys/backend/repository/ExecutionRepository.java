@@ -1,11 +1,27 @@
 package org.kabieror.elwasys.backend.repository;
 
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface ExecutionRepository extends JpaRepository<ExecutionEntity, Integer> {
+
+    /**
+     * Lädt eine Ausführung und sperrt ihre Zeile pessimistisch bis zum Transaktionsende
+     * ({@code SELECT ... FOR UPDATE}, Issue #20 - AP3). Der Beenden-/Abbruch-Pfad lädt die
+     * Ausführung damit FRISCH und GESPERRT innerhalb der Idempotenz-Transaktion, statt den
+     * "bereits beendet"-Wächter auf einer zuvor detacht geladenen Instanz zu prüfen: so
+     * durchlaufen zwei parallele {@code finish}-Aufrufe nicht beide den
+     * {@code finished == false}-Zweig und buchen doppelt ab.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT e FROM ExecutionEntity e WHERE e.id = :id")
+    Optional<ExecutionEntity> findWithLockById(@Param("id") Integer id);
 
     /**
      * Entspricht der Guthaben-Query in {@code User#loadCredit} im Alt-Code: ALLE noch

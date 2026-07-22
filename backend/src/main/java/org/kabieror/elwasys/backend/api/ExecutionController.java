@@ -24,14 +24,16 @@ import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
-import org.kabieror.elwasys.backend.notification.NotificationService;
+import org.kabieror.elwasys.backend.notification.ExecutionNotificationEvent;
 import org.kabieror.elwasys.backend.offline.ClientTimestampPolicy;
 import org.kabieror.elwasys.backend.repository.ProgramRepository;
 import org.kabieror.elwasys.backend.repository.UserRepository;
+import org.kabieror.elwasys.backend.service.AdvisoryLockService;
 import org.kabieror.elwasys.backend.service.CreditService;
 import org.kabieror.elwasys.backend.service.ExecutionService;
 import org.kabieror.elwasys.backend.service.PermissionService;
 import org.kabieror.elwasys.backend.service.PricingService;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -72,15 +74,18 @@ import org.springframework.web.bind.annotation.RestController;
  * am Terminal"). Fehlt das Feld, verwendet der Server wie bisher seine eigene Uhr.
  *
  * <p><b>Benachrichtigungen (AP3, Phase 4)</b>: ein reguläres Ende ({@link #finish}) bzw. ein
- * Abbruch ({@link #abort}) löst {@link NotificationService#notifyExecutionFinished}
- * bzw. {@link NotificationService#notifyExecutionAborted} aus - 1:1 am selben Auslösepunkt
- * wie {@code ExecutionFinisher#executeAction()} im Client-Alt-Code. Der Versand bleibt
- * strikt hinter {@code elwasys.notifications.enabled} (Default AUS, siehe
- * {@link NotificationService} Klassen-Javadoc) - dieser Controller ruft den Dienst
- * bedingungslos auf und überlässt das Gating vollständig {@link NotificationService}, analog
- * zu {@code PasswordResetService}. Bei einem idempotenten Replay (siehe oben) wird die
- * Benachrichtigung NICHT erneut ausgelöst, weil die fachliche Aktion (inkl. Benachrichtigung)
- * dann gar nicht erst erneut ausgeführt wird.
+ * Abbruch ({@link #abort}) publiziert ein
+ * {@link org.kabieror.elwasys.backend.notification.ExecutionNotificationEvent} - 1:1 am selben
+ * Auslösepunkt wie {@code ExecutionFinisher#executeAction()} im Client-Alt-Code. Der Versand
+ * selbst läuft erst nach dem Commit der Finish-Transaktion im
+ * {@link org.kabieror.elwasys.backend.notification.ExecutionNotificationListener} (Issue #36,
+ * {@code @TransactionalEventListener} / {@code AFTER_COMMIT}), damit ein hängender SMTP-Server
+ * nicht die DB-Transaktion blockiert und eine zurückgerollte Transaktion keine "fertig"-Mail
+ * zu einer nicht verbuchten Ausführung auslöst. Das Gating hinter
+ * {@code elwasys.notifications.enabled} (Default AUS) verbleibt vollständig im
+ * {@code NotificationService}. Bei einem idempotenten Replay (siehe oben) wird das Ereignis
+ * NICHT erneut publiziert, weil die fachliche Aktion dann gar nicht erst erneut ausgeführt
+ * wird.
  *
  * <p><b>Offline-Nachmeldung/Zeitstempel-Toleranz (AP6, Phase 4, additiv)</b>: ein
  * {@code clientTimestamp}, der außerhalb des erlaubten Zeitfensters (Standort-
@@ -124,14 +129,17 @@ public class ExecutionController {
 
     private final IdempotencyService idempotencyService;
 
-    private final NotificationService notificationService;
-
     private final ClientTimestampPolicy clientTimestampPolicy;
+
+    private final AdvisoryLockService advisoryLockService;
+
+    private final ApplicationEventPublisher eventPublisher;
 
     public ExecutionController(ProgramRepository programRepository, UserRepository userRepository,
             PermissionService permissionService, PricingService pricingService, CreditService creditService,
             ExecutionService executionService, TerminalScopeGuard scopeGuard, IdempotencyService idempotencyService,
-            NotificationService notificationService, ClientTimestampPolicy clientTimestampPolicy) {
+            ClientTimestampPolicy clientTimestampPolicy, AdvisoryLockService advisoryLockService,
+            ApplicationEventPublisher eventPublisher) {
         this.programRepository = programRepository;
         this.userRepository = userRepository;
         this.permissionService = permissionService;
@@ -140,8 +148,9 @@ public class ExecutionController {
         this.executionService = executionService;
         this.scopeGuard = scopeGuard;
         this.idempotencyService = idempotencyService;
-        this.notificationService = notificationService;
         this.clientTimestampPolicy = clientTimestampPolicy;
+        this.advisoryLockService = advisoryLockService;
+        this.eventPublisher = eventPublisher;
     }
 
     @PostMapping
@@ -149,23 +158,20 @@ public class ExecutionController {
     public ExecutionDto start(@AuthenticationPrincipal TerminalPrincipal terminal,
             @RequestHeader(value = IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey,
             @Valid @RequestBody ExecutionStartRequest request) {
-        // Entitäts-Auflösung (404-Fälle) bleibt bewusst AUSSERHALB des Idempotenz-Zweigs -
-        // sie liefert das device-Objekt, das idempotencyService.execute selbst für den
-        // Standort-Scope-Parameter braucht. Alle FACHLICHEN Prüfungen (blockiert/Standort/
-        // Nutzbarkeit/Programm/Belegung/Guthaben) laufen dagegen INNERHALB des
-        // Idempotenz-Zweigs (siehe finishOrAbort für dieselbe Überlegung): sie dürfen bei
-        // einem Replay NICHT erneut ausgeführt werden, sonst könnte ein zwischenzeitlich
-        // geänderter Zustand (z.B. der Benutzer wurde nach dem erfolgreichen Erstversuch
-        // gesperrt) einen eigentlich erfolgreichen Replay fälschlich scheitern lassen.
+        // Nur device wird AUSSERHALB des Idempotenz-Zweigs aufgelöst: idempotencyService.execute
+        // braucht dessen Standort für den Scope-Parameter, und der Standort-Scope-Wächter ist
+        // zugleich die Authentifizierung dieses Aufrufs. program/user werden dagegen bewusst
+        // INNERHALB des Zweigs aufgelöst (Issue #41): ein legitimer Replay soll die gespeicherte
+        // Antwort auch dann liefern, wenn user/program zwischen Erst- und Wiederholungsaufruf
+        // gelöscht wurden - würden sie vorab aufgelöst, scheiterte ein solcher Replay fälschlich
+        // mit 404 statt der gespeicherten 201.
         DeviceEntity device = this.scopeGuard.requireDeviceInScope(request.deviceId(), terminal);
-        ProgramEntity program = this.programRepository.findById(request.programId()).orElseThrow(
-                () -> new ProgramNotFoundException(request.programId()));
-        UserEntity user = this.userRepository.findById(request.userId()).orElseThrow(
-                () -> new UserNotFoundException(request.userId()));
         boolean replay = request.isReplay();
 
         IdempotentResult<ExecutionDto> result = this.idempotencyService.execute(idempotencyKey, device.getLocation(),
                 "execution-start", HttpStatus.CREATED.value(), ExecutionDto.class, () -> {
+                    ProgramEntity program = this.programRepository.findById(request.programId()).orElseThrow(
+                            () -> new ProgramNotFoundException(request.programId()));
                     // Offline-Nachmeldung (Issue #16): eine bereits offline gebuchte Ausführung
                     // wird nachgetragen - das Ereignis ist ein FAKT, keine Anfrage. Die
                     // fachlichen Wächter würden hier einen zwischenzeitlich geänderten Zustand
@@ -174,7 +180,20 @@ public class ExecutionController {
                     // Ablehnung werten und den kompletten Journal-Replay dauerhaft verklemmen.
                     // Auftraggeber-Festlegung (docs/kb/05-migration-plan.md, ADR 0010): der
                     // Snapshot-Stand gilt, negativ gewordene Salden werden normal verbucht.
+                    UserEntity user;
                     if (!replay) {
+                        // Issue #20: Belegungs- und Guthabenentscheidung serialisieren, damit
+                        // zwei parallele Starts nicht beide ein freies Gerät bzw. ausreichendes
+                        // Guthaben sehen und doppelt belegen/reservieren. Reihenfolge bewusst
+                        // erst Gerät (Advisory-Lock), dann Nutzer (Zeilensperre) - konsistent zu
+                        // den übrigen Geldpfaden, um Deadlocks auszuschließen.
+                        this.advisoryLockService.lockDevice(device.getId());
+                        // Nutzer FRISCH und pessimistisch GESPERRT laden (nicht vorab per
+                        // findById): so entscheiden die Wächter (isBlocked/Rechte) und der
+                        // Guthabencheck auf dem Stand NACH Lock-Erwerb, nicht auf einem davor
+                        // gelesenen Snapshot.
+                        user = this.userRepository.findWithLockById(request.userId()).orElseThrow(
+                                () -> new UserNotFoundException(request.userId()));
                         if (user.isBlocked()) {
                             throw new UserBlockedException(user.getId());
                         }
@@ -196,6 +215,11 @@ public class ExecutionController {
                             throw new InsufficientCreditException(user.getId(), maxPrice,
                                     this.creditService.getCredit(user));
                         }
+                    } else {
+                        // Replay: keine Wächter, kein Lock nötig (die Nachmeldung ist ein Fakt) -
+                        // der Nutzer wird nur zum Anlegen der Ausführung benötigt.
+                        user = this.userRepository.findById(request.userId()).orElseThrow(
+                                () -> new UserNotFoundException(request.userId()));
                     }
                     ExecutionEntity execution = this.executionService.createExecution(device, program, user);
                     LocalDateTime resolvedTimestamp = this.clientTimestampPolicy.resolve(request.clientTimestamp(),
@@ -249,22 +273,26 @@ public class ExecutionController {
         // einen Replay fälschlich mit 409 statt der gespeicherten 200-Antwort beenden.
         IdempotentResult<ExecutionDto> result = this.idempotencyService.execute(idempotencyKey, location, operation,
                 HttpStatus.OK.value(), ExecutionDto.class, () -> {
-                    if (execution.isFinished()) {
+                    // Issue #20: Ausführung FRISCH und pessimistisch GESPERRT laden statt die
+                    // zuvor (für den Standort-Scope) detacht geladene Instanz zu prüfen - so
+                    // durchlaufen zwei parallele finish-Aufrufe nicht beide den
+                    // finished=false-Zweig und buchen doppelt ab.
+                    ExecutionEntity locked = this.executionService.getForUpdate(id);
+                    if (locked.isFinished()) {
                         throw new ExecutionAlreadyFinishedException(id);
                     }
                     LocalDateTime resolvedTimestamp = this.clientTimestampPolicy.resolve(clientTimestamp, location,
                             operation);
-                    ExecutionEntity finished = this.executionService.finishExecution(execution, resolvedTimestamp);
+                    ExecutionEntity finished = this.executionService.finishExecution(locked, resolvedTimestamp);
                     // Benachrichtigungen zu einem stark verspätet nachgemeldeten Ereignis werden
                     // unterdrueckt (Auftraggeber-Vorgabe, siehe ClientTimestampPolicy-Javadoc) -
                     // die ORIGINAL-Zeitstempel-Angabe entscheidet, nicht der ggf. per Drift-Toleranz
-                    // ersetzte resolvedTimestamp.
+                    // ersetzte resolvedTimestamp. Issue #36: der Versand selbst läuft erst NACH dem
+                    // Commit (AFTER_COMMIT-Event, siehe ExecutionNotificationListener), nicht mehr
+                    // in dieser DB-Transaktion.
                     if (!this.clientTimestampPolicy.isNotificationSuppressed(clientTimestamp, location)) {
-                        if (aborted) {
-                            this.notificationService.notifyExecutionAborted(finished.getUser(), finished.getDevice());
-                        } else {
-                            this.notificationService.notifyExecutionFinished(finished.getUser(), finished.getDevice());
-                        }
+                        this.eventPublisher.publishEvent(
+                                new ExecutionNotificationEvent(finished.getUser(), finished.getDevice(), aborted));
                     }
                     return toDto(finished);
                 });

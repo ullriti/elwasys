@@ -29,33 +29,36 @@ import org.kabieror.elwasys.backend.domain.ProgramType;
 import org.kabieror.elwasys.backend.domain.TerminalIdempotencyKeyEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
-import org.kabieror.elwasys.backend.notification.NotificationService;
+import org.kabieror.elwasys.backend.notification.ExecutionNotificationEvent;
 import org.kabieror.elwasys.backend.offline.ClientTimestampPolicy;
 import org.kabieror.elwasys.backend.offline.OfflineProperties;
 import org.kabieror.elwasys.backend.repository.TerminalIdempotencyKeyRepository;
+import org.kabieror.elwasys.backend.service.AdvisoryLockService;
 import org.kabieror.elwasys.backend.service.CreditService;
 import org.kabieror.elwasys.backend.service.ExecutionService;
 import org.kabieror.elwasys.backend.service.PermissionService;
 import org.kabieror.elwasys.backend.service.PricingService;
+import org.springframework.context.ApplicationEventPublisher;
 
 /**
- * Verdrahtung des Benachrichtigungsdienstes an den API-Execution-Lebenszyklus (AP3, Phase 4,
- * siehe docs/kb/05-migration-plan.md und {@code ExecutionController} Klassen-Javadoc,
- * "Benachrichtigungen"). Bewusst ein reiner Mockito-Unit-Test OHNE Spring-Kontext (kein
- * {@code @SpringBootTest}/{@code AbstractApiIT}): ein zusätzlicher, sich per {@code @MockBean}
- * unterscheidender Kontext würde einen weiteren gecachten Spring-Testkontext samt eigenem
- * Connection-Pool erzeugen - genau das Muster, das in Phase 3 AP4 bereits einmal
- * "PostgreSQL max_connections=100" überschritten hat (siehe docs/kb/05-migration-plan.md,
- * Änderungslog "Phase 3 AP4", Fallstrick). Der Controller ist reines Java (keine
- * Spring-MVC-Reflektion nötig, um seine Methoden direkt aufzurufen), ein Mockito-Unit-Test
- * prüft die Verdrahtungslogik daher ebenso zuverlässig, aber ohne jede DB-Verbindung. Das
- * Notification-GATING selbst (inkl. Flag-AUS-Fall) ist bereits auf Ebene von
- * {@link NotificationService} durch {@code NotificationServiceEmailTest}/
- * {@code NotificationsPropertiesDefaultTest} abgedeckt (siehe docs/kb/03-modules.md).
+ * Verdrahtung der Ende-/Abbruch-Benachrichtigung an den API-Execution-Lebenszyklus (AP3, siehe
+ * docs/kb/05-migration-plan.md und {@code ExecutionController} Klassen-Javadoc,
+ * "Benachrichtigungen"). Seit Issue #36 publiziert der Controller ein
+ * {@link ExecutionNotificationEvent} (statt den {@code NotificationService} direkt aufzurufen);
+ * der eigentliche Versand läuft danach im {@code ExecutionNotificationListener} erst nach dem
+ * Commit - dieser Test prüft daher, dass GENAU das richtige Ereignis (Ende vs. Abbruch, nur
+ * einmal je Idempotenz-Schlüssel, nie beim Reset) publiziert wird. Die Zuordnung
+ * Ereignis→{@code NotificationService} deckt {@link ExecutionNotificationListenerTest} ab.
+ *
+ * <p>Bewusst ein reiner Mockito-Unit-Test OHNE Spring-Kontext (kein
+ * {@code @SpringBootTest}/{@code AbstractApiIT}): ein zusätzlicher, sich unterscheidender
+ * Kontext würde einen weiteren gecachten Spring-Testkontext samt eigenem Connection-Pool
+ * erzeugen - genau das Muster, das in Phase 3 AP4 bereits einmal "PostgreSQL
+ * max_connections=100" überschritten hat (siehe docs/kb/05-migration-plan.md).
  */
 class ExecutionControllerNotificationTest {
 
-    private NotificationService notificationService;
+    private ApplicationEventPublisher eventPublisher;
 
     private ExecutionService executionService;
 
@@ -67,8 +70,9 @@ class ExecutionControllerNotificationTest {
 
     @BeforeEach
     void setUp() {
-        this.notificationService = mock(NotificationService.class);
+        this.eventPublisher = mock(ApplicationEventPublisher.class);
         this.executionService = mock(ExecutionService.class);
+        AdvisoryLockService advisoryLockService = mock(AdvisoryLockService.class);
         TerminalScopeGuard scopeGuard = mock(TerminalScopeGuard.class);
 
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
@@ -86,12 +90,13 @@ class ExecutionControllerNotificationTest {
             store.put(entity.getIdempotencyKey(), entity);
             return entity;
         });
-        IdempotencyService idempotencyService = new IdempotencyService(fakeRepository, objectMapper);
+        IdempotencyService idempotencyService = new IdempotencyService(fakeRepository, objectMapper,
+                advisoryLockService);
 
         this.controller = new ExecutionController(null, null, mock(PermissionService.class),
                 mock(PricingService.class), mock(CreditService.class), this.executionService, scopeGuard,
-                idempotencyService, this.notificationService,
-                new ClientTimestampPolicy(new OfflineProperties()));
+                idempotencyService, new ClientTimestampPolicy(new OfflineProperties()), advisoryLockService,
+                this.eventPublisher);
 
         LocationEntity location = new LocationEntity("Waschkeller");
         DeviceEntity device = new DeviceEntity("Waschmaschine 1", 0, location);
@@ -102,6 +107,9 @@ class ExecutionControllerNotificationTest {
 
         this.terminal = new TerminalPrincipal(1, 1, "Waschkeller");
         when(scopeGuard.requireExecutionInScope(anyInt(), any())).thenReturn(this.execution);
+        // Der Finish-/Abort-Pfad lädt die Ausführung frisch und gesperrt (Issue #20) - im
+        // Unit-Test liefert der Mock dieselbe Instanz zurück.
+        when(this.executionService.getForUpdate(anyInt())).thenReturn(this.execution);
         // thenAnswer statt thenReturn: markiert die (echte, nicht gemockte) ExecutionEntity
         // tatsächlich als beendet, damit executionAlreadyFinishedIsCheckedInsideThe
         // IdempotencyBranch() den echten Fallstrick nachstellen kann (siehe dortiger
@@ -114,45 +122,50 @@ class ExecutionControllerNotificationTest {
         when(this.executionService.getPrice(any())).thenReturn(BigDecimal.ZERO);
     }
 
+    private ExecutionNotificationEvent finishedEvent() {
+        return new ExecutionNotificationEvent(this.execution.getUser(), this.execution.getDevice(), false);
+    }
+
+    private ExecutionNotificationEvent abortedEvent() {
+        return new ExecutionNotificationEvent(this.execution.getUser(), this.execution.getDevice(), true);
+    }
+
     @Test
-    void finishTriggersNotifyExecutionFinishedNotAborted() {
+    void finishPublishesFinishedNotAbortedEvent() {
         this.controller.finish(this.terminal, 1, null, null);
 
-        verify(this.notificationService, times(1)).notifyExecutionFinished(this.execution.getUser(),
-                this.execution.getDevice());
-        verify(this.notificationService, never()).notifyExecutionAborted(any(), any());
+        verify(this.eventPublisher, times(1)).publishEvent(finishedEvent());
+        verify(this.eventPublisher, never()).publishEvent(abortedEvent());
     }
 
     @Test
-    void abortTriggersNotifyExecutionAbortedNotFinished() {
+    void abortPublishesAbortedNotFinishedEvent() {
         this.controller.abort(this.terminal, 1, null, null);
 
-        verify(this.notificationService, times(1)).notifyExecutionAborted(this.execution.getUser(),
-                this.execution.getDevice());
-        verify(this.notificationService, never()).notifyExecutionFinished(any(), any());
+        verify(this.eventPublisher, times(1)).publishEvent(abortedEvent());
+        verify(this.eventPublisher, never()).publishEvent(finishedEvent());
     }
 
     @Test
-    void resetDoesNotTriggerAnyNotification() {
+    void resetDoesNotPublishAnyNotificationEvent() {
         when(this.executionService.resetExecution(any())).thenReturn(this.execution);
 
         this.controller.reset(this.terminal, 1, null);
 
-        verify(this.notificationService, never()).notifyExecutionFinished(any(), any());
-        verify(this.notificationService, never()).notifyExecutionAborted(any(), any());
+        verify(this.eventPublisher, never()).publishEvent(any(ExecutionNotificationEvent.class));
     }
 
     @Test
-    void repeatedFinishWithSameIdempotencyKeyNotifiesOnlyOnce() {
+    void repeatedFinishWithSameIdempotencyKeyPublishesOnlyOnce() {
         String key = UUID.randomUUID().toString();
 
         this.controller.finish(this.terminal, 1, key, null);
         // Der zweite Aufruf mit demselben Schlüssel liefert die gespeicherte Antwort erneut
-        // aus - executionService/notificationService dürfen dabei NICHT erneut aufgerufen
-        // werden (siehe IdempotencyService Javadoc).
+        // aus - executionService/eventPublisher dürfen dabei NICHT erneut aufgerufen werden
+        // (siehe IdempotencyService Javadoc).
         this.controller.finish(this.terminal, 1, key, null);
 
-        verify(this.notificationService, times(1)).notifyExecutionFinished(any(), any());
+        verify(this.eventPublisher, times(1)).publishEvent(any(ExecutionNotificationEvent.class));
         verify(this.executionService, times(1)).finishExecution(any(), any());
     }
 

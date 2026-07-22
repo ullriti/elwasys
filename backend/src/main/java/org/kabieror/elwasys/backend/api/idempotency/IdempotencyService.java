@@ -3,12 +3,14 @@ package org.kabieror.elwasys.backend.api.idempotency;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Optional;
 import java.util.function.Supplier;
+import org.kabieror.elwasys.backend.api.exception.IdempotencyKeyReusedException;
+import org.kabieror.elwasys.backend.api.exception.InvalidIdempotencyKeyException;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.TerminalIdempotencyKeyEntity;
 import org.kabieror.elwasys.backend.repository.TerminalIdempotencyKeyRepository;
+import org.kabieror.elwasys.backend.service.AdvisoryLockService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,18 +29,31 @@ import org.springframework.transaction.annotation.Transactional;
  * Verhalten der Execution-Endpunkte (AP4) bleibt für Aufrufer ohne diesen Header 1:1
  * erhalten (additiv, siehe docs/kb/05-migration-plan.md Rahmenbedingungen).
  *
- * <p><b>Bekannte Grenze (dokumentiert, nicht Teil dieses Arbeitspakets)</b>: dies ist KEINE
- * verteilte Sperre. Zwei tatsächlich GLEICHZEITIGE Anfragen mit demselben Schlüssel können
- * beide den "nicht gefunden"-Zweig durchlaufen und {@code action} je einmal ausführen,
- * bevor der zweite {@code INSERT} an der Unique-Constraint scheitert (siehe
- * {@link #execute}, catch-Zweig) - der Seiteneffekt (z.B. eine Guthabenbuchung) wäre dann
- * bereits zweimal ausgelöst. In der Praxis meldet ein einzelnes Terminal ein Ereignis
- * sequenziell (kein paralleles Doppel-Senden derselben Meldung), das Risiko ist damit gering;
- * eine vollständige Lösung (z.B. per DB-Advisory-Lock) ist für ein künftiges Arbeitspaket
- * vorgemerkt, falls die Offline-Replay-Vertiefung (AP6) sie braucht.
+ * <p><b>Nebenläufigkeit (Issue #29, AP3)</b>: {@link #execute} serialisiert Anfragen mit
+ * demselben Schlüssel per transaktionsgebundenem PostgreSQL-Advisory-Lock (siehe
+ * {@link AdvisoryLockService#lockIdempotencyKey}). Von zwei tatsächlich GLEICHZEITIGEN
+ * Anfragen mit demselben Schlüssel durchläuft damit immer nur EINE den "nicht gefunden"-Zweig
+ * und führt {@code action} aus; die zweite wartet, sieht anschließend den gespeicherten
+ * Schlüssel und liefert die gespeicherte Antwort erneut aus - kein doppelter Seiteneffekt und
+ * kein HTTP 500 durch eine an der Unique-Constraint vergiftete Transaktion (der frühere
+ * {@code catch (DataIntegrityViolationException)}-Notnagel entfällt dadurch).
+ *
+ * <p><b>Schlüssel-Validierung (Issue #29)</b>: ein Schlüssel, der die Speichergrenze der
+ * Spalte ({@code VARCHAR(64)}) überschreitet, wird früh mit 400 abgelehnt
+ * ({@link InvalidIdempotencyKeyException}), BEVOR {@code action} läuft - sonst scheiterte erst
+ * {@code saveAndFlush} an der DB und die Operation (z.B. {@code finish}) könnte in einer
+ * dauerhaften 500-Schleife nie persistiert werden.
+ *
+ * <p><b>Vorgangs-Bindung (Issue #41)</b>: beim Replay wird zusätzlich geprüft, ob der
+ * gespeicherte {@code operation}-Wert zum aktuellen Aufruf passt; bei Abweichung 409
+ * ({@link IdempotencyKeyReusedException}), damit ein versehentlich wiederverwendeter Schlüssel
+ * nicht die Fremd-Antwort zurückliefert und die neue Aktion stillschweigend überspringt.
  */
 @Service
 public class IdempotencyService {
+
+    /** Speichergrenze der Spalte {@code terminal_idempotency_keys.idempotency_key} (V4). */
+    private static final int MAX_KEY_LENGTH = 64;
 
     private final Logger logger = LoggerFactory.getLogger(getClass());
 
@@ -46,9 +61,13 @@ public class IdempotencyService {
 
     private final ObjectMapper objectMapper;
 
-    public IdempotencyService(TerminalIdempotencyKeyRepository repository, ObjectMapper objectMapper) {
+    private final AdvisoryLockService advisoryLockService;
+
+    public IdempotencyService(TerminalIdempotencyKeyRepository repository, ObjectMapper objectMapper,
+            AdvisoryLockService advisoryLockService) {
         this.repository = repository;
         this.objectMapper = objectMapper;
+        this.advisoryLockService = advisoryLockService;
     }
 
     /**
@@ -82,26 +101,34 @@ public class IdempotencyService {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             return new IdempotentResult<>(action.get(), false);
         }
+        if (idempotencyKey.length() > MAX_KEY_LENGTH) {
+            // Issue #29: früh ablehnen, BEVOR action läuft - sonst scheiterte erst saveAndFlush
+            // an der VARCHAR(64)-Grenze und die Operation bliebe in einer 500-Schleife hängen.
+            throw new InvalidIdempotencyKeyException(MAX_KEY_LENGTH);
+        }
+
+        // Issue #29: konkurrierende Anfragen mit demselben Schlüssel serialisieren, damit
+        // action genau einmal läuft (siehe Klassen-Javadoc "Nebenläufigkeit"). Die Sperre wird
+        // am Transaktionsende automatisch freigegeben.
+        this.advisoryLockService.lockIdempotencyKey(idempotencyKey);
 
         Optional<TerminalIdempotencyKeyEntity> existing = this.repository.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
+            // Issue #41: der Schlüssel muss zum SELBEN Vorgang gehören - sonst bekäme ein
+            // versehentlich wiederverwendeter Schlüssel die Fremd-Antwort und die neue Aktion
+            // würde stillschweigend übersprungen.
+            String storedOperation = existing.get().getOperation();
+            if (!storedOperation.equals(operation)) {
+                throw new IdempotencyKeyReusedException(storedOperation, operation);
+            }
             this.logger.debug("Idempotency-Key '{}' bereits verarbeitet (operation={}) - liefere gespeicherte "
                     + "Antwort erneut aus, ohne '{}' erneut auszufuehren.", idempotencyKey, operation, operation);
             return new IdempotentResult<>(deserialize(existing.get().getResponseBody(), responseType), true);
         }
 
         T result = action.get();
-        try {
-            this.repository.saveAndFlush(new TerminalIdempotencyKeyEntity(idempotencyKey, location, operation,
-                    responseStatus, serialize(result)));
-        } catch (DataIntegrityViolationException e) {
-            // Race zweier gleichzeitiger Anfragen mit demselben Schluessel - siehe
-            // Klassen-Javadoc "Bekannte Grenze". Die Aktion ist bereits ausgefuehrt; wir
-            // geben trotzdem das gerade berechnete Ergebnis zurueck (statt eines Fehlers),
-            // damit DIESE Anfrage nicht scheitert.
-            this.logger.warn("Idempotency-Key '{}' wurde parallel bereits gespeichert (operation={}).",
-                    idempotencyKey, operation);
-        }
+        this.repository.saveAndFlush(new TerminalIdempotencyKeyEntity(idempotencyKey, location, operation,
+                responseStatus, serialize(result)));
         return new IdempotentResult<>(result, false);
     }
 

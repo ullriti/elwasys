@@ -157,6 +157,27 @@ public class ExecutionService {
     }
 
     /**
+     * Lädt eine Ausführung FRISCH und pessimistisch GESPERRT ({@code SELECT ... FOR UPDATE},
+     * Issue #20 - AP3, siehe
+     * {@link org.kabieror.elwasys.backend.repository.ExecutionRepository#findWithLockById}).
+     * Der Beenden-/Abbruch-Pfad ({@code ExecutionController#finishOrAbort}) prüft den "bereits
+     * beendet"-Wächter damit auf der gesperrten Zeile innerhalb der Idempotenz-Transaktion,
+     * statt auf einer zuvor detacht geladenen Instanz - so kann ein zweiter, paralleler
+     * {@code finish} nicht denselben {@code finished == false}-Zustand sehen und doppelt
+     * abrechnen. MUSS innerhalb der Transaktion aufgerufen werden, in der anschließend beendet
+     * wird.
+     *
+     * @throws IllegalStateException wenn die Ausführung nicht (mehr) existiert - für den
+     *         Aufrufer eine Invariante, da der Standort-Scope-Wächter dieselbe Id unmittelbar
+     *         zuvor erfolgreich aufgelöst hat
+     */
+    @Transactional
+    public ExecutionEntity getForUpdate(Integer id) {
+        return this.executionRepository.findWithLockById(id)
+                .orElseThrow(() -> new IllegalStateException("Ausführung id=" + id + " nicht gefunden."));
+    }
+
+    /**
      * 1:1-Portierung von {@code Execution#reset()}.
      *
      * <p><b>Beobachtung</b> (siehe docs/kb/05-migration-plan.md): der Alt-Code setzt

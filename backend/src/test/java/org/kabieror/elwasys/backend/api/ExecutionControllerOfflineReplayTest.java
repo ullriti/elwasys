@@ -35,15 +35,17 @@ import org.kabieror.elwasys.backend.domain.ProgramType;
 import org.kabieror.elwasys.backend.domain.TerminalIdempotencyKeyEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
-import org.kabieror.elwasys.backend.notification.NotificationService;
+import org.kabieror.elwasys.backend.notification.ExecutionNotificationEvent;
 import org.kabieror.elwasys.backend.offline.ClientTimestampPolicy;
 import org.kabieror.elwasys.backend.offline.OfflineProperties;
 import org.kabieror.elwasys.backend.repository.TerminalIdempotencyKeyRepository;
+import org.kabieror.elwasys.backend.service.AdvisoryLockService;
 import org.kabieror.elwasys.backend.service.CreditService;
 import org.kabieror.elwasys.backend.service.ExecutionService;
 import org.kabieror.elwasys.backend.service.PermissionService;
 import org.kabieror.elwasys.backend.service.PricingService;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * Zeitstempel-Toleranz und Benachrichtigungs-Unterdrückung für Offline-Nachmeldungen (Phase 4
@@ -56,7 +58,7 @@ class ExecutionControllerOfflineReplayTest {
 
     private ExecutionService executionService;
 
-    private NotificationService notificationService;
+    private ApplicationEventPublisher eventPublisher;
 
     private ExecutionController controller;
 
@@ -72,9 +74,14 @@ class ExecutionControllerOfflineReplayTest {
 
     private CreditService creditService;
 
+    private org.kabieror.elwasys.backend.repository.ProgramRepository programRepository;
+
+    private org.kabieror.elwasys.backend.repository.UserRepository userRepository;
+
     private void setUp(int offlineMaxDurationMinutes) {
         this.executionService = mock(ExecutionService.class);
-        this.notificationService = mock(NotificationService.class);
+        this.eventPublisher = mock(ApplicationEventPublisher.class);
+        AdvisoryLockService advisoryLockService = mock(AdvisoryLockService.class);
         PermissionService permissionService = mock(PermissionService.class);
         PricingService pricingService = mock(PricingService.class);
         CreditService creditService = mock(CreditService.class);
@@ -93,7 +100,8 @@ class ExecutionControllerOfflineReplayTest {
             store.put(entity.getIdempotencyKey(), entity);
             return entity;
         });
-        IdempotencyService idempotencyService = new IdempotencyService(fakeRepository, objectMapper);
+        IdempotencyService idempotencyService = new IdempotencyService(fakeRepository, objectMapper,
+                advisoryLockService);
 
         OfflineProperties offlineProperties = new OfflineProperties();
         offlineProperties.setClockDriftTolerance(Duration.ofMinutes(5));
@@ -102,6 +110,10 @@ class ExecutionControllerOfflineReplayTest {
         LocationEntity location = new LocationEntity("Waschkeller");
         location.setOfflineMaxDurationMinutes(offlineMaxDurationMinutes);
         this.device = new DeviceEntity("Waschmaschine 1", 0, location);
+        // Der Start-Pfad sperrt das Gerät per Advisory-Lock über device.getId() (Issue #20) -
+        // eine transiente Test-Entität hätte hier null; in Produktion liefert der Standort-Scope-
+        // Wächter immer eine persistierte Entität mit Id.
+        org.springframework.test.util.ReflectionTestUtils.setField(this.device, "id", 1);
         UserGroupEntity group = new UserGroupEntity("Testgruppe", DiscountType.NONE, 0);
         this.user = new UserEntity("Erika Mustermann", "erika", group);
         this.program = new ProgramEntity("Kurzprogramm", ProgramType.FIXED, 3600);
@@ -117,27 +129,23 @@ class ExecutionControllerOfflineReplayTest {
         when(creditService.canAfford(any(), any())).thenReturn(true);
         when(this.executionService.createExecution(any(), any(), any())).thenReturn(this.execution);
         when(this.executionService.startExecution(any(), any())).thenReturn(this.execution);
+        when(this.executionService.getForUpdate(anyInt())).thenReturn(this.execution);
         when(this.executionService.finishExecution(any(), any())).thenAnswer(invocation -> {
             this.execution.setFinished(true);
             return this.execution;
         });
         when(this.executionService.getPrice(any())).thenReturn(BigDecimal.ZERO);
 
-        this.controller = new ExecutionController(mockProgramRepository(), mockUserRepository(), permissionService,
+        this.programRepository = mock(org.kabieror.elwasys.backend.repository.ProgramRepository.class);
+        when(this.programRepository.findById(any())).thenReturn(Optional.of(this.program));
+        this.userRepository = mock(org.kabieror.elwasys.backend.repository.UserRepository.class);
+        when(this.userRepository.findById(any())).thenReturn(Optional.of(this.user));
+        // Nicht-Replay-Starts laden den Nutzer frisch und gesperrt (Issue #20).
+        when(this.userRepository.findWithLockById(any())).thenReturn(Optional.of(this.user));
+
+        this.controller = new ExecutionController(this.programRepository, this.userRepository, permissionService,
                 pricingService, creditService, this.executionService, scopeGuard, idempotencyService,
-                this.notificationService, clientTimestampPolicy);
-    }
-
-    private org.kabieror.elwasys.backend.repository.ProgramRepository mockProgramRepository() {
-        var repo = mock(org.kabieror.elwasys.backend.repository.ProgramRepository.class);
-        when(repo.findById(any())).thenReturn(Optional.of(this.program));
-        return repo;
-    }
-
-    private org.kabieror.elwasys.backend.repository.UserRepository mockUserRepository() {
-        var repo = mock(org.kabieror.elwasys.backend.repository.UserRepository.class);
-        when(repo.findById(any())).thenReturn(Optional.of(this.user));
-        return repo;
+                clientTimestampPolicy, advisoryLockService, this.eventPublisher);
     }
 
     @Test
@@ -195,7 +203,7 @@ class ExecutionControllerOfflineReplayTest {
 
         this.controller.finish(this.terminal, 1, null, new ExecutionEndRequest(tooOldForNotification));
 
-        verify(this.notificationService, never()).notifyExecutionFinished(any(), any());
+        verify(this.eventPublisher, never()).publishEvent(any(ExecutionNotificationEvent.class));
         // Die Ausfuehrung selbst wird trotzdem ganz normal verbucht.
         verify(this.executionService, times(1)).finishExecution(any(), any());
     }
@@ -207,8 +215,8 @@ class ExecutionControllerOfflineReplayTest {
 
         this.controller.finish(this.terminal, 1, null, new ExecutionEndRequest(recent));
 
-        verify(this.notificationService, times(1)).notifyExecutionFinished(this.execution.getUser(),
-                this.execution.getDevice());
+        verify(this.eventPublisher, times(1)).publishEvent(
+                new ExecutionNotificationEvent(this.execution.getUser(), this.execution.getDevice(), false));
     }
 
     @Test
@@ -217,8 +225,8 @@ class ExecutionControllerOfflineReplayTest {
 
         this.controller.finish(this.terminal, 1, null, null);
 
-        verify(this.notificationService, times(1)).notifyExecutionFinished(this.execution.getUser(),
-                this.execution.getDevice());
+        verify(this.eventPublisher, times(1)).publishEvent(
+                new ExecutionNotificationEvent(this.execution.getUser(), this.execution.getDevice(), false));
     }
 
     @Test
@@ -230,7 +238,7 @@ class ExecutionControllerOfflineReplayTest {
 
         this.controller.finish(this.terminal, 1, null, new ExecutionEndRequest(eightMinutesAgo));
 
-        verify(this.notificationService, never()).notifyExecutionFinished(any(), any());
+        verify(this.eventPublisher, never()).publishEvent(any(ExecutionNotificationEvent.class));
     }
 
     // --- Privilegierter Nachbuchungs-Pfad (Issue #16) ---------------------------------------
@@ -253,6 +261,27 @@ class ExecutionControllerOfflineReplayTest {
         // beim Replay laut Auftraggeber-Festlegung zulässig).
         verify(this.executionService, times(1)).createExecution(this.device, this.program, this.user);
         verify(this.executionService, times(1)).startExecution(eq(this.execution), any());
+    }
+
+    @Test
+    void replayReturnsTheStoredResponseEvenIfAReferenceEntityWasDeletedMeanwhile() {
+        // Issue #41: Nach einem erfolgreichen Erst-Start werden user/program gelöscht (findById
+        // liefert leer). Ein legitimer Replay mit demselben Schlüssel muss die gespeicherte
+        // Antwort liefern statt 404 - genau deshalb wird die Entitätsauflösung jetzt im
+        // "neu"-Zweig ausgeführt, sodass ein Replay sie gar nicht mehr anfasst.
+        setUp(60);
+        var request = new ExecutionStartRequest(1, 1, 1, LocalDateTime.now().minusMinutes(5), null);
+        var first = this.controller.start(this.terminal, "start-key", request);
+        assertThat(first).isNotNull();
+
+        when(this.programRepository.findById(any())).thenReturn(Optional.empty());
+        when(this.userRepository.findById(any())).thenReturn(Optional.empty());
+
+        var replayed = this.controller.start(this.terminal, "start-key", request);
+
+        assertThat(replayed).isNotNull();
+        // Reiner Replay: keine zweite Ausführung angelegt.
+        verify(this.executionService, times(1)).createExecution(any(), any(), any());
     }
 
     @Test
