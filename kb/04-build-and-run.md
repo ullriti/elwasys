@@ -178,6 +178,13 @@ kb/05-migration-plan.md).
 
 ### Cutover-Werkzeuge (Phase 6 AP1/AP2)
 
+> **Übergreifendes Runbook (Phase 6 AP7):** Die sequenzierte End-to-End-Anleitung für die
+> gesamte Produktivumschaltung (Strangler-Reihenfolge Portal/Backend → Terminals, je Schritt
+> Gate + Rollback, plus Rollback-Entscheidungsbaum und Wartungsfenster-Checkliste) steht in
+> **`deploy/CUTOVER-RUNBOOK.md`**. Es orchestriert die hier und unter „Deployment" beschriebenen
+> DB-/Terminal-/Gate-Werkzeuge und verlinkt die drei Detail-Runbooks (`deploy/cutover/README.md`,
+> `deploy/terminal/README.md`, `deploy/smoke/README.md`).
+
 `deploy/cutover/` bündelt die Werkzeuge für die eigentliche **Produktivumschaltung** einer
 bereits über den Alt-Weg (`database-init.sql`) angelegten Bestands-DB auf die neue,
 Flyway-verwaltete Architektur – Details/Runbook in `deploy/cutover/README.md`,
