@@ -231,6 +231,14 @@ Zusammenfassung:
      Verifiziert: Backend startet sauber (Health-Endpoint UP), `flyway_schema_history` enthält
      genau eine `BASELINE`-Zeile bei Version 1, Bestandsdaten (z. B. der `admin`-Nutzer)
      bleiben unverändert.
+  - **Vollständiger Cutover-Pfad (BASELINE@1 + V2..V10, Phase 6 AP1)**:
+    `deploy/cutover/verify-cutover-migration.sh` erweitert Szenario 2 auf den heutigen
+    Migrationsstand – baut lokal eine Testkopie des Alt-Weg-Schemas, füllt sie mit
+    realistischen Bestandsdaten (je eine Zeile über alle Kerntabellen), startet das
+    Backend-Jar dagegen und verifiziert per Assert-Liste sowohl den Datenerhalt als auch die
+    Wirksamkeit der Härtungs-Migrationen (V6 Alt-Rollen-Grants weg, V7 Admin-Passwort NULL,
+    V8 Spaltentypo-Fix, V9 `locations.client_*` weg, V10 App-Reste weg). Siehe
+    `deploy/cutover/README.md` für den vollständigen Cutover-Ablauf.
 - **`config.db.version` stillgelegt**: Untersuchung von Common/Client-Raspi/Portal (Grep über
   alle drei Module) zeigt, dass **kein** Java-Code (`DataManager`, `ConfigurationManager` o.
   ä.) den Wert von `config.db.version` je liest – es gab nie einen automatischen

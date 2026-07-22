@@ -176,6 +176,30 @@ einer frischen Installation ist das der einzige Weg, dem Seed-`admin`-Benutzer �
 Passwort zu geben (siehe `V7__remove_default_admin_password.sql`, kb/02-data-model.md,
 kb/05-migration-plan.md).
 
+### Cutover-Werkzeuge (Phase 6 AP1)
+
+`deploy/cutover/` bündelt die Werkzeuge für die eigentliche **Produktivumschaltung** einer
+bereits über den Alt-Weg (`database-init.sql`) angelegten Bestands-DB auf die neue,
+Flyway-verwaltete Architektur – Details/Runbook in `deploy/cutover/README.md`,
+Hintergrund/Roadmap in kb/05-migration-plan.md ("Phase 6 – Produktivumschaltung"):
+- **`01-preflight-check.sh`**: rein lesender Readiness-Report (Flyway-Status, noch
+  vorhandene Alt-Artefakte, Dateninventar inkl. Standorte ohne aktives Token, Warnungen).
+- **`02-issue-terminal-tokens.sh`** / **`03-set-admin-password.sh`**: dünne Wrapper um die
+  oben dokumentierten `token-cli`-/`admin-cli`-Profile (Standorte auflisten + Token
+  ausstellen bzw. interaktive Passwort-Abfrage statt Klartext-Argument).
+- **`04-review-obsolete-locations.sql`**: read-only Review potenziell ungenutzter
+  `locations`-Zeilen (kein automatisches Löschen).
+- **`verify-cutover-migration.sh`**: das wartbare Cutover-Verifikationsskript – baut lokal
+  eine Testkopie des Bestandsschemas, fügt Bestandsdaten ein, startet das Backend-Jar
+  dagegen und prüft per Assert-Liste Flyway-Historie/Datenerhalt/Schema-Härtung (21 Asserts,
+  PASS/FAIL + Exit-Code). Anders als das ältere `backend/verify-schema-baseline.sh` (Phase-
+  2-Relikt, vergleicht Schema-Dumps 1:1 – dessen Prämisse gilt seit V2 nicht mehr) prüft
+  dieses Skript explizite, wartbare Assert-Aussagen; beide Skripte bleiben nebeneinander
+  bestehen (unterschiedlicher Zweck).
+
+Alle Skripte verwenden dieselben Umgebungsvariablen wie das Backend selbst
+(`ELWASYS_DB_URL`/`_USER`/`_PASSWORD`, siehe oben).
+
 ## Umgebung (dieser Remote-Container)
 
 - **OS**: Ubuntu 24.04.4 LTS
