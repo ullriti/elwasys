@@ -8,11 +8,10 @@ Flyway-verwaltetem Schema, Terminals über REST-API/Standort-Token statt Direkt-
 umstellen - ohne Datenverlust.
 
 **Scope dieses Arbeitspakets**: Skripte + dieses Runbook, lokal gegen eine Testkopie des
-Bestandsschemas verifiziert (siehe `verify-cutover-migration.sh`). Das eigentliche Umstellen
-echter Hardware/der echten Produktiv-DB ist NICHT Teil dieses Arbeitspakets (siehe
-kb/05-migration-plan.md, Phase-6-Roadmap: "Terminals neu aufsetzen" ist ein eigener,
-späterer Schritt). Ein Rollback-/Rückbau-Skript für einen abgebrochenen Cutover ist ebenfalls
-NICHT Teil von AP1 - siehe "Rollback" unten.
+Bestandsschemas verifiziert (siehe `verify-cutover-migration.sh` für den Hinweg,
+`verify-rollback.sh` für den Rückweg). Das eigentliche Umstellen echter Hardware/der echten
+Produktiv-DB ist NICHT Teil dieses Arbeitspakets (siehe kb/05-migration-plan.md,
+Phase-6-Roadmap: "Terminals neu aufsetzen" ist ein eigener, späterer Schritt).
 
 ## Vorher: Backup!
 
@@ -124,16 +123,82 @@ funktioniert seit V2 nicht mehr, siehe dessen Header) prüft dieses Skript expli
 wartbare Assert-Aussagen statt eine mittlerweile falsche Gleichheitsannahme.
 
 Die Test-DB `elwasys_cutover_verify` wird am Ende **nicht** gedroppt - sie ist die Grundlage
-für das kommende Rollback-Arbeitspaket (Phase 6 AP2, siehe unten).
+für `verify-rollback.sh` (Phase 6 AP2, siehe unten).
 
 ## Rollback
 
-**Noch nicht Teil dieses Arbeitspakets** (AP1 liefert nur die Migrationswerkzeuge). Ein
-eigenes Rückbau-/Rollback-Skript für einen abgebrochenen Cutover ist laut Roadmap
-(kb/05-migration-plan.md, Phase 6) als eigener Schritt vorgesehen - **folgt in AP2**. Bis
-dahin gilt als Rollback-Strategie das vor Schritt 2 gezogene DB-Backup (siehe oben) plus die
-Beobachtung, dass Schritt 2 (Flyway-Migration) additiv/schema-härtend, aber nicht destruktiv
-gegenüber den fachlichen Daten ist (siehe `verify-cutover-migration.sh`-Asserts oben) - ein
-Abbruch mitten in der Migration ist bei PostgreSQL-DDL i. d. R. transaktional pro Migration
-(Flyway führt jede `V*.sql`-Datei in einer eigenen Transaktion aus), ersetzt aber kein echtes
-Backup/getestetes Rollback-Verfahren.
+Für einen **abgebrochenen Cutover** - der Betreiber will wieder auf das alte Feld-System
+(Alt-Portal-WAR + Alt-Client mit JDBC-Direktzugriff) zurück - gibt es zwei Rückwege. **Immer
+zuerst Option A prüfen**, Option B ist die bewusste Alternative, wenn im Cutover-Fenster
+bereits entstandene Neu-System-Daten erhalten bleiben sollen.
+
+### A) Primär/sicherste Option: Restore aus dem Backup
+
+Das **vor Schritt 2** gezogene vollständige DB-Backup (siehe "Vorher: Backup!" oben)
+zurückspielen. Das ist der sicherste Weg - die DB ist danach exakt in dem Zustand, in dem sie
+unmittelbar vor dem Cutover war. Nachteil: **jede** zwischen Backup und Restore entstandene
+Änderung geht verloren, auch fachliche Buchungen/neue Nutzer, die während des Cutover-Fensters
+über das (bereits umgestellte) neue System gemacht wurden - nicht nur die Cutover-Migration
+selbst.
+
+### B) Sekundär: `rollback-cutover.sh` (Reverse-DDL)
+
+Wenn im Cutover-Fenster bereits entstandene Neu-System-Daten (z. B. neu ausgestellte
+Standort-Tokens, ein bereits im neuen Portal geändertes Nutzer-Passwort, neue
+Ausführungen/Buchungen) erhalten bleiben sollen, statt sie durch einen Backup-Restore zu
+verlieren: `deploy/cutover/rollback-cutover.sh` macht die additiven Flyway-Migrationen
+V3..V10 (siehe `backend/src/main/resources/db/migration/`) idempotent rückgängig, ohne
+Geschäftsdaten (`users`, `user_groups`, `locations`, `devices`, `programs`,
+`device_program_rel`, `executions`, `credit_accounting`, die `*_valid_user_groups`) zu
+verlieren. `V2` (Verbreiterung von `users.password`) wird bewusst NICHT umgekehrt (siehe
+Kommentar in `rollback-cutover.sql`) - Verengen würde einen evtl. im Neu-System gesetzten
+Argon2-Hash abschneiden, der Alt-Code stört sich an der breiteren Spalte nicht.
+
+```bash
+# ACHTUNG: braucht CREATEROLE-Rechte bzw. eine Superuser-Verbindung (die Umkehrung von V6
+# legt Rollen an) - anders als 01/02/03 reicht der normale Anwendungs-User "elwaportal" NICHT.
+ELWASYS_DB_URL=jdbc:postgresql://<host>:5432/elwasys \
+ELWASYS_DB_USER=postgres ELWASYS_DB_PASSWORD=<Superuser-Passwort> \
+deploy/cutover/rollback-cutover.sh
+```
+
+Details zu jeder einzelnen Umkehrung (mit Verweis auf die jeweilige `V*`-Migration) stehen als
+Kommentare direkt in `deploy/cutover/rollback-cutover.sql`. Idempotent - mehrfaches Ausführen
+gegen dieselbe DB ist sicher (siehe `verify-rollback.sh`, Abschnitt "Idempotenz").
+
+**Caveats (unbedingt vor dem Einsatz gegen eine echte Produktiv-DB lesen):**
+
+- **Alt-Rollen-Default-Passwörter kommen zurück**: die Umkehrung von V6 legt `elwaclient1`
+  (Passwort `elwaclient1`) und `elwaapi` (Passwort `api1234`) mit ihren historischen
+  Klartext-Default-Passwörtern wieder an, falls sie nicht mehr existieren. **Nach dem
+  Rollback zeitnah rotieren** (`ALTER USER ... WITH PASSWORD '<neu>'`).
+- **Admin-Passwort nur im V7-genullten Fall wiederhergestellt**: die Umkehrung von V7 setzt
+  das Alt-Default-Passwort (SHA1-Hash von `admin`) NUR dort wieder, wo `password IS NULL` ist
+  (also nur bei einer Installation, bei der niemand seit dem Cutover ein Passwort gesetzt
+  hat). Ein bereits gesetztes Passwort (Alt- ODER Neu-Portal) bleibt unangetastet.
+- **Ein im Neu-Portal gesetztes Argon2-Passwort versteht das Alt-Portal nicht**: der
+  Rollback ändert an einem bereits im neuen Portal geänderten Argon2id-Hash nichts (siehe
+  oben) - das Alt-Portal kann diesen Hash aber nicht prüfen (kennt nur SHA1). Für einen
+  betroffenen Nutzer ist nach dem Rollback ein manueller Passwort-Reset nötig.
+- **App-Spalten kommen leer zurück**: `users.app_id`/`access_key`/`auth_key`,
+  `locations.client_uid`/`client_ip`/`client_port`/`client_last_seen` werden mit `NULL`
+  wieder angelegt - ihr letzter Inhalt vor dem Cutover ist nicht rekonstruierbar (V9/V10
+  haben die Spalten ersatzlos gedroppt). Der Alt-Client registriert sich bei der nächsten
+  Verbindung ohnehin neu; ein `auth_key` wird beim nächsten `INSERT` auf `users` automatisch
+  neu vergeben (Trigger).
+
+### Lokale Verifikation des Rollback-Pfads
+
+```bash
+deploy/cutover/verify-rollback.sh
+```
+
+Stellt sicher, dass eine migrierte Bestands-DB vorliegt (per Default die von
+`verify-cutover-migration.sh` hinterlassene `elwasys_cutover_verify`, wird bei Bedarf
+automatisch hergestellt), führt `rollback-cutover.sh` aus, prüft per `psql`-Asserts sowohl
+das wiederhergestellte Alt-Schema als auch den unveränderten Erhalt der Geschäftsdaten, führt
+`rollback-cutover.sh` ein **zweites Mal** aus (Idempotenz-Beweis: keine Fehler, Zustand
+unverändert) und startet danach das Backend-Jar erneut gegen die zurückgebaute DB (**Re-
+Cutover-Beweis**: Flyway baselined erneut auf V1 und wendet V2..V10 erneut erfolgreich an,
+Backend kommt wieder `/actuator/health` UP) - beweist, dass die DB nach einem Rollback wieder
+sauber cutover-fähig ist, kein kaputter Zwischenzustand.

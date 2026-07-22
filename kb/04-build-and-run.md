@@ -176,7 +176,7 @@ einer frischen Installation ist das der einzige Weg, dem Seed-`admin`-Benutzer �
 Passwort zu geben (siehe `V7__remove_default_admin_password.sql`, kb/02-data-model.md,
 kb/05-migration-plan.md).
 
-### Cutover-Werkzeuge (Phase 6 AP1)
+### Cutover-Werkzeuge (Phase 6 AP1/AP2)
 
 `deploy/cutover/` bündelt die Werkzeuge für die eigentliche **Produktivumschaltung** einer
 bereits über den Alt-Weg (`database-init.sql`) angelegten Bestands-DB auf die neue,
@@ -196,6 +196,18 @@ Hintergrund/Roadmap in kb/05-migration-plan.md ("Phase 6 – Produktivumschaltun
   2-Relikt, vergleicht Schema-Dumps 1:1 – dessen Prämisse gilt seit V2 nicht mehr) prüft
   dieses Skript explizite, wartbare Assert-Aussagen; beide Skripte bleiben nebeneinander
   bestehen (unterschiedlicher Zweck).
+- **`rollback-cutover.sql`** / **`rollback-cutover.sh`** (AP2): idempotentes Reverse-DDL für
+  einen abgebrochenen Cutover – macht V3..V10 rückgängig (Alt-Rollen/-Trigger/-Tabellen/
+  -Spalten wieder anlegen, `flyway_schema_history` droppen), ohne Geschäftsdaten zu
+  verlieren; V2 bleibt bewusst unangetastet. Braucht – anders als 01-03 – eine Verbindung mit
+  CREATEROLE-Rechten (die V6-Umkehrung legt Rollen an). Details je Umkehrung als Kommentare in
+  `rollback-cutover.sql`, Einsatz-Anleitung (inkl. Backup-Restore als primäre Alternative,
+  Caveats) in `deploy/cutover/README.md`, Abschnitt "Rollback".
+- **`verify-rollback.sh`** (AP2): Gegenstück zu `verify-cutover-migration.sh` – verifiziert
+  den Rückweg gegen die von `verify-cutover-migration.sh` hinterlassene Test-DB: Asserts
+  (Alt-Schema wieder da + Geschäftsdaten erhalten), Idempotenz-Beweis (zweiter Lauf), Re-
+  Cutover-Beweis (Backend erneut gegen die zurückgebaute DB starten – Flyway migriert wieder
+  sauber bis V10).
 
 Alle Skripte verwenden dieselben Umgebungsvariablen wie das Backend selbst
 (`ELWASYS_DB_URL`/`_USER`/`_PASSWORD`, siehe oben).
