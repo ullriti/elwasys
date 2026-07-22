@@ -9,5 +9,5 @@ import java.util.List;
  */
 public record DeviceDto(Integer id, String name, int position, boolean enabled, boolean usableByUser,
         boolean occupied, List<ProgramDto> programs, String fhemName, String fhemSwitchName, String fhemPowerName,
-        String deconzUuid, float autoEndPowerThreashold, int autoEndWaitTimeSeconds) {
+        String deconzUuid, float autoEndPowerThreshold, int autoEndWaitTimeSeconds) {
 }

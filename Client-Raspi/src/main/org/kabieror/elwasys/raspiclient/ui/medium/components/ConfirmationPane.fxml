@@ -79,10 +79,6 @@
                 <VBox fx:id="ionicNotificationErrorNote" managed="${ionicNotificationErrorNote.visible}">
                     <Label text="Für Push-Benachrichtigungen bitte elwaApp herunterladen."
                            styleClass="ionic-notification-note"/>
-                    <HBox alignment="CENTER">
-                        <Label text="Dein Auth-Key: " />
-                        <Label text="${controller.authKey}" styleClass="ionic-notification-authkey"/>
-                    </HBox>
                 </VBox>
                 <Label text="${controller.moreInfoText}"
                        styleClass="more-info-note"

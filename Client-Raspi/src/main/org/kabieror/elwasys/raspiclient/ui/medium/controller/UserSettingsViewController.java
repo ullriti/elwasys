@@ -5,7 +5,6 @@ import javafx.beans.property.StringProperty;
 import javafx.beans.value.ChangeListener;
 import javafx.event.ActionEvent;
 import javafx.scene.Node;
-import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.HBox;
 import org.kabieror.elwasys.common.FormatUtilities;
 import org.kabieror.elwasys.raspiclient.model.ClientUser;
@@ -16,9 +15,9 @@ import org.kabieror.elwasys.raspiclient.ui.medium.state.ToolbarState;
 /**
  * Controller für die Anzeige der Benutzerdaten.
  * <p>
- * Die Auth-Key-Anzeige (elwaApp-Kopplung) zeigt seit Phase 4 AP4 immer den
- * "nicht verbunden"-Hinweis - siehe {@link ConfirmationViewController} Klassenkommentar für
- * die Begründung (App-Altlast, bewusst nicht ins neue Datenmodell gemappt).
+ * Die Auth-Key-Anzeige (elwaApp-Kopplung) - siehe {@link ConfirmationViewController}
+ * Klassenkommentar für die Begründung (App-Altlast, bewusst nicht ins neue Datenmodell
+ * gemappt) - wurde in Phase 5 AP4 (V10) entfernt.
  *
  * @author Oliver Kabierschke
  */
@@ -26,7 +25,6 @@ public class UserSettingsViewController implements IViewController {
 
     public Node userSettingsPane;
     public Node userSettingsContent;
-    public HBox authKeyInfo;
     public HBox appConnectionInfo;
     private MainFormController mainFormController;
     private ChangeListener<ClientUser> userChangedListener = (observable, oldValue, newValue) -> {
@@ -39,7 +37,6 @@ public class UserSettingsViewController implements IViewController {
     private StringProperty email = new SimpleStringProperty();
     private StringProperty username = new SimpleStringProperty();
     private StringProperty credit = new SimpleStringProperty();
-    private StringProperty authKey = new SimpleStringProperty();
 
     @Override
     public void onStart(MainFormController mfc) {
@@ -71,8 +68,6 @@ public class UserSettingsViewController implements IViewController {
         }
         this.userSettingsPane.setVisible(true);
         this.credit.set(FormatUtilities.formatCurrency(this.mainFormController.getRegisteredUser().getCredit()));
-        this.authKey.set(null);
-        this.authKeyInfo.setVisible(false);
         this.appConnectionInfo.setVisible(true);
     }
 
@@ -85,10 +80,6 @@ public class UserSettingsViewController implements IViewController {
     @Override
     public void onReturnFromError() {
 
-    }
-
-    public void onAuthKeyInfo(MouseEvent mouseEvent) {
-        this.mainFormController.hideUserSettings();
     }
 
     @Override
@@ -146,17 +137,5 @@ public class UserSettingsViewController implements IViewController {
 
     public StringProperty creditProperty() {
         return credit;
-    }
-
-    public String getAuthKey() {
-        return authKey.get();
-    }
-
-    public StringProperty authKeyProperty() {
-        return authKey;
-    }
-
-    public void setAuthKey(String authKey) {
-        this.authKey.set(authKey);
     }
 }

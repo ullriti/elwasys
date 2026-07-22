@@ -24,18 +24,17 @@
 FROM maven:3.9-eclipse-temurin-21 AS deps
 WORKDIR /build
 
-# Nur die POM-Dateien aller vier Reactor-Module kopieren: Maven muss beim Parsen des
-# Root-Reactors (Parent-POM listet alle vier <module>-Einträge auf) jede Modul-POM lesen
+# Nur die POM-Dateien aller drei Reactor-Module kopieren: Maven muss beim Parsen des
+# Root-Reactors (Parent-POM listet alle drei <module>-Einträge auf) jede Modul-POM lesen
 # können, auch wenn mit -pl/-am letztlich nur Common und backend tatsächlich gebaut werden.
-# Client-Raspi/Portal brauchen dafür NUR ihre pom.xml, kein Quellcode (werden nicht gebaut).
+# Client-Raspi braucht dafür NUR seine pom.xml, kein Quellcode (wird nicht gebaut).
 COPY pom.xml pom.xml
 COPY Common/pom.xml Common/pom.xml
 COPY Client-Raspi/pom.xml Client-Raspi/pom.xml
-COPY Portal/pom.xml Portal/pom.xml
 COPY backend/pom.xml backend/pom.xml
 
 # Abhängigkeiten für Common + backend vorab auflösen/cachen (go-offline scheitert nicht an
-# fehlenden Client-Raspi/Portal-Sourcen, da -pl/-am die Ausführung auf Common+backend
+# fehlenden Client-Raspi-Sourcen, da -pl/-am die Ausführung auf Common+backend
 # beschränkt). Läuft mit dem lokalen Maven-Repo-Cache-Mount, damit wiederholte Builds in
 # derselben Umgebung nicht jedes Mal alles neu herunterladen.
 RUN --mount=type=cache,target=/root/.m2/repository \

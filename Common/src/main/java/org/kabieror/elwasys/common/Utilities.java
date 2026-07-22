@@ -5,8 +5,6 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.Appender;
 import ch.qos.logback.core.FileAppender;
 import org.apache.commons.lang3.RandomStringUtils;
-import org.apache.commons.mail.EmailException;
-import org.apache.commons.mail.SimpleEmail;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -84,30 +82,5 @@ public class Utilities {
             }
         }
         return null;
-    }
-
-    /**
-     * Sendet eine einfache Email an einen Benutzer.
-     *
-     * @param subject Betreff
-     * @param content Inhalt
-     * @param to      Empfänger
-     * @throws EmailException
-     */
-    public void sendEmail(String subject, String content, User to) throws EmailException {
-        this.logger.debug("Sending mail to " + to.getEmail() + ", using " + this.config.getSmtpServer() + ":" +
-                this.config.getSmtpPort() + ", with user " + this.config.getSmtpUser());
-        final SimpleEmail mail = new SimpleEmail();
-        mail.addTo(to.getEmail());
-        mail.setSubject(subject);
-        mail.setMsg(content);
-
-        mail.setHostName(this.config.getSmtpServer());
-        mail.setSmtpPort(this.config.getSmtpPort());
-        mail.setSSLOnConnect(this.config.getSmtpUseSsl());
-        mail.setAuthentication(this.config.getSmtpUser(), this.config.getSmtpPassword());
-        mail.setFrom(this.config.getSmtpSenderAddress());
-
-        mail.send();
     }
 }

@@ -144,7 +144,7 @@ public class ClientInsufficientCreditE2ETest {
                             "', 'FIXED', 3600, 0, 1.50, NULL, NULL, TRUE, 0, TRUE) RETURNING id");
             final int deviceId = insertReturningId(s,
                     "INSERT INTO devices (name, position, location_id, fhem_name, fhem_switch_name, " +
-                            "fhem_power_name, deconz_uuid, auto_end_power_threashold, auto_end_wait_time, enabled) " +
+                            "fhem_power_name, deconz_uuid, auto_end_power_threshold, auto_end_wait_time, enabled) " +
                             "VALUES ('" + DEVICE_NAME + "', 1, " + locationId +
                             ", 'wm1', 'wm1sw', 'wm1pw', '', 0.5, 20, TRUE) RETURNING id");
             s.executeUpdate("INSERT INTO device_program_rel (device_id, program_id) VALUES ("
@@ -158,8 +158,6 @@ public class ClientInsufficientCreditE2ETest {
             s.executeUpdate("INSERT INTO users (name, username, card_ids, group_id, is_admin, blocked, deleted) VALUES ("
                     + "'E2E Pleite', 'e2e_broke_" + System.currentTimeMillis() + "', '" + cardId + "', "
                     + groupId + ", FALSE, FALSE, FALSE)");
-
-            s.executeUpdate("UPDATE locations SET client_uid=NULL, client_last_seen=NULL WHERE id=" + locationId);
         }
     }
 

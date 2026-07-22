@@ -13,13 +13,13 @@ jobs:
       packages: write
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Set up JDK 21
       # Common/Client-Raspi compile at language level 21 since Phase 1
       # (maven.compiler.release=21 in the parent POM) — the release JDK here
       # must be >= 21, otherwise "mvn install -pl Common,Client-Raspi -am"
       # fails with "invalid target release: 21".
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v4
       with:
         java-version: '21'
         distribution: 'liberica'
@@ -28,7 +28,7 @@ jobs:
 
     - name: Apply version number
       # Sets the version in the root (parent) POM and propagates it to all
-      # modules that inherit it (Common, Client-Raspi, Portal), including the
+      # modules that inherit it (Common, Client-Raspi, backend), including the
       # <parent><version> and ${project.version} references — no more sed
       # hack across multiple POM files.
       run: mvn -B versions:set -DnewVersion=${{ github.event.release.tag_name }} -DgenerateBackupPoms=false
@@ -38,12 +38,18 @@ jobs:
       # so it still needs this simple substitution.
       run: sed -i -E "s/0.0.0-local-development/${{ github.event.release.tag_name }}/g" Common/src/main/java/org/kabieror/elwasys/common/Utilities.java
 
-    - name: Build Common + Raspi-Client
+    - name: Build Common + Raspi-Client (Terminal-fat-jar)
       # Reactor build from the root so the (now re-versioned) parent POM is
       # also installed into the local repo — a plain "mvn install" inside
       # Common/ alone would not install it, and Client-Raspi needs it there
       # to resolve the common dependency.
-      run: mvn -B install -pl Common,Client-Raspi -am
+      #
+      # -DskipTests: der Release-Job PAKETIERT nur den Terminal-fat-jar; die
+      # Testsuiten sind Sache der CI (siehe ci.yml, läuft bei jedem PR/Push auf
+      # master). Client-Raspis TestFX-/E2E-Tests brauchen Xvfb + PostgreSQL + ein
+      # laufendes Backend (siehe run-ui-tests.sh) - dieses Infrastruktur-Setup gibt
+      # es im Release-Runner bewusst nicht, daher hier keine Testausführung.
+      run: mvn -B install -pl Common,Client-Raspi -am -DskipTests
 
     - name: Publish runnable JAR
       uses: svenstaro/upload-release-action@v2

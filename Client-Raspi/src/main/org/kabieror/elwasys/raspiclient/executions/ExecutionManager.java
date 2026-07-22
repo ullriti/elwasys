@@ -252,7 +252,7 @@ public class ExecutionManager implements ICloseListener {
     public void onPowerMeasurementAvailable(ClientExecution execution, double power) {
         this.logger.debug("[" + execution.getDevice().getName() + "] Power: " + power + "W");
         if (execution.getProgram().isAutoEnd()) {
-            if (power < execution.getDevice().getAutoEndPowerThreashold()) {
+            if (power < execution.getDevice().getAutoEndPowerThreshold()) {
                 if (!this.plannedStops.containsKey(execution) || this.plannedStops.get(execution).isDone()) {
                     final long delay = execution.getEarliestAutoEnd().getSeconds();
                     this.logger

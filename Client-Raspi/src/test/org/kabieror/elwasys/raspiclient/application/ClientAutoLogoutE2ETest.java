@@ -116,14 +116,11 @@ public class ClientAutoLogoutE2ETest {
         cardId = "4" + String.format("%08d", System.currentTimeMillis() % 100_000_000L);
         try (Connection c = DriverManager.getConnection(DB_URL, "postgres", "postgres");
              Statement s = c.createStatement()) {
-            final int locationId = queryInt(s, "SELECT id FROM locations WHERE name='Default'");
             final int groupId = queryInt(s, "SELECT id FROM user_groups ORDER BY id LIMIT 1");
 
             s.executeUpdate("INSERT INTO users (name, username, card_ids, group_id, is_admin, blocked, deleted) VALUES ("
                     + "'E2E Timeout', 'e2e_timeout_" + System.currentTimeMillis() + "', '" + cardId + "', "
                     + groupId + ", FALSE, FALSE, FALSE)");
-
-            s.executeUpdate("UPDATE locations SET client_uid=NULL, client_last_seen=NULL WHERE id=" + locationId);
         }
     }
 

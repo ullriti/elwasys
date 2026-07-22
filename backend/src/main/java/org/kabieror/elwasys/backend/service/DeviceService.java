@@ -91,7 +91,7 @@ public class DeviceService {
         device.setFhemSwitchName(fhemSwitchName);
         device.setFhemPowerName(fhemPowerName);
         device.setDeconzUuid(deconzUuid);
-        device.setAutoEndPowerThreashold(autoEndPowerThreshold);
+        device.setAutoEndPowerThreshold(autoEndPowerThreshold);
         device.setAutoEndWaitTimeSeconds((int) autoEndWaitTime.getSeconds());
         device.setEnabled(enabled);
         device.getPrograms().clear();

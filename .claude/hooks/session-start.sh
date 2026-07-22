@@ -33,7 +33,7 @@ fi
 # Container state is cached after the hook, so subsequent builds/tests are fast.
 # Building via the root reactor (-pl Common -am) also installs the aggregator
 # parent POM into the local repo, which a plain "mvn -f Common/pom.xml
-# install" does not — and Client-Raspi/Portal need it to resolve Common.
+# install" does not — and Client-Raspi needs it to resolve Common.
 echo "[elwasys hook] Building/installing Common (+ parent POM) into local Maven repo"
 mvn -q -B -f pom.xml install -pl Common -am -DskipTests
 

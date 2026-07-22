@@ -50,7 +50,7 @@ import org.springframework.stereotype.Service;
  *   <li>Der dritte Alt-Kanal (elwaApp-Push über {@code https://api.ionic.io/push/notifications})
  *       ist NICHT portiert: die mobile App ({@code elwaapi}) wurde laut Auftraggeber als
  *       nicht mehr relevant eingestuft und alle zugehörigen Reste (u.a. {@code app_id},
- *       auf das dieser Kanal aufbaut) werden in Phase 5 entfernt (siehe
+ *       auf das dieser Kanal aufbaut) wurden in Phase 5 AP4 (V10) entfernt (siehe
  *       kb/05-migration-plan.md, Entscheidungen "Mobile App (`elwaapi`) ist nicht
  *       relevant"). Dieses Arbeitspaket ist zudem explizit auf "SMTP + Pushover"
  *       zugeschnitten (siehe Auftrag).</li>

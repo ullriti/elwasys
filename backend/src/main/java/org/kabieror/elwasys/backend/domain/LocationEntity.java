@@ -18,11 +18,10 @@ import java.util.Set;
  * kb/02-data-model.md) sowie {@code org.kabieror.elwasys.common.Location} im Alt-Code.
  *
  * <p>Die Spalten {@code client_uid}/{@code client_ip}/{@code client_port}/
- * {@code client_last_seen} (Registry für die Fernwartungs-Anwahl, siehe
+ * {@code client_last_seen} (Registry für die alte Fernwartungs-Anwahl, siehe
  * kb/05-migration-plan.md Komponenten-Inventur: "Weg - obsolet durch ausgehende
- * Client-Verbindung") werden hier bewusst NICHT gemappt: sie sind fürs AP2-Fachkern
- * (Abrechnung/Berechtigungen/Preisberechnung/Execution-Lebenszyklus) irrelevant, alle
- * nullable, und werden in Phase 5 entfernt.
+ * Client-Verbindung") wurden hier nie gemappt und sind seit Phase 5 AP3
+ * ({@code V9__drop_obsolete_location_client_columns.sql}) auch in der Datenbank entfernt.
  */
 @Entity
 @Table(name = "locations")

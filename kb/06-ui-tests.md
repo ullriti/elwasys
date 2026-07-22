@@ -270,18 +270,21 @@ kb/03-modules.md „Offline-Robustheit (AP6)“.
 unverändert **3/3**, Backend-Suite **199/199 → 207/207**, Portal-E2E-Suite weiterhin
 **20/20** (P14 inkl. neuem Feld „Offline-Maximaldauer“, unveränderter Save-Roundtrip).
 
-## Alt-Portal (Vaadin 7) – Playwright E2E ⚠️ STILLGELEGT (Phase 3 AP6, 2026-07-21)
+## Alt-Portal (Vaadin 7) – Playwright E2E ⚠️ STILLGELEGT (Phase 3 AP6) und ENTFERNT (Phase 5 AP1)
 
-> **Stillgelegt.** Diese Suite (`Portal/e2e/`) war der Maßstab für P1–P20 und lief bis Phase 3
-> AP6 in der PR-CI. Sie ist jetzt durch [`backend/e2e/`](#backend-vaadin-flow--playwright-e2e--umgesetzt-phase-3-ap6)
-> (Vaadin Flow, dasselbe Testplan-Inventar P1–P20) abgelöst und **läuft nicht mehr in der
-> CI** (`.github/workflows/ci.yml`, Job `portal-legacy-build` baut das Alt-Portal-Modul nur
-> noch, ohne Playwright). Code und dieses Dokument-Kapitel bleiben laut Roadmap bis Phase 5 im
-> Repo (siehe kb/05-migration-plan.md, kb/03-modules.md) – lokal weiterhin lauffähig
-> (`cd Portal/e2e && npm test`), aber kein CI-Gate mehr.
+> **Historisch – existiert nicht mehr.** Diese Suite (`Portal/e2e/`) war der Maßstab für
+> P1–P20 und lief bis Phase 3 AP6 in der PR-CI. Sie wurde in Phase 3 AP6 durch
+> [`backend/e2e/`](#backend-vaadin-flow--playwright-e2e--umgesetzt-phase-3-ap6) (Vaadin Flow,
+> dasselbe Testplan-Inventar P1–P20) fachlich abgelöst und lief seither nicht mehr in der CI
+> (`.github/workflows/ci.yml`, Job `portal-legacy-build` baute das Alt-Portal-Modul nur noch,
+> ohne Playwright). Mit dem gesamten Alt-Portal-Modul ist auch `Portal/e2e/` in **Phase 5 AP1
+> vollständig aus dem Repository entfernt** – dieser Abschnitt bleibt als historische
+> Dokumentation stehen (siehe kb/05-migration-plan.md, kb/03-modules.md), ist aber nicht mehr
+> lokal ausführbar. Die maßgebliche, aktuelle Portal-E2E-Suite ist ausschließlich
+> `backend/e2e/` (siehe unten).
 
-Entscheidung (Auftraggeber, historisch): **Playwright (Node/TypeScript)**. Projekt unter
-`Portal/e2e/`.
+Entscheidung (Auftraggeber, historisch): **Playwright (Node/TypeScript)**. Projekt war unter
+`Portal/e2e/` (entfernt, siehe oben).
 
 - **Browser**: vorinstalliertes Chromium (`/opt/pw-browsers/chromium`) via
   `executablePath` – kein `playwright install` nötig.

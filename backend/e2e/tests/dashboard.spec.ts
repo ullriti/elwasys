@@ -41,11 +41,11 @@ function seed() {
         time_unit, auto_end, earliest_auto_end, enabled)
       VALUES ('E2E-Dash-Prog', 'FIXED', 3600, 0, 1.50, NULL, NULL, FALSE, 0, TRUE);
     INSERT INTO devices (name, position, location_id, fhem_name, fhem_switch_name,
-        fhem_power_name, deconz_uuid, auto_end_power_threashold, auto_end_wait_time, enabled)
+        fhem_power_name, deconz_uuid, auto_end_power_threshold, auto_end_wait_time, enabled)
       VALUES ('${OCCUPIED}', 90, (SELECT id FROM locations WHERE name='Default'),
         'e2e-dash-1', 'e2e-dash-1sw', 'e2e-dash-1pw', '', 0.5, 20, TRUE);
     INSERT INTO devices (name, position, location_id, fhem_name, fhem_switch_name,
-        fhem_power_name, deconz_uuid, auto_end_power_threashold, auto_end_wait_time, enabled)
+        fhem_power_name, deconz_uuid, auto_end_power_threshold, auto_end_wait_time, enabled)
       VALUES ('${FREE}', 91, (SELECT id FROM locations WHERE name='Default'),
         'e2e-dash-2', 'e2e-dash-2sw', 'e2e-dash-2pw', '', 0.5, 20, TRUE);
     INSERT INTO users (name, username, is_admin, blocked, deleted, group_id)

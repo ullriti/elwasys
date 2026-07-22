@@ -1,0 +1,11 @@
+-- Typo-Fix (Phase 5 AP3, siehe kb/02-data-model.md, kb/05-migration-plan.md): die Spalte
+-- devices.auto_end_power_threashold trug seit der 0.4.0-Baseline
+-- (V1__baseline_schema_0_4_0.sql, ebenso Common/resources/database-init.sql) einen
+-- Tippfehler ("threashold" statt "threshold"). AP3 zieht den Fix vollstaendig durch
+-- Datenbank UND Code (DeviceEntity/DTOs/Services/Client) in einem Commit.
+--
+-- V1 und Common/resources/database-init.sql bleiben als eingefrorene 0.4.0-Baseline
+-- bewusst UNVERAENDERT (sie beschreiben, was eine 0.4.0-Installation historisch anlegte);
+-- diese Migration benennt die Spalte auf dem darauf aufbauenden Migrationspfad vorwaerts
+-- um, exakt wie V2-V7 bereits Bestandsschema-Korrekturen vornehmen.
+ALTER TABLE devices RENAME COLUMN auto_end_power_threashold TO auto_end_power_threshold;

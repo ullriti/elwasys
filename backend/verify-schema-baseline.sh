@@ -30,10 +30,36 @@
 # script's "fresh path" comparison at flyway.target=1 (true V1-only check) or replace it
 # with an explicit, maintained list of expected post-baseline diffs.
 #
+# UPDATE (Phase 5 AP3, 2026-07-21): the same "fresh path" divergence now also covers V8
+# (devices.auto_end_power_threashold -> auto_end_power_threshold) and V9 (drops
+# locations.client_uid/client_ip/client_port/client_last_seen) - both are additional,
+# expected, non-regression diffs against the untouched legacy-path DB from step 1. Full
+# rework of this script (explicit expected-diff list or flyway.target=1) is deferred to
+# Phase 5 AP6 as noted above; this script is still not part of any CI/test suite.
+#
+# UPDATE (Phase 5 AP6, 2026-07-21, doc-only pass): the rework flagged above was intentionally
+# NOT done in AP6 (AP6 is a documentation/comment cleanup work package, not a script-logic
+# change) - this NOTE block is being made honest instead. By now (V1-V10) this script's
+# "fresh path" (step 2) has diverged from the untouched legacy-path DB (step 1) by design in
+# even more ways than V8/V9 above: V6 drops the elwaclient1/elwaapi roles and the
+# elwaclients group that database-init.sql still creates, V7 removes the seeded default
+# admin password (see ADMIN_ROW check below - "admin" now seeds with a NULL/placeholder
+# password, not the legacy-path DB's default hash), and V10 drops the elwaapi-app columns/
+# tables (auth_key/access_key/app_id, reservations, foreign_authkeys) entirely. In short: this
+# script's core premise ("the fresh Flyway path and the legacy path produce the same schema")
+# has not held since AP3's V2 and is now further from true with every migration since - it
+# is a HISTORICAL tool from Phase 2 AP1 (when V1 was the only migration and baseline-
+# equivalence was the actual property being verified), not a maintained regression check. A
+# real V1-only baseline-equivalence check would need to run Flyway with `flyway.target=1`
+# instead of the current unbounded `migrate()` (step 2) so it only applies V1, matching what
+# step 1's legacy path actually represents; nobody has needed that check since, so it has not
+# been rebuilt. Re-running this script as-is today will very likely FAIL at steps 3/4 - that
+# is expected and NOT a regression signal.
+#
 # Requires: JDK 21, Maven, local PostgreSQL 16 (pg_ctlcluster) + sudo. Not part of the routine
 # test suite (run-backend-tests.sh) - this is the documented one-off verification the AP1
-# work order asked for; safe to re-run any time to re-check the baseline after touching the
-# migration.
+# work order asked for; safe to re-run any time to re-check the V1-era baseline, keeping the
+# above caveats in mind.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

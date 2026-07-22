@@ -16,9 +16,9 @@ import java.util.Set;
  * seit Phase 4 AP3 zentral über das Backend anhand der dort gespeicherten
  * Benutzer-Einstellung, das Terminal löst nur noch das fachliche Ereignis aus (siehe
  * kb/05-migration-plan.md "Benachrichtigungen"). {@code authKey} (elwaApp-Kopplung) wird
- * bewusst NICHT übernommen: die Spalte ist eine App-Altlast, die laut
+ * bewusst NICHT übernommen: die Spalte war eine App-Altlast, die laut
  * {@code backend.domain.UserEntity} Klassenkommentar absichtlich NICHT ins neue Datenmodell
- * gemappt ist (Entfernung in Phase 5 vorgesehen) - siehe
+ * gemappt war und in Phase 5 AP4 (V10) entfernt wurde - siehe
  * {@code UserSettingsViewController}/{@code ConfirmationViewController} für die daraus
  * folgende (rein kosmetische) UI-Anpassung.
  */

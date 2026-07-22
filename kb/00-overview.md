@@ -24,44 +24,50 @@ Domain: `elwasys.de` (siehe `CNAME`). Ursprünglicher Autor: Oliver Kabierschke
 - **Feingranulare Berechtigungen**:
   - Sonderpreise pro Benutzergruppe (Rabatt: fix oder Faktor)
   - Zugriffssperre auf bestimmte Geräte pro Benutzergruppe
-- **Reservierungen** von Geräten
+- **Reservierungen** von Geräten (Alt-Feature; laut Auftraggeber nicht mehr relevant, Reste
+  in Phase 5 AP4 entfernt)
 - **Web-Portal** zur Administration (Nutzer, Gruppen, Geräte, Programme, Standorte, Guthaben)
-- **Fernwartung** (Maintenance-Verbindung zwischen Portal und Client)
+  – seit Phase 3 als Vaadin-Flow-UI in das zentrale Backend eingebettet, kein eigenständiges
+  Portal-Modul mehr
+- **Fernwartung** (Status/Log/Neustart) – seit Phase 4 über eine vom Terminal ausgehende
+  WebSocket-Verbindung zum Backend, nicht mehr über eine direkte Portal-Client-Verbindung
 - Mehrere **Standorte** (Locations), je Standort ein Client-Terminal
 
-## Drei-Komponenten-Bild (High Level)
+## Komponenten-Bild (High Level, Zielarchitektur seit Phase 5)
 
 ```
-┌────────────────────────┐        ┌──────────────────────────┐
-│  Raspberry-Pi-Client    │        │      Web-Portal           │
-│  (JavaFX Touch-UI)      │        │      (Vaadin 7 Webapp)    │
-│                         │        │                          │
-│  - RFID-Login           │        │  - Admin-Dashboard        │
-│  - Geräteauswahl        │        │  - Nutzer/Gruppen/Geräte  │
-│  - Programm starten     │        │  - Programme/Standorte    │
-│  - Zigbee schalten      │        │  - Guthaben verwalten     │
-│  - Leistung messen      │        │  - Log-Viewer / Wartung   │
-└───────────┬────────────┘        └────────────┬─────────────┘
+┌────────────────────────┐        ┌──────────────────────────────────┐
+│  Raspberry-Pi-Terminal  │        │       Backend (Spring Boot)       │
+│  (JavaFX Touch-UI)      │        │                                  │
+│                         │        │  - REST-API v1 (Standort-Token)   │
+│  - RFID-Login           │◀──────▶│  - eingebettetes Admin-Portal-UI  │
+│  - Geräteauswahl        │  REST +│    (Vaadin Flow)                 │
+│  - Programm starten     │  ausgeh│  - Benachrichtigungsdienst        │
+│  - Zigbee schalten      │  ender │    (SMTP/Pushover)                │
+│  - Leistung messen      │  WS    │                                  │
+└───────────┬────────────┘        └────────────┬─────────────────────┘
             │                                   │
             │        ┌──────────────────┐       │
-            └───────▶│   PostgreSQL DB   │◀──────┘
+            └╌╌╌╌╌╌╌▶│   PostgreSQL DB   │◀──────┘
                      │  (gemeinsam)      │
                      └──────────────────┘
-            │
-            │  Maintenance-WebSocket (Portal ⇄ Client)
-            └───────────────────────────────────────────
 
   Client ⇄ Zigbee-Gateway (deCONZ/ConBee2)  bzw.  fhem  → Funksteckdosen
 ```
 
-- **Common**: gemeinsame Bibliothek (Datenmodell, DB-Zugriff, Maintenance-Protokoll),
-  wird von Client und Portal als Maven-Dependency genutzt.
-- **Client-Raspi**: die JavaFX-Anwendung auf dem Raspberry Pi (das Terminal).
-- **Portal**: die Vaadin-Webanwendung zur Administration.
+- **Common**: kleine gemeinsame Bibliothek (Enum-Typ, Format-/Konfigurationshilfen), wird von
+  Client-Raspi als Maven-Dependency genutzt (vom Backend nur noch test-scope).
+- **Client-Raspi**: die JavaFX-Anwendung auf dem Raspberry Pi (das Terminal) – seit Phase 4
+  ohne Direkt-DB-Zugriff, ausschließlich über die Backend-REST-API und eine ausgehende
+  WebSocket-Verbindung (auch für Fernwartung).
+- **backend**: das zentrale Spring-Boot-Backend – REST-API/WebSocket für die Terminals UND
+  das eingebettete Admin-Portal-UI (Vaadin Flow), Notifications, Flyway-verwaltetes Schema.
+  Es gibt seit Phase 5 AP1 kein eigenständiges Portal-Modul mehr (das Vaadin-7-Alt-Portal ist
+  vollständig entfernt).
 
-Client und Portal teilen sich **eine gemeinsame PostgreSQL-Datenbank**. Zusätzlich gibt es
-eine direkte **Maintenance-Verbindung** (WebSocket-basiert) zwischen Portal und Client für
-Fernwartung (Status abfragen, Logs holen, App neu starten).
+Backend und Terminals teilen sich **eine gemeinsame PostgreSQL-Datenbank**, aber nur das
+Backend greift direkt zu (User `elwaportal`) – die Terminals sprechen ausschließlich die
+Backend-API. Details: [01-architecture.md](01-architecture.md).
 
 ## Hardware-Kontext
 
@@ -72,7 +78,13 @@ Fernwartung (Status abfragen, Logs holen, App neu starten).
 - Alternativ (ältere Variante): **fhem** als Gateway.
 - Optional RFID-Kartenleser (über Telnet/serielle Schnittstelle angebunden).
 
-## Aktueller Zustand (Ausgangslage für die Überarbeitung)
+## Ausgangslage vor der Modernisierung (historisch)
+
+> Dieser Abschnitt beschreibt bewusst den **Stand vor Beginn** der Modernisierung (Grundlage
+> für den Migrationsplan) und ist nicht der aktuelle Zustand. Der aktuelle Stand (Phase 5, Root-
+> Reactor mit 3 Modulen, kein Alt-Portal mehr) ist oben im „Komponenten-Bild" sowie in
+> [01-architecture.md](01-architecture.md) und [05-migration-plan.md](05-migration-plan.md)
+> beschrieben.
 
 - Multi-Modul-Maven-Projekt (3 separate `pom.xml`, **kein** Aggregator-Parent-POM).
 - **Technologisch veraltet** an mehreren Stellen:

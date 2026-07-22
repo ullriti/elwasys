@@ -67,7 +67,7 @@ class ClientOfflineReplayIdempotencyE2ETest {
                             + "1.50, NULL, NULL, FALSE, 0, TRUE) RETURNING id");
             deviceId = insertReturningId(s,
                     "INSERT INTO devices (name, position, location_id, fhem_name, fhem_switch_name, "
-                            + "fhem_power_name, deconz_uuid, auto_end_power_threashold, auto_end_wait_time, "
+                            + "fhem_power_name, deconz_uuid, auto_end_power_threshold, auto_end_wait_time, "
                             + "enabled) VALUES ('E2E-Idem-WM', 1, " + locationId
                             + ", 'wm1', 'wm1sw', 'wm1pw', '', 0.5, 20, TRUE) RETURNING id");
             s.executeUpdate(

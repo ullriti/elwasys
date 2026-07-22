@@ -250,7 +250,7 @@ public class ClientUsageE2ETest {
                             "', 'FIXED', 3600, 0, 1.50, NULL, NULL, TRUE, 0, TRUE) RETURNING id");
             deviceId = insertReturningId(s,
                     "INSERT INTO devices (name, position, location_id, fhem_name, fhem_switch_name, " +
-                            "fhem_power_name, deconz_uuid, auto_end_power_threashold, auto_end_wait_time, enabled) " +
+                            "fhem_power_name, deconz_uuid, auto_end_power_threshold, auto_end_wait_time, enabled) " +
                             "VALUES ('" + DEVICE_NAME + "', 1, " + locationId +
                             ", 'wm1', 'wm1sw', 'wm1pw', '', 0.5, 20, TRUE) RETURNING id");
             s.executeUpdate("INSERT INTO device_program_rel (device_id, program_id) VALUES ("
@@ -266,9 +266,6 @@ public class ClientUsageE2ETest {
                             + groupId + ", FALSE, FALSE, FALSE) RETURNING id");
             s.executeUpdate("INSERT INTO credit_accounting (user_id, amount, description) VALUES ("
                     + userId + ", 100, 'E2E seed')");
-
-            // Free the location so this client can register.
-            s.executeUpdate("UPDATE locations SET client_uid=NULL, client_last_seen=NULL WHERE id=" + locationId);
         }
     }
 

@@ -56,9 +56,12 @@ Bei EC2/GCE/Hetzner als *user-data* verwenden.
 | Laufende Testsuite | ❌ noch keine (bestehende Tests sind TestNG-Simulatoren; UI-Tests folgen) |
 
 ## Hinweise / Stolperfallen
-- **Portal** wird vom Hook bewusst **nicht** gebaut: Versionskonflikt
+- ~~**Portal** wird vom Hook bewusst **nicht** gebaut: Versionskonflikt
   (`common:0.3.4-SNAPSHOT` vs. `0.0.0-local-development`) + schwergewichtige Vaadin-/GWT-
-  Widgetset-Compilation. Portal-Build/-Tests kommen in einer späteren Phase (siehe
-  05-migration-plan.md).
+  Widgetset-Compilation. Portal-Build/-Tests kommen in einer späteren Phase.~~ *(Historisch,
+  Stand Phase 0. Das Alt-Portal-Modul ist seit Phase 5 AP1 vollständig aus dem Repo entfernt –
+  der Root-Reactor umfasst seither nur noch Common/Client-Raspi/backend, siehe
+  05-migration-plan.md; das neue Portal-UI [Vaadin Flow] ist Teil von `backend` und wird
+  normal mitgebaut.)*
 - Ausgehende HTTPS-Verbindungen laufen in dieser Umgebung über einen Agent-Proxy; der
   Java-Truststore ist per `JAVA_TOOL_OPTIONS` gesetzt. Maven-Downloads funktionieren.

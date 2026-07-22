@@ -135,7 +135,7 @@ public class DeviceFormDialog extends Dialog {
             this.tfFhemPowerName.setValue(deviceToEdit.getFhemPowerName());
             this.tfDeconzUuid.setValue(
                     deviceToEdit.getDeconzUuid() == null ? "" : deviceToEdit.getDeconzUuid());
-            this.nfAutoEndPowerThreshold.setValue((double) deviceToEdit.getAutoEndPowerThreashold());
+            this.nfAutoEndPowerThreshold.setValue((double) deviceToEdit.getAutoEndPowerThreshold());
             this.ifAutoEndWaitTime.setValue(deviceToEdit.getAutoEndWaitTimeSeconds());
             this.cbEnabled.setValue(deviceToEdit.isEnabled());
             this.selPrograms.setValue(Set.copyOf(deviceToEdit.getPrograms()));

@@ -8,22 +8,17 @@
 	<version>0.0.0-local-development</version>
 	<packaging>pom</packaging>
 	<name>elwasys parent</name>
-	<description>Aggregator/parent POM for the elwasys modules (Common, Client-Raspi, Portal).</description>
+	<description>Aggregator/parent POM for the elwasys modules (Common, Client-Raspi, backend).</description>
 
 	<modules>
 		<module>Common</module>
 		<module>Client-Raspi</module>
-		<module>Portal</module>
 		<module>backend</module>
 	</modules>
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<!-- Default Java language level for modules that don't override it
-		     (Common, Client-Raspi). Portal freezes its own compiler source/target
-		     at 1.8 (Vaadin 7/GWT 2.7 is not verified for newer language levels)
-		     via its own project.source.version/project.target.version properties,
-		     independent of this default. -->
+		<!-- Default Java language level for all modules (Common, Client-Raspi, backend). -->
 		<maven.compiler.release>21</maven.compiler.release>
 	</properties>
 

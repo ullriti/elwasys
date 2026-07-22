@@ -9,7 +9,6 @@ unten): `Common/resources/database-upgrade/upgrade_0.3.1_0.3.2.sql`, `upgrade_0.
 ```
 user_groups ─┬─< users >──┬─< credit_accounting
              │            │
-             │            └─< reservations >── devices
              ├─< locations_valid_user_groups >── locations ──< devices
              ├─< devices_valid_user_groups >── devices
              └─< programs_valid_user_groups >── programs
@@ -17,14 +16,16 @@ user_groups ─┬─< users >──┬─< credit_accounting
 devices ──< device_program_rel >── programs      │
 executions >── devices, programs, users ─────────┘
 ```
+(`reservations` – App-Relikt der mobilen App, in Phase 5 AP4 entfernt, siehe unten.)
 
 ## Tabellen
 
 ### config
 Schlüssel/Wert-Konfiguration.
 - `key` (unique), `value`
-- Seeds: `db.version=0.4.0`, `authkey.prefix` (2 Zufallszeichen),
-  `reservation.duration=900` (Sek.)
+- Seeds: `db.version=0.4.0`, ~~`authkey.prefix` (2 Zufallszeichen), `reservation.duration=900`
+  (Sek.)~~ *(entfernt in Phase 5 AP4, `V10__drop_app_remnants.sql` – App-Relikte, siehe
+  „App-Reste“ unten)*
 
 ### user_groups
 Benutzergruppen mit Rabattregel.
@@ -48,22 +49,25 @@ Benutzergruppen mit Rabattregel.
   dieselben Spalten weiterhin unverändert, kein Konflikt bei Parallelbetrieb, siehe
   kb/05-migration-plan.md, „Entscheidungen“)
 - `deleted`, `last_login`, `group_id` → user_groups (Default 1)
-- App-Anbindung: `app_id`, `access_key`, `auth_key` (Trigger `user_authkey_trigger`
-  generiert `auth_key` beim INSERT über `generate_user_authkey()`)
+- ~~App-Anbindung: `app_id`, `access_key`, `auth_key` (Trigger `user_authkey_trigger`
+  generiert `auth_key` beim INSERT über `generate_user_authkey()`)~~ *(entfernt in Phase 5
+  AP4, `V10__drop_app_remnants.sql`: Trigger + beide Funktionen
+  `user_authkey_trigger_function()`/`generate_user_authkey()` sowie die drei Spalten – die
+  mobile App (`elwaapi`) ist laut Auftraggeber nicht mehr relevant, siehe
+  kb/05-migration-plan.md „Entscheidungen“)*
 - Seed: `admin` / Passwort-Hash `d033e22ae348aeb5660fc2140aec35850c4da997`
   (= SHA1 von „admin“), `is_admin=TRUE`
 
 ### locations
 Ein Standort = ein Client-Terminal.
 - `id`, `name` (unique)
-- `client_uid`, `client_ip`, `client_port`, `client_last_seen` – **obsolet seit Phase 4 AP5**
-  (2026-07-21): dienten der Alt-IP-Registrierung für die Fernwartung (`LocationManager`, siehe
-  kb/01-architecture.md „Maintenance-Protokoll (Common)“) – der Client schreibt/liest diese
-  Spalten nicht mehr (die Fernwartung läuft jetzt über eine vom Terminal ausgehende
-  WebSocket-Verbindung, `TerminalConnectionRegistry` im Backend hält die Erreichbarkeit rein
-  in-memory, siehe kb/03-modules.md). Die Spalten bleiben laut Roadmap **bis Phase 5**
-  bestehen (KEINE Migration entfernt Bestandsspalten in Phase 4) – Entfall per additiver
-  Migration ist für Phase 5 vorgesehen.
+- `client_uid`, `client_ip`, `client_port`, `client_last_seen` – **entfernt in Phase 5 AP3**
+  (2026-07-21, `V9__drop_obsolete_location_client_columns.sql`): dienten der Alt-IP-
+  Registrierung für die Fernwartung (`LocationManager`, siehe kb/01-architecture.md
+  „Maintenance-Protokoll (Common)“) – seit Phase 4 AP5 läuft die Fernwartung über eine vom
+  Terminal ausgehende WebSocket-Verbindung, `TerminalConnectionRegistry` im Backend hält die
+  Erreichbarkeit rein in-memory (siehe kb/03-modules.md). Die Spalten waren seitdem ungenutzt
+  und wurden per V9 gedroppt.
 - Seed: `Default`
 - `offline_max_duration_minutes` (INT, NOT NULL, Default 60) – **neu seit Phase 4 AP6**
   (2026-07-21): `offline.max-duration` dieses Standorts (Auftraggeber-Vorgabe, siehe
@@ -82,7 +86,8 @@ Ein Gerät (Waschmaschine/Trockner).
 - `id`, `name`, `position`, `location_id` → locations
 - fhem: `fhem_name`, `fhem_switch_name`, `fhem_power_name`
 - deCONZ: `deconz_uuid`
-- Ende-Erkennung: `auto_end_power_threashold` (REAL, Default 0.5 W),
+- Ende-Erkennung: `auto_end_power_threshold` (REAL, Default 0.5 W; hieß bis V7
+  `auto_end_power_threashold` – Tippfehler in Phase 5 AP3 per V8 korrigiert),
   `auto_end_wait_time` (INT, Default 20 s)
 - `enabled`
 
@@ -115,14 +120,18 @@ Guthaben-Buchungen.
 - `id`, `user_id` → users, `execution_id` → executions (nullable)
 - `amount` (numeric, +Aufladung / −Verbrauch), `date`, `description`
 
-### foreign_authkeys
-Verzeichnis für Föderation mit anderen Servern.
-- `prefix` (Auth-Key-Prefix), `server_address`
+### ~~foreign_authkeys~~ *(entfernt in Phase 5 AP4)*
+~~Verzeichnis für Föderation mit anderen Servern.~~
+~~- `prefix` (Auth-Key-Prefix), `server_address`~~
+*(`V10__drop_app_remnants.sql` – App-Relikt, mobile App laut Auftraggeber nicht mehr
+relevant, siehe kb/05-migration-plan.md „Entscheidungen“)*
 
-### reservations
-Gerätereservierungen.
-- `id`, `user_id` → users, `device_id` → devices, `start_time`
-- Unique-Constraint (`user_id`, `device_id`)
+### ~~reservations~~ *(entfernt in Phase 5 AP4)*
+~~Gerätereservierungen.~~
+~~- `id`, `user_id` → users, `device_id` → devices, `start_time`~~
+~~- Unique-Constraint (`user_id`, `device_id`)~~
+*(`V10__drop_app_remnants.sql` – App-Relikt, mobile App laut Auftraggeber nicht mehr
+relevant)*
 
 ### terminal_tokens *(neu, seit Phase 2 AP4)*
 Standort-Tokens für die Terminal-REST-API/den WebSocket-Endpunkt (additive Migration
@@ -156,21 +165,38 @@ Alt-Code unbenutzt/unbekannt.
 
 ## DB-Rollen & Rechte
 
-- **Gruppe `elwaclients`**, User `elwaclient1` (PW `elwaclient1`):
-  SELECT auf alles; INSERT/UPDATE auf `executions`; UPDATE auf `locations`, `devices`;
-  INSERT auf `credit_accounting`. (Terminal darf nur Nötiges schreiben.)
+**Stand seit Phase 5 AP2 (`V6__harden_db_roles.sql`, 2026-07-21):** `elwaportal` ist der
+EINZIGE Anwendungs-DB-User. `elwaclient1`/`elwaapi` + die Gruppe `elwaclients` (mitsamt ihrer
+Default-Passwörter) sind entfernt – das Terminal spricht seit Phase 4 AP4/AP5 nur noch über
+die Backend-REST-API/den Standort-Token mit dem Backend (kein Direkt-DB-Zugriff mehr), und die
+mobile App (`elwaapi`) ist laut Auftraggeber nicht mehr relevant (siehe „Entscheidungen“ in
+kb/05-migration-plan.md). Die alte Rollenbeschreibung bleibt hier als historischer Kontext
+dokumentiert:
+
+- ~~**Gruppe `elwaclients`**, User `elwaclient1` (PW `elwaclient1`): SELECT auf alles;
+  INSERT/UPDATE auf `executions`; UPDATE auf `locations`, `devices`; INSERT auf
+  `credit_accounting`. (Terminal durfte nur Nötiges schreiben.)~~ *(entfernt, V6)*
 - **User `elwaportal`**: volles SELECT/INSERT/UPDATE/DELETE, aber `REVOKE UPDATE, DELETE`
-  auf `credit_accounting` (Buchungen sind unveränderlich).
-- **User `elwaapi`** (PW `api1234`): SELECT auf alles; UPDATE auf `users`;
-  INSERT/DELETE auf `reservations` (für die mobile App).
+  auf `credit_accounting` (Buchungen sind unveränderlich). Unverändert seit V1.
+- ~~**User `elwaapi`** (PW `api1234`): SELECT auf alles; UPDATE auf `users`; INSERT/DELETE auf
+  `reservations` (für die mobile App).~~ *(DB-User entfernt in V6; die Tabelle `reservations`
+  selbst wurde zusätzlich in Phase 5 AP4 per `V10` gedroppt.)*
+
+**Cluster-weite Rollen im geteilten Test-Cluster**: `V6` läuft idempotent und fängt den Fall
+ab, dass eine Rolle in DIESER Datenbank noch Rechte besitzt, aber in einer ANDEREN Datenbank
+desselben Clusters (z. B. die von den Client-Raspi-Testharnesses über `database-init.sql`
+geseedete `elwasys`-Test-DB, solange diese parallel existiert) noch referenziert wird – in
+diesem Fall wird `DROP ROLE`/`DROP GROUP` für diesen Lauf übersprungen (`RAISE NOTICE`), die
+Rechte in der aktuellen DB sind trotzdem entfernt. In einer echten Produktivumgebung mit
+genau einer `elwasys`-Datenbank tritt das nicht auf, siehe Kommentarkopf der Migration.
 
 ## Migrations-relevante Beobachtungen
 
 - Passwörter als **SHA1** gespeichert → bei Modernisierung sicherheitskritisch
   (Wechsel auf bcrypt/argon2 einplanen, Migrationspfad nötig).
 - Klartext-/schwache Default-Passwörter (`elwaclient1`, `api1234`) → härten.
-- Tippfehler in Spaltenname `auto_end_power_threashold` (statt *threshold*) – bei
-  Schema-Refactor berücksichtigen (Kompatibilität!).
+- Tippfehler in Spaltenname `auto_end_power_threashold` (statt *threshold*) – in Phase 5 AP3
+  per `V8__rename_auto_end_power_threshold.sql` auf `auto_end_power_threshold` korrigiert.
 
 ## Flyway-Baseline (seit Phase 2 AP1, 2026-07-20)
 
@@ -190,8 +216,9 @@ Zusammenfassung:
   einen `DO`-Block mit Existenzprüfung (`pg_roles`) gefasst, weil PostgreSQL-Rollen
   Cluster-weit sind (nicht pro Datenbank) und ein zweiter Lauf gegen denselben Cluster sonst
   mit „role already exists“ fehlschlagen würde. Der Spaltentypo
-  `auto_end_power_threashold` bleibt bewusst erhalten (Umbenennung erst Phase 5, siehe
-  Roadmap).
+  `auto_end_power_threashold` blieb hier bewusst erhalten (eingefrorene 0.4.0-Baseline);
+  Phase 5 AP3 hat ihn per `V8` auf dem Migrationspfad vorwärts korrigiert (siehe
+  Änderungslog).
 - **Zwei Betriebsszenarien**, beide mit `backend/verify-schema-baseline.sh` verifiziert:
   1. **Frische, leere DB**: Flyway führt `V1` normal aus → schema-äquivalent zu einer frischen
      `database-init.sql`-DB (verifiziert per `pg_dump --schema-only`-Diff; einzige Abweichung
@@ -229,10 +256,10 @@ Zusammenfassung:
   `baselineOnMigrate`-Baseline-Schritt mit angewendet. Details/Abwägung siehe
   kb/05-migration-plan.md („Entscheidungen“, AP3).
 - **Rollen/Grants**: Die DB-Rollen `elwaclient1`/`elwaportal`/`elwaapi` (siehe „DB-Rollen &
-  Rechte“ oben) werden von der Baseline unverändert mit angelegt/gegrantet – das Backend
-  selbst nutzt sie in AP1 noch nicht (es hat noch keine fachlichen Endpunkte); die
-  Ablösung durch einen einzelnen technischen Backend-User ist laut Roadmap erst Phase 5
-  vorgesehen.
+  Rechte“ oben) wurden von der Baseline (V1) zunächst unverändert mit angelegt/gegrantet – das
+  Backend selbst nutzte sie in AP1 noch nicht (es hatte noch keine fachlichen Endpunkte). Die
+  Ablösung durch einen einzelnen technischen Backend-User (`elwaportal`) ist seit Phase 5 AP2
+  (`V6`) umgesetzt, siehe „DB-Rollen & Rechte“ oben.
 - **`V3__create_terminal_tokens.sql`** (Phase 2 AP4, 2026-07-20): neue Tabelle
   `terminal_tokens` (siehe „Tabellen“ oben) für die Standort-Token-Auth der Terminal-API.
   Rein additiv (neue Tabelle, keine Änderung an Bestandstabellen) – der Alt-Code bekommt
@@ -248,6 +275,16 @@ Zusammenfassung:
   (`NOT NULL`-Spalte mit `DEFAULT 60`, keine Bestandsspalte geändert) – der Alt-Code bekommt
   davon nichts mit. Details siehe kb/03-modules.md „Offline-Robustheit (AP6)“ und
   kb/05-migration-plan.md.
+- **`V6__harden_db_roles.sql`** (Phase 5 AP2, 2026-07-21): entfernt `elwaclient1`/`elwaapi` +
+  Gruppe `elwaclients` (idempotent, cluster-weite Rollen-Problematik abgefangen, siehe „DB-
+  Rollen & Rechte“ oben). `elwaportal` unverändert.
+- **`V7__remove_default_admin_password.sql`** (Phase 5 AP2, 2026-07-21): setzt
+  `users.password` für den Seed-`admin`-Benutzer auf `NULL`, aber NUR wenn er noch den
+  unveränderten Default-SHA1-Hash von „admin“ trägt (Verhalten-bewahren für Bestände, die das
+  Passwort bereits geändert haben). Frische Installationen haben danach kein bekanntes
+  Admin-Passwort mehr – es wird über das neue Admin-CLI gesetzt (`AdminPasswordCliRunner`,
+  Profil `admin-cli`, Kommando siehe kb/04-build-and-run.md). Details/Entscheidung siehe
+  kb/05-migration-plan.md.
 
 ## JPA-Entities (seit Phase 2 AP2, 2026-07-20)
 
@@ -258,11 +295,13 @@ und kb/05-migration-plan.md (Änderungslog, AP2). Für das Datenmodell relevante
   nicht per einfachem `@Enumerated(STRING)` gegen eine Postgres-ENUM-Spalte binden (Fehler
   „column is of type … but expression is of type character varying“) – die Entities nutzen
   dafür Hibernates `@JdbcTypeCode(SqlTypes.NAMED_ENUM)`.
-- **`auth_key`-Trigger bleibt wirksam**: die Spalte ist zwar bewusst nicht in `UserEntity`
+- ~~**`auth_key`-Trigger bleibt wirksam**: die Spalte ist zwar bewusst nicht in `UserEntity`
   gemappt (siehe Rahmenbedingungen zu den App-Relikt-Spalten), der DB-Trigger
   `user_authkey_trigger` (`BEFORE INSERT ON users`) befüllt sie bei jedem per JPA
   ausgeführten INSERT trotzdem automatisch – verifiziert (keine NOT-NULL-/Constraint-
-  Verletzung beim Anlegen eines `UserEntity` über den Backend-Testlauf).
+  Verletzung beim Anlegen eines `UserEntity` über den Backend-Testlauf).~~ *(Trigger +
+  Spalte in Phase 5 AP4 per `V10` entfernt; `UserEntity`-INSERTs laufen seither ohne
+  Trigger-Nebenwirkung.)*
 - **`credit_accounting.date`**: die Spalte hat einen `CURRENT_TIMESTAMP`-DB-Default, den
   der Alt-Code nie explizit überschreibt. `CreditAccountingEntryEntity` setzt den Wert
   stattdessen bewusst per Anwendungs-Uhr – siehe kb/05-migration-plan.md (Änderungslog,

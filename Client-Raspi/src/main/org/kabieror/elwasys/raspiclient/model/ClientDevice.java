@@ -39,7 +39,7 @@ public class ClientDevice {
     private String fhemSwitchName;
     private String fhemPowerName;
     private String deconzUuid;
-    private float autoEndPowerThreashold;
+    private float autoEndPowerThreshold;
     private Duration autoEndWaitTime;
     private List<ClientProgram> programs = Collections.emptyList();
     private Integer lastUserId;
@@ -66,7 +66,7 @@ public class ClientDevice {
         this.fhemSwitchName = dto.fhemSwitchName();
         this.fhemPowerName = dto.fhemPowerName();
         this.deconzUuid = dto.deconzUuid();
-        this.autoEndPowerThreashold = dto.autoEndPowerThreashold();
+        this.autoEndPowerThreshold = dto.autoEndPowerThreshold();
         this.autoEndWaitTime = Duration.ofSeconds(dto.autoEndWaitTimeSeconds());
         this.lastUserId = dto.lastUserId();
         this.lastUserName = dto.lastUserName();
@@ -111,8 +111,8 @@ public class ClientDevice {
         return this.deconzUuid;
     }
 
-    public float getAutoEndPowerThreashold() {
-        return this.autoEndPowerThreashold;
+    public float getAutoEndPowerThreshold() {
+        return this.autoEndPowerThreshold;
     }
 
     public Duration getAutoEndWaitTime() {
