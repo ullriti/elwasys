@@ -3,6 +3,8 @@ package org.kabieror.elwasys.backend.service;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import org.kabieror.elwasys.backend.auth.PasswordResetProperties;
 import org.kabieror.elwasys.backend.domain.UserEntity;
@@ -58,37 +60,79 @@ public class PasswordResetService {
 
     private final PasswordResetProperties properties;
 
+    private final RateLimiter rateLimiter;
+
     private final SecureRandom secureRandom = new SecureRandom();
 
     public PasswordResetService(UserRepository userRepository, PasswordService passwordService,
-            NotificationService notificationService, PasswordResetProperties properties) {
+            NotificationService notificationService, PasswordResetProperties properties, RateLimiter rateLimiter) {
         this.userRepository = userRepository;
         this.passwordService = passwordService;
         this.notificationService = notificationService;
         this.properties = properties;
+        this.rateLimiter = rateLimiter;
     }
 
     /**
-     * 1:1-Portierung von {@code PasswordForgotWindow#execute}: sucht den Benutzer über seine
-     * Email-Adresse, erzeugt bei Erfolg einen neuen Reset-Schlüssel und verschickt eine Email
-     * mit dem Reset-Link. Bewusst dieselbe (aus Sicht der Informationspreisgabe nicht ideale,
-     * aber 1:1 vom Alt-Code übernommene) Rückmeldung: existiert die Email-Adresse nicht, wirft
-     * diese Methode {@link UserNotFoundForEmailException} statt stillschweigend nichts zu tun -
-     * der Aufrufer (Dialog) zeigt dieselbe Fehlermeldung wie das Alt-{@code PasswordForgotWindow}
-     * ("Es konnte kein Benutzer mit der angegebenen Email-Adresse gefunden werden.").
+     * Öffentlicher (anonym erreichbarer) Passwort-Reset – fachlicher Nachfolger von
+     * {@code PasswordForgotWindow#execute}, mit zwei bewussten Härtungen (Pre-Launch AP4,
+     * ADR 0018):
+     *
+     * <ul>
+     *   <li><b>Kontenexistenz nicht preisgeben (#24):</b> ist zu der Adresse KEIN Konto
+     *       vorhanden, endet die Methode <b>still</b> (keine Exception, kein Versand). Die
+     *       frühere {@code UserNotFoundForEmailException} entfällt aus diesem öffentlichen
+     *       Pfad; der Dialog zeigt in JEDEM Fall dieselbe neutrale Meldung. Bewusste
+     *       Abweichung vom Alt-Portal, in ADR 0018 freigegeben.</li>
+     *   <li><b>Ratenlimit (#24):</b> pro Adresse wird frühestens nach
+     *       {@link PasswordResetProperties#getSendCooldown()} erneut versandt (In-Memory-
+     *       {@link RateLimiter}, verhindert Mail-Bombing).</li>
+     * </ul>
+     *
+     * <p><b>Mehrere Konten je Adresse (#47):</b> {@code users.email} ist nicht eindeutig –
+     * teilen sich mehrere (nicht gelöschte) Konten die Adresse, erhält JEDES seinen eigenen
+     * Reset-Token und seine eigene Mail. Das fügt sich in die Neutralisierung: der Anfragende
+     * erfährt weder Anzahl noch Existenz der Konten.
      */
     @Transactional
     public void requestReset(String email) {
-        UserEntity user = this.userRepository.findByEmailIgnoreCaseAndDeletedFalse(email)
-                .orElseThrow(UserNotFoundForEmailException::new);
+        if (email == null || email.isBlank()) {
+            return;
+        }
 
-        String token = generateToken();
-        user.setPasswordResetKey(token);
-        user.setPasswordResetTimeout(LocalDateTime.now().plus(this.properties.getTokenValidity()));
-        this.userRepository.save(user);
+        List<UserEntity> users = this.userRepository.findByEmailIgnoreCaseAndDeletedFalse(email);
+        if (users.isEmpty()) {
+            // Neutralisierung (#24): unbekannte Adresse -> still beenden, kein Versand.
+            return;
+        }
 
-        String resetUrl = this.properties.getPortalBaseUrl() + "/reset-password?key=" + token;
-        this.notificationService.sendPasswordResetEmail(user, resetUrl);
+        // Ratenlimit (#24): frühestens alle N Minuten ein Versand je Adresse. Der Schlüssel
+        // ist die normalisierte Adresse (nicht das einzelne Konto), damit mehrere Konten
+        // derselben Adresse (#47) zusammen als EIN Versandvorgang zählen. Bewusst nur PRÜFEN,
+        // nicht schon hochzählen - das Fenster wird erst nach erfolgreichem Versand markiert
+        // (siehe unten).
+        String rateKey = "password-reset:" + email.toLowerCase(Locale.ROOT);
+        if (this.rateLimiter.currentCount(rateKey, this.properties.getSendCooldown()) > 0) {
+            LOG.info("Password reset for an address requested again within the cooldown window - skipping resend.");
+            return;
+        }
+
+        for (UserEntity user : users) {
+            String token = generateToken();
+            user.setPasswordResetKey(token);
+            user.setPasswordResetTimeout(LocalDateTime.now().plus(this.properties.getTokenValidity()));
+            this.userRepository.save(user);
+
+            String resetUrl = this.properties.getPortalBaseUrl() + "/reset-password?key=" + token;
+            this.notificationService.sendPasswordResetEmail(user, resetUrl);
+        }
+
+        // Erst NACH erfolgreichem Versand das Cooldown-Fenster markieren: schlägt der Mailversand
+        // fehl (SMTP), wird der Zähler nicht gesetzt und ein legitimer Wiederholungsversuch bleibt
+        // sofort möglich, statt für die volle Cooldown-Dauer blockiert zu sein (Code-Review-Befund
+        // AP4). Ein seltenes nebenläufiges Doppel-Anfragen kann so höchstens eine zweite Reset-Mail
+        // auslösen - unkritisch, da mehrere Mails je Adresse ohnehin möglich sind (#47).
+        this.rateLimiter.increment(rateKey, this.properties.getSendCooldown());
     }
 
     /**
@@ -156,20 +200,16 @@ public class PasswordResetService {
      * werden soll, nicht Teil einer URL ist.
      */
     private String generateReadablePassword() {
-        String alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGEHIJKLMNOPQRSTUVWXYZ0123456789-_!?=()#";
+        // Issue #46 (Pre-Launch AP4): das Alphabet enthielt einen Tippfehler ("...ABCDEFGE
+        // HIJKLM...", also ein doppeltes 'E' und ein fehlendes 'G'); korrigiert auf das
+        // vollständige Großbuchstaben-Alphabet. Fachlich unschädlich (die Menge möglicher
+        // Passwörter ändert sich minimal), aber Parität zum Alt-Code
+        // (common.Utilities#generatePassword, das das vollständige Alphabet nutzt).
+        String alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_!?=()#";
         StringBuilder sb = new StringBuilder(12);
         for (int i = 0; i < 12; i++) {
             sb.append(alphabet.charAt(this.secureRandom.nextInt(alphabet.length())));
         }
         return sb.toString();
-    }
-
-    /**
-     * Entspricht dem "Email unbekannt"-Fehlerfall in {@code PasswordForgotWindow#execute}.
-     */
-    public static final class UserNotFoundForEmailException extends RuntimeException {
-        public UserNotFoundForEmailException() {
-            super("Es konnte kein Benutzer mit der angegebenen Email-Adresse gefunden werden.");
-        }
     }
 }

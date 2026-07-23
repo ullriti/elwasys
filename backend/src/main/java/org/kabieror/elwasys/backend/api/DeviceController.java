@@ -103,7 +103,7 @@ public class DeviceController {
      */
     @PostMapping("/{id}/deconz-uuid")
     public DeviceOverviewDto updateDeconzUuid(@AuthenticationPrincipal TerminalPrincipal terminal,
-            @PathVariable Integer id, @RequestBody UpdateDeconzUuidRequest request) {
+            @PathVariable Integer id, @jakarta.validation.Valid @RequestBody UpdateDeconzUuidRequest request) {
         DeviceEntity device = this.scopeGuard.requireDeviceInScope(id, terminal);
         device.setDeconzUuid(request.deconzUuid());
         device = this.deviceRepository.save(device);

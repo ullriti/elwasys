@@ -10,6 +10,7 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.textfield.PasswordField;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.exception.InvalidCurrentPasswordException;
+import org.kabieror.elwasys.backend.exception.PasswordTooShortException;
 import org.kabieror.elwasys.backend.service.PasswordService;
 
 /**
@@ -39,6 +40,8 @@ public class ChangePasswordDialog extends Dialog {
 
         this.tfNewPassword1.setRequired(true);
         this.tfNewPassword1.setMaxLength(50);
+        this.tfNewPassword1.setMinLength(PasswordService.MIN_PASSWORD_LENGTH);
+        this.tfNewPassword1.setHelperText("Mindestens " + PasswordService.MIN_PASSWORD_LENGTH + " Zeichen.");
         this.tfNewPassword1.setWidthFull();
 
         this.tfNewPassword2.setRequired(true);
@@ -102,6 +105,10 @@ public class ChangePasswordDialog extends Dialog {
         } catch (InvalidCurrentPasswordException e) {
             this.tfOldPassword.setInvalid(true);
             this.tfOldPassword.setErrorMessage("Das Passwort ist nicht korrekt.");
+            return;
+        } catch (PasswordTooShortException e) {
+            this.tfNewPassword1.setInvalid(true);
+            this.tfNewPassword1.setErrorMessage(e.getMessage());
             return;
         }
 

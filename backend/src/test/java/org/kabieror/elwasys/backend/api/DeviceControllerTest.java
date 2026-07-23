@@ -262,6 +262,33 @@ class DeviceControllerTest extends AbstractApiIT {
                 status().isOk()).andExpect(jsonPath("$[0].deconzUuid").value("new-uuid-123"));
     }
 
+    /**
+     * Issue #42 (Pre-Launch AP4): der deconz-uuid-Endpunkt validiert den Body - ein leerer
+     * Wert wird mit {@code 400} abgewiesen, statt eine unbrauchbare Kennung zu speichern.
+     */
+    @Test
+    void deconzUuidUpdateWithABlankValueIsRejectedWith400() throws Exception {
+        LocationEntity location = newLocation();
+        IssuedTerminalToken token = newToken(location);
+        DeviceEntity device = newDevice(location);
+
+        this.mockMvc.perform(post("/api/v1/devices/" + device.getId() + "/deconz-uuid").header("Authorization",
+                authHeader(token)).contentType(MediaType.APPLICATION_JSON).content("{\"deconzUuid\":\"\"}")).andExpect(
+                status().isBadRequest());
+    }
+
+    @Test
+    void deconzUuidUpdateWithAnOversizedValueIsRejectedWith400() throws Exception {
+        LocationEntity location = newLocation();
+        IssuedTerminalToken token = newToken(location);
+        DeviceEntity device = newDevice(location);
+
+        String oversized = "x".repeat(65); // @Size(max = 64)
+        this.mockMvc.perform(post("/api/v1/devices/" + device.getId() + "/deconz-uuid").header("Authorization",
+                authHeader(token)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"deconzUuid\":\"" + oversized + "\"}")).andExpect(status().isBadRequest());
+    }
+
     @Test
     void deconzUuidOfAForeignDeviceIsNotAccessible() throws Exception {
         LocationEntity ownLocation = newLocation();

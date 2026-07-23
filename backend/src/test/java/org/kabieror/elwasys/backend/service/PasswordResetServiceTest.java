@@ -16,7 +16,6 @@ import org.kabieror.elwasys.backend.domain.UserGroupEntity;
 import org.kabieror.elwasys.backend.exception.InvalidOrExpiredResetTokenException;
 import org.kabieror.elwasys.backend.repository.UserGroupRepository;
 import org.kabieror.elwasys.backend.repository.UserRepository;
-import org.kabieror.elwasys.backend.service.PasswordResetService.UserNotFoundForEmailException;
 import org.kabieror.elwasys.backend.support.AbstractBackendIT;
 import org.kabieror.elwasys.backend.support.Fixtures;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -86,12 +85,49 @@ class PasswordResetServiceTest extends AbstractBackendIT {
         assertThat(body).contains("/reset-password?key=" + reloaded.getPasswordResetKey());
     }
 
+    /**
+     * Issue #24 / ADR 0018 (Pre-Launch AP4): eine unbekannte Adresse darf die Kontenexistenz
+     * nicht verraten - {@code requestReset} beendet still (keine Exception) und verschickt
+     * keine Mail.
+     */
     @Test
-    void requestResetForAnUnknownEmailThrowsWithoutSendingAnyMail() {
-        assertThatThrownBy(() -> this.passwordResetService.requestReset("nobody-" + Fixtures.unique("x")
-                + "@example.com")).isInstanceOf(UserNotFoundForEmailException.class);
+    void requestResetForAnUnknownEmailDoesNothingSilently() {
+        this.passwordResetService.requestReset("nobody-" + Fixtures.unique("x") + "@example.com");
 
         assertThat(greenMail.getReceivedMessages()).isEmpty();
+    }
+
+    /**
+     * Issue #24 (Pre-Launch AP4): serverseitiges Ratenlimit - eine zweite Anfrage für dieselbe
+     * Adresse innerhalb des Zeitfensters löst keinen zweiten Versand aus.
+     */
+    @Test
+    void requestResetIsRateLimitedWithinTheCooldownWindow() {
+        String email = Fixtures.unique("user") + "@example.com";
+        newUserWithEmail(email);
+
+        this.passwordResetService.requestReset(email);
+        this.passwordResetService.requestReset(email);
+
+        assertThat(greenMail.getReceivedMessages()).as("second request within the cooldown must not resend")
+                .hasSize(1);
+    }
+
+    /**
+     * Issue #47 (Pre-Launch AP4): {@code users.email} ist nicht eindeutig - teilen sich zwei
+     * Konten eine Adresse, wirft {@code requestReset} nicht (früher:
+     * {@code IncorrectResultSizeDataAccessException}) und schreibt BEIDE Konten an.
+     */
+    @Test
+    void requestResetForAnEmailSharedByTwoUsersSendsToBothWithoutFailing() {
+        String email = Fixtures.unique("shared") + "@example.com";
+        newUserWithEmail(email);
+        newUserWithEmail(email);
+
+        this.passwordResetService.requestReset(email);
+
+        assertThat(greenMail.getReceivedMessages()).as("each account sharing the address gets its own reset mail")
+                .hasSize(2);
     }
 
     @Test

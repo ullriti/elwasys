@@ -10,7 +10,6 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.EmailField;
 import org.kabieror.elwasys.backend.service.PasswordResetService;
-import org.kabieror.elwasys.backend.service.PasswordResetService.UserNotFoundForEmailException;
 
 /**
  * Dialog "Passwort zurücksetzen" (Phase 3 AP4, Testfall P19) - fachlicher Nachfolger von
@@ -36,8 +35,8 @@ public class PasswordForgotDialog extends Dialog {
         setWidth("22em");
 
         Paragraph explanation = new Paragraph(
-                "Bitte gib hier deine Email-Adresse ein. Du wirst einen Link erhalten, mit welchem du ein neues "
-                        + "Passwort setzen kannst.");
+                "Bitte gib hier deine Email-Adresse ein. Falls ein Konto zu dieser Adresse existiert, erhältst du "
+                        + "einen Link, mit welchem du ein neues Passwort setzen kannst.");
 
         this.tfEmail.setRequired(true);
         this.tfEmail.setWidthFull();
@@ -68,16 +67,16 @@ public class PasswordForgotDialog extends Dialog {
 
         try {
             this.passwordResetService.requestReset(this.tfEmail.getValue());
-        } catch (UserNotFoundForEmailException e) {
-            showError("Es konnte kein Benutzer mit der angegebenen Email-Adresse gefunden werden.");
-            return;
         } catch (RuntimeException e) {
-            showError("Konnte die Email nicht senden. " + e.getMessage());
+            showError("Konnte die Anfrage nicht verarbeiten. " + e.getMessage());
             return;
         }
 
         close();
-        showSuccess("Die Email wurde versandt. Prüfe dein Postfach!");
+        // Neutrale Meldung (Issue #24, ADR 0018): IMMER dieselbe Rückmeldung, unabhängig
+        // davon, ob zu der Adresse ein Konto existiert - so verrät der Dialog die
+        // Kontenexistenz nicht.
+        showSuccess("Falls ein Konto zu dieser Adresse existiert, wurde eine Email versandt.");
     }
 
     private static void showError(String message) {

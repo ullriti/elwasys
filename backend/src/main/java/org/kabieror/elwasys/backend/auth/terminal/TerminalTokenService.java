@@ -4,6 +4,9 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Optional;
@@ -41,12 +44,24 @@ public class TerminalTokenService {
 
     private static final int TOKEN_RANDOM_BYTES = 32;
 
+    /**
+     * Drosselung von {@code last_used_at} (Issue #45, Pre-Launch AP4): der Zeitstempel wird
+     * höchstens einmal pro diesem Intervall geschrieben. Verhindert, dass jede einzelne
+     * (u.U. sekündliche) Terminal-Anfrage einen DB-Schreibvorgang auf der Token-Zeile
+     * auslöst - der Wert ist rein informativ ("zuletzt gesehen"), eine minutengenaue
+     * Auflösung genügt vollauf.
+     */
+    private static final Duration LAST_USED_THROTTLE = Duration.ofMinutes(5);
+
     private final TerminalTokenRepository terminalTokenRepository;
+
+    private final Clock clock;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public TerminalTokenService(TerminalTokenRepository terminalTokenRepository) {
+    public TerminalTokenService(TerminalTokenRepository terminalTokenRepository, Clock clock) {
         this.terminalTokenRepository = terminalTokenRepository;
+        this.clock = clock;
     }
 
     /**
@@ -67,9 +82,12 @@ public class TerminalTokenService {
 
     /**
      * Prüft ein vom Client vorgelegtes Klartext-Token: liefert das zugehörige, AKTIVE
-     * {@link TerminalTokenEntity} zurück (leer bei unbekanntem oder widerrufenem Token) und
-     * aktualisiert bei Erfolg {@link TerminalTokenEntity#touchLastUsed()} (rein informativ,
-     * best effort).
+     * {@link TerminalTokenEntity} zurück (leer bei unbekanntem oder widerrufenem Token).
+     *
+     * <p>{@code last_used_at} (rein informativ, best effort) wird dabei GEDROSSELT geschrieben
+     * (Issue #45): nur wenn der bisherige Wert fehlt oder älter als {@link #LAST_USED_THROTTLE}
+     * ist, erfolgt ein {@code save}. So löst nicht jede (u.U. sehr häufige) Terminal-Anfrage
+     * einen Schreibvorgang auf der Token-Zeile aus.
      */
     @Transactional
     public Optional<TerminalTokenEntity> authenticate(String rawToken) {
@@ -82,9 +100,17 @@ public class TerminalTokenService {
             return Optional.empty();
         }
         TerminalTokenEntity entity = found.get();
-        entity.touchLastUsed();
-        this.terminalTokenRepository.save(entity);
+        LocalDateTime now = LocalDateTime.now(this.clock);
+        if (shouldUpdateLastUsed(entity, now)) {
+            entity.touchLastUsed(now);
+            this.terminalTokenRepository.save(entity);
+        }
         return Optional.of(entity);
+    }
+
+    private static boolean shouldUpdateLastUsed(TerminalTokenEntity entity, LocalDateTime now) {
+        LocalDateTime lastUsed = entity.getLastUsedAt();
+        return lastUsed == null || lastUsed.isBefore(now.minus(LAST_USED_THROTTLE));
     }
 
     /**

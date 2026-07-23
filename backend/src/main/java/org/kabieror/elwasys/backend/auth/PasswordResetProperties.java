@@ -45,6 +45,14 @@ public class PasswordResetProperties {
      */
     private String portalBaseUrl = "http://localhost:8080";
 
+    /**
+     * Serverseitiges Ratenlimit für den öffentlichen Passwort-Reset (Pre-Launch AP4, Issue
+     * #24, ADR 0018): pro E-Mail-Adresse wird frühestens nach Ablauf dieser Dauer erneut eine
+     * Reset-Mail versandt (verhindert Mail-Bombing). In-Memory genügt bei der Einzelinstanz
+     * (siehe {@link org.kabieror.elwasys.backend.service.RateLimiter}).
+     */
+    private Duration sendCooldown = Duration.ofMinutes(5);
+
     public boolean isEnabled() {
         return this.enabled;
     }
@@ -67,5 +75,13 @@ public class PasswordResetProperties {
 
     public void setPortalBaseUrl(String portalBaseUrl) {
         this.portalBaseUrl = portalBaseUrl;
+    }
+
+    public Duration getSendCooldown() {
+        return this.sendCooldown;
+    }
+
+    public void setSendCooldown(Duration sendCooldown) {
+        this.sendCooldown = sendCooldown;
     }
 }

@@ -81,6 +81,18 @@ Listet zunächst alle Standorte, erzeugt danach ein neues Token für den angegeb
 Klartext-Token erscheint **genau einmal** in der Ausgabe und wird nirgends gespeichert -
 sofort in die Terminal-Konfiguration (`backend.token` in `elwasys.properties`) übernehmen.
 
+> **Rotation & Widerruf (Pre-Launch AP4, #43, ADR 0018).** Ein Standort-Token hat bewusst
+> **keinen** automatischen Ablauf (`expires_at`) und **kein** Verwaltungs-UI – ein geleaktes
+> Token erlaubt standortübergreifende Guthaben-/Karten-Enumeration (akzeptiertes Restrisiko,
+> siehe docs/kb/05-migration-plan.md). Die einzige Gegenmaßnahme ist prozessual: pro Standort
+> dürfen mehrere aktive Tokens gleichzeitig gelten (Rotation ohne Ausfallfenster). Ablauf:
+> neues Token ausstellen (Kommando oben) → Terminal auf das neue Token umstellen → **altes
+> Token verpflichtend widerrufen** (`revoked_at` setzen, über das `token-cli`-Profil
+> `--spring.profiles.active=token-cli --revoke-token-id=<Id>`, siehe
+> docs/kb/04-build-and-run.md). **Bei jedem Gerätetausch/-verlust
+> und bei jedem Verdacht auf einen SD-Karten-/Konfig-Leak das betroffene Token zwingend
+> widerrufen** – ein Token bleibt sonst unbegrenzt gültig.
+
 ### 4. Admin-/Benutzer-Passwort setzen
 
 Seit Phase 5 (V7) hat eine gehärtete Bestands-DB **kein bekanntes Admin-Passwort mehr**

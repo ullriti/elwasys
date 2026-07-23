@@ -4,6 +4,7 @@ import org.kabieror.elwasys.backend.auth.PasswordVerificationService;
 import org.kabieror.elwasys.backend.auth.PasswordVerificationService.VerificationResult;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.exception.InvalidCurrentPasswordException;
+import org.kabieror.elwasys.backend.exception.PasswordTooShortException;
 import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +39,12 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class PasswordService {
+
+    /**
+     * Serverseitige Mindestlänge für ein neu gesetztes Passwort (Issue #44, ADR 0018). Gilt
+     * für alle Passwort-Pfade, siehe {@link #setNewPassword}.
+     */
+    public static final int MIN_PASSWORD_LENGTH = 8;
 
     private final UserRepository userRepository;
 
@@ -76,6 +83,12 @@ public class PasswordService {
      */
     @Transactional
     public void setNewPassword(UserEntity user, String newPassword) {
+        // Mindestlänge zentral erzwingen (Issue #44, ADR 0018): dies ist der gemeinsame
+        // Engpass aller Passwort-Pfade (Ändern-Dialog, öffentlicher Reset-Link, Admin-Reset),
+        // daher genügt EINE Prüfung hier.
+        if (newPassword == null || newPassword.length() < MIN_PASSWORD_LENGTH) {
+            throw new PasswordTooShortException(MIN_PASSWORD_LENGTH);
+        }
         user.setPassword(this.passwordVerificationService.encodeNew(newPassword));
         user.setPasswordResetKey(null);
         user.setPasswordResetTimeout(null);

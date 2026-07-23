@@ -1,10 +1,12 @@
 package org.kabieror.elwasys.backend.auth;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
 import org.kabieror.elwasys.backend.auth.PasswordVerificationService.HashAlgorithm;
 import org.kabieror.elwasys.backend.auth.PasswordVerificationService.VerificationResult;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.repository.UserRepository;
+import org.kabieror.elwasys.backend.service.RateLimiter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationProvider;
@@ -61,11 +63,15 @@ public class ElwasysAuthenticationProvider implements AuthenticationProvider {
 
     private final AuthProperties authProperties;
 
+    private final RateLimiter rateLimiter;
+
     public ElwasysAuthenticationProvider(UserRepository userRepository,
-            PasswordVerificationService passwordVerificationService, AuthProperties authProperties) {
+            PasswordVerificationService passwordVerificationService, AuthProperties authProperties,
+            RateLimiter rateLimiter) {
         this.userRepository = userRepository;
         this.passwordVerificationService = passwordVerificationService;
         this.authProperties = authProperties;
+        this.rateLimiter = rateLimiter;
     }
 
     @Override
@@ -79,16 +85,41 @@ public class ElwasysAuthenticationProvider implements AuthenticationProvider {
             throw new BadCredentialsException(GENERIC_FAILURE_MESSAGE);
         }
 
+        // Brute-Force-Schutz (Issue #25, Pre-Launch AP4): steht ein Benutzername wegen zu
+        // vieler jüngster Fehlversuche unter temporärer Sperre, wird der Versuch abgewiesen -
+        // bewusst VOR der Passwortprüfung, damit die Sperre auch bei (dann) korrektem Passwort
+        // greift. Der Zähler wird nur für tatsächlich existierende Benutzer geführt (siehe
+        // unten), daher trifft die Sperre nie einen unbekannten Namen und wächst der
+        // Zähler-Speicher nicht durch beliebige Fantasie-Namen.
+        //
+        // Bewusst dieselbe generische Exception/Meldung wie ein normaler Fehlversuch (NICHT eine
+        // eigene "zu viele Versuche"-Meldung): weil der Zähler nur für existierende Benutzer
+        // geführt wird, wäre eine unterscheidbare Sperr-Meldung ein Enumeration-Orakel (nur reale
+        // Konten ließen sich "sperren" und damit erkennen) - genau das, was die generische Meldung
+        // und ADR 0018 vermeiden wollen. Die Sperre drosselt also, ohne die Kontenexistenz zu
+        // verraten (Code-Review-Befund AP4). Das verbleibende Timing-Orakel - ein unbekannter Name
+        // kehrt ohne Argon2-Verifikation schneller zurück - ist ein bewusst akzeptiertes
+        // Restrisiko, siehe ADR 0018.
+        String lockKey = loginKey(username);
+        if (this.rateLimiter.currentCount(lockKey, this.authProperties.getLoginLockoutWindow())
+                >= this.authProperties.getMaxFailedLoginAttempts()) {
+            LOG.warn("Login for user '{}' temporarily locked after too many failed attempts.", username);
+            throw new BadCredentialsException(GENERIC_FAILURE_MESSAGE);
+        }
+
         UserEntity user = this.userRepository.findByUsernameIgnoreCaseAndDeletedFalse(username).orElse(null);
         if (user == null || user.getPassword() == null || user.getPassword().isEmpty()) {
             // Generische Meldung mit Absicht: nicht verraten, ob der Benutzername überhaupt
             // existiert (Alt-Code tut das durch die identische Rückgabe "false" für "nicht
-            // gefunden" und "Passwort falsch" implizit ebenfalls).
+            // gefunden" und "Passwort falsch" implizit ebenfalls). Bewusst KEIN Fehlversuch
+            // gezählt: ein unbekannter Name soll keinen (attacker-kontrollierten) Zähler-
+            // Eintrag anlegen können.
             throw new BadCredentialsException(GENERIC_FAILURE_MESSAGE);
         }
 
         VerificationResult result = this.passwordVerificationService.verify(rawPassword, user.getPassword());
         if (!result.matches()) {
+            this.rateLimiter.increment(lockKey, this.authProperties.getLoginLockoutWindow());
             throw new BadCredentialsException(GENERIC_FAILURE_MESSAGE);
         }
 
@@ -98,6 +129,10 @@ public class ElwasysAuthenticationProvider implements AuthenticationProvider {
         if (user.isBlocked()) {
             throw new LockedException("Der Benutzer ist gesperrt.");
         }
+
+        // Erfolgreicher Login: den Fehlversuchs-Zähler dieses Benutzers zurücksetzen, damit
+        // frühere Vertipper ihn nicht dauerhaft belasten.
+        this.rateLimiter.reset(lockKey);
 
         if (result.algorithm() == HashAlgorithm.LEGACY_SHA1 && this.authProperties.isRehashOnLogin()) {
             LOG.info("Migrating password hash of user '{}' (id={}) from SHA1 to Argon2id on login.",
@@ -110,6 +145,18 @@ public class ElwasysAuthenticationProvider implements AuthenticationProvider {
 
         ElwasysUserPrincipal principal = new ElwasysUserPrincipal(user);
         return new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+    }
+
+    /**
+     * Schlüssel des Fehlversuchs-Zählers: der case-insensitiv normalisierte Benutzername
+     * (der Login vergleicht ebenfalls case-insensitiv, "Anna" und "anna" teilen sich also
+     * denselben Zähler). Eine zusätzliche Quell-IP-Komponente ist bewusst NICHT verdrahtet -
+     * der {@link org.springframework.security.authentication.AuthenticationProvider} hat keinen
+     * direkten Request-Zugriff, und für die Einzelinstanz genügt die Sperre pro Benutzername
+     * (siehe ADR 0018 / docs/kb/05-migration-plan.md).
+     */
+    private static String loginKey(String username) {
+        return "login:" + username.toLowerCase(Locale.ROOT);
     }
 
     @Override

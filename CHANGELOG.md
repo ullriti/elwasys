@@ -12,7 +12,24 @@ im [Worklog](docs/worklog/README.md).
 
 ## [Unreleased]
 
+### Security
+- Auth & Security (Pre-Launch-Review AP4, Issues #21/#23/#24/#25/#26/#42/#44/#45/#46/#47/#48,
+  ADR 0018): Kartenlogin sucht Kartennummern nicht mehr als regulären Ausdruck und validiert
+  das Format streng – `cardId=".*"` meldet keinen beliebigen Benutzer mehr an (#21). Der
+  Portal-Login hat jetzt ein Brute-Force-Limit (temporäre Sperre nach zu vielen Fehlversuchen,
+  In-Memory), das „gesperrt" bewusst nicht von „falsches Passwort" unterscheidbar macht (#25).
+- Passwort-Reset verrät nicht mehr, ob eine Adresse existiert (immer neutrale Meldung), und
+  drosselt den Versand gegen Mail-Flooding (#24, ADR 0018); mehrere Konten je Adresse führen
+  nicht mehr zum Absturz (#47). Passwörter erfordern serverseitig mindestens 8 Zeichen (#44).
+- Fernwartungs-Antworten werden gegen den erwarteten Standort geprüft (#26); ein geleaktes
+  Standort-Token bleibt ein bewusst akzeptiertes, dokumentiertes Restrisiko (#43, ADR 0018).
+
 ### Fixed
+- Case-insensitiver Benutzername kollidiert nicht mehr mit dem case-sensitiven DB-Constraint –
+  „Anna"/„anna" werden beim Anlegen abgewiesen statt beide Logins dauerhaft zu sperren (#23).
+  Der deconz-uuid-Endpunkt validiert die Eingabe (400 statt 500, #42); die Terminal-Token-Auth
+  schreibt `last_used_at` nur noch gedrosselt statt bei jedem Request (#45); der
+  Passwortgenerator-Alphabet-Tippfehler ist behoben (#46). (Pre-Launch-Review AP4)
 - Geld-/Abrechnungs-Integrität (Pre-Launch-Review AP3, Issues #20/#22/#29/#36/#41, ADR 0017):
   Geld-/Belegungspfade gegen Nebenläufigkeit abgesichert – pessimistische Nutzer-Zeilensperre
   (Guthabencheck/Auszahlung/Abbuchung), frisch gesperrte Ausführung beim Beenden und

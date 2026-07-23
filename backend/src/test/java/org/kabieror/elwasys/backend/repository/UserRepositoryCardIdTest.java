@@ -52,6 +52,33 @@ class UserRepositoryCardIdTest extends AbstractBackendIT {
                 .isEmpty();
     }
 
+    /**
+     * Regressionstest für die Regex-Injection (Issue #21, Pre-Launch AP4): die frühere Query
+     * bettete {@code :cardId} in ein Postgres-Regex ein, sodass ein Metazeichen-Muster wie
+     * {@code .*} JEDE gespeicherte Kartennummer traf und damit einen beliebigen Benutzer
+     * zurückgab. Die regex-freie Query interpretiert die Eingabe rein literal - {@code .*}
+     * trifft keine reale Kartennummer mehr.
+     */
+    @Test
+    void regexMetacharactersAreTreatedLiterallyAndDoNotMatchAnyCard() {
+        UserGroupEntity group = this.userGroupRepository.save(
+                new UserGroupEntity(Fixtures.unique("group"), DiscountType.NONE, 0));
+        UserEntity user = new UserEntity(Fixtures.unique("Regex User"), Fixtures.unique("regex-user"), group);
+        String realCard = Fixtures.unique("REGEXCARD");
+        user.setCardIds(new String[] {realCard});
+        this.userRepository.save(user);
+
+        // Das Regex-Muster ".*" hätte mit der alten Query den obigen Benutzer angemeldet. Bewusst
+        // NICHT auf global-leeres Ergebnis geprüft: die Testsuite committet (kein Rollback je Test,
+        // siehe AbstractBackendIT) und ein anderer Test kann eine Karte ".*" literal anlegen
+        // (UserServiceTest) - ".*" darf nur die soeben angelegte ECHTE Karte nicht wildcard-treffen.
+        assertThat(this.userRepository.findByCardId(".*").map(UserEntity::getId).orElse(null))
+                .as("a regex metacharacter pattern must not wildcard-match the real card we stored")
+                .isNotEqualTo(user.getId());
+        // Der exakte, literale Treffer funktioniert weiterhin.
+        assertThat(this.userRepository.findByCardId(realCard)).map(UserEntity::getId).contains(user.getId());
+    }
+
     @Test
     void deletedUsersAreNotFoundByCardId() {
         UserGroupEntity group = this.userGroupRepository.save(

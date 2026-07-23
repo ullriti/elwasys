@@ -30,17 +30,34 @@ public interface UserRepository extends JpaRepository<UserEntity, Integer> {
 
     /**
      * Entspricht {@code DataManager#getUserByCardId}: Suche über eine der (durch
-     * Zeilenumbruch getrennten) Kartennummern in {@code card_ids} per Postgres-Regex
-     * {@code (?n)^cardId$} - "(?n)" = zeilenweise (newline-sensitive) Suche, damit
-     * {@code ^}/{@code $} an jedem Zeilenumbruch greifen, nicht nur am Gesamtanfang/-ende
-     * (1:1 wie im Alt-Code, nur mit gebundenem statt String-verkettetem Parameter -
-     * gleiches Matching-Verhalten, ohne SQL-Injection-Risiko).
+     * Zeilenumbruch getrennten) Kartennummern in {@code card_ids}.
+     *
+     * <p><b>Regex-frei (Issue #21, Pre-Launch AP4):</b> die frühere Variante bettete den
+     * Parameter in einen Postgres-Regex ein ({@code card_ids ~ '(?n)^' || :cardId || '$'}).
+     * Weil {@code :cardId} dabei als Regex-Muster interpretiert wurde, meldete ein als
+     * Kartennummer übergebenes Metazeichen-Muster (z.B. {@code .*}) einen beliebigen Benutzer
+     * an – eine Regex-Injection. Diese Query zerlegt {@code card_ids} stattdessen an den
+     * Zeilenumbrüchen in ein Array und prüft exakte Zeilen-Gleichheit
+     * ({@code :cardId = ANY(string_to_array(card_ids, E'\n'))}). Das Matching-Verhalten
+     * bleibt fachlich identisch (exakter Treffer genau EINER Kartennummer, kein
+     * Teilstring-/Präfix-Treffer), interpretiert die Eingabe aber ausschließlich als
+     * Literal.
      */
-    @Query(value = "SELECT * FROM users WHERE deleted = FALSE AND card_ids ~ ('(?n)^' || :cardId || '$') LIMIT 1",
-            nativeQuery = true)
+    @Query(value = "SELECT * FROM users WHERE deleted = FALSE "
+            + "AND :cardId = ANY(string_to_array(card_ids, E'\n')) LIMIT 1", nativeQuery = true)
     Optional<UserEntity> findByCardId(@Param("cardId") String cardId);
 
     Optional<UserEntity> findByUsernameIgnoreCaseAndDeletedFalse(String username);
+
+    /**
+     * Prüft, ob ein nicht gelöschter Benutzer mit diesem Benutzernamen (case-insensitiv)
+     * existiert – Grundlage des Service-seitigen Eindeutigkeits-Guards
+     * ({@code UserService#create}/{@code #update}, Issue #23, Pre-Launch AP4). Verhindert, dass
+     * zwei nur in der Groß-/Kleinschreibung abweichende Benutzernamen entstehen, an denen der
+     * case-insensitive Login später mit {@code IncorrectResultSizeDataAccessException}
+     * scheitern würde.
+     */
+    boolean existsByUsernameIgnoreCaseAndDeletedFalse(String username);
 
     /**
      * Entspricht {@code DataManager#getUserByEmail} (Alt-Portal
@@ -48,8 +65,14 @@ public interface UserRepository extends JpaRepository<UserEntity, Integer> {
      * Email-Adresse, case-insensitiv (E-Mail-Adressen werden allgemein als
      * case-insensitiv im lokalen Teil/Domain-Teil behandelt - der Alt-Code selbst vergleicht
      * SQL-seitig ohnehin ohne explizite Case-Sensitivität, siehe {@code DataManager}).
+     *
+     * <p><b>Liste statt {@code Optional} (Issue #47, Pre-Launch AP4):</b> {@code users.email}
+     * trägt KEINE Eindeutigkeits-Constraint – mehrere Benutzer dürfen dieselbe Adresse haben
+     * (z.B. ein Elternteil für Kinder-Konten). Ein {@code Optional}-Rückgabewert scheiterte in
+     * diesem Fall mit {@code IncorrectResultSizeDataAccessException}. Der Passwort-Reset
+     * ({@code PasswordResetService#requestReset}) verarbeitet daher bewusst ALLE Treffer.
      */
-    Optional<UserEntity> findByEmailIgnoreCaseAndDeletedFalse(String email);
+    List<UserEntity> findByEmailIgnoreCaseAndDeletedFalse(String email);
 
     /**
      * Für die öffentliche Passwort-Reset-Ansicht ({@code ResetPasswordView}, siehe

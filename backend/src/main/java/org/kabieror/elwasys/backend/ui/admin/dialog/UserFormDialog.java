@@ -14,6 +14,7 @@ import com.vaadin.flow.component.textfield.TextField;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
 import org.kabieror.elwasys.backend.exception.DuplicateCardIdException;
+import org.kabieror.elwasys.backend.exception.DuplicateUsernameException;
 import org.kabieror.elwasys.backend.service.PasswordResetService;
 import org.kabieror.elwasys.backend.service.UserGroupService;
 import org.kabieror.elwasys.backend.service.UserService;
@@ -171,6 +172,10 @@ public class UserFormDialog extends Dialog {
                         this.tfUsername.getValue(), emptyToNull(email), cardIds, this.cbBlocked.getValue(),
                         this.cbUserGroup.getValue());
             }
+        } catch (DuplicateUsernameException e) {
+            this.tfUsername.setInvalid(true);
+            this.tfUsername.setErrorMessage(e.getMessage());
+            return;
         } catch (DuplicateCardIdException e) {
             this.tfCardIds.setInvalid(true);
             this.tfCardIds.setErrorMessage(e.getMessage());

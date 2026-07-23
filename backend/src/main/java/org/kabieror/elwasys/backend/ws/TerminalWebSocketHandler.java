@@ -75,7 +75,8 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
             // (handleStatusRequest), der auf ein vom TERMINAL selbst gesendetes
             // STATUS_REQUEST antwortet - beide Nachrichtentypen laufen in dieselbe Richtung
             // (Terminal -> Backend) nie gleichzeitig für dieselbe Anfrage auf.
-            case LOG_RESPONSE, RESTART_RESPONSE, STATUS_RESPONSE -> this.maintenanceService.completeIfPending(incoming);
+            case LOG_RESPONSE, RESTART_RESPONSE, STATUS_RESPONSE ->
+                    this.maintenanceService.completeIfPending(locationId(session), incoming);
             default -> send(session, TerminalWsMessage.inReplyTo(incoming, TerminalWsMessageType.ERROR,
                     Map.of("reason", "not-implemented",
                             "detail", "Message type " + incoming.type() + " is not implemented in Phase 2 (AP4).")));

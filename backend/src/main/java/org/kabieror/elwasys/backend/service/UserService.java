@@ -6,6 +6,7 @@ import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
 import org.kabieror.elwasys.backend.events.UserChangedEvent;
 import org.kabieror.elwasys.backend.exception.DuplicateCardIdException;
+import org.kabieror.elwasys.backend.exception.DuplicateUsernameException;
 import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -54,6 +55,7 @@ public class UserService {
     @Transactional
     public UserEntity create(String name, String username, String email, String[] cardIds, boolean blocked,
             UserGroupEntity group) {
+        assertUsernameIsFree(username, null);
         assertCardIdsAreFree(cardIds, null);
         UserEntity user = new UserEntity(name, username, group);
         user.setEmail(email);
@@ -77,6 +79,7 @@ public class UserService {
     @Transactional
     public UserEntity update(UserEntity user, String name, String username, String email, String[] cardIds,
             boolean blocked, UserGroupEntity group) {
+        assertUsernameIsFree(username, user);
         assertCardIdsAreFree(cardIds, user);
         user.setName(name);
         user.setUsername(username);
@@ -123,6 +126,29 @@ public class UserService {
         user = this.userRepository.save(user);
         this.eventPublisher.publishEvent(new UserChangedEvent(user.getId()));
         return user;
+    }
+
+    /**
+     * Stellt sicher, dass der Benutzername – case-insensitiv – noch keinem anderen, nicht
+     * gelöschten Benutzer gehört (Issue #23, Pre-Launch AP4). Beim Bearbeiten wird der
+     * bearbeitete Benutzer selbst ausgenommen (sein eigener, unveränderter Name kollidiert
+     * nicht mit sich selbst). Vergleich case-insensitiv, weil der Login das ebenfalls tut und
+     * genau diese Uneindeutigkeit ("Anna"/"anna") den späteren Login-Crash auslöst.
+     */
+    private void assertUsernameIsFree(String username, UserEntity userBeingEdited) {
+        if (username == null || username.isBlank()) {
+            return;
+        }
+        // 1:1 wie beim Speichern (UserEntity#setUsername) wird der Name klein geschrieben -
+        // damit vergleicht der Guard denselben Wert, der später persistiert wird.
+        String normalized = username.toLowerCase();
+        if (userBeingEdited != null && normalized.equalsIgnoreCase(userBeingEdited.getUsername())) {
+            // Der eigene, unveraenderte Name des bearbeiteten Benutzers ist kein Konflikt.
+            return;
+        }
+        if (this.userRepository.existsByUsernameIgnoreCaseAndDeletedFalse(normalized)) {
+            throw new DuplicateUsernameException(username);
+        }
     }
 
     private void assertCardIdsAreFree(String[] cardIds, UserEntity userBeingEdited) {
