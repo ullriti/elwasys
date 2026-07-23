@@ -24,7 +24,7 @@ shared PostgreSQL database. See [docs/kb/00-overview.md](docs/kb/00-overview.md)
 - **`Common/`** – a small shared library (enum types, formatting/config helpers) used by
   `Client-Raspi`.
 
-It uses the [ConBee2](https://phoscon.de/de/conbee2) stick to communicate with Zigbee smart plugs (e.g. [LIDL SilverCrest](https://www.lidl.de/p/silvercrest-3er-set-steckdosen-zwischenstecker-zigbee-smart-home-mit-energiezaehler/p800003184)).
+It uses the [ConBee2](https://phoscon.de/de/conbee2) stick to communicate with Zigbee smart plugs (e.g. [LIDL SilverCrest](http://web.archive.org/web/20240921080603/https://www.lidl.de/p/silvercrest-3er-set-steckdosen-zwischenstecker-zigbee-smart-home-mit-energiezaehler/p800003184)).
 The wireless sockets are switched on if a user has enough credit and are switched off again when the washer is done.
 
 ## Features
