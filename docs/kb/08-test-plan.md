@@ -80,6 +80,14 @@ z. B. zusätzlicher Nicht-Admin-Benutzer mit Passwort, Gruppen, Geräte, Program
 | P20 | P4 | Dashboard-Gerätestatus „Frei/Besetzt" aus laufender Execution ✅ | Status entspricht DB-Zustand |
 | P21 | P4 | Log-Viewer / Client-Neustart (Wartungsverbindung) ✅ | **Cross-Component**: Server holt Log, sendet Neustart-Befehl an laufenden Client |
 | P22 | P4 | Client-Status/Uptime über Wartungsverbindung ✅ | **Cross-Component**: `GetStatusRequest` → Interface-Status, Startzeit, laufende Executions |
+| P23 | P2 | Guthaben-Aufladung lehnt nicht-positiven Betrag ab (#22) ✅ | Betrag ≤ 0 abgewiesen · `backend/e2e/tests/admin-crud.spec.ts` (~Z. 122), Pre-Launch AP3 |
+| P24 | P2 | Auszahlung blockiert bei Guthaben-Überschreitung (#50) ✅ | Auszahlung > Guthaben abgewiesen · `admin-crud.spec.ts` (~Z. 147), Pre-Launch AP5 |
+| P25 | P2 | Benutzer löschen (#50) ✅ | Benutzer verschwindet aus Liste · `admin-crud.spec.ts` (~Z. 194), Pre-Launch AP5 |
+| P26 | P3 | Öffentlicher Reset-Link lehnt ungültigen Key ab (#50) ✅ | Reset-Seite rendert, ungültiger Key abgewiesen · `user-portal.spec.ts` (~Z. 57), Pre-Launch AP5 |
+
+> **P23–P26 gibt es nur gegen das neue Vaadin-Flow-Portal** (`backend/e2e/`, Pre-Launch AP3/AP5,
+> siehe 06-ui-tests.md „Pre-Launch AP1–AP6") – die historische Vaadin-7-Suite oben kannte sie
+> nicht. Portal-E2E dadurch von 20 auf **23 `test()`** in `backend/e2e/tests/` gewachsen.
 
 **Hinweise/Feasibility**
 - Vaadin 7 vergibt keine stabilen IDs → Lokatoren über Captions/CSS-Klassen. **Empfehlung
@@ -107,6 +115,27 @@ z. B. zusätzlicher Nicht-Admin-Benutzer mit Passwort, Gruppen, Geräte, Program
 **Umgesetzt & grün** — Client (TestFX/Xvfb, 21 Tests): C1–C16 sowie der
 Cross-Component-Fall P21/P22 (Wartungsverbindung). Portal (Playwright, 18 Tests):
 P1–P20. **Alle geplanten Fälle sind umgesetzt.**
+
+### Nachtrag: Stand nach Pre-Launch AP1–AP6 (2026-07-23)
+
+Seit dem 2026-07-20-Snapshot oben sind die Suiten in den Pre-Launch-Paketen (Epic #66) weiter
+gewachsen; Zahlen hier sind **am Code gezählt** (Inventar), die „grün"-Läufe stammen aus den
+AP-Worklogs (Details und Aufschlüsselung je Paket: 06-ui-tests.md „Pre-Launch AP1–AP6"):
+
+- **Portal-E2E** (Playwright, `backend/e2e/tests/`): von der 20-Fälle-Basis auf **23 `test()`**
+  (login 2 / admin 3 / admin-crud 12 / dashboard 1 / user-portal 5) zzgl. 4 READ-ONLY-Smoke-Fälle
+  in `tests-smoke/`. Neu: **P23** Negativbetrag-Ablehnung (#22, AP3), **P24** Auszahlung >
+  Guthaben blockiert (#50, AP5), **P25** Benutzer löschen (#50, AP5), **P26** öffentlicher
+  Reset-Link lehnt ungültigen Key ab (#50, AP5) – siehe Tabelle oben. AP5-Worklog: 24 Tests grün
+  (24 vs. code-verifizierte 23, weil P15/P18 dort als zwei Fälle gezählt sind).
+- **Client** (TestFX/JUnit, `Client-Raspi/src/test`): **71 `@Test`** in 28 Testklassen (40
+  Testdateien). Neu u. a. die Offline-/Stabilitäts-Unit-Tests aus AP1/AP2
+  (`OfflineGatewayReplayTest`, `OfflineGatewayClockPlausibilityTest`, `ApiClientMalformedResponseTest`,
+  `ExecutionFinisherRetryTest`, `UtilitiesCardMaskingTest`) – infrastrukturfrei, **kein** neuer
+  `run-client-e2e.sh`-E2E-Fall (die E2E-Zahl bleibt 29/29, Phase 4 AP6).
+- **Backend** (JUnit, nicht Frontend – nur als Querverweis): Suite über die Pakete monoton auf
+  **259 grün** (AP6) gewachsen, u. a. Concurrency-, Brute-Force- und Health-Indicator-Tests
+  (#22/#28/#36/#41/#50 …). Details in 06-ui-tests.md.
 
 **Cross-Component (P21/P22) — Umsetzung (Stand bis Phase 4 AP4, Alt-TCP-Protokoll):**
 - Realisiert als Client-Test `ClientMaintenanceConnectionE2ETest` (läuft im bestehenden
@@ -154,6 +183,12 @@ P1–P20. **Alle geplanten Fälle sind umgesetzt.**
 | C15b | P3 | Backend aus, neue Buchung innerhalb `offline.max-duration` | Buchung wird offline gegen den Snapshot akzeptiert, existiert beim Backend erst nach Replay | `ClientOfflineRobustnessE2ETest` |
 | C15c | P3 | Snapshot/Zeitfenster abgelaufen, Backend aus | Neue Buchung abgelehnt, exakt dasselbe Fehlerbild wie C15 (`ERROR`-Zustand) | `ClientOfflineRobustnessE2ETest` |
 | C15d | P3 | Journal-Replay wird wiederholt (Absturz zwischen Backend-Erfolg und Journal-Löschung bzw. zweiter, sich überschneidender Versuch) | Keine Doppelbuchung (Backend dedupliziert über den Idempotenz-Schlüssel) | `ClientOfflineReplayIdempotencyE2ETest` (bewusst kein TestFX, siehe dortiger Klassen-Javadoc) |
+
+> **Querverweis Pre-Launch AP1 (2026-07-22):** Die C15-Offline-Logik ist zusätzlich durch
+> gezielte, netzwerkfreie Unit-Tests abgesichert – Client `OfflineGatewayReplayTest` (5 `@Test`:
+> Paar-Reihenfolge/NPE, Dead-Letter, `clear()`-Race) und `OfflineGatewayClockPlausibilityTest`
+> (3 `@Test`, #54 Uhren-Plausibilität), Backend `ExecutionControllerOfflineReplayTest` (inzwischen
+> 11 `@Test`, #41 Replay nach Löschung). Siehe 06-ui-tests.md „Pre-Launch AP1–AP6".
 - **P14**: Standort wird über das Zahnrad-Menü einer Standort-Kachel auf dem Admin-
   Dashboard („Bearbeiten") geöffnet; Name-Feld vorbelegt, unveränderter Save-Round-Trip
   hält den globalen Zustand (`Default`) für andere Tests stabil.

@@ -295,15 +295,65 @@ docs/kb/03-modules.md „Offline-Robustheit (AP6)“.
   Journal-Löschung bzw. einen sich überschneidenden zweiten Replay-Versuch) und beweist über
   `executions`-/`credit_accounting`-Zeilenzahlen, dass dabei weder eine zweite Ausführung
   noch eine zweite Guthabenbuchung entsteht.
-- **Backend**: `ExecutionControllerOfflineReplayTest` (8 reine Mockito-Unit-Tests, gleiches
-  Muster wie `ExecutionControllerNotificationTest` – kein zusätzlicher Spring-Testkontext),
-  deckt die Zeitstempel-Toleranz (inkl. standortspezifischer `offline.max-duration`) und die
-  Notification-Unterdrückung für zu alte Ereignisse ab.
+- **Backend**: `ExecutionControllerOfflineReplayTest` (bei Phase 4 AP6 als 8 reine
+  Mockito-Unit-Tests angelegt, gleiches Muster wie `ExecutionControllerNotificationTest` – kein
+  zusätzlicher Spring-Testkontext; inzwischen **11 `@Test`**, in Pre-Launch AP3 um die
+  Replay-nach-Löschung-Fälle aus #41 erweitert), deckt die Zeitstempel-Toleranz (inkl.
+  standortspezifischer `offline.max-duration`) und die Notification-Unterdrückung für zu alte
+  Ereignisse ab.
 
 **Testzahlen Phase 4 AP6 (2026-07-21)**: `run-ui-tests.sh` **43/43 → 47/47**,
 `run-client-e2e.sh` **25/25 → 29/29** (2× hintereinander reproduziert), Cross-Component
 unverändert **3/3**, Backend-Suite **199/199 → 207/207**, Portal-E2E-Suite weiterhin
 **20/20** (P14 inkl. neuem Feld „Offline-Maximaldauer“, unveränderter Save-Roundtrip).
+
+## Pre-Launch AP1–AP6 (2026-07-22/23) – neue Testklassen je Arbeitspaket
+
+Die Pre-Launch-Pakete (Epic #66) haben die Suiten weiter ausgebaut. Zahlen unten sind, wo als
+`@Test`/`test()` markiert, **am Code gezählt** (Inventar); die „grün"-Angaben sind die real in
+den AP-Worklogs (`docs/worklog/2026-07-2{2,3}-ap*.md`) dokumentierten Suite-Läufe. Die
+Backend-Suite wuchs über die Pakete monoton: **AP1 209 → AP3 225 → AP4 243 → AP5 250 → AP6 259**
+grün (`backend/run-backend-tests.sh`, lokales PostgreSQL).
+
+- **AP1 (Offline-Replay-Kern, 2026-07-22)** – Client: `OfflineGatewayReplayTest` (5 `@Test`,
+  Paar-Reihenfolge/NPE, Dead-Letter, `clear()`-Race), `OfflineGatewayClockPlausibilityTest`
+  (3 `@Test`, #54 Uhren-Plausibilität); beide netzwerkfrei (Fake-`ApiClient`), kein Sleep/Zufall.
+  Backend: `ExecutionControllerOfflineReplayTest` um #41 (Replay nach Löschung) auf **11 `@Test`**
+  erweitert. Backend-Suite 209 grün.
+- **AP2 (Terminal-Stabilität, 2026-07-22)** – Client: `ApiClientMalformedResponseTest`
+  (1 `@Test`, #53 kaputte 2xx ≠ Kommunikationsfehler, TCP-Stub), `ExecutionFinisherRetryTest`
+  (1 `@Test`, #28 run()+retry() ⇒ genau ein Finish), `UtilitiesCardMaskingTest` (inzwischen
+  4 `@Test`, #56 Kartennummer-Maskierung – im AP2-Worklog noch 3, später um einen Fall
+  erweitert). Alle infrastrukturfrei.
+- **AP3 (Abrechnungs-Integrität, 2026-07-22)** – Backend (neu): `ExecutionControllerConcurrencyTest`
+  (4 `@Test`, Doppelstart/Doppel-Finish/paralleler Same-Key), `CreditServiceConcurrencyTest`
+  (1 `@Test`, parallele Auszahlungen überziehen nie), `ExecutionNotificationTransactionalTest`
+  (2 `@Test`, #36 Commit/Rollback); `ExecutionControllerIdempotencyTest` auf **7 `@Test`**
+  erweitert (#29 Key-Länge, #41 operation-Mismatch). Portal-E2E: P8-Negativbetrag-Fall (#22)
+  ergänzt (`admin-crud.spec.ts` ~Z. 122). Backend-Suite 225 grün.
+- **AP4 (2026-07-22)** – Backend: `ElwasysAuthenticationProviderBruteForceTest` (3 `@Test`,
+  Lockout/Brute-Force-Schutz). Backend-Suite 243 grün.
+- **AP5 (Portal-Performance & CRUD, 2026-07-23)** – Backend: `DemoDataSeederGuardTest` (2 `@Test`);
+  `RouteAccessAnnotationsTest` (existiert seit Phase 3 AP1, 6 `@Test`) auf einen Classpath-Scan
+  **gehärtet** (kein Neuzugang). Portal-E2E von der 20-Fälle-Basis auf **23 `test()`** in
+  `backend/e2e/tests/` gewachsen – die 3 #50-Fälle: Auszahlung blockiert bei Überschreitung
+  (`admin-crud.spec.ts` ~Z. 147), Benutzer löschen (~Z. 194), öffentlicher Reset-Link lehnt
+  ungültigen Key ab (`user-portal.spec.ts` ~Z. 57). Backend-Suite 250 grün; Portal-E2E im
+  AP5-Worklog als 24 Tests grün geführt (24 vs. code-verifizierte 23: P15/P18 sind ein
+  gemeinsames `test()`).
+- **AP6 (Deployment/Betrieb/Cutover, 2026-07-23)** – Backend: `ExpiredExecutionsHealthIndicatorTest`
+  (2 `@Test`), `TerminalConnectivityHealthIndicatorTest` (3 `@Test`),
+  `IdempotencyKeyRetentionSchedulerTest` (2 `@Test`). Backend-Suite **259 grün** (AP6-Worklog).
+
+**Gesamtstand als Inventar (code-verifiziert, Stand 2026-07-23)**: Backend **265 `@Test` in 51
+Klassen** (57 Testdateien); die separat gehaltene `TerminalMaintenanceRealClientE2ETest`
+(5 `@Test`, `backend/pom.xml`-Exclude, eigener Harness) läuft nicht in der Standard-Suite → diese
+umfasst rund **260** und lief zuletzt **259 grün** (AP6). Portal-E2E: **23 `test()`** in
+`backend/e2e/tests/` (login 2 / admin 3 / admin-crud 12 / dashboard 1 / user-portal 5) zzgl. **4**
+READ-ONLY-Smoke-`test()` in `tests-smoke/`. Client: **71 `@Test`** in 28 Testklassen (40
+Testdateien insgesamt, inkl. Simulatoren/Helfer). Für `run-client-e2e.sh` kam kein neuer
+E2E-Fall hinzu – die AP1/AP2-Client-Neuzugänge sind infrastrukturfreie Unit-Tests, daher bleibt
+diese E2E-Zahl (zuletzt 29/29, Phase 4 AP6) ohne dokumentierten neuen Lauf unverändert benannt.
 
 ## Alt-Portal (Vaadin 7) – Playwright E2E ⚠️ STILLGELEGT (Phase 3 AP6) und ENTFERNT (Phase 5 AP1)
 
@@ -433,12 +483,17 @@ erzwingen, der in dieser Umgebung abbricht (siehe docs/kb/05-migration-plan.md, 
 ist das **rein kosmetisch**: nur Farben/Rahmen ändern sich, keine Texte/Struktur/Selektoren –
 P1–P20 blieben nach der Änderung unverändert **19/19 grün** (sauberer `-Pproduction`-Build).
 
-### Test-für-Test-Status (P1–P20, letzter Lauf 2026-07-21)
+### Test-für-Test-Status (P1–P20 zzgl. 3 Pre-Launch-Fälle)
 
-Alle 20 Testfälle grün, mehrfach (≥ 5 vollständige Läufe, 3 davon über den echten
-`webServer`-Pfad inkl. Produktions-Build+Jar-Neustart, 2 gegen einen bereits laufenden
-Server) ohne einen einzigen Fehlschlag oder Retry – `retries: 0` in der Config macht Flakes
-sofort sichtbar statt sie zu verschlucken.
+Die ursprünglichen 20 Testfälle (P1–P20) liefen zum Stand 2026-07-21 grün, mehrfach (≥ 5
+vollständige Läufe, 3 davon über den echten `webServer`-Pfad inkl. Produktions-Build+Jar-Neustart,
+2 gegen einen bereits laufenden Server) ohne einen einzigen Fehlschlag oder Retry – `retries: 0`
+in der Config macht Flakes sofort sichtbar statt sie zu verschlucken. In den Pre-Launch-Paketen
+AP1–AP6 (2026-07-22/23, siehe Abschnitt unten) kamen 4 weitere Playwright-Fälle hinzu, sodass
+`backend/e2e/tests/` jetzt **23 `test()`** enthält (code-verifiziert; das AP5-Worklog nennt 24,
+weil es den zu einem `test()` zusammengefassten Fall P15/P18 als zwei Fälle zählt). Die neuen
+Fälle liefen laut AP3- bzw. AP5-Worklog grün mit (AP3: Portal-E2E grün; AP5: 24 Playwright-Tests
+grün).
 
 | Test | Datei | Status |
 |---|---|---|
@@ -462,6 +517,10 @@ sofort sichtbar statt sie zu verschlucken.
 | P18 Berechtigungen (kein Admin-Zugriff) | user-portal.spec.ts | grün – zusätzlich direkter URL-Zugriffsversuch auf eine Admin-Route geprüft |
 | P19 „Passwort vergessen?"-Dialog | user-portal.spec.ts | grün – zusätzlich Fehlerfall (unbekannte Email, kein SMTP konfiguriert) durchgespielt: Dialog bleibt offen, zeigt Fehlermeldung, **stürzt nicht ab** |
 | P20 Dashboard-Gerätestatus | dashboard.spec.ts | grün |
+| P8 Nicht-positiver Betrag abgelehnt (#22) | admin-crud.spec.ts (~Z. 122) | grün – **Pre-Launch AP3** ergänzt (Guthaben-Aufladung lehnt ≤ 0 ab) |
+| P8 Auszahlung blockiert bei Guthaben-Überschreitung (#50) | admin-crud.spec.ts (~Z. 147) | grün – **Pre-Launch AP5** ergänzt (Auszahlung > Guthaben abgewiesen) |
+| P13 Benutzer löschen (#50) | admin-crud.spec.ts (~Z. 194) | grün – **Pre-Launch AP5** ergänzt (Benutzer verschwindet aus Liste) |
+| P19 Öffentlicher Reset-Link lehnt ungültigen Key ab (#50) | user-portal.spec.ts (~Z. 57) | grün – **Pre-Launch AP5** ergänzt (Reset-Seite rendert, ungültiger Key abgewiesen) |
 
 **Nebenbefund/Bugfix**: beim Aufbau dieser Suite fiel auf, dass der „Passwort vergessen?"-
 Knopf auf der Login-Seite trotz sonst durchgehend eingedeutschter Formulartexte beim

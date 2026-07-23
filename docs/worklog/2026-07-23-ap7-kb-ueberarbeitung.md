@@ -38,6 +38,20 @@ CHANGELOG und ADRs waren dagegen bereits nachgeführt.
   Rotmacher) + diese AP7-Zeile.
 - **`docs/kb/README.md`**: „Aktueller Stand" um AP7 ergänzt und „Nächster Schritt" auf
   Live-Gang/Betrieb umgeschrieben.
+- **Repo-weiter MD-Nachscan** (auf Nachfrage, alle getrackten `.md` gegen AP1–AP6 geprüft;
+  zwei fokussierte Scan-Agenten + Verifikation am Code). Zusätzlich korrigiert:
+  - `00-overview.md`: das Komponenten-Bild zeichnete fälschlich einen **Terminal→DB-Direkt-
+    zugriff** (gestrichelte Linie) – seit Phase 4 AP4/AP5 entfernt (ADR 0004); jetzt hängt nur
+    das Backend an der DB.
+  - Root-`README.md`: obsoleten `Common/`-Komponentenpunkt entfernt (Modul im Phase-5-Nachtrag
+    aufgelöst, Root-Reactor = 2 Module); Hinweis in den Client-Raspi-Punkt gefaltet.
+  - `06-ui-tests.md` / `08-test-plan.md`: veraltete „aktuelle" Test-Stände korrigiert
+    (Portal-E2E 20→23, `ExecutionControllerOfflineReplayTest` 8→11) und je ein **datierter
+    AP1–AP6-Nachtrag** mit den neuen Testklassen ergänzt – code-verifizierte Inventarzahlen,
+    Grün-Läufe aus den AP-Worklogs zitiert (Backend zuletzt 259, AP6), keine erfundenen Zahlen.
+  - Sauber gegengeprüft (kein Fix nötig): `02-data-model.md`, `07-cloud-init.md`, alle
+    `deploy/**`-READMEs + `CUTOVER-RUNBOOK.md` (Health-Pfade bereits in AP6 umgestellt),
+    ADR-Index (0016–0019 gelistet), `CHANGELOG.md` (`[Unreleased]` vollständig).
 
 ## Entscheidungen
 - **Keine neuen ADRs nötig:** Alle im AP7-Checklistenpunkt genannten Entscheidungspunkte sind

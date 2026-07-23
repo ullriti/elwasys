@@ -45,12 +45,12 @@ Domain: `elwasys.de` (siehe `CNAME`). Ursprünglicher Autor: Oliver Kabierschke
 │  - Programm starten     │  ausgeh│  - Benachrichtigungsdienst        │
 │  - Zigbee schalten      │  ender │    (SMTP/Pushover)                │
 │  - Leistung messen      │  WS    │                                  │
-└───────────┬────────────┘        └────────────┬─────────────────────┘
-            │                                   │
-            │        ┌──────────────────┐       │
-            └╌╌╌╌╌╌╌▶│   PostgreSQL DB   │◀──────┘
-                     │  (gemeinsam)      │
-                     └──────────────────┘
+└────────────────────────┘        └────────────┬─────────────────────┘
+                                               │
+                                       ┌───────┴────────┐
+                                       │  PostgreSQL DB │
+                                       │  (nur Backend) │
+                                       └────────────────┘
 
   Client ⇄ Zigbee-Gateway (deCONZ/ConBee2)  bzw.  fhem  → Funksteckdosen
 ```
