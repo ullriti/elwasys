@@ -78,13 +78,21 @@ entfernen, `.env.example`-/`.dockerignore`-Kleinkram, Testzahl-Drift in KB.
 
 ## 3. Vorschlag Arbeitspakete
 
-| AP | Inhalt | Zuständig | Wann |
-|----|--------|-----------|------|
-| **FR-1** | Code-Fixes H1–H3 + Regressionstests T2, dazu FHEM-Log-Bug (`e1`) | terminal | vor Feldeinsatz |
-| **FR-2** | Betrieb: H4 Alerting verdrahten, H5 Restore-Runbook+Probe, H6 verify-Skript V11, H7 `PORTAL_BASE_URL`; dazu Compose/Helm-Image-Bezug | devops | vor Feldeinsatz |
-| **FR-3** | Tests: T1 deCONZ-Reconnect, DYNAMIC-E2E, Determinismus-Stellen | terminal/portal | vor/kurz nach Feldeinsatz |
-| **FR-4** | Qualitäts-Refactors (R3-Mittelfunde, gebündelt je Modul) | backend/terminal/portal | nach Feldeinsatz |
-| **FR-5** | Doku-/Hygiene-Sammelpaket (R4/R7-Mittel- und Niedrigfunde) | – | nach Feldeinsatz |
+| AP | Inhalt | Issues | Zuständig | Wann |
+|----|--------|--------|-----------|------|
+| **FR-1** | Code-Fixes H1–H3 + Regressionstests T2, dazu FHEM-Log-Bug (`e1`) | #80 #81 #82 | terminal | vor Feldeinsatz |
+| **FR-2** | Betrieb: H4 Alerting verdrahten, H5 Restore-Runbook+Probe, H6 verify-Skript V11, H7 `PORTAL_BASE_URL`; dazu Mittelfunde (Image-Bezug, NTP, Zert, Dead-Letter) | #83 #84 #85 #86 #89 | devops | vor Feldeinsatz (#89 zeitnah) |
+| **FR-3** | Tests: T1 deCONZ-Reconnect, DYNAMIC-E2E, Determinismus-Stellen | #87 #88 | terminal/portal | vor/kurz nach Feldeinsatz |
+| **FR-4** | Qualitäts-Refactors (R3-Mittelfunde, gebündelt je Modul) | #90 #91 #92 | backend/terminal/portal | nach Feldeinsatz |
+| **FR-5** | Doku-/Hygiene-Sammelpaket (R1/R4/R7-Funde) | #93 | – | nach Feldeinsatz |
+
+**Erfasst als Epic #94** (2026-07-24). Vor der Issue-Anlage wurden alle Findings
+zweitvalidiert: Hoch-Findings einzeln durch den Hauptagenten am Code (H1 zusätzlich
+gegen die Fix-Historie #17/#68 abgegrenzt – verbleibende Lücke, kein Duplikat; Server-
+Idempotenz des Replay-Endpoints als Fix-Voraussetzung verifiziert), alle Mittelfunde
+durch zwei adversariale Verifikations-Agenten: 37 geprüft, 34 bestätigt, 3 Detail-
+Korrekturen (Worklog-Zählung 25/24; Currency-Beleg-Referenz; Duplikatanzahl eher
+untertrieben), **0 widerlegt**.
 
 Danach: **Generalprobe** nach Spec 0001 (Cutover-Probelauf, Migrations-Dry-Run,
 Backup-Restore-Probe, Ausfall-Drills, Alarm-Probe, Soak-Test, Kalibrierung vor Ort) und
