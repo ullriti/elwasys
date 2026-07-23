@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.kabieror.elwasys.backend.domain.DeviceEntity;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.events.DeviceChangedEvent;
@@ -45,6 +46,8 @@ import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 import org.kabieror.elwasys.backend.ws.TerminalMaintenanceService;
 import org.kabieror.elwasys.backend.ws.TerminalNotConnectedException;
 import org.kabieror.elwasys.backend.ws.TerminalRequestTimeoutException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 /**
  * Admin-Dashboard (Phase 3 AP3, siehe docs/kb/05-migration-plan.md) - fachlicher Nachfolger von
@@ -328,6 +331,7 @@ public class AdminDashboardView extends VerticalLayout {
     }
 
     private Grid<ExecutionEntity> buildHistoryGrid(DeviceStatus deviceStatus) {
+        DeviceEntity device = deviceStatus.device();
         Grid<ExecutionEntity> grid = new Grid<>();
         grid.addClassName("dashboard-device-history");
         grid.setHeight("14em");
@@ -345,7 +349,19 @@ public class AdminDashboardView extends VerticalLayout {
             return null;
         });
 
-        grid.setItems(deviceStatus.executions());
+        // Issue #30 (Pre-Launch AP5): lazy, seitenweise geladene Historie (neueste zuerst) statt
+        // der vollständigen Liste. Der Preis (N+1 über lazy program/user/group) wird damit nur
+        // noch für die tatsächlich sichtbaren Zeilen berechnet, nicht für die gesamte Historie.
+        //
+        // Stabiler Zweit-Sortierschlüssel (id DESC): Bei Lazy-Pagination stellt der Callback pro
+        // Seite eine eigene SQL-Abfrage. Teilten sich zwei Ausführungen denselben start-Zeitstempel
+        // (realistisch bei importierten/Demo-Daten), könnte Postgres sie über die Seiten hinweg in
+        // unterschiedlicher Reihenfolge liefern - eine Zeile erschiene sonst doppelt oder gar nicht.
+        Sort newestFirst = Sort.by(Sort.Direction.DESC, "start").and(Sort.by(Sort.Direction.DESC, "id"));
+        grid.setItems(
+                query -> this.executionService.getExecutions(device,
+                        PageRequest.of(query.getPage(), query.getPageSize(), newestFirst)).stream(),
+                query -> (int) this.executionService.countExecutions(device));
         return grid;
     }
 

@@ -74,8 +74,11 @@ public class DashboardService {
     public DeviceStatus getDeviceStatus(DeviceEntity device) {
         Optional<ExecutionEntity> runningExecution = this.executionService.getRunningExecution(device);
         Duration remainingTime = runningExecution.map(this::remainingTime).orElse(null);
-        List<ExecutionEntity> executions = this.executionService.getExecutions(device);
-        return new DeviceStatus(device, runningExecution, remainingTime, executions);
+        // Issue #30 (Pre-Launch AP5): Die Geräte-Historie wird NICHT mehr hier vollständig
+        // geladen - das Dashboard-Grid lädt sie lazy seitenweise über
+        // ExecutionService#getExecutions(device, pageable). So belastet weder der Seitenaufbau
+        // noch ein Live-Update pro offener Admin-Session die DB mit der kompletten Historie.
+        return new DeviceStatus(device, runningExecution, remainingTime);
     }
 
     /**
@@ -100,10 +103,12 @@ public class DashboardService {
 
     /**
      * Der Status eines einzelnen Geräts. {@code remainingTime} ist {@code null}, wenn keine
-     * Ausführung läuft (leeres {@code runningExecution}).
+     * Ausführung läuft (leeres {@code runningExecution}). Die Ausführungshistorie ist bewusst
+     * NICHT Teil dieses Records (Issue #30): das Dashboard-Grid lädt sie lazy seitenweise über
+     * {@link ExecutionService#getExecutions(DeviceEntity, org.springframework.data.domain.Pageable)}.
      */
     public record DeviceStatus(DeviceEntity device, Optional<ExecutionEntity> runningExecution,
-            Duration remainingTime, List<ExecutionEntity> executions) {
+            Duration remainingTime) {
 
         /**
          * Entspricht der Alt-Dashboard-Anzeige "Frei"/"Besetzt" (Testfall P20).

@@ -25,6 +25,8 @@ import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.kabieror.elwasys.backend.support.AbstractBackendIT;
 import org.kabieror.elwasys.backend.support.Fixtures;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 /**
  * Charakterisierungstests für die Execution-Lebenszyklus-Logik auf Persistenzebene (Start/
@@ -99,20 +101,24 @@ class ExecutionServiceTest extends AbstractBackendIT {
     }
 
     @Test
-    void startExecutionSetsStartTimeOnlyOnce() throws InterruptedException {
+    void startExecutionSetsStartTimeOnlyOnce() {
         UserEntity user = newUser();
         DeviceEntity device = newDevice();
         ProgramEntity program = newProgram(3600);
         ExecutionEntity execution = this.executionService.createExecution(device, program, user);
 
-        execution = this.executionService.startExecution(execution);
-        LocalDateTime firstStart = execution.getStart();
-        assertThat(firstStart).isNotNull();
+        // Issue #40 (Pre-Launch AP5): deterministisch statt Thread.sleep - zwei bewusst
+        // UNTERSCHIEDLICHE Zeitstempel beweisen, dass der zweite start()-Aufruf ignoriert wird
+        // (der Startzeitpunkt bleibt der des ersten Aufrufs), ohne von der Wanduhr-Auflösung
+        // abzuhängen.
+        LocalDateTime firstTimestamp = LocalDateTime.of(2020, 1, 1, 10, 0, 0);
+        LocalDateTime secondTimestamp = LocalDateTime.of(2021, 6, 6, 15, 30, 0);
+        execution = this.executionService.startExecution(execution, firstTimestamp);
+        assertThat(execution.getStart()).isEqualTo(firstTimestamp);
 
-        Thread.sleep(5);
-        execution = this.executionService.startExecution(execution);
+        execution = this.executionService.startExecution(execution, secondTimestamp);
         assertThat(execution.getStart()).as("a second start() call must not move the start time").isEqualTo(
-                firstStart);
+                firstTimestamp);
     }
 
     @Test
@@ -378,5 +384,56 @@ class ExecutionServiceTest extends AbstractBackendIT {
         List<ExecutionEntity> executions = this.executionService.getExecutions(device);
         assertThat(executions).hasSize(1);
         assertThat(executions.get(0).getId()).isEqualTo(started.getId());
+    }
+
+    @Test
+    void getExecutionsPagedReturnsStartedOnesNewestFirstAndCounts() {
+        // Issue #30 (Pre-Launch AP5): das Dashboard lädt die Geräte-Historie lazy seitenweise.
+        DeviceEntity device = newDevice();
+        ProgramEntity program = newProgram(3600);
+        UserEntity user = newUser();
+
+        // Nie gestartete Ausführung darf weder zählen noch in einer Seite erscheinen.
+        this.executionService.createExecution(device, program, user);
+        ExecutionEntity oldest = this.executionService.startExecution(
+                this.executionService.createExecution(device, program, user), LocalDateTime.of(2020, 1, 1, 10, 0));
+        ExecutionEntity middle = this.executionService.startExecution(
+                this.executionService.createExecution(device, program, user), LocalDateTime.of(2020, 1, 2, 10, 0));
+        ExecutionEntity newest = this.executionService.startExecution(
+                this.executionService.createExecution(device, program, user), LocalDateTime.of(2020, 1, 3, 10, 0));
+
+        assertThat(this.executionService.countExecutions(device)).isEqualTo(3);
+
+        Sort newestFirst = Sort.by(Sort.Direction.DESC, "start");
+        assertThat(this.executionService.getExecutions(device, PageRequest.of(0, 2, newestFirst)))
+                .extracting(ExecutionEntity::getId).containsExactly(newest.getId(), middle.getId());
+        assertThat(this.executionService.getExecutions(device, PageRequest.of(1, 2, newestFirst)))
+                .extracting(ExecutionEntity::getId).containsExactly(oldest.getId());
+    }
+
+    @Test
+    void getExecutionsPagedIsStableAcrossPagesWhenStartTimestampsAreIdentical() {
+        // Issue #30 / Review-Finding: Bei identischen start-Zeitstempeln braucht die
+        // Lazy-Pagination einen stabilen Zweit-Sortierschlüssel (id), sonst könnte eine Zeile
+        // über die Seiten hinweg doppelt oder gar nicht erscheinen. Das Dashboard sortiert
+        // deshalb start DESC, id DESC.
+        DeviceEntity device = newDevice();
+        ProgramEntity program = newProgram(3600);
+        UserEntity user = newUser();
+        LocalDateTime sameStart = LocalDateTime.of(2020, 5, 5, 12, 0, 0);
+        ExecutionEntity e1 = this.executionService.startExecution(
+                this.executionService.createExecution(device, program, user), sameStart);
+        ExecutionEntity e2 = this.executionService.startExecution(
+                this.executionService.createExecution(device, program, user), sameStart);
+        ExecutionEntity e3 = this.executionService.startExecution(
+                this.executionService.createExecution(device, program, user), sameStart);
+
+        Sort stable = Sort.by(Sort.Direction.DESC, "start").and(Sort.by(Sort.Direction.DESC, "id"));
+        List<ExecutionEntity> page0 = this.executionService.getExecutions(device, PageRequest.of(0, 2, stable));
+        List<ExecutionEntity> page1 = this.executionService.getExecutions(device, PageRequest.of(1, 2, stable));
+
+        // Deterministisch id DESC; keine Ueberschneidung, keine verlorene Zeile.
+        assertThat(page0).extracting(ExecutionEntity::getId).containsExactly(e3.getId(), e2.getId());
+        assertThat(page1).extracting(ExecutionEntity::getId).containsExactly(e1.getId());
     }
 }

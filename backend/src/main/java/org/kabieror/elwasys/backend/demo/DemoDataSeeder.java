@@ -100,6 +100,28 @@ public class DemoDataSeeder implements ApplicationRunner {
             log.info("[demo] Demo-Daten bereits vorhanden (Marker-Benutzer 'anna') - Seeding uebersprungen.");
             return;
         }
+        // Issue #38 (Pre-Launch AP5): Schutz gegen einen versehentlichen Start des demo-Profils
+        // gegen eine PRODUKTIV-DB (in der 'anna' natuerlich fehlt). Ohne diesen Waechter wuerde
+        // der Seeder echte Daten mit Demo-Bestand vermengen und - schlimmer - das Admin-Passwort
+        // auf "admin" ueberschreiben (siehe unten).
+        //
+        // Signal: Eine frische Installation hat das Admin-Passwort per V7 geleert (NULL); ein
+        // betriebsbereites/produktives System hat es gesetzt (ueber den AdminPasswordCliRunner,
+        // siehe Cutover-Runbook). Ist das Admin-Passwort gesetzt, der Demo-Marker 'anna' aber
+        // nicht vorhanden, laeuft das demo-Profil offensichtlich gegen ein echtes System ->
+        // Abbruch, bevor der Seeder genau dieses Passwort ueberschreibt. (Reine Zeilenzahlen
+        // taugen als Signal nicht: der geteilte Integrationstest-Datenbestand ist nie leer.)
+        boolean adminHasPassword = this.userRepository.findByUsernameIgnoreCaseAndDeletedFalse("admin")
+                .map(UserEntity::getPassword)
+                .filter(pw -> !pw.isBlank())
+                .isPresent();
+        if (adminHasPassword) {
+            throw new IllegalStateException(
+                    "[demo] Abbruch: Das Admin-Passwort ist bereits gesetzt, aber der Demo-Marker 'anna' fehlt. "
+                            + "Das demo-Profil darf nicht gegen eine produktive Datenbank gestartet werden (es "
+                            + "wuerde u.a. das Admin-Passwort auf 'admin' zuruecksetzen). Fuer Demo-Daten eine "
+                            + "frische Datenbank verwenden (siehe backend/run-demo.sh).");
+        }
         log.info("[demo] Lege Demo-Daten an ...");
 
         // --- Benutzergruppen (Default existiert bereits aus der Flyway-Baseline) --------------

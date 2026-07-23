@@ -54,6 +54,22 @@ test('the password-forgot dialog opens from the login page and handles errors wi
   await expectNoDialog(page);
 });
 
+test('the public reset-password link renders and rejects an invalid key (P19, Issue #50)', async ({ page }) => {
+  // Issue #50 (Pre-Launch AP5): die öffentliche ResetPasswordView (/reset-password?key=...) lief
+  // bislang in keinem Test. Ein ungültiger/abgelaufener Schlüssel darf KEIN Passwortformular
+  // zeigen, sondern die neutrale Hinweismeldung (beforeEnter -> isValidToken == false). Die
+  // Ansicht ist ohne Anmeldung erreichbar (@AnonymousAllowed).
+  await page.goto('/reset-password?key=definitely-not-a-valid-key');
+
+  await expect(page).toHaveTitle(/Passwort zurücksetzen/i);
+  await expect(
+    page.getByText('Dieser Link zum Zurücksetzen des Passworts ist ungültig oder abgelaufen.'),
+  ).toBeVisible();
+  // Kein Passwortformular bei ungültigem Schlüssel.
+  await expect(page.getByLabel('Neues Passwort', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Passwort setzen' })).toHaveCount(0);
+});
+
 test('a user can change their own password and log in with it (P16)', async ({ page }) => {
   // Start from a known state: password "testpass1" (>= 8 Zeichen, Issue #44/ADR 0018 - der
   // Ändern-Dialog erzwingt die Mindestlänge). Per docs/kb/05-migration-plan.md, this is the ONE

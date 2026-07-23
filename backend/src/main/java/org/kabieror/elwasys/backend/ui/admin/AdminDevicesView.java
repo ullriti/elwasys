@@ -9,6 +9,8 @@ import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.notification.Notification;
+import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
@@ -17,6 +19,7 @@ import com.vaadin.flow.shared.Registration;
 import jakarta.annotation.security.RolesAllowed;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
 import org.kabieror.elwasys.backend.events.DeviceChangedEvent;
+import org.kabieror.elwasys.backend.exception.EntityInUseException;
 import org.kabieror.elwasys.backend.service.DeviceService;
 import org.kabieror.elwasys.backend.service.LocationService;
 import org.kabieror.elwasys.backend.service.ProgramService;
@@ -137,7 +140,14 @@ public class AdminDevicesView extends VerticalLayout {
     private void confirmDelete(DeviceEntity device) {
         ConfirmDeleteDialog.show("Gerät löschen",
                 "Möchten Sie dieses Gerät wirklich löschen? " + device.getName(), () -> {
-                    this.deviceService.delete(device);
+                    try {
+                        this.deviceService.delete(device);
+                    } catch (EntityInUseException e) {
+                        Notification notification = Notification.show(e.getMessage(), 5000,
+                                Notification.Position.MIDDLE);
+                        notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
+                        return;
+                    }
                     loadData();
                 });
     }

@@ -73,9 +73,20 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   doppelter Adresse (#47). Restrisiken (Timing-Orakel Login/Reset, #48 Sessions, #46 Klartext-
   Admin-Mail, #23 TOCTOU) bewusst akzeptiert und in
   [05-migration-plan.md](05-migration-plan.md) („Restrisiken Auth & Security") festgehalten.
-- **Nächster Schritt:** restliche Pre-Launch-Arbeitspakete – AP5 (Portal-Performance/CRUD/
-  Datenmodell) und AP6 (Deployment/Betrieb/Cutover, inkl. Vaadin-Lizenz-🧩) – je als eigener
-  PR, **AP7 (KB)** zuletzt; danach Betrieb/Nachpflege auf der Zielarchitektur; neue Vorhaben
+  **AP5 (Portal-Performance/CRUD/Tests/Datenmodell, #30/#37/#38/#39/#40/#49/#50) ist behoben** –
+  Dashboard-Historie lazy-paginiert und Guthaben-Spalte gebündelt geladen (`getCredits`, zwei
+  statt 2·N Abfragen, fachlich identisch), V11-Indizes auf `executions`/`credit_accounting`
+  (#30/#37); Demo-Seeder bricht gegen eine produktive DB ab (Signal: Admin-Passwort gesetzt,
+  Marker `anna` fehlt, #38); `UserEntity.password` auf 255 + Soft-Delete-Username auf Spaltenbreite
+  gekürzt/idempotent (#39); Testdeterminismus (#40); Geräte-Lösch-Wächter (`EntityInUseException`
+  bei laufender Ausführung), Lösch-Bestätigung im ExpiredExecutions-Dialog und Doppelklick-Schutz
+  auf Geldknöpfen (#49); RouteAccess per Classpath-Scan + neue E2E (Auszahlung/NotEnoughCredit,
+  Benutzer-Löschung, Reset-Link, #50). **#60 (Terminal-Totalausfall) bewusst nach AP6 verschoben**
+  (betrieblich; Auftraggeber-Info: die Steckdosen bleiben bei Terminal-Ausfall eingeschaltet →
+  unbeaufsichtigter Weiterlauf, für AP6/#32 Alerting/Runbook relevant).
+- **Nächster Schritt:** restliche Pre-Launch-Arbeitspakete – AP6 (Deployment/Betrieb/Cutover,
+  inkl. #60 und Vaadin-Lizenz-🧩) – als eigener PR, **AP7 (KB)** zuletzt; danach Betrieb/Nachpflege
+  auf der Zielarchitektur; neue Vorhaben
   vorab als Spec in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.
   Die Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).
 - **Details:** siehe den jeweils letzten Eintrag im [Worklog](../worklog/README.md).

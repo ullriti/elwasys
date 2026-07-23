@@ -9,28 +9,37 @@ import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
 import org.kabieror.elwasys.backend.events.DeviceChangedEvent;
+import org.kabieror.elwasys.backend.exception.EntityInUseException;
 import org.kabieror.elwasys.backend.repository.DeviceRepository;
+import org.kabieror.elwasys.backend.repository.ExecutionRepository;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Stammdaten-Verwaltung für Geräte (Phase 3 AP2, siehe docs/kb/05-migration-plan.md) - fachlicher
- * Nachfolger von {@code Portal/.../components/DeviceWindow} (Testfälle P10/P11). Löschen ist
- * bewusst OHNE Wächter (1:1 wie {@code Common.Device#delete}/
- * {@code Portal/.../views/DevicesView#deleteDevice}): laufende/vergangene Ausführungen
- * behalten ihren Bezug per {@code ON DELETE SET DEFAULT} (virtuelles Gerät -1, siehe
- * docs/kb/02-data-model.md), Programm-/Benutzergruppen-Zuordnungen fallen per
- * {@code ON DELETE CASCADE} weg.
+ * Nachfolger von {@code Portal/.../components/DeviceWindow} (Testfälle P10/P11). Vergangene
+ * (abgeschlossene) Ausführungen behalten beim Löschen ihren Bezug per
+ * {@code ON DELETE SET DEFAULT} (virtuelles Gerät -1, siehe docs/kb/02-data-model.md),
+ * Programm-/Benutzergruppen-Zuordnungen fallen per {@code ON DELETE CASCADE} weg.
+ *
+ * <p>Issue #49 (Pre-Launch AP5): Anders als bisher wird ein Gerät mit einer noch NICHT
+ * abgeschlossenen (laufenden/abgelaufenen) Ausführung NICHT mehr gelöscht - konsistent mit den
+ * Wächtern für Standort/Programm/Benutzergruppe. Sonst fiele die laufende Ausführung per
+ * {@code ON DELETE SET DEFAULT} auf das Sentinel-Gerät -1 und belastete das Guthaben des
+ * Nutzers weiter, bis ein Admin sie manuell abräumt.
  */
 @Service
 public class DeviceService {
 
     private final DeviceRepository deviceRepository;
+    private final ExecutionRepository executionRepository;
     private final ApplicationEventPublisher eventPublisher;
 
-    public DeviceService(DeviceRepository deviceRepository, ApplicationEventPublisher eventPublisher) {
+    public DeviceService(DeviceRepository deviceRepository, ExecutionRepository executionRepository,
+            ApplicationEventPublisher eventPublisher) {
         this.deviceRepository = deviceRepository;
+        this.executionRepository = executionRepository;
         this.eventPublisher = eventPublisher;
     }
 
@@ -100,9 +109,24 @@ public class DeviceService {
         device.getValidUserGroups().addAll(validUserGroups);
     }
 
+    /**
+     * Löscht ein Gerät.
+     *
+     * <p>Der Wächter greift bei einer GESTARTETEN, nicht abgeschlossenen Ausführung
+     * ({@code start IS NOT NULL AND finished = false}) - dem laufenden/abgelaufenen Fall des
+     * Issue-#49-Scopes. Eine nur angelegte, noch nie gestartete Ausführung ({@code start IS NULL})
+     * ist bewusst nicht abgedeckt (sie entsteht praktisch nur transient im Start-Pfad).
+     *
+     * @throws EntityInUseException wenn das Gerät noch eine nicht abgeschlossene
+     *                              (laufende/abgelaufene) Ausführung trägt (Issue #49)
+     */
     @Transactional
     public void delete(DeviceEntity device) {
         Integer deviceId = device.getId();
+        if (this.executionRepository.existsByDevice_IdAndFinishedFalseAndStartIsNotNull(deviceId)) {
+            throw new EntityInUseException("Das Gerät " + device.getName()
+                    + " hat noch eine laufende Ausführung und kann nicht gelöscht werden.");
+        }
         this.deviceRepository.delete(device);
         this.eventPublisher.publishEvent(new DeviceChangedEvent(deviceId));
     }

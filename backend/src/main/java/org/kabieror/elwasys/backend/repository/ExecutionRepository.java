@@ -35,6 +35,15 @@ public interface ExecutionRepository extends JpaRepository<ExecutionEntity, Inte
     List<ExecutionEntity> findByUser_IdAndFinishedFalse(Integer userId);
 
     /**
+     * Wie {@link #findByUser_IdAndFinishedFalse(Integer)}, aber für MEHRERE Benutzer in EINER
+     * Abfrage (Issue #30 - Pre-Launch AP5): die Guthaben-Spalte der Benutzerliste zieht damit
+     * die Vor-Reservierungen (Maximalpreis nicht abgeschlossener Ausführungen) aller Benutzer
+     * gebündelt, statt pro Zeile eine eigene Abfrage auszulösen (siehe
+     * {@code CreditService#getCredits}).
+     */
+    List<ExecutionEntity> findByUser_IdInAndFinishedFalse(java.util.Collection<Integer> userIds);
+
+    /**
      * Entspricht {@code DataManager#getNotFinishedExecutions}: nicht abgeschlossene,
      * aber tatsächlich gestartete Ausführungen eines Benutzers (mit {@code start}-Filter,
      * anders als {@link #findByUser_IdAndFinishedFalse}).
@@ -52,6 +61,30 @@ public interface ExecutionRepository extends JpaRepository<ExecutionEntity, Inte
      * Entspricht {@code DataManager#getExecutions(Device)}.
      */
     List<ExecutionEntity> findByDevice_IdAndStartIsNotNullOrderByStartDesc(Integer deviceId);
+
+    /**
+     * Ausführungshistorie eines Geräts, neueste zuerst, seitenweise (Issue #30 - Pre-Launch
+     * AP5). Ersetzt beim Admin-Dashboard das Laden der VOLLSTÄNDIGEN Historie
+     * ({@link #findByDevice_IdAndStartIsNotNullOrderByStartDesc}) durch lazy nachgeladene
+     * Seiten - nach Übernahme der Alt-DB (Jahre an {@code executions}) sonst tausende Entities
+     * je Gerät und je Live-Update.
+     */
+    org.springframework.data.domain.Page<ExecutionEntity> findByDevice_IdAndStartIsNotNull(Integer deviceId,
+            org.springframework.data.domain.Pageable pageable);
+
+    /**
+     * Zählt die gestarteten Ausführungen eines Geräts (Issue #30) - für den {@code
+     * CallbackDataProvider} des lazy geladenen Dashboard-Historie-Grids.
+     */
+    long countByDevice_IdAndStartIsNotNull(Integer deviceId);
+
+    /**
+     * Ob ein Gerät noch mindestens eine nicht abgeschlossene, gestartete Ausführung trägt
+     * (Issue #49 - Pre-Launch AP5): Wächter gegen das Löschen eines belegten Geräts, dessen
+     * laufende Ausführung sonst per {@code ON DELETE SET DEFAULT} auf das Sentinel-Gerät -1
+     * fiele und das Guthaben weiter belastete.
+     */
+    boolean existsByDevice_IdAndFinishedFalseAndStartIsNotNull(Integer deviceId);
 
     /**
      * Entspricht {@code DataManager#getLastUser}: die letzte gestartete Ausführung eines

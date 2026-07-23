@@ -124,19 +124,7 @@ class DashboardServiceTest extends AbstractBackendIT {
         assertThat(statusA.devices()).extracting(ds -> ds.device().getId()).containsExactly(deviceA.getId());
         assertThat(statusB.devices()).extracting(ds -> ds.device().getId()).containsExactly(deviceB.getId());
     }
-
-    @Test
-    void deviceStatusIncludesTheExecutionHistoryLikeLegacyDataManagerGetExecutions() {
-        LocationEntity location = this.locationRepository.save(new LocationEntity(Fixtures.unique("loc")));
-        DeviceEntity device = this.deviceRepository.save(new DeviceEntity(Fixtures.unique("dev"), 1, location));
-        ProgramEntity program = newProgram(3600);
-        UserEntity user = newUser();
-        this.executionService.finishExecution(
-                this.executionService.startExecution(this.executionService.createExecution(device, program, user)));
-
-        DeviceStatus status = this.dashboardService.getDeviceStatus(device);
-
-        assertThat(status.executions()).hasSize(1);
-        assertThat(status.executions().get(0).getUser().getId()).isEqualTo(user.getId());
-    }
+    // Hinweis (Issue #30, Pre-Launch AP5): Die Geräte-Historie ist nicht mehr Teil von
+    // DeviceStatus - das Dashboard-Grid lädt sie lazy seitenweise. Die Historie-Abfrage wird
+    // daher in ExecutionServiceTest (getExecutions(device, pageable)/countExecutions) geprüft.
 }

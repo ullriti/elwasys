@@ -2,8 +2,11 @@ package org.kabieror.elwasys.backend.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.vaadin.flow.router.Route;
+import com.vaadin.flow.server.auth.AnonymousAllowed;
 import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.kabieror.elwasys.backend.ui.admin.AdminDashboardView;
 import org.kabieror.elwasys.backend.ui.admin.AdminDevicesView;
@@ -14,6 +17,9 @@ import org.kabieror.elwasys.backend.ui.admin.AdminUsersView;
 import org.kabieror.elwasys.backend.ui.login.LoginView;
 import org.kabieror.elwasys.backend.ui.login.ResetPasswordView;
 import org.kabieror.elwasys.backend.ui.user.UserDashboardView;
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+import org.springframework.core.type.filter.AnnotationTypeFilter;
 
 /**
  * Reiner Reflection-Test (kein Spring-Kontext, keine DB) für den rollenbasierten
@@ -79,5 +85,46 @@ class RouteAccessAnnotationsTest {
         RolesAllowed rolesAllowed = UserDashboardView.class.getAnnotation(RolesAllowed.class);
         assertThat(rolesAllowed).isNotNull();
         assertThat(rolesAllowed.value()).containsExactly("USER");
+    }
+
+    /**
+     * Issue #50 (Pre-Launch AP5): Classpath-Scan statt Hand-Aufzählung. JEDE {@code @Route}-View
+     * außerhalb des {@code login}-Pakets MUSS {@code @RolesAllowed} oder {@code @PermitAll}
+     * tragen und darf NIEMALS {@code @AnonymousAllowed} sein - sonst wäre sie versehentlich für
+     * jeden (oder für niemanden) erreichbar. Eine neue Admin-/Benutzer-View, die die Annotation
+     * vergisst, fällt damit automatisch durch das Raster, ohne dass dieser Test gepflegt werden
+     * muss. Ausgenommen ist nur das {@code login}-Paket (LoginView/ResetPasswordView, die
+     * bewusst anonym erreichbar sind - separat oben geprüft).
+     */
+    @Test
+    void everyRouteOutsideLoginIsRoleProtectedAndNeverAnonymous() {
+        ClassPathScanningCandidateComponentProvider scanner =
+                new ClassPathScanningCandidateComponentProvider(false);
+        scanner.addIncludeFilter(new AnnotationTypeFilter(Route.class));
+        Set<BeanDefinition> routes = scanner.findCandidateComponents("org.kabieror.elwasys.backend.ui");
+
+        assertThat(routes).as("der Scan muss die vorhandenen @Route-Views finden").isNotEmpty();
+
+        for (BeanDefinition definition : routes) {
+            Class<?> viewClass = loadClass(definition.getBeanClassName());
+            if (viewClass.getPackageName().startsWith("org.kabieror.elwasys.backend.ui.login")) {
+                // login-Paket ist bewusst anonym erreichbar (oben einzeln geprüft).
+                continue;
+            }
+            boolean roleProtected = viewClass.isAnnotationPresent(RolesAllowed.class)
+                    || viewClass.isAnnotationPresent(PermitAll.class);
+            assertThat(roleProtected).as("%s muss @RolesAllowed oder @PermitAll tragen",
+                    viewClass.getSimpleName()).isTrue();
+            assertThat(viewClass.isAnnotationPresent(AnonymousAllowed.class)).as(
+                    "%s darf NICHT @AnonymousAllowed sein", viewClass.getSimpleName()).isFalse();
+        }
+    }
+
+    private static Class<?> loadClass(String className) {
+        try {
+            return Class.forName(className);
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException("View-Klasse aus dem Classpath-Scan nicht ladbar: " + className, e);
+        }
     }
 }

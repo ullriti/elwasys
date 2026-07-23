@@ -99,13 +99,32 @@ public class UserService {
      * eine Neuanmeldung frei ist ({@code users.username} trägt eine UNIQUE-Constraint, siehe
      * docs/kb/02-data-model.md). Buchungen/Historie des Benutzers bleiben erhalten (kein
      * physisches Löschen), analog zum Alt-Code.
+     *
+     * <p>Issue #39 (Pre-Launch AP5): Das Präfix {@code #del<id>#} kann die Spaltenbreite
+     * {@code users.username VARCHAR(50)} sprengen (ein ~43 Zeichen langer Username + Präfix &gt;
+     * 50) - der Alt-Code lief dann in einen DB-Fehler. Das Ergebnis wird daher auf 50 Zeichen
+     * gekürzt; das Präfix hat Vorrang (der Rest des Namens wird abgeschnitten), damit der
+     * Original-Username in jedem Fall frei wird. Bereits gelöschte Benutzer werden nicht erneut
+     * präfigiert (idempotent).
      */
     @Transactional
     public void delete(UserEntity user) {
-        user.setUsername("#del" + user.getId() + "#" + user.getUsername());
+        if (user.isDeleted()) {
+            return;
+        }
+        user.setUsername(truncateDeletedUsername("#del" + user.getId() + "#" + user.getUsername()));
         user.setDeleted(true);
         user = this.userRepository.save(user);
         this.eventPublisher.publishEvent(new UserChangedEvent(user.getId()));
+    }
+
+    /**
+     * Kürzt den mit dem Lösch-Präfix versehenen Benutzernamen auf die Spaltenbreite
+     * {@code users.username VARCHAR(50)} (Issue #39). Das Präfix ({@code #del<id>#}) ist kurz
+     * und hat Vorrang - überzählige Zeichen werden am Ende des Original-Namens abgeschnitten.
+     */
+    private static String truncateDeletedUsername(String prefixedUsername) {
+        return prefixedUsername.length() <= 50 ? prefixedUsername : prefixedUsername.substring(0, 50);
     }
 
     /**

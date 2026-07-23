@@ -305,6 +305,12 @@ Zusammenfassung:
   Admin-Passwort mehr – es wird über das neue Admin-CLI gesetzt (`AdminPasswordCliRunner`,
   Profil `admin-cli`, Kommando siehe docs/kb/04-build-and-run.md). Details/Entscheidung siehe
   docs/kb/05-migration-plan.md.
+- **`V11__add_performance_indexes.sql`** (Pre-Launch AP5, 2026-07-23, Issue #37): additive,
+  idempotente (`IF NOT EXISTS`) Indizes auf `executions(user_id)`, `executions(device_id)` und
+  `credit_accounting(user_id)`. Die V1-Baseline legte für diese Fremdschlüssel keine Indizes an;
+  `getCredit` (Summe über `credit_accounting` + Unfinished-Scan über `executions`) läuft bei jedem
+  Kartenlogin/Start, das Dashboard liest `executions.device_id` – nach Übernahme der Alt-DB sonst
+  Full-Table-Scans. Keine Datenänderung.
 
 ## JPA-Entities (seit Phase 2 AP2, 2026-07-20)
 
