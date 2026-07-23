@@ -110,6 +110,13 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
 
 - Nach jedem Arbeitspaket aktualisieren; „Aktueller Stand" oben überschreiben und einen
   Worklog-Eintrag anlegen.
+- **KB-Artikel = Ist-Zustand.** Der Body der Artikel (`00`–`08`) beschreibt nur den aktuellen
+  Stand (Präsens) – **kein** Durchstreichen, **keine** „neu/entfernt/seit Phase X"-Marker im
+  Fließtext, keine reproduzierten Alt-Artefakte. Historie je Artikel als datierter
+  `## Historie`-Pointer-Footer (verlinkt auf Worklog/ADR/Änderungslog, dupliziert nicht).
+  Details: [ADR 0020](../architecture/0020-kb-ist-zustand-und-historie-footer.md). Ausnahmen:
+  [05-migration-plan.md](05-migration-plan.md) (bewusst historisch/Roadmap) und der „Aktueller
+  Stand"-Snapshot oben.
 - Entscheidungen des Auftraggebers/Teams als **ADR** in [`../architecture/`](../architecture/)
   festhalten (inkl. Begründung); der Roadmap-/Entscheidungskontext bleibt in
   [05-migration-plan.md](05-migration-plan.md).
