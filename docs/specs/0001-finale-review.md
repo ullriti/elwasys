@@ -49,23 +49,32 @@ Findings (Schwere, Fundstelle, Empfehlung):
 
 ### Tracks
 
-| Track | Inhalt (Prüffragen) | Empfohlener Subagent | Schwerpunkt-Pfade |
-|-------|--------------------|---------------------|-------------------|
-| **R1** | Zielerreichung (1) | `general-purpose` | `docs/kb/05-migration-plan.md`, ADRs, Code-Stichproben |
-| **R2** | Kritische Bugs/Schwachstellen (2) | `code-reviewer` | Geld-/Replay-/Auth-/Concurrency-Pfade in `backend/` + `Client-Raspi/` |
-| **R3a** | Code-Qualität Backend (3) | `code-reviewer` | `backend/src/main/java` (ohne `ui/`) |
-| **R3b** | Code-Qualität Terminal (3) | `code-reviewer` | `Client-Raspi/` |
-| **R3c** | Code-Qualität Portal (3) | `code-reviewer` | `backend/.../ui/`, `backend/e2e/` |
-| **R4** | Dokumentation (4) | `general-purpose` | `docs/`, Javadoc/Kommentare, `README.md`, `CHANGELOG.md` |
-| **R5** | Betrieb: Deployment/Alerting/Backup/Monitoring (5–8) | `devops` | `deploy/`, Health-Indicators, Runbook, CI |
-| **R6** | Testabdeckung (9) | `general-purpose` | alle Test-Suiten vs. Szenarienliste |
-| **R7** | Repo-Hygiene (10) | `Explore`/`general-purpose` | gesamtes Repo |
+| Track | Inhalt (Prüffragen) | Empfohlener Subagent | Modell | Schwerpunkt-Pfade |
+|-------|--------------------|---------------------|--------|-------------------|
+| **R1** | Zielerreichung (1) | `general-purpose` | Sonnet | `docs/kb/05-migration-plan.md`, ADRs, Code-Stichproben |
+| **R2** | Kritische Bugs/Schwachstellen (2) | `code-reviewer` | **Opus** | Geld-/Replay-/Auth-/Concurrency-Pfade in `backend/` + `Client-Raspi/` |
+| **R3a** | Code-Qualität Backend (3) | `code-reviewer` | **Opus** | `backend/src/main/java` (ohne `ui/`) |
+| **R3b** | Code-Qualität Terminal (3) | `code-reviewer` | **Opus** | `Client-Raspi/` |
+| **R3c** | Code-Qualität Portal (3) | `code-reviewer` | Sonnet | `backend/.../ui/`, `backend/e2e/` |
+| **R4** | Dokumentation (4) | `general-purpose` | Sonnet | `docs/`, Javadoc/Kommentare, `README.md`, `CHANGELOG.md` |
+| **R5** | Betrieb: Deployment/Alerting/Backup/Monitoring (5–8) | `devops` | **Opus** | `deploy/`, Health-Indicators, Runbook, CI |
+| **R6** | Testabdeckung (9) | `general-purpose` | Sonnet | alle Test-Suiten vs. Szenarienliste |
+| **R7** | Repo-Hygiene (10) | `Explore`/`general-purpose` | Sonnet | gesamtes Repo |
 
 ### Modelle & Aufteilung
 
 - **Hauptagent: Fable** (Synthese, Priorisierung, Bewertung der Findings – höchster
-  Hebel, moderater Tokenanteil). **Subagenten: Opus** (die Fan-out-Lesearbeit ist der
-  Token-Treiber; Opus reviewt stark genug und schont das 5x-Fenster).
+  Hebel, moderater Tokenanteil; das Fable-Wochenlimit ist zudem separat und kaum genutzt).
+- **Subagenten gemischt** (Spalte „Modell" oben): **Opus** für die Tiefen-Tracks, bei denen
+  subtiles Schließen zählt – R2 (Geld-/Replay-/Auth-/Concurrency-Bugs, inkl. Blick auf die
+  AP1–AP6-Fixes selbst), R3a/b (Kern-Code-Qualität) und R5 (Betriebs-Urteilsvermögen).
+  **Sonnet** für die Breiten-/Abgleich-Tracks R1, R3c, R4, R6, R7 – dort geht es um
+  systematisches Durcharbeiten, nicht um subtile Fehlersuche.
+- Begründung (Entscheidung Auftraggeber, 2026-07-23): Das wöchentliche „Alle Modelle"-Limit
+  des Max-5x-Tarifs war zum Planungszeitpunkt bereits zu ~60 % verbraucht; die Mischung
+  halbiert grob das Fan-out-Budget gegenüber „alles Opus", ohne die kritischen Tracks zu
+  schwächen. „Alles Sonnet" wäre für eine finale Review zu riskant: Die dann noch
+  übersehene Fehlerklasse (subtile Locking-/Idempotenz-/Race-Fälle) ist die teuerste.
 - **Ein-Session-Variante (bevorzugt):** alle Tracks als Subagenten aus einer Session,
   Synthese am Ende. Reicht das Fenster nicht, Tracks gestaffelt fortsetzen.
 - **Zwei-Session-Variante (Fallback):**
@@ -92,8 +101,9 @@ Jeder Prompt ist eigenständig; die Session liest zuerst `AGENTS.md` und den
 
 ```text
 Finale Review vor dem Feldeinsatz, Teil A (Korrektheit) laut docs/specs/0001-finale-review.md.
-Fahre die Tracks R1, R2 und R6 als parallele Subagenten (Modell: Opus) und schreibe je Track
-einen Report nach docs/reviews/final/ (Format siehe Spec). Keine Fixes, nur Findings.
+Fahre die Tracks R1, R2 und R6 als parallele Subagenten (Modelle laut Spec-Tabelle:
+R2 = Opus, R1/R6 = Sonnet) und schreibe je Track einen Report nach docs/reviews/final/
+(Format siehe Spec). Keine Fixes, nur Findings.
 
 R1 – Zielerreichung: Gleiche docs/kb/05-migration-plan.md (Rahmenbedingungen, Roadmap-Phasen,
 Abschnitt „Entscheidungen (Auftraggeber)", offene Fragen) und die ADRs gegen den Ist-Zustand
@@ -123,8 +133,8 @@ Top-Findings im Chat.
 ```text
 Finale Review vor dem Feldeinsatz, Teil B (Qualität & Betrieb) laut
 docs/specs/0001-finale-review.md. Fahre R3a, R3b, R3c, R4, R5 und R7 als parallele
-Subagenten (Modell: Opus), je Track ein Report nach docs/reviews/final/ (Format siehe Spec).
-Keine Fixes, nur Findings.
+Subagenten (Modelle laut Spec-Tabelle: R3a/R3b/R5 = Opus, R3c/R4/R7 = Sonnet), je Track
+ein Report nach docs/reviews/final/ (Format siehe Spec). Keine Fixes, nur Findings.
 
 R3a/b/c – Code-Qualität (Backend ohne ui/ | Client-Raspi | Portal-ui/ + backend/e2e):
 Duplikate (auch modulübergreifend – die Ex-Common-Klassen liegen in Client-Raspi),
