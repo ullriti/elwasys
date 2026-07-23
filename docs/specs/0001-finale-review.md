@@ -2,7 +2,7 @@
 
 |              |                                            |
 | ------------ | ------------------------------------------ |
-| **Status:**  | Draft                                      |
+| **Status:**  | Accepted (Review durchgeführt; Findings-Behebung offen) |
 | **Datum:**   | 2026-07-23                                 |
 | **Autor:**   | Auftraggeber + Claude                      |
 
@@ -178,11 +178,14 @@ in docs/kb/README.md aktualisieren, committen und pushen. Nichts fixen.
 
 ## Abnahmekriterien
 
-- [ ] Alle neun Track-Reports liegen unter `docs/reviews/final/` und beantworten ihre
-      Prüffrage(n) mit Urteil + Findings im vereinbarten Format.
-- [ ] `SYNTHESE.md` existiert mit priorisierter Liste und Vor-Feldeinsatz-Empfehlung.
-- [ ] Findings der Schwere kritisch/hoch sind als Issues oder Arbeitspakete erfasst.
-- [ ] Worklog-Eintrag + KB-Snapshot aktualisiert.
+- [x] Alle neun Track-Reports liegen unter `docs/reviews/final/` und beantworten ihre
+      Prüffrage(n) mit Urteil + Findings im vereinbarten Format. *(2026-07-24)*
+- [x] `SYNTHESE.md` existiert mit priorisierter Liste und Vor-Feldeinsatz-Empfehlung.
+      *(2026-07-24)*
+- [ ] Findings der Schwere kritisch/hoch sind als Issues oder Arbeitspakete erfasst
+      (Vorschlag FR-1–FR-5 in `SYNTHESE.md`; Issues noch anzulegen).
+- [x] Worklog-Eintrag + KB-Snapshot aktualisiert. *(Teil A 2026-07-23, Teil B/Synthese
+      2026-07-24)*
 
 ## Ergänzend: Generalprobe vor dem Feldeinsatz (außerhalb der Code-Review)
 

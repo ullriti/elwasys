@@ -109,18 +109,21 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   FINISH fachlich abgelehnt) wird per kompensierendem `abort` aufgeräumt + laut alarmiert (#68);
   das Dead-Lettern verliert bei Write-Fehler keinen Eintrag mehr (Write-before-Remove) und
   begrenzt den Busy-Loop über einen neustartfesten Fehlversuchszähler (#69).
-  Aktuell läuft die **finale Review vor dem Feldeinsatz** nach
-  [Spec 0001](../specs/0001-finale-review.md): **Teil A (R1 Zielerreichung, R2 kritische
-  Bugs, R6 Testabdeckung) ist abgeschlossen** – Reports in
-  [`../reviews/final/`](../reviews/final/); wichtigstes Ergebnis: 1 Hoch-Finding
-  (Replay-Paar-Atomizität über Lauf-Grenzen, `OfflineGateway`, siehe R2-Report) und
-  1 Testlücke (deCONZ-Reconnect-Regressionstest, R6).
-- **Nächster Schritt:** Finale Review **Teil B** (R3a–c Code-Qualität, R4 Doku, R5
-  Betrieb, R7 Repo-Hygiene; Prompt in [Spec 0001](../specs/0001-finale-review.md)), dann
-  Synthese + Behebung der priorisierten Findings; danach **Live-Gang / Betrieb** auf der
-  Zielarchitektur (Cutover nach
-  [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md)). Neue Vorhaben vorab als
-  Spec in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.
+  Die **finale Review vor dem Feldeinsatz** nach
+  [Spec 0001](../specs/0001-finale-review.md) ist **vollständig abgeschlossen** (alle
+  neun Tracks + Synthese, Reports in [`../reviews/final/`](../reviews/final/)). Ergebnis
+  ([SYNTHESE.md](../reviews/final/SYNTHESE.md)): Ziele erreicht, Geld-/Auth-Pfade halten
+  stand, Code-/Doku-Qualität gut – aber **7 Hoch-Findings vor dem Feldeinsatz beheben**
+  (H1 Replay-Paar-Atomizität `OfflineGateway`, H2 Listener-Leak `ExecutionManager:326`,
+  H3 Fall-Through `DeviceListEntry`, H4 kein verdrahteter Alarmkanal, H5 kein geprobter
+  Restore-Weg, H6 Cutover-Preflight kennt V11 nicht, H7 `ELWASYS_PORTAL_BASE_URL` fehlt
+  in Compose/Helm) plus Regressionstest-Pflichten (deCONZ-Reconnect, Replay-Abbruch).
+- **Nächster Schritt:** Arbeitspakete **FR-1** (Terminal-Code-Fixes H1–H3 + Tests) und
+  **FR-2** (Betrieb H4–H7) aus der [SYNTHESE.md](../reviews/final/SYNTHESE.md) umsetzen,
+  dann Generalprobe (Spec 0001) und **Live-Gang** (Cutover nach
+  [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md)). FR-4/FR-5
+  (Qualitäts-Refactors, Doku-Hygiene) nach dem Feldeinsatz. Neue Vorhaben vorab als Spec
+  in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.
   Die Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).
 - **Details:** siehe den jeweils letzten Eintrag im [Worklog](../worklog/README.md).
 
