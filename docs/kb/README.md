@@ -39,12 +39,12 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   erreicht – zentrales Spring-Boot-Backend mit eingebautem Vaadin-Flow-Portal, Terminals
   ohne Direkt-DB-Zugriff (nur REST-API + WebSocket + Standort-Token), DB-Rollen gehärtet,
   Alt-Portal und `Common`-Modul entfernt (Root-Reactor = 2 Module: Client-Raspi, backend).
-  Zuletzt wurde das Doku-/Agenten-Setup auf die **agentic-baseline**-Struktur umgestellt
+  Das Doku-/Agenten-Setup wurde auf die **agentic-baseline**-Struktur umgestellt
   (AGENTS.md als Single Source of Truth, `docs/`-Wissenssystem, `.claude/`-Agenten). Zusätzlich
   gibt es seit 2026-07-22 einen **Demo-Modus** (Profil `demo`, `DemoDataSeeder` + `backend/run-demo.sh`)
   mit wiederverwendbarem Beispielbestand fürs visuelle UI-Prüfen (siehe
   [06-ui-tests.md](06-ui-tests.md) „Demo-Daten", [04-build-and-run.md](04-build-and-run.md) „Demo-Modus").
-  Seit 2026-07-22 läuft die **Pre-Launch-Review** (Epic #66): **AP1 (Offline-/Replay-Kern,
+  Seit 2026-07-22 lief die **Pre-Launch-Review** (Epic #66): **AP1 (Offline-/Replay-Kern,
   #16/#17/#18/#54/#59) ist behoben** – privilegierter Replay-Nachbuchungs-Pfad, Client-Replay
   robust (Dead-Letter/Paar-Reihenfolge/NPE/`clear()`-Race), Zeitstempel-Invariante `stop ≥ start`
   + Preis-Deckel, Uhren-Plausibilität (siehe [ADR 0016](../architecture/0016-offline-replay-haertung.md)).
@@ -95,8 +95,13 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   Passwort-Guard + CI-`helm`-Lint (#64). **Vaadin-Lizenz-🧩 (#33): Restrisiko bewusst akzeptiert**
   ([ADR 0019](../architecture/0019-ap6-vaadin-lizenz-restrisiko.md)). Ein späterer Repo-Umzug nach
   `kabieror/elwasys` wird über Issue #75 nachgehalten.
-- **Nächster Schritt:** **AP7 (KB-Überarbeitung)** als letztes Pre-Launch-Arbeitspaket; danach
-  Betrieb/Nachpflege auf der Zielarchitektur; neue Vorhaben vorab als Spec in
+  **AP7 (KB-Überarbeitung) ist behoben** – die Knowledge Base ist nach AP1–AP6 wieder auf dem
+  Ist-Stand (u. a. `03-modules.md` code-verifiziert korrigiert – Replay-/Locking-/Idempotenz-/
+  Dashboard-/Auth-Aussagen –, Health-Pfade + Compose-Härtung in `04-build-and-run.md`,
+  Änderungslog AP4–AP6 in `05-migration-plan.md`); damit ist die Pre-Launch-Review
+  (Epic #66, AP1–AP7) vollständig abgeschlossen.
+- **Nächster Schritt:** **Live-Gang / Betrieb** auf der Zielarchitektur (Cutover nach
+  [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md)); neue Vorhaben vorab als Spec in
   [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.
   Die Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).
 - **Details:** siehe den jeweils letzten Eintrag im [Worklog](../worklog/README.md).

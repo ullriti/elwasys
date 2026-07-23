@@ -83,7 +83,7 @@ Flow)").
   ausgeschlossen, seit Phase 3 AP1) – das eingebettete Admin-Portal-UI, siehe
   docs/kb/03-modules.md „Portal-UI (Vaadin Flow)"
 - **Flyway** (`flyway-core` + `flyway-database-postgresql`) für Migrationen – alleiniger
-  Schema-Verwaltungsweg, aktuell V1–V10 (siehe docs/kb/02-data-model.md)
+  Schema-Verwaltungsweg, aktuell V1–V11 (siehe docs/kb/02-data-model.md)
 - **springdoc-openapi-starter-webmvc-ui `2.8.6`** (seit Phase 2 AP4) – generiert die OpenAPI-
   Beschreibung + Swagger-UI für `/api/v1/**` aus den Controllern (`/v3/api-docs`,
   `/swagger-ui.html`)

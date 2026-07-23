@@ -98,6 +98,9 @@ java -jar backend/target/elwasys-backend.jar
 # Health-Check:
 curl http://localhost:8080/actuator/health
 ```
+(Die Root-`/actuator/health` ist seit Pre-Launch AP6 die Alerting-Sammelsicht für den lokalen
+Überblick; die Orchestrierungs-Probes von Docker/Helm nutzen dagegen die getrennten Gruppen
+`/actuator/health/liveness` + `/actuator/health/readiness` – siehe Dockerfile/Helm/Smoke unten.)
 Gegen eine bestehende (pre-Flyway) 0.4.0-Bestands-DB migriert Flyway beim ersten Start per
 `baselineOnMigrate` (kein DDL, keine Datenänderung); gegen eine leere DB durchläuft Flyway die
 Baseline-Migration `V1__baseline_schema_0_4_0.sql` normal.
@@ -358,7 +361,8 @@ docker build -f backend/Dockerfile -t elwasys-backend:local .
 Multi-Stage: Maven-Build (Root-Reactor, zwei Aufrufe wie oben dokumentiert: erst
 `mvn -N install -DskipTests` [nur die Parent-POM], dann `package -pl backend -DskipTests`) → schlankes
 `eclipse-temurin:21-jre-jammy`-Runtime-Image, non-root User (UID/GID 1000), `HEALTHCHECK`
-gegen `/actuator/health`. `.dockerignore` an der Repo-Wurzel hält den Build-Kontext klein
+gegen `/actuator/health/liveness` (seit Pre-Launch AP6 #32 die Liveness-Probe-Gruppe, nicht
+mehr die Root-Sammelsicht `/actuator/health`). `.dockerignore` an der Repo-Wurzel hält den Build-Kontext klein
 (Client-Raspi-Quellcode wird für den Backend-Build nicht gebraucht, nur dessen `pom.xml`,
 damit Maven den Reactor parsen kann).
 
@@ -387,10 +391,22 @@ Optionales TLS-Overlay mit Caddy (automatisches Let's-Encrypt-Zertifikat):
 docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d --build
 ```
 
+**Härtung/Betriebsvorgaben des Basis-Files (Pre-Launch AP6, verifiziert)**:
+- Der Backend-Port 8080 wird bewusst **nur auf `127.0.0.1` gebunden** (#35) – der Container
+  ist von außen nicht direkt erreichbar, sondern ausschließlich über den (lokal terminierenden
+  bzw. vorgelagerten) Reverse Proxy. Das obige `curl http://localhost:8080/...` funktioniert
+  daher nur vom Host selbst.
+- **`TZ=Europe/Berlin`** ist in **beiden** Containern gesetzt (Backend- und Postgres-Container,
+  #31), damit Log-Zeitstempel und DB-Zeitzone konsistent zur lokalen Betriebszeit sind.
+- **Docker-Log-Limits** je Service (`max-size 10m`, `max-file 3`, #32) begrenzen den
+  Plattenverbrauch der Container-Logs (Rotation über den Docker-`json-file`-Treiber).
+
 ### Backend: Kubernetes / Helm Chart
 
 `deploy/helm/elwasys-backend/` (Deployment, Service, Ingress, ConfigMap/Secret getrennt,
-Liveness/Readiness gegen `/actuator/health`). `values.yaml` ist zugleich die
+Liveness gegen `/actuator/health/liveness`, Readiness gegen `/actuator/health/readiness` –
+seit Pre-Launch AP6 #32 die getrennten Probe-Gruppen statt der Root-Sammelsicht
+`/actuator/health`). `values.yaml` ist zugleich die
 Values-Dokumentation (jeder Abschnitt kommentiert). Der Chart bringt bewusst **kein**
 PostgreSQL-Sub-Chart mit - externe/bereits vorhandene DB ist der dokumentierte Regelfall
 (Begründung in `values.yaml` unter `database:` und in docs/kb/05-migration-plan.md
@@ -450,10 +466,21 @@ BASE_URL=http://<host>:8080 deploy/smoke/post-deploy-smoke.sh
 BASE_URL=https://portal.example.org SMOKE_ADMIN_PASSWORD='<pw>' deploy/smoke/post-deploy-smoke.sh
 ```
 
-Zwei Schritte, beide müssen grün sein (Exit 0 nur dann): (1) `GET $BASE_URL/actuator/health` →
-`"status":"UP"` (mit Retries); (2) die schlanke, strikt READ-ONLY Playwright-Teilmenge
+Zwei Schritte, beide müssen grün sein (Exit 0 nur dann): (1) `GET $BASE_URL/actuator/health/liveness`
+→ `"status":"UP"` (mit Retries; seit Pre-Launch AP6 #32 die Liveness-Probe-Gruppe, nicht mehr die
+Root-Sammelsicht `/actuator/health`); (2) die schlanke, strikt READ-ONLY Playwright-Teilmenge
 (`backend/e2e` `npm run smoke`, Config `playwright.smoke.config.ts`, Tests `tests-smoke/`, siehe
 docs/kb/06-ui-tests.md). Bei FAIL: über die Plattform zurückrollen. Runbook: `deploy/smoke/README.md`.
+
+### Backend: Dauerbetrieb (Backup, Retention, Alerting, Log-Rotation)
+
+Die Vorgaben für den laufenden Produktivbetrieb – über den reinen Rollout hinaus – stehen
+gebündelt in **`deploy/CUTOVER-RUNBOOK.md`, Kap. 7 „Dauerbetrieb"**:
+- **Backup**: regelmäßiger `pg_dump` per Cron.
+- **Retention**: Aufräumen alter Dumps über `find … -mtime +30 -delete`.
+- **Alerting**: Überwachung gegen `/actuator/health/operational` (die dedizierte Sammelsicht
+  für Betriebs-/Alerting-Zwecke, abgegrenzt von den Orchestrierungs-Probes `/liveness`+`/readiness`).
+- **Log-Rotation**: siehe die oben beschriebenen Compose-Log-Limits bzw. die Runbook-Vorgaben.
 
 ## CI (GitHub Actions)
 
