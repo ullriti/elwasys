@@ -336,7 +336,7 @@ Backend-Betrieb übernimmt Flyway die Baseline beim ersten Start automatisch.
 
 - **Client**: One-Line-Setup auf frischem Raspberry Pi:
   ```bash
-  bash <(curl -s https://raw.githubusercontent.com/kabieror/elwasys/master/Client-Raspi/setup.sh)
+  bash <(curl -s https://raw.githubusercontent.com/ullriti/elwasys/master/Client-Raspi/setup.sh)
   ```
   `setup.sh` installiert Java 21 (BellSoft armhf, `bellsoft-java21-runtime-full`, siehe
   „Bekannte Build-Risiken" unten), UFW-Firewall, deCONZ, lädt das neueste Release-JAR,

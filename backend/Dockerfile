@@ -55,6 +55,15 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 # ---------------------------------------------------------------------------
 FROM eclipse-temurin:21-jre-jammy AS runtime
 
+# Zeitzone fest auf Europe/Berlin (Issue #31). Terminal- und Backend-Zeitzone MÜSSEN
+# übereinstimmen: die Terminals melden Ausführungs-Zeitstempel in ihrer lokalen Zone nach, und
+# ClientTimestampPolicy fällt bei einer Zonendifferenz in den Ersetzungszweig (der Backend-
+# Empfangszeitpunkt gewinnt statt des vom Terminal gemeldeten). Außerdem wäre DYNAMIC-Preis
+# (tageszeit-/wochentagabhängig) über die DST-Umstellungsnacht falsch, wenn das Backend in
+# einer anderen Zone (z.B. UTC im Container-Default) rechnet als das Terminal vor Ort.
+# Die JVM liest die TZ-Umgebungsvariable; das jammy-JRE-Basisimage bringt tzdata mit.
+ENV TZ=Europe/Berlin
+
 # curl wird ausschließlich für den HEALTHCHECK unten gebraucht (Actuator-Health per HTTP
 # abfragen) - kleine, gezielte Ergänzung statt eines vollen Basis-Images.
 RUN apt-get update \

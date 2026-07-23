@@ -53,6 +53,21 @@ Hintergrund/Roadmap: [docs/kb/05-migration-plan.md](../kb/05-migration-plan.md),
       buchbar). Laufende Waschvorgänge berücksichtigen (die Terminals führen laufende
       Executions ohnehin lokal zu Ende, Phase 4 AP6 – die Terminal-Charge erst anfassen, wenn
       ihre Geräte frei sind).
+- [ ] **TLS ist Pflicht (Issue #35, Auftraggeber-Vorgabe).** `backend.url` MUSS `https://`
+      sein – **kein** Klartext-HTTP nach außen. Der TLS-Terminierungspunkt (Reverse Proxy per
+      `docker-compose.proxy.yml`/Caddy **oder** ein Kubernetes-TLS-Ingress mit cert-manager)
+      muss **vor** Schritt 3d stehen und ein gültiges Zertifikat liefern. Das Backend selbst
+      bindet im Compose-Stack bewusst nur an `127.0.0.1` (siehe `deploy/compose/docker-compose.yml`)
+      und darf nie direkt im Klartext aus dem Netz veröffentlicht werden. Eine Klartext-Ausnahme
+      gibt es **nicht** als Default; falls überhaupt, nur als ausdrücklich begründete
+      Sonderentscheidung des Auftraggebers.
+- [ ] **Zeitzonen-Gleichheit (Issue #31, Pflichtprüfpunkt).** Terminal- und Backend-Zeitzone
+      MÜSSEN übereinstimmen (Auftraggeber-Vorgabe: `Europe/Berlin`). Andernfalls fällt jede
+      nachgemeldete Terminal-Meldung in den Ersetzungszweig von `ClientTimestampPolicy` und der
+      DYNAMIC-Preis rechnet über die DST-Umstellungsnacht falsch. Das Backend-Image setzt
+      `TZ=Europe/Berlin` (siehe `backend/Dockerfile`; Compose/Helm reichen `TZ` durch); die
+      Terminals laufen in der Systemzeit des Raspi. Der Preflight-Check (unten) prüft das als
+      Gate – die Raspi-Systemzeit vorab kontrollieren (`timedatectl` → `Europe/Berlin`).
 - [ ] **Release-Artefakte bereitstellen und festhalten** (für einen reproduzierbaren
       Rollback):
       - Backend-**Image-Tag** (GHCR, aus dem Release-Workflow) bzw. Backend-Jar-Version.
@@ -83,18 +98,23 @@ Hintergrund/Roadmap: [docs/kb/05-migration-plan.md](../kb/05-migration-plan.md),
 Das neue Backend gegen die **bestehende** Produktiv-DB deployen – **nicht** eine neue DB
 danebenstellen. Flyway erkennt die fehlende `flyway_schema_history`, **baselined die DB auf
 V1** (== eingefrorener 0.4.0-Alt-Weg-Stand, kein erneutes Ausführen von V1) und wendet danach
-**V2..V10** automatisch an (`baseline-on-migrate`, siehe `application.yml`; die
-Baseline-on-migrate-Konfig steht ebenda). Die Bestandsdaten bleiben unverändert.
+**V2 bis zur neuesten Migration** automatisch an (`baseline-on-migrate`, siehe `application.yml`;
+die Baseline-on-migrate-Konfig steht ebenda). Die Bestandsdaten bleiben unverändert.
 
 ```bash
 # docker-compose-Redeploy (Bestands-DB: den mitgelieferten "postgres"-Service NICHT starten,
-# ELWASYS_DB_URL auf die externe Produktiv-DB zeigen – siehe deploy/compose/.env.example):
+# ELWASYS_DB_URL auf die externe Produktiv-DB zeigen – siehe deploy/compose/.env.example).
+# WICHTIG (Issue #64): "--no-deps", sonst zieht das "depends_on: postgres" den mitgelieferten
+# Postgres-Service trotzdem hoch:
 cd deploy/compose
-docker compose up -d backend        # bzw. helm upgrade ... für Kubernetes/Helm
+docker compose up -d --no-deps backend   # bzw. helm upgrade ... für Kubernetes/Helm
 ```
 
-- **Beobachtung/Log:** `curl http://<host>:8080/actuator/health` → `{"status":"UP"}`, Logs auf
-  saubere Flyway-Migration prüfen (BASELINE@1, dann V2..V10 `success`).
+- **Beobachtung/Log:** Health lokal auf dem Host prüfen – das Backend bindet nur an
+  `127.0.0.1` (Issue #35), extern läuft der Zugriff über den TLS-Proxy/-Ingress:
+  `curl http://127.0.0.1:8080/actuator/health` → `{"status":"UP"}` (bzw. über den Proxy
+  `curl https://<host>/actuator/health`). Logs auf saubere Flyway-Migration prüfen
+  (BASELINE@1, dann V2..V\<neueste\> `success`).
 - **Gate:** [`deploy/smoke/post-deploy-smoke.sh`](smoke/post-deploy-smoke.sh) – Health `UP`
   **und** die schlanke, strikt read-only Playwright-Teilmenge müssen grün sein. **Erst bei
   GRÜN gilt der Rollout als erfolgreich.**
@@ -152,16 +172,28 @@ ist der Rückweg am einfachsten, weil die Terminals noch am Alt-Stand hängen).
 Terminals **in Chargen** umstellen (z. B. eine Waschküche / ein Standort nach dem anderen),
 damit ein Problem nie alle Geräte gleichzeitig trifft. **Pro Charge:**
 
+0. **Update-/Watchdog-Skripte aufs Gerät kopieren (Issue #64).** Die Skripte
+   `upgrade-jre.sh`, `update.sh`, `auto-update-watchdog.sh` liegen im Repo unter
+   `deploy/terminal/` – für den Feldbetrieb einmalig aufs Gerät kopieren (z. B. nach
+   `/opt/elwasys/bin/`, ausführbar machen) und den Watchdog-Cron auf diesen Pfad einrichten
+   (siehe `deploy/terminal/README.md`, „Cron-Einrichtung"). Die enge sudoers-Regel für
+   `killall java` legt `setup.sh` an; auf Bestandsgeräten ohne diese Regel einmalig nachtragen
+   (Issue #63, siehe README).
 1. **JRE-21 ZUERST** (Bestandsgeräte tragen nur Java 17; ein Sprachlevel-21-Jar bricht sonst
    mit `UnsupportedClassVersionError` ab):
    ```bash
-   deploy/terminal/upgrade-jre.sh          # idempotent, verifiziert danach java -version >= 21
+   /opt/elwasys/bin/upgrade-jre.sh         # idempotent, verifiziert danach java -version >= 21
    ```
 2. **Dann auf backend.url + Token umstellen:**
-   - **Bestandsgerät:** `elwasys.properties` auf `backend.url`/`backend.token` setzen (Token
-     aus Schritt 3b) und das neue Client-Jar ausrollen:
+   - **`backend.url` MUSS `https://` sein (Issue #35, TLS-Pflicht).** Ein `http://`-Wert ist
+     hier ein Gate-Verstoß – der Terminal-Datenverkehr (Login, Guthaben, Wartungs-WebSocket)
+     darf nicht im Klartext laufen. Der TLS-Terminierungspunkt aus den Voraussetzungen muss
+     stehen.
+   - **Bestandsgerät:** `elwasys.properties` auf `backend.url` (`https://…`)/`backend.token`
+     setzen (Token aus Schritt 3b) und das neue Client-Jar ausrollen (der Download wird per
+     SHA-256 + Zip-Struktur verifiziert, Issue #62):
      ```bash
-     deploy/terminal/update.sh --version <tag>     # bzw. --jar <lokaler Pfad> (Offline)
+     /opt/elwasys/bin/update.sh --version <tag>    # bzw. --jar <lokaler Pfad> (Offline)
      ```
    - **Neu/frisch aufzusetzendes Gerät:** das interaktive `Client-Raspi/setup.sh` (installiert
      Java 21, schreibt Konfig + Supervisor-`run.sh` + X-Autologin).
@@ -246,13 +278,86 @@ Plattform, DB über Backup/Reverse-DDL, Terminals einzeln über das vorherige Ja
 |---|---|---|---|
 | 0 | DB-Backup ziehen **und verifizieren**; Release-Artefakte + Rollback-Ziele festhalten | Backup restaurierbar | — |
 | 0b | `01-preflight-check.sh` gegen Produktiv-DB; Migration an Bestandskopie proben (`verify-cutover-migration.sh`) | Report ok, Asserts PASS | — |
-| 1 | **3a** Backend gegen Bestands-DB deployen (compose/Helm), Flyway migriert | `/actuator/health` UP, Flyway V2..V10 `success` | Plattform-Rollback |
+| 1 | **3a** Backend gegen Bestands-DB deployen (compose/Helm), Flyway migriert | `/actuator/health` UP, Flyway V2..Vn `success` | Plattform-Rollback |
 | 2 | **3a Gate** `post-deploy-smoke.sh` | Health UP **+** Playwright-Smoke grün | Plattform-Rollback / Backup-Restore / `rollback-cutover.sh` |
 | 3 | **3b** Standort-Tokens (`02`) + Admin-Passwort (`03`); optional `04` review | Token(s) erzeugt, Portal-Login möglich | — (rein additiv) |
 | 4 | **3c** Portal/Backend beobachten (definierte Zeit) | Health/Logs stabil, Admin-Login/Sektionen ok | Backend-Rollback (Terminals noch alt) |
 | 5 | **3d** Terminals Charge für Charge: JRE-21 → Konfig/Jar → `SELECT_DEVICE` | Readiness-Marker frisch, bedienbar | `update.sh --jar <prev>` / Watchdog-Rollback |
 | 6 | **3e** `ELWASYS_NOTIFICATIONS_ENABLED=true` (SMTP/Pushover-Konfig steht) | Testvorgang → genau eine Mail/Push | Flag `false`, Redeploy |
 | 7 | **Post-Cutover:** Testwaschgang, Nutzerkomm. „fertig", Monitoring, Neu-Backup | echter Waschgang ok | — |
+
+---
+
+## 7. Dauerbetrieb (nach dem Cutover)
+
+Der Cutover ist ein einmaliger Vorgang – dieser Abschnitt hält fest, was **fortlaufend**
+laufen muss, damit die Installation dauerhaft gesund bleibt (Issues #32, #60).
+
+### 7a. Wiederkehrendes Backup (ZWINGEND)
+
+Kein einmaliges Backup ersetzt einen laufenden Backup-Zyklus. Additiv/nicht-destruktiv heißt
+nicht „unverlierbar" – Platten-, Bedien- oder Hardwarefehler bleiben möglich.
+
+- **Compose-Stack (mitgelieferte oder externe DB):** einen `pg_dump`-Cron auf dem
+  Docker-Host einrichten (kein zusätzlicher Container nötig – das ist im Repo-Stil die
+  einfachste, betriebssichere Variante gegenüber einem Backup-Sidecar):
+  ```cron
+  # /etc/cron.d/elwasys-db-backup  – täglich 03:15, komprimierter Dump in ein Backup-Verzeichnis
+  15 3 * * * root docker exec elwasys-postgres pg_dump -U elwasys elwasys | gzip > /var/backups/elwasys/elwasys-$(date +\%F).sql.gz
+  # Retention: Dumps älter als 30 Tage entfernen
+  30 3 * * * root find /var/backups/elwasys -name 'elwasys-*.sql.gz' -mtime +30 -delete
+  ```
+  (Container-/DB-/User-Namen anpassen; bei externer Bestands-DB `pg_dump` direkt gegen deren
+  Host statt `docker exec` laufen lassen. Das Backup-Verzeichnis selbst außerhalb des Hosts
+  spiegeln/sichern.) **Restore regelmäßig proben** – ein nie getestetes Backup ist keins.
+- **Kubernetes/Helm:** Dieser Chart bringt bewusst **keine** DB mit (siehe `values.yaml`
+  „database:"). Das DB-Backup ist Sache des DB-Betreibers/Operators (z. B. CloudNativePG,
+  ein `CronJob` mit `pg_dump`, oder Snapshots des Storage-Providers) – als betrieblichen
+  Pflichtpunkt einplanen, mit derselben Retention/Restore-Probe wie oben.
+
+### 7b. Alerting über die Health-Indicators
+
+Das Backend liefert (Pre-Launch AP6) zusätzliche Health-Indicators unter `/actuator/health`
+als **Alerting-Grundlage**:
+
+- **WS-Verbindungen je Standort** – erkennt Terminals, deren Wartungs-WebSocket zum Backend
+  abgerissen ist (ein Standort ohne verbundenes Terminal ist ein Frühwarnsignal).
+- **Offene abgelaufene Executions** – Ausführungen, deren `maxDuration` überschritten ist und
+  die noch nicht abgerechnet/geschlossen wurden (siehe 7c).
+
+`/actuator/health` regelmäßig pollen (Monitoring/Uptime-Check) und auf `status != UP` bzw. auf
+die genannten Indicator-Komponenten alarmieren. Ergänzend beobachten: Backend-/DB-Logs und die
+Terminal-Watchdog-Logs (`${ELWA_ROOT}/log/auto-update-watchdog.log`).
+
+### 7c. Terminal-Totalausfall – Betriebsrisiko (Issue #60)
+
+Fällt ein Terminal **länger als `maxDuration`** komplett aus (Strom-/Netz-/Hardwareausfall,
+kein Rückkehren des Clients), hat das **zwei** Konsequenzen:
+
+1. **Steckdose bleibt EINGESCHALTET (physisches Risiko).** Bei einem Terminal-Ausfall wird die
+   Schaltsteckdose der Maschine **nicht** abgeschaltet – die **Maschine läuft unbeaufsichtigt
+   weiter**, bis das Terminal zurückkehrt. Das ist ausdrücklich als Betriebsrisiko zu behandeln
+   (nicht nur als Abrechnungsthema): betroffene Maschinen im Ausfallzeitraum vor Ort
+   kontrollieren, ggf. manuell vom Netz nehmen.
+2. **Execution bleibt unabgerechnet (Guthaben reserviert).** Die laufende Ausführung wird nicht
+   automatisch beendet; das Nutzer-Guthaben bleibt reserviert, bis ein **Admin** sie im Portal
+   in der **ExpiredExecutions-View** manuell abrechnet oder löscht.
+
+**Betriebsmaßnahme:** die ExpiredExecutions-View regelmäßig kontrollieren – bzw. auf den
+Health-Indicator „offene abgelaufene Executions" (7b) alarmieren – und hängende Ausführungen
+zeitnah abrechnen/bereinigen.
+
+### 7d. Log-Rotation
+
+- **Backend-/DB-Container (Compose):** die Container-Logs (json-file) sind in
+  `deploy/compose/docker-compose.yml` je Service auf `max-size: 10m`/`max-file: 3` begrenzt
+  (Issue #32) – ohne diese Kappung wächst json-file unbegrenzt. Bei Kubernetes übernimmt die
+  Log-Rotation der Node/Container-Runtime bzw. die Log-Pipeline des Clusters.
+- **Anwendungs-Logs im Backend:** laufen über die Spring-/Logback-Konfiguration.
+- **Terminal:** die Client-Anwendungslogs rotieren täglich über `logback.xml`; die rohen
+  `run.sh`-`log/stdout`/`log/errout` kappt der Supervisor per Größenschwelle
+  (`ELWA_LOG_MAX_BYTES`, siehe `deploy/terminal/README.md`); die Watchdog-Cron-Logs bei Bedarf
+  per `logrotate` auf dem Gerät begrenzen.
 
 ---
 

@@ -13,10 +13,9 @@
 replicaCount: 1
 
 image:
-  # Platzhalter-Repository - an die tatsächliche Registry anpassen (siehe
-  # .github/workflows/ci.yml/maven-publish.yml für den Image-Build; Veröffentlichung nach GHCR
-  # ist als offener Punkt in docs/kb/05-migration-plan.md dokumentiert).
-  repository: ghcr.io/kabieror/elwasys-backend
+  # GHCR-Image aus dem Release-Workflow (.github/workflows/maven-publish.yml veröffentlicht
+  # nach ghcr.io/<owner>/elwasys-backend). Kanonisches Repo: ullriti/elwasys (Issue #64).
+  repository: ghcr.io/ullriti/elwasys-backend
   # Leer = Chart.appVersion (siehe Chart.yaml). Explizit setzen, um von der Chart-Version
   # unabhängig ein bestimmtes Image zu pinnen (empfohlen für Produktion statt "latest").
   tag: ""
@@ -55,9 +54,16 @@ service:
   port: 8080
 
 # Ingress: TLS-Konzept für Kubernetes (siehe docs/kb/05-migration-plan.md Zielarchitektur Punkt 5
-# "TLS über Reverse Proxy oder Ingress"). Standardmäßig deaktiviert, weil ein Ingress-
-# Controller + (optional) cert-manager als Cluster-Voraussetzung nicht Teil dieses Charts
-# ist. Zwei dokumentierte Wege, TLS zu bekommen:
+# "TLS über Reverse Proxy oder Ingress").
+#
+# TLS ist Pflicht (Issue #35): der Service oben ist ein ClusterIP (nur clusterintern), das
+# Backend spricht selbst kein TLS. Externer Zugriff MUSS über einen TLS-terminierenden Ingress
+# laufen (mit gültigem Zertifikat, empfohlen via cert-manager). Das Backend NIEMALS im Klartext
+# (z.B. per NodePort/LoadBalancer direkt auf 8080) aus dem Netz veröffentlichen.
+#
+# Standardmäßig ist der Ingress hier deaktiviert, weil ein Ingress-Controller + (optional)
+# cert-manager als Cluster-Voraussetzung nicht Teil dieses Charts ist - er MUSS aber für den
+# produktiven externen Zugriff aktiviert werden. Zwei dokumentierte Wege, TLS zu bekommen:
 #   1. cert-manager (empfohlen): die Annotation "cert-manager.io/cluster-issuer" unten setzt
 #      einen bereits im Cluster vorhandenen ClusterIssuer; cert-manager stellt das Zertifikat
 #      automatisch aus und legt es im "tls[].secretName" ab (Secret wird von cert-manager
@@ -187,6 +193,14 @@ pushover:
 # daher unverändert AUS.
 auth:
   rehashOnLogin: false
+
+# Zeitzone des Backends (Issue #31). MUSS mit der Terminal-Zeitzone übereinstimmen: bei einer
+# Zonendifferenz fällt jede nachgemeldete Terminal-Meldung in den Ersetzungszweig von
+# ClientTimestampPolicy und der DYNAMIC-Preis rechnet über die DST-Umstellungsnacht falsch.
+# Wird als TZ-Umgebungsvariable in den Container gereicht (siehe templates/configmap.yaml); das
+# Image bringt denselben Default bereits mit (backend/Dockerfile). Nur ändern, wenn die
+# Terminals nachweislich in einer anderen Zone stehen - dann beide gemeinsam umstellen.
+timezone: Europe/Berlin
 
 # Zusätzliche Umgebungsvariablen (Liste im Kubernetes-"env"-Format), für Fälle, die die
 # obigen strukturierten Values nicht abdecken.

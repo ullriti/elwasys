@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Kanonisches GitHub-Repo (Issue #64) - an EINER Stelle definiert, per Env überschreibbar.
+ELWA_GITHUB_REPO="${ELWA_GITHUB_REPO:-ullriti/elwasys}"
+
 # Check if the script is run as root
 if [[ $EUID -eq 0 ]]
 then
@@ -56,7 +59,42 @@ function collect_data() {
 
 function install_dependencies() {
     sudo apt-get update
-    sudo apt-get install -y curl
+    # unzip zusätzlich zu curl: für die Jar-Integritätsprüfung (Issue #62, siehe
+    # verify_jar_integrity) wird "unzip -t" gebraucht.
+    sudo apt-get install -y curl unzip
+}
+
+# Prüft die Integrität eines gerade heruntergeladenen Client-Jars (Issue #62): erst die
+# mitgelieferte SHA-256-Prüfsumme (sha256sum -c), dann die Zip/Jar-Struktur (fängt
+# abgeschnittene Downloads oder als Jar getarnte HTML-Fehlerseiten ab). $1 = zu prüfende Datei,
+# $2 = zugehörige .sha256-Datei (beide als Namen im aktuellen Verzeichnis). Rückgabe != 0 bei
+# jedem Fehlschlag - der Aufrufer verwirft dann den Download, bevor irgendetwas verlinkt wird.
+function verify_jar_integrity() {
+    local file="$1" sumfile="$2"
+    if [ ! -s "$sumfile" ]; then
+        echo "FEHLER: Prüfsummendatei '$sumfile' fehlt oder ist leer - verwerfe Download." >&2
+        return 1
+    fi
+    # Die .sha256 trägt den Asset-Namen (raspi-client-<version>.jar). Die noch nicht final
+    # benannte Datei heißt aber anders (z.B. *.part), daher den Dateinamen in der Prüfzeile auf
+    # $file umschreiben und mit "sha256sum -c -" gegen genau diese Datei prüfen.
+    if ! sed "s|  .*|  ${file}|" "$sumfile" | sha256sum -c - ; then
+        echo "FEHLER: SHA-256-Prüfsumme stimmt nicht - verwerfe Download." >&2
+        return 1
+    fi
+    if command -v unzip >/dev/null 2>&1; then
+        if ! unzip -t -qq "$file" >/dev/null 2>&1; then
+            echo "FEHLER: '$file' ist kein gültiges Jar/Zip-Archiv - verwerfe Download." >&2
+            return 1
+        fi
+    else
+        # Fallback ohne unzip: Zip/Jar beginnt mit der Magic "PK".
+        if [ "$(head -c2 "$file" 2>/dev/null)" != "PK" ]; then
+            echo "FEHLER: '$file' beginnt nicht mit der Zip/Jar-Magic 'PK' - verwerfe Download." >&2
+            return 1
+        fi
+    fi
+    return 0
 }
 
 # # # # # # #
@@ -66,6 +104,26 @@ function install_java() {
     echo "deb [arch=armhf] https://apt.bell-sw.com/ stable main" | sudo tee /etc/apt/sources.list.d/bellsoft.list
     sudo apt-get update
     sudo apt-get install -y bellsoft-java21-runtime-full
+}
+
+
+# # # # # # #
+function configure_sudoers() {
+    log_state Configuring passwordless killall for the terminal user...
+    # Enge sudoers-Regel (Issue #63): der Terminal-User darf GENAU "killall java" ohne Passwort
+    # ausführen - das ist der Neustart-Trigger des Supervisor-Vertrags (run.sh-Cleanup,
+    # update.sh, auto-update-watchdog.sh; siehe deploy/terminal/README.md). Bewusst KEIN
+    # pauschales NOPASSWD:ALL, nur dieser eine Befehl.
+    local sudoers_file="/etc/sudoers.d/elwasys"
+    # killall liegt auf Debian/Raspberry Pi OS unter /usr/bin/killall (Paket psmisc).
+    echo "$USER ALL=(root) NOPASSWD: /usr/bin/killall java" | sudo tee "$sudoers_file" > /dev/null
+    sudo chmod 0440 "$sudoers_file"
+    # Syntaxprüfung - eine ungültige sudoers-Datei kann sudo global unbrauchbar machen.
+    if ! sudo visudo -cf "$sudoers_file" > /dev/null; then
+        echo "FEHLER: sudoers-Regel $sudoers_file ist ungültig - entferne sie wieder." >&2
+        sudo rm -f "$sudoers_file"
+        exit 1
+    fi
 }
 
 
@@ -132,15 +190,30 @@ function install_elwasys() {
 
     cd $ELWA_ROOT
 
-    version=$(curl --silent -qI https://github.com/kabieror/elwasys/releases/latest | awk -F '/' '/^location/ {print  substr($NF, 1, length($NF)-1)}')
-    jar_file=./raspi-client-${version}.jar
+    version=$(curl --silent -qI https://github.com/${ELWA_GITHUB_REPO}/releases/latest | awk -F '/' '/^location/ {print  substr($NF, 1, length($NF)-1)}')
+    jar_file=raspi-client-${version}.jar
+    base_url=https://github.com/${ELWA_GITHUB_REPO}/releases/download/${version}
     if [ ! -f "$jar_file" ]
     then
-        wget https://github.com/kabieror/elwasys/releases/download/$version/raspi-client-${version}.jar -O $jar_file
-        ln -s ./raspi-client-${version}.jar ./raspi-client.latest.jar
+        # Robust laden (Issue #63): erst nach .part, Integrität prüfen (Issue #62), dann atomar
+        # an den Zielnamen ruecken - so gilt nie ein halbes/kaputtes Jar als fertig.
+        wget "${base_url}/raspi-client-${version}.jar" -O "${jar_file}.part"
+        wget "${base_url}/raspi-client-${version}.jar.sha256" -O "${jar_file}.sha256"
+        if ! verify_jar_integrity "${jar_file}.part" "${jar_file}.sha256"; then
+            rm -f "${jar_file}.part" "${jar_file}.sha256"
+            echo "ABBRUCH: Download von raspi-client-${version}.jar fehlgeschlagen (Integrität)." >&2
+            exit 1
+        fi
+        mv "${jar_file}.part" "$jar_file"
+        rm -f "${jar_file}.sha256"
     else
         echo "Skipping downloading raspi-client JAR. File already exists: $jar_file"
     fi
+
+    # Symlink IMMER (idempotent) setzen - auch im Skip-Fall oben (Issue #63): "ln -sfn" statt
+    # "ln -s", damit ein erneuter setup.sh-Lauf nicht an einem bereits existierenden Symlink
+    # scheitert und der Symlink stets auf die gerade installierte Version zeigt.
+    ln -sfn ./raspi-client-${version}.jar ./raspi-client.latest.jar
 }
 
 
@@ -332,6 +405,8 @@ log_state Starting Installation...
 install_dependencies
 
 setup_firewall
+
+configure_sudoers
 
 install_java
 

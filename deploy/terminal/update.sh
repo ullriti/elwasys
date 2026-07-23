@@ -44,8 +44,8 @@ set -euo pipefail
 # auf ein Temp-Verzeichnis setzbar.
 ELWA_ROOT="${ELWA_ROOT:-/opt/elwasys}"
 
-# GitHub-Repo/Host wie in setup.sh install_elwasys.
-ELWA_GITHUB_REPO="${ELWA_GITHUB_REPO:-kabieror/elwasys}"
+# GitHub-Repo/Host wie in setup.sh install_elwasys (kanonisch: ullriti/elwasys, Issue #64).
+ELWA_GITHUB_REPO="${ELWA_GITHUB_REPO:-ullriti/elwasys}"
 
 # Kommando, das den laufenden java-Prozess (die JVM unter dem run.sh-Supervisor)
 # beendet - so relauncht die Loop das neu verlinkte Jar. Fuer Trocken-Tests ohne
@@ -74,13 +74,19 @@ Aufruf:
   update.sh --version <tag>       neues raspi-client-<tag>.jar von GitHub laden
   update.sh --jar <lokaler Pfad>  bereits vorliegendes Jar verwenden (offline)
 
+Optionen:
+  --force-download   ein lokal bereits vorliegendes raspi-client-<tag>.jar vor dem
+                     Download verwerfen (für unter demselben Tag repariertes Asset).
+
 Aktualisiert ein bereits provisioniertes Terminal auf ein neues Client-Jar, ohne
-setup.sh erneut zu fahren. Haengt den Symlink ${LATEST_LINK} auf das neue Jar um
-(das bisherige Ziel wird zu ${PREVIOUS_LINK}) und stoesst den Neustart an.
+setup.sh erneut zu fahren. Bei --version wird der Download per SHA-256-Prüfsumme +
+Zip-Struktur verifiziert (Integrität), erst dann ausgerollt. Haengt den Symlink
+${LATEST_LINK} auf das neue Jar um (das bisherige Ziel wird zu ${PREVIOUS_LINK}) und
+stoesst den Neustart an.
 
 Env-Overrides: ELWA_ROOT (Default /opt/elwasys), ELWA_RESTART_CMD
 (Default 'sudo killall java'), ELWA_JAVA_PGREP (Default 'pgrep -x java'),
-ELWA_GITHUB_REPO (Default kabieror/elwasys).
+ELWA_GITHUB_REPO (Default ullriti/elwasys).
 
 Hinweis: Braucht das neue Jar ein hoeheres Java als das installierte JRE, zuerst
 deploy/terminal/upgrade-jre.sh ausfuehren (Java 21).
@@ -98,6 +104,58 @@ link_target() {
     fi
 }
 
+# Prüft die Integrität eines heruntergeladenen Jars (Issue #62): SHA-256-Prüfsumme
+# (sha256sum -c) + Zip/Jar-Struktur (fängt abgeschnittene Downloads / getarnte HTML-Fehlerseiten
+# ab). $1 = zu prüfende Datei, $2 = zugehörige .sha256 (beide relative Namen im ELWA_ROOT).
+# Rückgabe != 0 bei jedem Fehlschlag -> der Aufrufer verwirft den Download, es wird NICHTS
+# verlinkt (der Watchdog behandelt das als B1-Fetch-Fehlschlag: kein Rollback/Kill).
+verify_jar_integrity() {
+    local file="$1" sumfile="$2"
+    if [[ ! -s "${sumfile}" ]]; then
+        echo "FEHLER: Prüfsummendatei '${sumfile}' fehlt/leer - verwerfe Download." >&2
+        return 1
+    fi
+    # .sha256 trägt den Asset-Namen; für "sha256sum -c" gegen die (noch .part-)Datei den
+    # Dateinamen in der Prüfzeile auf ${file} umschreiben.
+    if ! sed "s|  .*|  ${file}|" "${sumfile}" | sha256sum -c - ; then
+        echo "FEHLER: SHA-256-Prüfsumme stimmt nicht - verwerfe Download." >&2
+        return 1
+    fi
+    if command -v unzip >/dev/null 2>&1; then
+        if ! unzip -t -qq "${file}" >/dev/null 2>&1; then
+            echo "FEHLER: '${file}' ist kein gültiges Jar/Zip-Archiv - verwerfe Download." >&2
+            return 1
+        fi
+    else
+        # Fallback ohne unzip: Zip/Jar beginnt mit der Magic "PK".
+        if [[ "$(head -c2 "${file}" 2>/dev/null)" != "PK" ]]; then
+            echo "FEHLER: '${file}' beginnt nicht mit der Zip/Jar-Magic 'PK' - verwerfe Download." >&2
+            return 1
+        fi
+    fi
+    return 0
+}
+
+# Führt den Neustart-Trigger (ELWA_RESTART_CMD) aus und unterscheidet einen echten Rechte-/
+# sudo-Fehler (der Kill konnte NICHT ausgeführt werden) von einem harmlosen "kein Prozess mehr"
+# (killall-Exit != 0 ohne Rechtefehler). Rückgabe 3 nur beim Rechte-/sudo-Fehler, sonst 0.
+# So löst ein am fehlenden sudoers-Recht gescheiterter Kill KEINEN grundlosen Rollback und
+# damit keine Endlosschleife aus (Issue #63/#34).
+run_restart_cmd() {
+    local out rc
+    out="$(${ELWA_RESTART_CMD} 2>&1)"; rc=$?
+    if (( rc != 0 )); then
+        if printf '%s' "${out}" | grep -qiE 'sudo|passwo|not allowed|permission|operation not permitted'; then
+            echo "FEHLER: Neustart-Trigger '${ELWA_RESTART_CMD}' scheiterte an Rechten (sudoers?): ${out}" >&2
+            return 3
+        fi
+        # killall meldet auch dann != 0, wenn gar kein Prozess (mehr) lief - harmlos, der
+        # Supervisor startet ohnehin das aktuell verlinkte Jar.
+        echo "Hinweis: '${ELWA_RESTART_CMD}' meldete Exit ${rc} (vermutlich kein Prozess mehr) - unkritisch."
+    fi
+    return 0
+}
+
 # ==============================================================================
 # Argumente parsen
 # ==============================================================================
@@ -105,6 +163,11 @@ link_target() {
 MODE=""
 VERSION=""
 SRC_JAR=""
+# --force-download (Issue #34/#62): ein bereits lokal vorliegendes raspi-client-<version>.jar
+# vor dem Neu-Download verwerfen. Nötig, wenn ein Release-Asset unter DEMSELBEN Tag repariert
+# wurde (z.B. nach einem fehlgeschlagenen Update) - sonst würde update.sh das alte, kaputte Jar
+# beibehalten ("liegt bereits vor - kein erneuter Download").
+FORCE_DOWNLOAD=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -114,6 +177,8 @@ while [[ $# -gt 0 ]]; do
         --jar)
             [[ $# -ge 2 ]] || { echo "FEHLER: --jar braucht einen <Pfad>." >&2; usage; }
             MODE="jar"; SRC_JAR="$2"; shift 2 ;;
+        --force-download)
+            FORCE_DOWNLOAD=1; shift ;;
         -h|--help)
             usage ;;
         *)
@@ -138,14 +203,33 @@ if [[ "${MODE}" == "version" ]]; then
     # GitHub-Release-Download-URL, gleiches Muster/Host wie setup.sh install_elwasys:
     #   https://github.com/<repo>/releases/download/<tag>/raspi-client-<tag>.jar
     new_jar="raspi-client-${VERSION}.jar"
-    url="https://github.com/${ELWA_GITHUB_REPO}/releases/download/${VERSION}/raspi-client-${VERSION}.jar"
+    base_url="https://github.com/${ELWA_GITHUB_REPO}/releases/download/${VERSION}"
+    url="${base_url}/raspi-client-${VERSION}.jar"
+    # --force-download: ein evtl. lokal liegendes (womöglich kaputtes) Jar vorher entfernen,
+    # damit ein unter demselben Tag repariertes Asset wirklich neu geladen wird (Issue #34).
+    if [[ "${FORCE_DOWNLOAD}" == "1" && -f "${new_jar}" ]]; then
+        log_state "--force-download: entferne lokal vorhandenes ${new_jar} vor dem Neu-Download."
+        rm -f "${new_jar}"
+    fi
     if [[ -f "${new_jar}" ]]; then
         log_state "Jar ${new_jar} liegt bereits vor - kein erneuter Download."
     else
         log_state "Lade ${new_jar} von ${url} ..."
-        # Robust: erst nach .part laden, dann atomar an den Zielnamen ruecken -
-        # ein abgebrochener Download hinterlaesst so kein halbes Ziel-Jar.
+        # Robust: erst nach .part laden, Integrität prüfen (Issue #62: SHA-256 + Zip-Struktur),
+        # dann atomar an den Zielnamen ruecken - ein abgebrochener/kaputter Download hinterlaesst
+        # so kein halbes/ungeprüftes Ziel-Jar und wird verworfen (kein Deploy).
+        # Bekannte Einschränkung (#62): Ein Release MUSS ein raspi-client-<tag>.jar.sha256-Asset
+        # mitliefern (maven-publish.yml erzeugt es seit AP6 automatisch). Fehlt es - z.B. bei einem
+        # Alt-Release von vor AP6 - schlaegt der zweite wget unter `set -e` fehl; das ist bewusst
+        # (kein ungeprüftes Jar), macht solche Alt-Releases aber nicht per Auto-Update ausrollbar.
         wget -O "${new_jar}.part" "${url}"
+        wget -O "${new_jar}.sha256" "${base_url}/raspi-client-${VERSION}.jar.sha256"
+        if ! verify_jar_integrity "${new_jar}.part" "${new_jar}.sha256"; then
+            rm -f "${new_jar}.part" "${new_jar}.sha256"
+            echo "FEHLER: Download von ${new_jar} fehlgeschlagen (Integrität) - nichts ausgerollt." >&2
+            exit 1
+        fi
+        rm -f "${new_jar}.sha256"
         mv "${new_jar}.part" "${new_jar}"
     fi
 else
@@ -203,8 +287,15 @@ fi
 # aus), gibt es nichts zu beenden: sauberer Hinweis statt Fehler.
 if ${ELWA_JAVA_PGREP} > /dev/null 2>&1; then
     log_state "Beende laufenden java-Prozess (Supervisor relauncht das neue Jar) ..."
-    # Fehlschlag hier nicht fatal (Prozess koennte inzwischen weg sein).
-    ${ELWA_RESTART_CMD} || true
+    # Kill-Exit-Code NICHT blind verschlucken (Issue #63): scheitert der Neustart-Trigger an
+    # fehlenden Rechten (sudoers), ist der Neustart NICHT erfolgt - das mit Exit 3 melden, damit
+    # der Watchdog das vom Deploy-Erfolg unterscheiden und einen grundlosen Rollback (und die
+    # daraus folgende Endlosschleife, Issue #34) vermeiden kann. Ein harmloses "kein Prozess
+    # mehr" behandelt run_restart_cmd als Erfolg.
+    if ! run_restart_cmd; then
+        echo "FEHLER: Neustart nach dem Symlink-Wechsel nicht ausgelöst (Rechte?). ${LATEST_LINK} zeigt jetzt auf ${new_jar}, aber der alte Prozess läuft weiter." >&2
+        exit 3
+    fi
     echo "Neustart angestossen: die run.sh-Loop startet in Kuerze ${new_jar}."
 else
     log_state "Kein laufender java-Prozess gefunden (Terminal evtl. aus)."
