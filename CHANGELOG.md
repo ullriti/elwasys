@@ -14,11 +14,12 @@ im [Worklog](docs/worklog/README.md).
 
 ### Changed
 - Offline-Replay-Härtung II (Code-Review-Follow-ups zu Epic #66, ADR 0021): Der privilegierte
-  Replay-Pfad (#67) verlangt jetzt einen plausibel in der Vergangenheit liegenden
-  Original-Zeitstempel und lehnt fehlende/„jetzt"/Zukunfts-Zeitstempel ab
-  (`422 invalid-replay-timestamp`, neuer Knopf `elwasys.offline.replay-min-backdating`, Default
-  60 s; ein zu alter Zeitstempel – langer Waschgang – wird weiterhin akzeptiert und wie bisher
-  auf Serverzeit gesetzt); jede privilegierte Nachbuchung wird auditiert. Das Terminal (#69) verliert einen
+  Replay-Pfad (#67) verlangt jetzt einen plausiblen Original-Zeitstempel und lehnt einen
+  fehlenden oder in der Zukunft liegenden Zeitstempel ab (`422 invalid-replay-timestamp`); ein
+  „jetzt"/verdächtig aktueller Zeitstempel wird angenommen und nur auditiert (legitime
+  Sofort-Nachmeldung, z. B. sofortiger Abbruch – Schwelle `elwasys.offline.replay-min-backdating`,
+  Default 60 s), ein zu alter wie bisher auf Serverzeit gesetzt. Jede privilegierte Nachbuchung
+  wird auditiert. Das Terminal (#69) verliert einen
   Poison-Eintrag nicht mehr, wenn der Dead-Letter-Write scheitert (Write-before-Remove) und
   begrenzt den Wiederhol-Busy-Loop bei defektem Datenträger über einen neustartfesten
   Fehlversuchszähler.

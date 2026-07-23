@@ -29,28 +29,29 @@ Auftraggeber-Festlegung werden sie jetzt behoben:
 
 ## Entscheidung
 
-- **Replay-Zeitstempel-Pflicht mit Ablehnung (#67):** Eine echte Nachmeldung trägt immer den
-  **Original-Zeitpunkt** der offline gebuchten Ausführung, der deutlich in der Vergangenheit
-  liegt (ein Stufe-B-`START` wird ohnehin erst nachgemeldet, wenn sein Ende im Journal liegt,
-  die Maschine also fertig ist). Der Replay-Pfad **verlangt** deshalb einen plausiblen
-  Vergangenheits-Zeitstempel und **lehnt ab** (`422 invalid-replay-timestamp`), wenn er fehlt
-  oder „jetzt"/in der Zukunft liegt. Grenze „jetzt": ein konfigurierbarer Mindestabstand
-  `elwasys.offline.replay-min-backdating` (Default 60 s) – groß genug, um „jetzt" sicher
-  abzuweisen, klein genug, um selbst den kürzesten realen Waschgang nie fälschlich abzulehnen.
-  Ein **zu ALTER** Zeitstempel wird bewusst **nicht** abgelehnt: Ein Stufe-B-`START` wird laut
-  Paar-Reihenfolge erst nachgemeldet, wenn sein Ende im Journal liegt – sein Alter beim Replay
-  ist `Waschdauer + Wiederverbindungszeit` und kann das Offline-Fenster des Standorts
-  überschreiten (langer Waschgang bei frischem Snapshot). Eine harte „zu alt"-Grenze würde
-  diesen legitimen Fall ins Dead-Letter schieben und die Buchung nie abrechnen (Umsatzverlust);
-  absurd alte Werte ersetzt stattdessen `ClientTimestampPolicy#resolve` durch die Serverzeit,
-  ohne die Buchung zu verlieren. Jede angenommene Nachbuchung wird zusätzlich
-  **auditiert** (INFO-Log mit Nutzer/Gerät/Programm/Standort/Original-Zeitstempel), damit
-  anomale Muster sichtbar werden. Bewusst **Ablehnung statt stiller Serverzeit-Ersetzung**
-  (wie in `ClientTimestampPolicy#resolve` für reguläre Aufrufe): beim Replay ist der
-  fehlende/„jetzt"-Zeitstempel gerade das verdächtige Signal, keine bloße Uhren-Drift. Die
-  #16-Invariante „kein Journal-Verklemmen" bleibt erhalten, weil `422` ein **fachlicher**
-  Fehler ist – das Terminal schiebt einen so abgelehnten Eintrag ins Dead-Letter (ADR 0016
-  #17), statt ihn ewig zu wiederholen.
+- **Replay-Zeitstempel-Prüfung + Audit (#67):** Das `replay`-Flag umgeht ALLE fachlichen
+  Wächter und ist rein client-gesteuert; der Replay-Pfad verlangt deshalb, dass eine Nachmeldung
+  wenigstens einen plausiblen Original-Zeitstempel trägt, und **auditiert** jede angenommene
+  Nachbuchung (INFO-Log mit Nutzer/Gerät/Programm/Standort/Original-Zeitstempel).
+  - **Hart abgelehnt** (`422 invalid-replay-timestamp`) werden nur die eindeutig unplausiblen
+    Fälle: ein **fehlender** Zeitstempel (eine echte Nachmeldung trägt immer den Original-
+    Zeitpunkt) und ein Zeitstempel in der **Zukunft** (jenseits der Uhren-Drift-Toleranz – ein
+    bereits geschehenes Ereignis kann nicht in der Zukunft liegen).
+  - **Bewusst NICHT abgelehnt, nur protokolliert** wird ein **„jetzt"/verdächtig aktueller**
+    Zeitstempel (jünger als `elwasys.offline.replay-min-backdating`, Default 60 s): Eine offline
+    gebuchte Ausführung kann **legitim unmittelbar** nachgemeldet werden – etwa wenn der Nutzer
+    sofort abbricht oder das Backend Sekunden später zurückkehrt (durch die E2E-Baseline
+    `ClientOfflineRobustnessE2ETest` abgesichert). Eine harte „jetzt"-Ablehnung würde solche
+    legitimen Sofort-Nachmeldungen ins Dead-Letter schieben und die Buchung nie abrechnen
+    (Umsatzverlust). Ein WARN-Audit macht ein anomales Muster (gehäufte „jetzt"-Replays) dennoch
+    sichtbar, ohne den Betrieb zu brechen (Issue #67 Fix-Option 3). `replay-min-backdating` ist
+    damit die **Warn-Schwelle**, keine Reject-Grenze.
+  - **Zu ALTE** Zeitstempel werden ebenfalls nicht abgelehnt: absurd alte Werte ersetzt
+    `ClientTimestampPolicy#resolve` beim Aufrufer per Serverzeit (ein langer Waschgang kann das
+    Offline-Fenster legitim überschreiten), ohne die Buchung zu verlieren.
+  - Die #16-Invariante „kein Journal-Verklemmen" bleibt erhalten, weil `422` ein **fachlicher**
+    Fehler ist – das Terminal schiebt einen so abgelehnten Eintrag ins Dead-Letter (ADR 0016
+    #17), statt ihn ewig zu wiederholen.
 - **Geister-Execution-Kompensation (#68):** Wird beim Replay ein Terminator
   (`FINISH`/`ABORT`) dead-lettert, dessen zugehöriger `START` **in diesem Lauf** bereits
   erfolgreich angelegt wurde (`resolvedStartKeys` kennt die echte Backend-Id), wird (a) **laut
@@ -73,12 +74,16 @@ Auftraggeber-Festlegung werden sie jetzt behoben:
 
 ## Konsequenzen
 
-- **#67:** Ein legitimer Replay (Original-Zeitstempel, deutlich in der Vergangenheit) ist
-  unverändert unauffällig – der Nutzer merkt nichts. Ein Replay ohne/„jetzt"-Zeitstempel wird
+- **#67:** Ein legitimer Replay ist unverändert unauffällig – der Nutzer merkt nichts (auch
+  eine legitime Sofort-Nachmeldung mit „jetzt"-Zeitstempel, z. B. sofortiger Abbruch, wird
+  angenommen). Nur ein Replay **ohne** Zeitstempel oder mit einem **Zukunfts**-Zeitstempel wird
   abgelehnt (und beim Terminal dead-lettert, nicht verklemmend). Der Admin erhält über das
-  Audit-Log Sichtbarkeit über jede privilegierte Nachbuchung. Restrisiko: ein Angreifer mit
-  gültigem Standort-Token kann weiterhin backdaten – die Härtung erschwert Missbrauch und macht
-  ihn sichtbar, sie ersetzt nicht das Vertrauensmodell (Standort-Token/Single-Writer).
+  Audit-Log Sichtbarkeit über jede privilegierte Nachbuchung und ein zusätzliches WARN bei
+  „jetzt"/verdächtig aktuellen Replays. Restrisiko: ein Angreifer mit gültigem Standort-Token
+  kann weiterhin einen plausiblen Vergangenheits-Zeitstempel setzen – die Härtung erschwert
+  Missbrauch und macht ihn sichtbar, sie ersetzt nicht das Vertrauensmodell (Standort-Token/
+  Single-Writer). Ein hartes Ablehnen von „jetzt"-Zeitstempeln wäre nicht möglich, ohne legitime
+  Sofort-Nachmeldungen (E2E-Baseline) fälschlich zu verlieren.
 - **#68:** Eine fertige, aber serverseitig „hängende" Maschine wird beim seltenen Fehlerfall
   sofort per Kompensations-Abort freigegeben (wieder buchbar) statt bis zum `maxDuration`-
   Ablauf belegt zu bleiben; scheitert der Abort, ist der Vorfall zumindest laut alarmiert statt

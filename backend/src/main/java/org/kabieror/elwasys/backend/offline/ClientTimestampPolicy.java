@@ -75,31 +75,31 @@ public class ClientTimestampPolicy {
 
     /**
      * Prüft den Original-Zeitstempel einer privilegierten Offline-Nachmeldung ({@code replay},
-     * Issue #16) als Defense-in-Depth-Härtung (Issue #67) und wirft eine
-     * {@link InvalidReplayTimestampException}, wenn er nicht plausibel ist. Anders als
-     * {@link #resolve} (das einen Zeitstempel außerhalb des Fensters STILL durch die Serverzeit
-     * ersetzt) wird ein Replay hier ABGELEHNT - denn das {@code replay}-Flag umgeht alle
-     * fachlichen Wächter, und genau dann ist ein fehlender/„jetzt"-Zeitstempel das verdächtige
-     * Signal (ein Terminal, das die Wächter für eine Live-Buchung umgehen will), keine bloße
-     * Uhren-Drift.
+     * Issue #16) als Defense-in-Depth-Härtung (Issue #67). Das {@code replay}-Flag umgeht ALLE
+     * fachlichen Wächter und ist rein client-gesteuert; deshalb wird hier verlangt, dass eine
+     * Nachmeldung wenigstens einen plausiblen Original-Zeitstempel trägt.
      *
-     * <p>Abgelehnt werden nur die tatsächlichen Missbrauchssignale:
+     * <p><b>Hart abgelehnt</b> ({@link InvalidReplayTimestampException}, 422) werden nur die
+     * eindeutig unplausiblen Fälle:
      * <ul>
      *   <li><b>{@code null}</b> - eine echte Nachmeldung trägt immer den Original-Zeitpunkt;</li>
-     *   <li><b>„jetzt"/Zukunft</b> - der Zeitstempel muss mindestens {@code replay-min-backdating}
-     *       in der Vergangenheit liegen (ein bereits geschehenes Ereignis kann nicht „jetzt" oder
-     *       in der Zukunft sein). Genau hier läge das Signal eines Terminals, das mit dem
-     *       {@code replay}-Flag die Wächter für eine LIVE-Buchung umgehen will.</li>
+     *   <li><b>Zukunft</b> (jenseits der Uhren-Drift-Toleranz) - ein bereits geschehenes Ereignis
+     *       kann nicht in der Zukunft liegen.</li>
      * </ul>
      *
      * <p>Ein <b>zu ALTER</b> Zeitstempel wird bewusst NICHT abgelehnt (Issue #67-Review-Fix):
-     * Ein Stufe-B-{@code START} wird laut Paar-Reihenfolge erst nachgemeldet, wenn sein Ende im
-     * Journal liegt - sein Alter beim Replay ist also {@code Waschdauer + Wiederverbindungszeit}
-     * und kann das Offline-Fenster des Standorts durchaus überschreiten (ein langer Waschgang bei
-     * frischem Snapshot). Ein solcher Fall ist legitim; eine harte „zu alt"-Grenze würde ihn
-     * fälschlich ins Dead-Letter schieben und die Buchung nie abrechnen. Absurd alte Werte fängt
-     * stattdessen {@link #resolve} beim Aufrufer ab (Serverzeit-Ersatz + Protokollhinweis), ohne
-     * die Buchung zu verlieren.
+     * absurd alte Werte fängt {@link #resolve} beim Aufrufer per Serverzeit-Ersatz ab, ohne die
+     * Buchung zu verlieren (ein langer Waschgang kann das Offline-Fenster legitim überschreiten).
+     *
+     * <p>Ein <b>„jetzt"/verdächtig aktueller</b> Zeitstempel (jünger als
+     * {@code replay-min-backdating}) wird bewusst ebenfalls NICHT abgelehnt, sondern nur als
+     * Auffälligkeit protokolliert (Issue #67 Fix-Option 3): Eine offline gebuchte Ausführung kann
+     * legitim unmittelbar nachgemeldet werden - z. B. wenn der Nutzer sofort abbricht oder das
+     * Backend Sekunden später zurückkehrt (durch die E2E-Baseline
+     * {@code ClientOfflineRobustnessE2ETest} abgesichert). Eine harte „jetzt"-Ablehnung würde
+     * solche legitimen Sofort-Nachmeldungen fälschlich ins Dead-Letter schieben und die Buchung
+     * nie abrechnen. Das WARN-Audit macht ein anomales Muster (viele „jetzt"-Replays) dennoch
+     * sichtbar, ohne den Betrieb zu brechen.
      *
      * <p>{@code null}-Standort-Konfiguration bzw. eine Live-Buchung (kein {@code replay}) rufen
      * diese Methode gar nicht auf.
@@ -112,16 +112,24 @@ public class ClientTimestampPolicy {
                     "Eine Offline-Nachmeldung erfordert den Original-Zeitstempel des Ereignisses.");
         }
         LocalDateTime now = LocalDateTime.now();
-        Duration minBackdating = this.properties.getReplayMinBackdating();
-        LocalDateTime latestAccepted = now.minus(minBackdating);
+        Duration tolerance = this.properties.getClockDriftTolerance();
+        LocalDateTime latestAccepted = now.plus(tolerance);
         if (clientTimestamp.isAfter(latestAccepted)) {
             this.logger.warn(
-                    "Privilegierte Nachmeldung am Standort '{}' mit unplausibel aktuellem Zeitstempel {} abgelehnt "
-                            + "(muss mindestens {} in der Vergangenheit liegen, spätestens {}) - Issue #67.",
-                    location.getName(), clientTimestamp, minBackdating, latestAccepted);
+                    "Privilegierte Nachmeldung am Standort '{}' mit Zeitstempel {} in der Zukunft abgelehnt "
+                            + "(spätestens {}, Toleranz={}) - Issue #67.", location.getName(), clientTimestamp,
+                    latestAccepted, tolerance);
             throw new InvalidReplayTimestampException("Der Nachmelde-Zeitstempel " + clientTimestamp
-                    + " liegt zu nah an der aktuellen Zeit (erwartet: mindestens " + minBackdating
-                    + " in der Vergangenheit).");
+                    + " liegt in der Zukunft (spätestens erlaubt: " + latestAccepted + ").");
+        }
+        Duration minBackdating = this.properties.getReplayMinBackdating();
+        if (clientTimestamp.isAfter(now.minus(minBackdating))) {
+            // Nicht ablehnen (legitime Sofort-Nachmeldung, s. Javadoc), aber als Auffälligkeit
+            // protokollieren, damit ein anomales Muster (gehäufte „jetzt"-Replays) sichtbar wird.
+            this.logger.warn(
+                    "Privilegierte Nachmeldung am Standort '{}' mit verdächtig aktuellem Zeitstempel {} angenommen "
+                            + "(jünger als {} - moeglich bei Sofort-Abbruch, sonst pruefen) - Issue #67.",
+                    location.getName(), clientTimestamp, minBackdating);
         }
     }
 
