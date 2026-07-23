@@ -353,6 +353,7 @@ public class OfflineGateway {
                         "Offline-Journal-Eintrag '{}' ({}) wurde vom Backend fachlich abgelehnt ({} {}) - wird in "
                                 + "die Dead-Letter-Datei verschoben; der Replay faehrt mit den restlichen Eintraegen "
                                 + "fort.", entry.idempotencyKey(), entry.type(), e.getHttpStatus(), e.getTypeSlug(), e);
+                compensateGhostExecutionIfNeeded(entry, resolvedStartKeys);
                 this.journal.moveToDeadLetter(entry, deadLetterReason(entry, e));
                 deadLettered++;
             } catch (RuntimeException e) {
@@ -361,6 +362,7 @@ public class OfflineGateway {
                 // Journal dauerhaft verklemmen - Dead-Letter statt Abbruch.
                 this.logger.error("Offline-Journal-Eintrag '{}' ({}) konnte nicht verarbeitet werden - wird in die "
                         + "Dead-Letter-Datei verschoben.", entry.idempotencyKey(), entry.type(), e);
+                compensateGhostExecutionIfNeeded(entry, resolvedStartKeys);
                 this.journal.moveToDeadLetter(entry, deadLetterReason(entry, e));
                 deadLettered++;
             }
@@ -375,6 +377,64 @@ public class OfflineGateway {
 
     private static String deadLetterReason(OfflineJournalEntry entry, Exception e) {
         return entry.type() + " " + entry.idempotencyKey() + ": " + e.getMessage();
+    }
+
+    /**
+     * Räumt eine "Geister-Execution" auf, die entsteht, wenn beim Replay einer offline
+     * gebuchten Ausführung (Stufe B) der {@code START} in DIESEM Lauf bereits erfolgreich
+     * nachgemeldet wurde (das Backend hat die Execution also real angelegt), sein zugehöriger
+     * {@code FINISH}/{@code ABORT} danach aber fachlich scheitert und zum Dead-Letter wird
+     * (Issue #68). Ohne Gegenmaßnahme bliebe die serverseitig angelegte Ausführung unbeendet
+     * und das Gerät beim Backend belegt, bis es über {@code isExpired} (Ablauf der
+     * Maximaldauer) herausfällt.
+     *
+     * <p>Zwei Stufen: (1) <b>lauter Alarm</b> (statt stumm wie ein gewöhnlicher Poison-Entry),
+     * damit der Vorfall sichtbar wird; (2) <b>kompensierender {@code abort}</b> der frisch
+     * angelegten Execution (Id aus {@code resolvedStartKeys}), damit die Geister-Execution
+     * serverseitig sofort aufgeräumt wird - best effort: schlägt er selbst fehl (z. B. das
+     * Backend ist inzwischen wieder weg), bleibt es beim Alarm, und die Execution fällt
+     * spätestens über {@code isExpired} heraus.
+     *
+     * <p>Betrifft nur Terminatoren einer offline gebuchten Ausführung mit einem in diesem Lauf
+     * aufgelösten {@code startIdempotencyKey}: Ein Stufe-A-Terminator (echte {@code
+     * executionId}, ohne {@code startIdempotencyKey}) hat keinen frisch angelegten Start und
+     * wird unverändert wie ein gewöhnlicher Poison-Entry behandelt.
+     */
+    private void compensateGhostExecutionIfNeeded(OfflineJournalEntry entry, Map<String, Integer> resolvedStartKeys) {
+        boolean isTerminator = OfflineJournalEntry.TYPE_FINISH.equals(entry.type())
+                || OfflineJournalEntry.TYPE_ABORT.equals(entry.type());
+        if (!isTerminator || entry.startIdempotencyKey() == null) {
+            return;
+        }
+        Integer ghostExecutionId = resolvedStartKeys.get(entry.startIdempotencyKey());
+        if (ghostExecutionId == null) {
+            // Der zugehoerige START wurde in diesem Lauf NICHT erfolgreich angelegt (er wurde
+            // selbst zum Dead-Letter) - dann existiert serverseitig gar keine Execution, es gibt
+            // nichts aufzuraeumen (der uebliche Poison-Fall, Issue #17).
+            return;
+        }
+        this.logger.error(
+                "GEISTER-EXECUTION: Der START der offline gebuchten Ausfuehrung (startIdempotencyKey='{}') wurde "
+                        + "soeben als Execution {} angelegt, sein {} ('{}') scheiterte aber fachlich und wird zum "
+                        + "Dead-Letter. Die Execution bliebe sonst dauerhaft 'laufend' - versuche kompensierenden "
+                        + "Abort.", entry.startIdempotencyKey(), ghostExecutionId, entry.type(), entry.idempotencyKey());
+        // Eigener, deterministischer Idempotenz-Schluessel fuer den Kompensations-Abort: nicht
+        // der des gescheiterten Terminators (anderer Vorgang), aber stabil aus ihm abgeleitet,
+        // damit ein etwaiger Wiederholungsversuch serverseitig dedupliziert.
+        String compensatingKey = entry.idempotencyKey() + "-ghost-abort";
+        try {
+            this.apiClient.abortExecution(ghostExecutionId, entry.clientTimestamp(), compensatingKey);
+            this.logger.warn("Kompensierender Abort der Geister-Execution {} erfolgreich - Geraet serverseitig wieder "
+                    + "frei.", ghostExecutionId);
+        } catch (ApiException | RuntimeException ex) {
+            // Best effort: der Kompensations-Abort darf den laufenden Dead-Letter-Vorgang und den
+            // restlichen Replay NIE abreissen (auch nicht bei einem unerwarteten Laufzeitfehler) -
+            // sonst bliebe der aktuelle Poison-Eintrag liegen und der ganze Lauf verkeilte sich
+            // (untergrübe die Issue-#17-Robustheit). Bei Fehlschlag bleibt es beim Alarm; die
+            // Execution faellt spaetestens ueber isExpired heraus.
+            this.logger.error("Kompensierender Abort der Geister-Execution {} fehlgeschlagen - die Execution faellt "
+                    + "erst ueber den Ablauf ihrer Maximaldauer (isExpired) heraus.", ghostExecutionId, ex);
+        }
     }
 
     private void replayOne(OfflineJournalEntry entry, Map<String, Integer> resolvedStartKeys) throws ApiException {

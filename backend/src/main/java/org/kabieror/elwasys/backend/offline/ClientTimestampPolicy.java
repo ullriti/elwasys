@@ -2,6 +2,7 @@ package org.kabieror.elwasys.backend.offline;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import org.kabieror.elwasys.backend.api.exception.InvalidReplayTimestampException;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.service.LocationService;
 import org.slf4j.Logger;
@@ -70,6 +71,66 @@ public class ClientTimestampPolicy {
             return now;
         }
         return clientTimestamp;
+    }
+
+    /**
+     * Prüft den Original-Zeitstempel einer privilegierten Offline-Nachmeldung ({@code replay},
+     * Issue #16) als Defense-in-Depth-Härtung (Issue #67). Das {@code replay}-Flag umgeht ALLE
+     * fachlichen Wächter und ist rein client-gesteuert; deshalb wird hier verlangt, dass eine
+     * Nachmeldung wenigstens einen plausiblen Original-Zeitstempel trägt.
+     *
+     * <p><b>Hart abgelehnt</b> ({@link InvalidReplayTimestampException}, 422) werden nur die
+     * eindeutig unplausiblen Fälle:
+     * <ul>
+     *   <li><b>{@code null}</b> - eine echte Nachmeldung trägt immer den Original-Zeitpunkt;</li>
+     *   <li><b>Zukunft</b> (jenseits der Uhren-Drift-Toleranz) - ein bereits geschehenes Ereignis
+     *       kann nicht in der Zukunft liegen.</li>
+     * </ul>
+     *
+     * <p>Ein <b>zu ALTER</b> Zeitstempel wird bewusst NICHT abgelehnt (Issue #67-Review-Fix):
+     * absurd alte Werte fängt {@link #resolve} beim Aufrufer per Serverzeit-Ersatz ab, ohne die
+     * Buchung zu verlieren (ein langer Waschgang kann das Offline-Fenster legitim überschreiten).
+     *
+     * <p>Ein <b>„jetzt"/verdächtig aktueller</b> Zeitstempel (jünger als
+     * {@code replay-min-backdating}) wird bewusst ebenfalls NICHT abgelehnt, sondern nur als
+     * Auffälligkeit protokolliert (Issue #67 Fix-Option 3): Eine offline gebuchte Ausführung kann
+     * legitim unmittelbar nachgemeldet werden - z. B. wenn der Nutzer sofort abbricht oder das
+     * Backend Sekunden später zurückkehrt (durch die E2E-Baseline
+     * {@code ClientOfflineRobustnessE2ETest} abgesichert). Eine harte „jetzt"-Ablehnung würde
+     * solche legitimen Sofort-Nachmeldungen fälschlich ins Dead-Letter schieben und die Buchung
+     * nie abrechnen. Das WARN-Audit macht ein anomales Muster (viele „jetzt"-Replays) dennoch
+     * sichtbar, ohne den Betrieb zu brechen.
+     *
+     * <p>{@code null}-Standort-Konfiguration bzw. eine Live-Buchung (kein {@code replay}) rufen
+     * diese Methode gar nicht auf.
+     */
+    public void requireValidReplayTimestamp(LocalDateTime clientTimestamp, LocationEntity location) {
+        if (clientTimestamp == null) {
+            this.logger.warn("Privilegierte Nachmeldung am Standort '{}' ohne Original-Zeitstempel abgelehnt "
+                    + "(Issue #67).", location.getName());
+            throw new InvalidReplayTimestampException(
+                    "Eine Offline-Nachmeldung erfordert den Original-Zeitstempel des Ereignisses.");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        Duration tolerance = this.properties.getClockDriftTolerance();
+        LocalDateTime latestAccepted = now.plus(tolerance);
+        if (clientTimestamp.isAfter(latestAccepted)) {
+            this.logger.warn(
+                    "Privilegierte Nachmeldung am Standort '{}' mit Zeitstempel {} in der Zukunft abgelehnt "
+                            + "(spätestens {}, Toleranz={}) - Issue #67.", location.getName(), clientTimestamp,
+                    latestAccepted, tolerance);
+            throw new InvalidReplayTimestampException("Der Nachmelde-Zeitstempel " + clientTimestamp
+                    + " liegt in der Zukunft (spätestens erlaubt: " + latestAccepted + ").");
+        }
+        Duration minBackdating = this.properties.getReplayMinBackdating();
+        if (clientTimestamp.isAfter(now.minus(minBackdating))) {
+            // Nicht ablehnen (legitime Sofort-Nachmeldung, s. Javadoc), aber als Auffälligkeit
+            // protokollieren, damit ein anomales Muster (gehäufte „jetzt"-Replays) sichtbar wird.
+            this.logger.warn(
+                    "Privilegierte Nachmeldung am Standort '{}' mit verdächtig aktuellem Zeitstempel {} angenommen "
+                            + "(jünger als {} - moeglich bei Sofort-Abbruch, sonst pruefen) - Issue #67.",
+                    location.getName(), clientTimestamp, minBackdating);
+        }
     }
 
     /**

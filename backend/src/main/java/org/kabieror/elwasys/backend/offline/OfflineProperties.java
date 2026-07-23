@@ -24,11 +24,32 @@ public class OfflineProperties {
      */
     private Duration clockDriftTolerance = Duration.ofMinutes(5);
 
+    /**
+     * Schwelle, ab der der Original-Zeitstempel einer privilegierten Offline-Nachmeldung
+     * ({@code replay}, Issue #16) als „verdächtig aktuell" gilt und als Auffälligkeit
+     * protokolliert wird (Defense-in-Depth, Issue #67). Ein Zeitstempel jünger als dieser
+     * Abstand zur aktuellen Zeit wird NICHT abgelehnt - eine offline gebuchte Ausführung kann
+     * legitim unmittelbar nachgemeldet werden (Sofort-Abbruch, oder das Backend kehrt Sekunden
+     * später zurück; durch {@code ClientOfflineRobustnessE2ETest} abgesichert) -, aber ein
+     * WARN-Audit macht ein anomales Muster (gehäufte „jetzt"-Replays) sichtbar. Hart abgelehnt
+     * werden nur ein FEHLENDER oder ein in der ZUKUNFT liegender Zeitstempel (siehe
+     * {@link ClientTimestampPolicy#requireValidReplayTimestamp}). Default 60 Sekunden.
+     */
+    private Duration replayMinBackdating = Duration.ofSeconds(60);
+
     public Duration getClockDriftTolerance() {
         return this.clockDriftTolerance;
     }
 
     public void setClockDriftTolerance(Duration clockDriftTolerance) {
         this.clockDriftTolerance = clockDriftTolerance;
+    }
+
+    public Duration getReplayMinBackdating() {
+        return this.replayMinBackdating;
+    }
+
+    public void setReplayMinBackdating(Duration replayMinBackdating) {
+        this.replayMinBackdating = replayMinBackdating;
     }
 }

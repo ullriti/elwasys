@@ -100,6 +100,15 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   Dashboard-/Auth-Aussagen –, Health-Pfade + Compose-Härtung in `04-build-and-run.md`,
   Änderungslog AP4–AP6 in `05-migration-plan.md`); damit ist die Pre-Launch-Review
   (Epic #66, AP1–AP7) vollständig abgeschlossen.
+  Nachgelagert wurden die drei aus AP1 ausgelagerten Defense-in-Depth-/Datenintegritäts-Follow-ups
+  des Offline-/Replay-Pfads behoben (**#67/#68/#69**, [ADR 0021](../architecture/0021-offline-replay-haertung-ii.md)):
+  der privilegierte Replay-Pfad verlangt jetzt einen plausiblen Zeitstempel und lehnt einen
+  fehlenden/Zukunfts-Zeitstempel ab (`422`); ein „jetzt"/verdächtig aktueller wird angenommen und
+  nur auditiert (legitime Sofort-Nachmeldung, Schwelle `elwasys.offline.replay-min-backdating`),
+  ein zu alter auf Serverzeit gesetzt + auditiert jede Nachbuchung (#67); eine beim Replay entstehende Geister-Execution (START ok,
+  FINISH fachlich abgelehnt) wird per kompensierendem `abort` aufgeräumt + laut alarmiert (#68);
+  das Dead-Lettern verliert bei Write-Fehler keinen Eintrag mehr (Write-before-Remove) und
+  begrenzt den Busy-Loop über einen neustartfesten Fehlversuchszähler (#69).
 - **Nächster Schritt:** **Live-Gang / Betrieb** auf der Zielarchitektur (Cutover nach
   [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md)); neue Vorhaben vorab als Spec in
   [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.

@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.kabieror.elwasys.backend.api.dto.ExecutionEndRequest;
 import org.kabieror.elwasys.backend.api.dto.ExecutionStartRequest;
+import org.kabieror.elwasys.backend.api.exception.InvalidReplayTimestampException;
 import org.kabieror.elwasys.backend.api.exception.UserBlockedException;
 import org.kabieror.elwasys.backend.api.idempotency.IdempotencyService;
 import org.kabieror.elwasys.backend.auth.terminal.TerminalPrincipal;
@@ -295,5 +296,84 @@ class ExecutionControllerOfflineReplayTest {
                         new ExecutionStartRequest(1, 1, 1, LocalDateTime.now().minusMinutes(30), Boolean.FALSE)));
 
         verify(this.executionService, never()).createExecution(any(), any(), any());
+    }
+
+    // --- Zeitstempel-Härtung des Replay-Pfads (Issue #67) -----------------------------------
+
+    @Test
+    void replayWithoutAClientTimestampIsRejected() {
+        // Issue #67: eine echte Nachmeldung trägt immer den Original-Zeitstempel. Ein Replay
+        // OHNE Zeitstempel ist verdächtig (Umgehen der Wächter für eine Live-Buchung) und wird
+        // abgelehnt - der Eintrag verklemmt das Terminal-Journal dabei nicht, sondern wandert
+        // dort ins Dead-Letter (422, kein Kommunikationsfehler).
+        setUp(60);
+
+        assertThrows(InvalidReplayTimestampException.class,
+                () -> this.controller.start(this.terminal, "replay-no-ts",
+                        new ExecutionStartRequest(1, 1, 1, null, Boolean.TRUE)));
+
+        verify(this.executionService, never()).createExecution(any(), any(), any());
+    }
+
+    @Test
+    void replayWithANowTimestampIsAcceptedButAudited() {
+        // Issue #67 (Review-/CI-Fix): ein "jetzt"-Zeitstempel wird NICHT abgelehnt - eine offline
+        // gebuchte Ausführung kann legitim unmittelbar nachgemeldet werden (Sofort-Abbruch, oder
+        // das Backend kehrt Sekunden später zurück; durch ClientOfflineRobustnessE2ETest
+        // abgesichert). Eine harte Ablehnung würde diese legitime Buchung ins Dead-Letter schieben
+        // und nie abrechnen. Der Fall wird stattdessen als Auffälligkeit protokolliert (WARN).
+        setUp(60);
+
+        this.controller.start(this.terminal, "replay-now",
+                new ExecutionStartRequest(1, 1, 1, LocalDateTime.now(), Boolean.TRUE));
+
+        verify(this.executionService, times(1)).createExecution(this.device, this.program, this.user);
+        verify(this.executionService, times(1)).startExecution(eq(this.execution), any());
+    }
+
+    @Test
+    void replayWithAFutureTimestampBeyondToleranceIsRejected() {
+        // Issue #67: ein bereits geschehenes Ereignis kann nicht in der Zukunft liegen. Nur
+        // jenseits der Uhren-Drift-Toleranz (hier 5min) wird abgelehnt (10min in der Zukunft).
+        setUp(60);
+
+        assertThrows(InvalidReplayTimestampException.class,
+                () -> this.controller.start(this.terminal, "replay-future",
+                        new ExecutionStartRequest(1, 1, 1, LocalDateTime.now().plusMinutes(10), Boolean.TRUE)));
+
+        verify(this.executionService, never()).createExecution(any(), any(), any());
+    }
+
+    @Test
+    void replayWithATimestampOlderThanTheOfflineWindowIsStillAccepted() {
+        // Issue #67 (Review-Fix): ein Stufe-B-START wird erst nachgemeldet, wenn sein Ende im
+        // Journal liegt - sein Alter beim Replay ist Waschdauer + Reconnect und kann das
+        // Offline-Fenster des Standorts überschreiten (langer Waschgang). Ein solcher Fall ist
+        // LEGITIM und darf NICHT abgelehnt werden (sonst Umsatzverlust); die Serverzeit-Ersetzung
+        // in ClientTimestampPolicy#resolve fängt absurd alte Werte ab, ohne die Buchung zu
+        // verlieren. Standort mit 5min-Fenster, Zeitstempel 200min alt -> trotzdem angenommen.
+        setUp(5);
+
+        this.controller.start(this.terminal, "replay-long-wash",
+                new ExecutionStartRequest(1, 1, 1, LocalDateTime.now().minusMinutes(200), Boolean.TRUE));
+
+        verify(this.executionService, times(1)).createExecution(this.device, this.program, this.user);
+        verify(this.executionService, times(1)).startExecution(eq(this.execution), any());
+    }
+
+    @Test
+    void replayWithAPlausiblePastTimestampIsAccepted() {
+        // Issue #67: die Gegenprobe - ein plausibel in der Vergangenheit liegender Zeitstempel
+        // (deutlich älter als replay-min-backdating, jünger als das Offline-Fenster) wird
+        // angenommen und der Fakt trotz aller Wächter verbucht (Issue #16 bleibt erhalten).
+        setUp(60);
+        this.user.setBlocked(true);
+        when(this.creditService.canAfford(any(), any())).thenReturn(false);
+
+        this.controller.start(this.terminal, "replay-ok",
+                new ExecutionStartRequest(1, 1, 1, LocalDateTime.now().minusMinutes(30), Boolean.TRUE));
+
+        verify(this.executionService, times(1)).createExecution(this.device, this.program, this.user);
+        verify(this.executionService, times(1)).startExecution(eq(this.execution), any());
     }
 }

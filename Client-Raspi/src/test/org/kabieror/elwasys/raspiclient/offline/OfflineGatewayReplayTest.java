@@ -136,6 +136,80 @@ class OfflineGatewayReplayTest {
     }
 
     @Test
+    void aGhostExecutionIsCompensatedByAnAbortWhenTheFinishOfAFreshStartIsDeadLettered(@TempDir Path dir)
+            throws IOException {
+        // Issue #68: der START einer offline gebuchten Ausführung wird in diesem Lauf real
+        // angelegt (Id 42), sein FINISH scheitert danach aber fachlich und wird zum Dead-Letter.
+        // Ohne Gegenmaßnahme bliebe Execution 42 serverseitig "laufend" (Geister-Execution) -
+        // erwartet wird ein kompensierender Abort genau dieser Id.
+        OfflineJournal journal = new OfflineJournal(dir.resolve("offline-journal.jsonl"));
+        journal.appendStart("s1", TS, 1, 10, 100);
+        journal.appendFinish(false, "f1", TS.plusHours(1), 1, null, "s1", new BigDecimal("2.00"));
+        RecordingApiClient api = new RecordingApiClient();
+        api.startReplayResultId = 42;
+        api.failFinishWith = new ApiException(409, "execution-already-finished", "Bereits beendet", "schon fertig");
+        OfflineGateway gateway = newGateway(dir, api, journal);
+
+        boolean done = gateway.replay();
+
+        assertTrue(done, "no communication failure, so the journal drains (start replayed, finish dead-lettered)");
+        assertEquals(1, api.startReplays, "the START was replayed and its id learned");
+        assertEquals(1, api.finishes, "the FINISH was attempted (and failed fachlich)");
+        assertEquals(1, api.aborts, "the ghost execution is compensated by exactly one abort");
+        assertEquals(42, api.lastAbortExecutionId, "the compensating abort targets the freshly created execution id");
+        assertEquals("f1-ghost-abort", api.lastAbortKey, "the compensating abort uses its own derived idempotency key");
+        assertFalse(journal.hasPendingEntries(), "the poison FINISH is dead-lettered, the START was replayed");
+
+        Path deadLetter = dir.resolve("offline-journal.jsonl.deadletter");
+        assertTrue(Files.exists(deadLetter), "the poison FINISH left a dead-letter trace");
+        assertTrue(Files.readAllLines(deadLetter).stream().anyMatch(l -> l.contains("f1")));
+    }
+
+    @Test
+    void aFailingCompensatingAbortDoesNotAbortTheWholeReplayRun(@TempDir Path dir) throws IOException {
+        // Issue #68 (Review-Fix): der kompensierende Abort ist best effort - wirft er selbst einen
+        // (auch unerwarteten Laufzeit-)Fehler, darf er den laufenden Dead-Letter-Vorgang und den
+        // restlichen Replay NICHT abreissen (sonst bliebe der Poison-Eintrag liegen, Issue #17).
+        OfflineJournal journal = new OfflineJournal(dir.resolve("offline-journal.jsonl"));
+        journal.appendStart("s1", TS, 1, 10, 100);
+        journal.appendFinish(false, "f1", TS.plusHours(1), 1, null, "s1", new BigDecimal("2.00"));
+        RecordingApiClient api = new RecordingApiClient();
+        api.startReplayResultId = 42;
+        api.failFinishWith = new ApiException(409, "execution-already-finished", "Bereits beendet", "schon fertig");
+        api.failAbortWithRuntime = new IllegalStateException("unerwarteter Fehler im Abort-Pfad");
+        OfflineGateway gateway = newGateway(dir, api, journal);
+
+        boolean done = gateway.replay();
+
+        assertTrue(done, "the run still drains despite the compensating abort throwing");
+        assertEquals(1, api.aborts, "the compensating abort was attempted");
+        assertFalse(journal.hasPendingEntries(), "the poison FINISH was still dead-lettered, not left pending");
+        Path deadLetter = dir.resolve("offline-journal.jsonl.deadletter");
+        assertTrue(Files.exists(deadLetter) && Files.readAllLines(deadLetter).stream().anyMatch(l -> l.contains("f1")),
+                "the FINISH was moved to dead-letter even though the compensating abort failed");
+    }
+
+    @Test
+    void aStufeAFinishPoisonIsNotCompensatedByAnAbort(@TempDir Path dir) {
+        // Gegenprobe zu Issue #68: ein Stufe-A-FINISH (echte executionId, KEIN startIdempotency-
+        // Key - die Ausführung lief bereits online) hat keinen in diesem Lauf frisch angelegten
+        // Start. Scheitert es fachlich, wird es wie ein gewöhnlicher Poison-Entry dead-lettert,
+        // OHNE kompensierenden Abort (es gibt keine vom Replay erzeugte Geister-Execution).
+        OfflineJournal journal = new OfflineJournal(dir.resolve("offline-journal.jsonl"));
+        journal.appendFinish(false, "f3", TS, 3, 77, null, new BigDecimal("1.00")); // Stufe A, echte Id 77
+        RecordingApiClient api = new RecordingApiClient();
+        api.failFinishWith = new ApiException(409, "execution-already-finished", "Bereits beendet", "schon fertig");
+        OfflineGateway gateway = newGateway(dir, api, journal);
+
+        boolean done = gateway.replay();
+
+        assertTrue(done, "the poison Stufe-A finish is dead-lettered, the journal drains");
+        assertEquals(1, api.finishes, "the finish was attempted");
+        assertEquals(0, api.aborts, "no compensating abort for a Stufe-A finish without a fresh start");
+        assertFalse(journal.hasPendingEntries());
+    }
+
+    @Test
     void anUnknownEntryTypeIsDeadLetteredNotSilentlyDropped(@TempDir Path dir) throws IOException {
         // Ein Eintrag mit unbekanntem Typ (z. B. von einem neueren Client nach einem Downgrade)
         // darf nicht spurlos als "nachgemeldet" gelöscht werden, sondern muss in die
@@ -169,7 +243,11 @@ class OfflineGatewayReplayTest {
         int aborts;
         int startReplayResultId = 1;
         Integer lastFinishExecutionId;
+        Integer lastAbortExecutionId;
+        String lastAbortKey;
         ApiException failStartReplayWith;
+        ApiException failFinishWith;
+        RuntimeException failAbortWithRuntime;
         Runnable onFinish;
 
         RecordingApiClient() {
@@ -197,6 +275,9 @@ class OfflineGatewayReplayTest {
         public ExecutionDto finishExecution(int id, LocalDateTime clientTimestamp, String idempotencyKey)
                 throws ApiException {
             this.finishes++;
+            if (this.failFinishWith != null) {
+                throw this.failFinishWith;
+            }
             this.lastFinishExecutionId = id;
             if (this.onFinish != null) {
                 this.onFinish.run();
@@ -208,6 +289,11 @@ class OfflineGatewayReplayTest {
         public ExecutionDto abortExecution(int id, LocalDateTime clientTimestamp, String idempotencyKey)
                 throws ApiException {
             this.aborts++;
+            this.lastAbortExecutionId = id;
+            this.lastAbortKey = idempotencyKey;
+            if (this.failAbortWithRuntime != null) {
+                throw this.failAbortWithRuntime;
+            }
             this.lastFinishExecutionId = id;
             return new ExecutionDto(id, 0, 0, 0, clientTimestamp, clientTimestamp, true, null);
         }

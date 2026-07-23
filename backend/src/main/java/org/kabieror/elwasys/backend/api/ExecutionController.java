@@ -111,6 +111,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/executions")
 public class ExecutionController {
 
+    private final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(getClass());
+
     private static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 
     private final ProgramRepository programRepository;
@@ -216,10 +218,26 @@ public class ExecutionController {
                                     this.creditService.getCredit(user));
                         }
                     } else {
-                        // Replay: keine Wächter, kein Lock nötig (die Nachmeldung ist ein Fakt) -
-                        // der Nutzer wird nur zum Anlegen der Ausführung benötigt.
+                        // Replay: keine fachlichen Wächter, kein Lock nötig (die Nachmeldung ist
+                        // ein Fakt) - der Nutzer wird nur zum Anlegen der Ausführung benötigt.
+                        // Defense-in-Depth (Issue #67): das replay-Flag umgeht ALLE Wächter und
+                        // ist rein client-gesteuert; ohne Korrelation zu einer echten vorherigen
+                        // Offline-Buchung. Als Härtung wird ein plausibel in der Vergangenheit
+                        // liegender Original-Zeitstempel VERLANGT (ein Replay ohne/mit "jetzt"-
+                        // Zeitstempel ist verdächtig) und jede privilegierte Nachbuchung
+                        // auditiert, damit anomale Muster sichtbar werden. Ein abgelehnter Replay
+                        // (422) wandert beim Terminal ins Dead-Letter statt das Journal zu
+                        // verklemmen (Issue #17).
+                        this.clientTimestampPolicy.requireValidReplayTimestamp(request.clientTimestamp(),
+                                device.getLocation());
                         user = this.userRepository.findById(request.userId()).orElseThrow(
                                 () -> new UserNotFoundException(request.userId()));
+                        this.logger.info(
+                                "Privilegierte Offline-Nachbuchung (Replay) angenommen: Nutzer {}, Gerät {} ('{}'), "
+                                        + "Programm {}, Original-Zeitstempel {}, Standort '{}' - fachliche Wächter "
+                                        + "übersprungen (Issue #16), Audit (Issue #67).", user.getId(), device.getId(),
+                                device.getName(), program.getId(), request.clientTimestamp(),
+                                device.getLocation().getName());
                     }
                     ExecutionEntity execution = this.executionService.createExecution(device, program, user);
                     LocalDateTime resolvedTimestamp = this.clientTimestampPolicy.resolve(request.clientTimestamp(),

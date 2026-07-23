@@ -37,15 +37,37 @@ public class OfflineJournal {
 
     private final Logger logger = LoggerFactory.getLogger(getClass());
 
+    /**
+     * Maximale Anzahl Versuche, einen Poison-Eintrag in die Dead-Letter-Datei zu schreiben,
+     * bevor er endgültig aufgegeben wird (Issue #69). Solange das Schreiben scheitert (Platte
+     * voll/defekt), bleibt der Eintrag im aktiven Journal (kein Totalverlust); nach so vielen
+     * erfolglosen Versuchen wird er dennoch entfernt, damit ein dauerhaft defekter Datenträger
+     * keinen unendlichen Busy-Loop (alle ~20s ein erneut scheiternder Backend-Aufruf + Write)
+     * erzeugt.
+     */
+    static final int MAX_DEAD_LETTER_WRITE_ATTEMPTS = 5;
+
     private final Path file;
     private final Path deadLetterFile;
+    private final Path deadLetterFailureFile;
     private final Gson gson;
     private final Object lock = new Object();
+
+    /**
+     * Neustartfester Fehlversuchszähler je Idempotenz-Schlüssel für fehlgeschlagene
+     * Dead-Letter-Schreibvorgänge (Issue #69). Im Speicher gehalten (autoritativ für den
+     * laufenden Prozess - bricht den Busy-Loop schon innerhalb einer Sitzung) UND best-effort
+     * in {@link #deadLetterFailureFile} persistiert, damit ein Terminal-Neustart den Zähler
+     * nicht auf 0 zurücksetzt (rein In-Memory würde einen Neustart nicht überstehen).
+     */
+    private final Map<String, Integer> deadLetterWriteFailures;
 
     public OfflineJournal(Path file) {
         this.file = file;
         this.deadLetterFile = file.resolveSibling(file.getFileName() + ".deadletter");
+        this.deadLetterFailureFile = file.resolveSibling(file.getFileName() + ".deadletter-failures");
         this.gson = OfflineJsonSupport.gson();
+        this.deadLetterWriteFailures = loadDeadLetterWriteFailures();
     }
 
     /**
@@ -129,7 +151,7 @@ public class OfflineJournal {
      * #resetOnFailure}: ein Replay dieses Journal-Eintrags würde sonst eine nie tatsächlich
      * genutzte "Geister-Ausführung" beim Backend anlegen).
      */
-    public void removeEntry(String idempotencyKey) {
+    public boolean removeEntry(String idempotencyKey) {
         synchronized (this.lock) {
             List<OfflineJournalEntry> remaining = new ArrayList<>();
             for (OfflineJournalEntry entry : readAll()) {
@@ -140,17 +162,23 @@ public class OfflineJournal {
             try {
                 if (remaining.isEmpty()) {
                     Files.deleteIfExists(this.file);
-                    return;
+                    return true;
                 }
                 StringBuilder sb = new StringBuilder();
                 for (OfflineJournalEntry entry : remaining) {
                     sb.append(this.gson.toJson(entry)).append(System.lineSeparator());
                 }
+                // DSYNC wie beim Anhängen (Issue #55): ein Stromausfall unmittelbar nach dem
+                // Entfernen darf einen bereits nachgemeldeten/dead-letterten Eintrag nicht wieder
+                // auferstehen lassen (Doppel-Nachmeldung; beim Backend zwar per Idempotenz-Key
+                // abgefangen, aber vermeidbar).
                 Files.writeString(this.file, sb.toString(), StandardOpenOption.CREATE,
-                        StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+                        StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE, StandardOpenOption.DSYNC);
+                return true;
             } catch (IOException e) {
                 this.logger.error("Konnte einen Eintrag (Schluessel '{}') nicht aus dem Offline-Journal entfernen.",
                         idempotencyKey, e);
+                return false;
             }
         }
     }
@@ -167,15 +195,122 @@ public class OfflineJournal {
      */
     public void moveToDeadLetter(OfflineJournalEntry entry, String reason) {
         synchronized (this.lock) {
+            String key = entry.idempotencyKey();
+            if (this.deadLetterWriteFailures.getOrDefault(key, 0) >= MAX_DEAD_LETTER_WRITE_ATTEMPTS) {
+                // Dieser Poison-Eintrag wurde bereits endgueltig aufgegeben (Datentraeger dauerhaft
+                // defekt) - nicht erneut versuchen. Sonst schriebe jeder Replay-Lauf ein weiteres
+                // Dead-Letter-Duplikat bzw. liefe in denselben scheiternden Write (Busy-Loop).
+                return;
+            }
             try {
                 DeadLetterRecord record = new DeadLetterRecord(reason, LocalDateTime.now(), entry);
+                // DSYNC (Issue #55): der Dead-Letter-Datensatz ist der einzige verbliebene Beleg
+                // fuer diesen Eintrag und muss einen Stromausfall ueberstehen, bevor er unten aus
+                // dem aktiven Journal entfernt wird.
                 Files.writeString(this.deadLetterFile, this.gson.toJson(record) + System.lineSeparator(),
-                        StandardOpenOption.CREATE, StandardOpenOption.APPEND, StandardOpenOption.WRITE);
+                        StandardOpenOption.CREATE, StandardOpenOption.APPEND, StandardOpenOption.WRITE,
+                        StandardOpenOption.DSYNC);
             } catch (IOException e) {
-                this.logger.error("Konnte einen Poison-Eintrag (Schluessel '{}') nicht in die Dead-Letter-Datei "
-                        + "schreiben - er wird trotzdem aus dem aktiven Journal entfernt.", entry.idempotencyKey(), e);
+                // Write-before-Remove (Issue #69): das Dead-Letter-Schreiben scheiterte - der
+                // Eintrag bleibt im aktiven Journal (kein Totalverlust), Versuch zaehlen.
+                registerFailedDeadLetterOp(key, "in die Dead-Letter-Datei schreiben", e);
+                return;
             }
-            removeEntry(entry.idempotencyKey());
+            // Dead-Letter geschrieben - erst JETZT aus dem aktiven Journal entfernen. Schlaegt das
+            // Entfernen fehl (Issue #69-Review-Fix: removeEntry verschluckt seine IOException
+            // nicht mehr, sondern meldet false), NICHT als Erfolg werten: sonst wird der Eintrag
+            // beim naechsten Lauf erneut nachgemeldet und ein weiteres Mal ins Dead-Letter
+            // geschrieben (Duplikate + Busy-Loop), den der Zaehler sonst nie braeche.
+            if (removeEntry(key)) {
+                clearDeadLetterWriteFailure(key);
+            } else {
+                registerFailedDeadLetterOp(key, "nach dem Dead-Letter-Write aus dem aktiven Journal entfernen", null);
+            }
+        }
+    }
+
+    /**
+     * Behandelt einen fehlgeschlagenen Teilschritt von {@link #moveToDeadLetter} (Issue #69):
+     * zählt den Fehlversuch je Idempotenz-Schlüssel hoch (neustartfest) und gibt den Eintrag
+     * nach {@link #MAX_DEAD_LETTER_WRITE_ATTEMPTS} endgültig auf, damit ein dauerhaft defekter
+     * Datenträger keinen unendlichen Busy-Loop erzeugt. Der Aufruf läuft stets unter
+     * {@link #lock}.
+     */
+    private void registerFailedDeadLetterOp(String key, String what, IOException cause) {
+        int attempts = incrementDeadLetterWriteFailure(key);
+        if (attempts >= MAX_DEAD_LETTER_WRITE_ATTEMPTS) {
+            // Letzter Ausweg: den Eintrag dennoch aus dem aktiven Journal entfernen, damit er den
+            // Replay nicht bei jedem Lauf erneut vergiftet. Der Verlust betrifft nur diesen einen,
+            // ohnehin dauerhaft fachlich abgelehnten Eintrag und wird laut protokolliert. Gelingt
+            // das Entfernen, ist der Zaehler obsolet; gelingt es nicht, bleibt er auf dem Limit,
+            // sodass die Kurzschluss-Pruefung oben kuenftige Versuche (und Dead-Letter-Duplikate)
+            // unterbindet.
+            this.logger.error("Konnte einen Poison-Eintrag (Schluessel '{}') auch nach {} Versuchen nicht {} - er "
+                    + "wird jetzt endgueltig aufgegeben (Datentraeger voll/defekt?).", key, attempts, what, cause);
+            if (removeEntry(key)) {
+                clearDeadLetterWriteFailure(key);
+            }
+        } else {
+            this.logger.error("Konnte einen Poison-Eintrag (Schluessel '{}') nicht {} (Versuch {}/{}) - er bleibt im "
+                    + "aktiven Journal und wird erneut versucht.", key, what, attempts, MAX_DEAD_LETTER_WRITE_ATTEMPTS,
+                    cause);
+        }
+    }
+
+    /**
+     * Lädt den persistierten Dead-Letter-Fehlversuchszähler (Issue #69) - eine tolerante,
+     * best-effort-Operation: fehlt oder ist die Datei beschädigt, wird mit einem leeren Zähler
+     * begonnen (der In-Memory-Zähler bricht den Busy-Loop dann zumindest innerhalb der
+     * laufenden Sitzung).
+     */
+    private Map<String, Integer> loadDeadLetterWriteFailures() {
+        if (!Files.exists(this.deadLetterFailureFile)) {
+            return new HashMap<>();
+        }
+        try {
+            String json = Files.readString(this.deadLetterFailureFile);
+            Map<String, Integer> loaded = this.gson.fromJson(json, DEAD_LETTER_FAILURE_MAP_TYPE);
+            return loaded != null ? loaded : new HashMap<>();
+        } catch (IOException | RuntimeException e) {
+            this.logger.warn("Konnte den persistierten Dead-Letter-Fehlversuchszaehler nicht lesen - beginne mit "
+                    + "leerem Zaehler.", e);
+            return new HashMap<>();
+        }
+    }
+
+    private static final java.lang.reflect.Type DEAD_LETTER_FAILURE_MAP_TYPE =
+            com.google.gson.reflect.TypeToken.getParameterized(Map.class, String.class, Integer.class).getType();
+
+    private int incrementDeadLetterWriteFailure(String idempotencyKey) {
+        int attempts = this.deadLetterWriteFailures.getOrDefault(idempotencyKey, 0) + 1;
+        this.deadLetterWriteFailures.put(idempotencyKey, attempts);
+        persistDeadLetterWriteFailures();
+        return attempts;
+    }
+
+    private void clearDeadLetterWriteFailure(String idempotencyKey) {
+        if (this.deadLetterWriteFailures.remove(idempotencyKey) != null) {
+            persistDeadLetterWriteFailures();
+        }
+    }
+
+    /**
+     * Persistiert den Fehlversuchszähler (Issue #69) - best effort. Schlägt selbst dieser
+     * winzige Schreibvorgang fehl (derselbe defekte Datenträger), bleibt der autoritative
+     * In-Memory-Zähler erhalten und bricht den Busy-Loop innerhalb der laufenden Sitzung; nur
+     * ein Neustart würde ihn dann zurücksetzen.
+     */
+    private void persistDeadLetterWriteFailures() {
+        try {
+            if (this.deadLetterWriteFailures.isEmpty()) {
+                Files.deleteIfExists(this.deadLetterFailureFile);
+                return;
+            }
+            Files.writeString(this.deadLetterFailureFile, this.gson.toJson(this.deadLetterWriteFailures),
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
+        } catch (IOException e) {
+            this.logger.warn("Konnte den Dead-Letter-Fehlversuchszaehler nicht persistieren - er gilt nur fuer die "
+                    + "laufende Sitzung.", e);
         }
     }
 
