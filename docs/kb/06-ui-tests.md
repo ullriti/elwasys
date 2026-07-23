@@ -1,14 +1,15 @@
 # 06 – UI-Test-Strategie
 
-Ziel: Das **bestehende** Verhalten der Software durch UI-Tests festhalten
-(Characterization Tests), bevor umgebaut wird – und dabei die UI besser verstehen.
+Die Frontends beider Anwendungen sind durch UI-/E2E-Tests abgesichert, die das
+nutzer-sichtbare Verhalten festhalten (Characterization Tests): der JavaFX-Terminal-Client
+über **TestFX + Xvfb**, das Vaadin-Flow-Portal über **Playwright**. Grundlage sind reale
+Anwendungspfade (echte App, echte Simulatoren für die Gateways, echtes Backend, Test-DB).
 
-## Demo-Daten fürs visuelle UI-Prüfen (Profil `demo`, 2026-07-22)
+## Demo-Daten fürs visuelle UI-Prüfen (Profil `demo`)
 
-Ergänzend zu den automatisierten Suiten unten gibt es einen wiederverwendbaren
-**Demo-Datenbestand** zum **visuellen** Prüfen von Portal-/Dashboard-Änderungen, ohne die
-Daten jedes Mal von Hand anzulegen (Auftrag: „für bessere Tests und UI-Checks Demo-Daten
-anlegen").
+Ergänzend zu den automatisierten Suiten gibt es einen wiederverwendbaren **Demo-Datenbestand**
+zum **visuellen** Prüfen von Portal-/Dashboard-Änderungen, ohne die Daten jedes Mal von Hand
+anzulegen.
 
 - **`DemoDataSeeder`** (`backend/.../demo/`, `@Profile("demo")`, `ApplicationRunner`): legt
   beim Start einen zusammenhängenden Beispielbestand an – 4 Benutzergruppen (alle Rabattarten
@@ -17,8 +18,8 @@ anlegen").
   Ausführungshistorie und **laufenden** Ausführungen (Dashboard zeigt „Besetzt" inkl.
   Restzeit). Nutzt durchgängig die echten Repositories/Services (Argon2id-Passwörter,
   `CreditService`-Buchungen, `PricingService`-Preise) → Guthabenstände/Preise sind konsistent.
-  Bewusst **keine** Flyway-Migration (Demo-Daten gehören nicht ins Produktivschema); **idempotent**
-  über einen Marker-Benutzer (`anna`).
+  Bewusst **keine** Flyway-Migration (Demo-Daten gehören nicht ins Produktivschema);
+  **idempotent** über einen Marker-Benutzer (`anna`).
 - **Warum ein Seeder statt SQL-Fixture**: die Daten durchlaufen exakt dieselben Wege wie
   produktive Daten und bleiben dadurch konsistent; Login funktioniert mit bekannten
   Argon2id-Passwörtern (admin/admin bzw. `<benutzer>`/`demo`).
@@ -28,556 +29,391 @@ anlegen").
   docs/kb/04-build-and-run.md „Demo-Modus".
 - **Regressionstest**: `DemoDataSeederTest` (extends `AbstractBackendIT`, `@ActiveProfiles("demo")`)
   prüft Marker-Benutzer/Gruppe/Guthaben, gesperrten Gast, deaktiviertes Gerät, ein „besetztes"
-  Dashboard-Gerät und die Idempotenz eines zweiten Laufs (5 Tests, Teil von
-  `backend/run-backend-tests.sh`).
-- **Verifiziert (2026-07-22)**: Backend im Profil `demo` hochgefahren, per Playwright/Chromium
-  als admin eingeloggt und Dashboard/Benutzer/Geräte/Programme gerendert (Screenshots) –
-  „Besetzt"/„Frei", Rabatt-korrekte Guthaben, „Gesperrt"- und „Deaktiviert"-Zustände sichtbar.
+  Dashboard-Gerät und die Idempotenz eines zweiten Laufs (5 `@Test`, Teil von
+  `backend/run-backend-tests.sh`). `DemoDataSeederGuardTest` (2 `@Test`) sichert ab, dass der
+  Seeder nur unter Profil `demo` läuft.
 
-## Client (JavaFX) – TestFX (Fokus zuerst)
+## Client (JavaFX) – TestFX + Xvfb
 
 Der Raspi-Client ist eine JavaFX-Anwendung mit FXML-Views und einer klaren State-Machine
-(`MainFormState`). Das ist gut testbar mit **TestFX**.
+(`MainFormState`), gut testbar mit **TestFX**.
 
 ### Werkzeuge
-- **TestFX** (`org.testfx:testfx-core`, `org.testfx:testfx-junit5`) – FX-UI-Interaktion &
-  Assertions.
-- **Monocle** (`org.testfx:openjfx-monocle`) – **headless** Rendering (kein Display nötig),
-  ideal für Remote/CI: `-Djava.awt.headless=true -Dtestfx.robot=glass
-  -Dtestfx.headless=true -Dprestige.order=sw -Dglass.platform=Monocle
-  -Dmonocle.platform=Headless`.
-- **JUnit 5** als Test-Runner (Vereinheitlichung vorbereiten).
+- **TestFX** (`org.testfx:testfx-core`, `org.testfx:testfx-junit5`, `4.0.18`) – FX-UI-Interaktion
+  & Assertions.
+- **JUnit 5** (`junit-jupiter 5.10.2`) als Test-Runner.
+- **Headless-Ausführung über Xvfb** (virtuelles Framebuffer-Display), getrieben von
+  `xvfb-run mvn test`. Xvfb statt Monocle, weil Monocle-Versionen fragil zur JavaFX-Version
+  passen müssen; Xvfb ist robust und in der Umgebung vorhanden. `Client-Raspi/pom.xml` setzt im
+  `maven-surefire-plugin 3.2.5` die passenden System-Properties (`testfx.robot=glass`,
+  `prism.order=sw`, …).
+- Convenience-Skript: `Client-Raspi/run-ui-tests.sh [TestKlasse]` (ganze Suite bzw. einzelne
+  Klasse).
 
-### Herausforderung: harte Abhängigkeiten
-`Main`/`ElwaManager` initialisieren beim Start DB-Verbindung, deCONZ, CardReader,
-Maintenance-Server. Für UI-Tests brauchen wir **Isolation**:
-- Views/Controller einzeln laden (FXMLLoader auf einzelne `*.fxml`), statt die ganze App.
-- Abhängigkeiten (DataManager, ExecutionManager, DevicePowerManager, CardReader) über
-  Interfaces/Fakes ersetzen. Einige Interfaces existieren bereits
-  (`IDevicePowerManager`, `IDeviceRegistrationService`, `IMainFormStateManager`, …).
-- Ggf. einen Test-Modus/`-dry` nutzen (PowerManager ohne Funktion ist bereits vorgesehen).
+### Isolation
+`Main`/`ElwaManager` initialisieren beim Start DB-/Backend-Verbindung, deCONZ, CardReader,
+Maintenance-Kanal. Die `ElwaManager`-Kopplung ist per Dependency-Injection/Interfaces
+aufgebrochen (`IDevicePowerManager`, `IDeviceRegistrationService`, `IMainFormStateManager`, …),
+sodass Views/Controller einzeln über FXMLLoader geladen und die State-Machine isoliert getestet
+werden können. Beispiele:
+- `HeadlessFxSmokeTest` – reines FX (keine elwasys-Klassen); beweist die headless-Pipeline.
+- `ProgramListEntryFxmlTest` – lädt echtes App-FXML (`ProgramListEntry`) und prüft
+  Controller-Wiring, `#detailBox`, Default-Preisformat.
+- `MainFormStateManager`-Tests – isolierte Charakterisierung der Zustandsübergänge.
+- `InactivitySchedulerTest` – Auto-Logout/Backlight (timer-basiert).
 
-### Erste Testkandidaten (Client)
-1. **State-Machine**: Übergänge in `MainFormStateManager` (SELECT_DEVICE → CONFIRMATION →
-   …), inkl. Fehler-/Wait-Zustände. Teilweise ohne echtes Rendering testbar.
-2. **Startup-View**: lädt, zeigt korrekten Initialzustand.
-3. **DeviceView/ProgramList**: Rendering einer Geräteliste aus Fake-Daten, Auswahl löst
-   `onDeviceSelected` → Zustandswechsel aus.
-4. **InactivityScheduler**: Auto-Logout/Backlight (es gibt bereits `InactivitySchedulerTest`).
-5. **Toolbar-Zustände**: Unknown card / blocked user / location-not-allowed Visualisierung.
+## Client (JavaFX) – echtes E2E
 
-## Client (JavaFX) – echtes E2E ✅ (umgesetzt)
+Neben den isolierten FXML-Charakterisierungstests fährt eine E2E-Suite die **komplette
+Anwendung** (`Main`) headless hoch und durchläuft ihren realen Startup-Pfad (Config-Laden →
+Backend-Verbindung → JavaFX-State-Machine bis `SELECT_DEVICE`). Die `*E2ETest`-Klassen sprechen
+über die **REST-API v1** mit einem echten Backend (nicht mehr direkt mit der Datenbank).
 
-Zusätzlich zu den isolierten FXML-Charakterisierungstests gibt es jetzt einen **echten
-End-to-End-Test**, der die **komplette Anwendung** (`Main`) headless hochfährt und ihren
-realen Startup-Pfad durchläuft: Config-Laden → DB-Verbindung → Gateway-Verbindung →
-JavaFX-State-Machine bis `SELECT_DEVICE`.
+- **Basis-E2E**: `ClientAppE2ETest` (`src/test/.../application/`) – Startup bis `SELECT_DEVICE`.
+- **Gateway-Simulatoren**: der projekteigene **`FhemSimulator`** (fake fhem über Telnet,
+  start-/stoppbar) und der **`DeconzSimulator`** decken beide produktiv genutzten Gateways ab.
+- **Test-Backend-Harness**: `Client-Raspi/ci-support/start-test-backend.sh` (von allen drei
+  Client-Skripten `source`d) baut den Backend-Jar, startet EIN Backend für den gesamten Testlauf
+  (Flyway migriert die Test-DB), seedet per `token-cli` genau einen Standort-Token für „Default"
+  und exportiert `ELWASYS_TEST_BACKEND_URL`/`ELWASYS_TEST_BACKEND_TOKEN` (gelesen von
+  `application.TestBackend`). Ein `EXIT`-Trap stoppt das Backend und löscht dessen Log. Der Jar
+  wird mit **`-Pproduction`** gebaut: im Entwicklungsmodus löst Vaadins `VaadinServlet#init()`
+  einen ONLINE-Lizenzcheck gegen vaadin.com aus, der ohne Netzzugriff nach ~60 s eine
+  `LicenseException` wirft und den kompletten Spring-Kontext einreißt (Details siehe
+  docs/kb/04-build-and-run.md); im Produktionsmodus loggt Vaadin beim Start nur eine
+  `MissingLicenseKeyException` und läuft weiter.
+- **Config/Idempotenz**: temporäres `elwasys.properties` (via `user.dir`-Property); stabile
+  Client-UID (`.client-uid`) + Reset der Standort-Registrierung im Setup → reihenfolge-unabhängig.
+- **Runner**: `Client-Raspi/run-client-e2e.sh` (startet PG, seedet DB, baut+startet Backend,
+  `xvfb-run mvn test` mit `-Dtest='*E2ETest'`).
 
-- **Test**: `ClientAppE2ETest` (`src/test/.../application/`), grün.
-- **Gateway**: der projekteigene **`FhemSimulator`** (fake fhem über Telnet) — start-/
-  stoppbar gemacht (`start(port)`/`stop()`). Der Client nutzt den fhem-Pfad, weil kein
-  deCONZ-Server konfiguriert ist.
-- **DB**: lokale PostgreSQL, geseedet aus der Flyway-V1-Baseline
-  (`backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql`, Location „Default").
-- **Config**: temporäres `elwasys.properties` (via `user.dir`-Property); stabile Client-UID
-  (`.client-uid`) + Reset der Standort-Registrierung im Setup → idempotent, reihenfolge-
-  unabhängig.
-- **Runner**: `Client-Raspi/run-client-e2e.sh` (startet PG, seedet DB, `xvfb-run mvn test`).
-
-**Behobener Blocker (Produktions-Bugfix):** `WashguardConfiguration.getDeconzServer()`
-machte aus einem leeren Wert `"http://"` (nicht blank) → `ElwaManager.initiate()` wählte
-**immer** deCONZ, der dokumentierte fhem-Fallback war toter Code (zudem NPE bei fehlendem
-Key). Fix: leer bleibt leer. Damit ist der fhem-Pfad wieder erreichbar und testbar.
-
-## Client (JavaFX) – deCONZ-Simulator + beide Gateways im E2E ✅ (Phase 4 AP1, 2026-07-21)
-
-Bis Phase 4 AP1 lief die komplette Client-E2E-Suite ausschließlich gegen den fhem-Pfad
-(`FhemSimulator`). Da laut Auftraggeber-Entscheidung (2026-07-20, siehe docs/kb/05
-„Entscheidungen") **beide Gateways** (fhem und deCONZ) im Einsatz bleiben, braucht die
-Testharness einen deCONZ-Gegenpart und muss die wichtigsten Szenarien mit **beiden**
-Simulatoren nachweisen.
+`WashguardConfiguration.getDeconzServer()` liefert bei leerem Wert bewusst leer (nicht
+`"http://"`), damit `ElwaManager.initiate()` bei fehlendem deCONZ-Server auf den fhem-Pfad
+zurückfällt.
 
 ### `DeconzSimulator` (`src/test/.../application/deconzsimulator/`)
 
-Fachliches Gegenstück zu `FhemSimulator`, bildet aber statt eines Telnet-Protokolls die
-**REST+WebSocket**-Architektur von deCONZ nach (siehe `Client-Raspi/.../devices/deconz/`
-und `Client-Raspi/docs/deconz`):
+Fachliches Gegenstück zu `FhemSimulator`, bildet aber statt Telnet die **REST+WebSocket**-
+Architektur von deCONZ nach (siehe `Client-Raspi/.../devices/deconz/`):
 
-- **REST-API** über `com.sun.net.httpserver.HttpServer` (Teil der JDK, keine neue
-  Abhängigkeit): `POST /api` (Authentifizierung, liefert ein festes Fake-Token),
-  `GET/PUT /api/{token}/config` (WebSocket-Port melden bzw. Pairing/Registrierung –
-  Letzteres nur als Stub, siehe unten), `GET/PUT /api/{token}/lights/{id}[/state]`
-  (Zustand lesen/schalten). Die JSON-(De-)Serialisierung nutzt bewusst direkt die
-  **Produktions-Model-Records** aus `devices/deconz/model/` (statt eigener Test-DTOs), damit
-  das Wire-Format garantiert mit dem echten Client-Code übereinstimmt.
-- **WebSocket-Server** (`DeconzWebSocketServer`, package-privat): eine minimale, selbst
-  geschriebene RFC-6455-Implementierung (Handshake + unmaskierte Text-Frames), **keine neue
-  Abhängigkeit** – geprüft wurde, dass für einen reinen WebSocket-*Client* (den der
-  Produktionscode über `StandardWebSocketClient`/Tomcats eingebettete WS-Client-
-  Implementierung nutzt, transitiv über `spring-boot-starter-websocket` →
-  `tomcat-embed-websocket` vorhanden) kein zusätzlicher Server-Unterbau im Projekt existiert;
+- **REST-API** über `com.sun.net.httpserver.HttpServer` (JDK, keine neue Abhängigkeit):
+  `POST /api` (Authentifizierung, liefert festes Fake-Token), `GET/PUT /api/{token}/config`
+  (WebSocket-Port melden bzw. Pairing – Letzteres nur Stub), `GET/PUT
+  /api/{token}/lights/{id}[/state]` (Zustand lesen/schalten). Die JSON-(De-)Serialisierung nutzt
+  direkt die **Produktions-Model-Records** aus `devices/deconz/model/`, damit das Wire-Format
+  garantiert mit dem echten Client-Code übereinstimmt.
+- **WebSocket-Server** (`DeconzWebSocketServer`, package-privat): minimale, selbst geschriebene
+  RFC-6455-Implementierung (Handshake + unmaskierte Text-Frames), **keine neue Abhängigkeit** –
   da der Client auf dieser Verbindung nie selbst sendet, genügt Handshake + Senden.
 - **Geräte**: vier vorregistrierte Lampen `wm1`..`wm4` (Namens-Analogie zu `FhemSimulator`s
   `wm1sw`..`wm4sw`), deren Id zugleich der in `devices.deconz_uuid` zu seedende Wert ist.
 - **Leistungsmessung**: nicht automatisch – ein Test ruft `sendPowerMeasurement(uuid, watt)`
-  gezielt auf (sendet ein `sensors`-WebSocket-Event mit `uniqueid = uuid + "-power"`, passend
-  zum `startsWith`-Präfixvergleich in `DeconzDevicePowerManager`).
-- **Geräte-Registrierung**: laut Auftrag nur so weit modelliert, wie es der Buchungs-/
-  Auto-Ende-Ablauf braucht – das ist **gar nicht**, da Registrierung ein separater,
-  manueller Admin-Vorgang ist (`DeviceListEntry`-Zahnrad), der in keinem der vier
-  Pflichtszenarien auftritt. `PUT config` (Pairing) ist daher nur ein Stub (200 OK, kein
-  Geräte-Scan); `sendDeviceAddedEvent(uuid)` steht für einen künftigen, dedizierten Test von
-  `DeconzRegistrationService` bereit, wird aber von AP1 nicht genutzt.
+  gezielt auf (sendet ein `sensors`-WebSocket-Event mit `uniqueid = uuid + "-power"`, passend zum
+  `startsWith`-Präfixvergleich in `DeconzDevicePowerManager`).
+- **Geräte-Registrierung**: nur so weit modelliert, wie es der Buchungs-/Auto-Ende-Ablauf
+  braucht (Registrierung ist ein separater, manueller Admin-Vorgang). `PUT config` (Pairing) ist
+  ein Stub (200 OK); `sendDeviceAddedEvent(uuid)` steht für einen künftigen dedizierten
+  `DeconzRegistrationService`-Test bereit.
 
-### Drei neue E2E-Testklassen (deCONZ-Pendants zu bestehenden fhem-Tests)
-
-**Organisationsentscheidung**: statt die bestehenden fhem-Tests zu parametrisieren, gibt es
-**eigene Testklassen** je Pflichtszenario – dieselbe reale Anwendungslogik
-(`ElwaManager`/`DeconzApiAdapter`/`DeconzEventListener`/`DeconzDevicePowerManager`, gewählt
-von `ElwaManager.initiate()`, sobald `deconz.server` gesetzt ist) wird durchlaufen, aber die
-bewährte fhem-Suite bleibt unangetastet und ein gatewayspezifischer Regressionsfall schlägt
-gezielt nur in einer der beiden Klassen fehl:
+Für jedes Gateway-Pflichtszenario gibt es **eigene Testklassen** (statt die fhem-Tests zu
+parametrisieren) – dieselbe reale Anwendungslogik
+(`ElwaManager`/`DeconzApiAdapter`/`DeconzEventListener`/`DeconzDevicePowerManager`) wird
+durchlaufen, ein gatewayspezifischer Regressionsfall schlägt gezielt nur in einer der beiden
+Klassen fehl:
 
 | Test | fhem-Pendant | Testplan | Deckt |
 |---|---|---|---|
-| `ClientUsageDeconzE2ETest` | `ClientUsageE2ETest` | C2–C5 | Karten-Login, Geräteliste, Gerät buchen, Programmstart – inkl. Assertion, dass die simulierte deCONZ-Lampe tatsächlich eingeschaltet wurde |
-| `ClientAutoEndDeconzE2ETest` | `ClientAutoEndE2ETest` | C11 | Auto-Ende – geht über das fhem-Pendant hinaus: statt sich nur auf den eingebauten „0 W beim Start"-Fallback zu verlassen, schickt der Test einen echten **Über-Schwellwert**-Messwert (muss den geplanten Auto-Stopp abbrechen – verifiziert durch Warten über die Wartezeit hinaus, Ausführung muss noch laufen) und danach einen echten **Unter-Schwellwert**-Messwert (muss das tatsächliche Ende auslösen) – beweist die volle `DeconzEventListener → DeconzDevicePowerManager → ExecutionManager`-Pipeline für „sensors"-Events |
+| `ClientUsageDeconzE2ETest` | `ClientUsageE2ETest` | C2–C5 | Karten-Login, Geräteliste, Gerät buchen, Programmstart – inkl. Assertion, dass die simulierte deCONZ-Lampe eingeschaltet wurde |
+| `ClientAutoEndDeconzE2ETest` | `ClientAutoEndE2ETest` | C11 | Auto-Ende – schickt einen echten **Über-Schwellwert**-Messwert (muss den geplanten Auto-Stopp abbrechen) und danach einen echten **Unter-Schwellwert**-Messwert (muss das Ende auslösen) – beweist die volle `DeconzEventListener → DeconzDevicePowerManager → ExecutionManager`-Pipeline für „sensors"-Events |
 | `ClientAbortExecutionDeconzE2ETest` | `ClientAbortExecutionE2ETest` | C12 | Abbruch – inkl. Assertion, dass die simulierte Lampe beim Abbruch wieder ausgeschaltet wird |
 
-Alle drei grün, siehe „Fortschritt“ unten für die Gesamt-Testzahlen.
+### `ClientSmallUiSmokeE2ETest` – Abdeckung für `ui/small` (320×240)
 
-### `ClientSmallUiSmokeE2ETest` – erste Abdeckung für `ui/small` (320×240)
-
-Bis AP1 deckte die E2E-Suite ausschließlich `ui/medium` (800×480) ab. `ui/small` bleibt laut
-Auftraggeber im Einsatz (docs/kb/05) und bekommt jetzt eine Smoke-Test-Klasse.
+Neben `ui/medium` (800×480) ist `ui/small` durch eine Smoke-Test-Klasse abgedeckt.
 
 - **UI-Größenwahl**: `Main#start` prüft `Main.applicationInterfaceType` (falls nicht via
-  CLI-Schalter `-xsDisplay`/`-mdDisplay` gesetzt, wird die Bildschirmbreite der primären
-  `Screen` herangezogen: `< 500px` → klein). Der Test setzt das **statische Feld direkt**
-  vor `FxToolkit.setupApplication(Main.class)`, um unabhängig von der tatsächlichen
-  Xvfb-Auflösung zuverlässig die kleine UI zu erzwingen.
-- **Getestet**: App startet mit 320×240-Szene und erreicht `SELECT_DEVICE`; ein Gerät lässt
-  sich anwählen; ein Karten-Scan schließt den Login ab und erreicht
-  `CONFIRMATION_READY`.
-- **Befund (dokumentiert, kein Bug, keine Code-Änderung)**: `ui/small` hat einen
-  **umgekehrten Ablauf** gegenüber `ui/medium`: dort meldet man sich per Karte an und wählt
-  danach ein Gerät; in `ui/small` wählt man **zuerst** ein Gerät (`onDeviceSelected` prüft
-  nur `Device#isEnabled`, keinen angemeldeten Benutzer) und scannt **danach** die Karte auf
-  der Bestätigungsseite (`onCardDetected` reagiert nur in den
-  `CONFIRMATION_*`-Zwischenzuständen). Der Test bildet diesen tatsächlichen Ablauf ab, statt
-  ihn an `ui/medium` anzugleichen.
-- **Fallstrick beim Schreiben des Tests**: `MainForm.fxml` (small) setzt bei zwei Panes ein
-  explizites `id="..."` (`confirmation-pane`, `program-pane`), das vom sonst aus `fx:id`
-  automatisch abgeleiteten CSS-Id **überschrieben** wird – `lookup("#confirmationPane")`
-  liefert dadurch `null`, richtig ist `lookup("#confirmation-pane")`. Betrifft nur diese
-  beiden Panes; alle anderen `fx:id`s ohne expliziten `id=`-Override funktionieren wie
-  erwartet als Lookup-Selektor.
+  CLI-Schalter `-xsDisplay`/`-mdDisplay` gesetzt, entscheidet die Bildschirmbreite: `< 500px` →
+  klein). Der Test setzt das **statische Feld direkt** vor `FxToolkit.setupApplication(Main.class)`,
+  um unabhängig von der Xvfb-Auflösung zuverlässig die kleine UI zu erzwingen.
+- **Getestet**: App startet mit 320×240-Szene und erreicht `SELECT_DEVICE`; ein Gerät lässt sich
+  anwählen; ein Karten-Scan schließt den Login ab und erreicht `CONFIRMATION_READY`.
+- **Umgekehrter Ablauf gegenüber `ui/medium`**: in `ui/small` wählt man **zuerst** ein Gerät
+  (`onDeviceSelected` prüft nur `Device#isEnabled`, keinen angemeldeten Benutzer) und scannt
+  **danach** die Karte auf der Bestätigungsseite (`onCardDetected` reagiert nur in den
+  `CONFIRMATION_*`-Zwischenzuständen). Der Test bildet diesen tatsächlichen Ablauf ab.
+- **Selektor-Fallstrick**: `MainForm.fxml` (small) setzt bei zwei Panes ein explizites
+  `id="..."` (`confirmation-pane`, `program-pane`), das den sonst aus `fx:id` abgeleiteten CSS-Id
+  **überschreibt** – richtig ist `lookup("#confirmation-pane")`, nicht `lookup("#confirmationPane")`.
+  Betrifft nur diese beiden Panes.
 
-## Client (JavaFX) – Testharness startet seit Phase 4 AP4 ein echtes Backend
+### Offline-Robustheit
 
-Seit dem Terminal-Cutover (Phase 4 AP4, 2026-07-21, siehe docs/kb/05-migration-plan.md) sprechen
-die `*E2ETest`-Klassen über die REST-API v1 statt direkt mit der Datenbank. Alle drei
-Client-Harness-Skripte (`run-ui-tests.sh`, `run-client-e2e.sh`, `run-cross-component-e2e.sh`)
-bringen dafür jetzt ein echtes, laufendes Backend mit:
+Tests für die Offline-Szenarien (Backend nicht erreichbar, laufende Ausführung lokal beenden +
+nachmelden, Offline-Buchungen, Zeitfenster, Replay-Idempotenz), siehe
+docs/kb/03-modules.md „Offline-Robustheit".
 
-- **`Client-Raspi/ci-support/start-test-backend.sh`** (neu, `source`d von allen drei
-  Skripten): baut den Backend-Jar, startet EIN Backend-Prozess für den gesamten Testlauf
-  (Flyway migriert dieselbe Test-Datenbank, die zuvor per direktem Einspielen der V1-Baseline
-  angelegt wurde),
-  seedet per `token-cli` genau einen Standort-Token für „Default" und exportiert
-  `ELWASYS_TEST_BACKEND_URL`/`ELWASYS_TEST_BACKEND_TOKEN` (gelesen von
-  `application.TestBackend`, siehe dortiger Klassen-Javadoc). Ein `EXIT`-Trap stoppt das
-  Backend und löscht dessen Log wieder, wenn das Skript endet.
-- **Kernproblem gefunden und behoben**: das Skript baute den Test-Backend-Jar ursprünglich mit
-  einem einfachen `mvn package -DskipTests` (ohne `-Pproduction`). Damit lief Vaadin im
-  Entwicklungsmodus, dessen `VaadinServlet#init()` einen ONLINE-Lizenzcheck gegen vaadin.com
-  auslöst (siehe docs/kb/04-build-and-run.md „Achtung seit Phase 3 AP1" für die Grundlagen dieses
-  Sandbox-Befunds). Der Check hängt hier mangels Netzwerkzugriffs fest und wirft nach **~60
-  Sekunden** eine `LicenseException`, die den kompletten Spring-Kontext (Tomcat-Connector +
-  Hikari-Pool) einreißt – **ca. 60-70 Sekunden, NACHDEM** der Actuator-Health-Endpunkt schon
-  „UP" gemeldet hatte. Das erklärte exakt das beobachtete Symptom: `run-client-e2e.sh` (28
-  Tests in 16 Klassen) brach ab der 7. Testklasse (`ClientSmallUiSmokeE2ETest`, kumulierte
-  Laufzeit knapp unter der 60s-Marke) deterministisch mit `ApiException: Das Backend ist
-  nicht erreichbar` ab – jede Klasse davor lief noch gegen das (kurzzeitig) lebende Backend,
-  jede danach traf auf ein bereits abgestürztes. **Kein Speicherleck, kein Ressourcenleck,
-  keine Reihenfolge-Abhängigkeit** – eine reine Zeitbombe. Fix: `start_test_backend()` baut
-  jetzt mit `-Pproduction` (dieselbe bereits für `backend/e2e/scripts/start-backend.sh`
-  etablierte Umgehung – im Produktionsmodus loggt Vaadin beim Start nur eine
-  `MissingLicenseKeyException`, bricht aber nicht ab). Verifiziert: `run-client-e2e.sh` 2×
-  hintereinander vollständig grün (28/28).
-- **`run-cross-component-e2e.sh`** brauchte einen eigenen Nachzieh-Fix: `ElwaManager#initiate()`
-  verdrahtet seit dem Cutover IMMER einen `ApiClient` (auch wenn `ClientMaintenanceConnectionE2ETest`
-  inhaltlich nur den transitional auf dem Alt-DB-Pfad verbliebenen Maintenance-Kanal prüft) –
-  das Skript seedete aber nie einen Token. Nachgezogen (`source
-  ci-support/start-test-backend.sh` wie in den beiden anderen Skripten).
-- **Bekannter, isoliert reproduzierbarer Timing-Flake**: `InactivitySchedulerTest` (Timer-
-  basierte Charakterisierungstests, unabhängig vom Backend-Cutover) ist in einem vollen
-  `run-ui-tests.sh`-Lauf vereinzelt mit einem `testMultipleExecutions`-Fehlschlag aufgetreten;
-  im isolierten Einzellauf (`./run-ui-tests.sh InactivitySchedulerTest`) sofort wieder 4/4
-  grün. Kein Zusammenhang mit dem Backend-Cutover, keine Regression – bereits vor AP4 als
-  gelegentlicher Timing-Flake bekannt (siehe Phase-4-AP2-Änderungslog-Eintrag).
+- **Test-Helfer `BackendProxy`** (`Client-Raspi/src/test/.../application/`, reine JDK-TCP-
+  Weiterleitung, analog `FhemSimulator`): der Client zeigt statt direkt auf `TestBackend.url()`
+  auf diesen lokalen Proxy; `goOffline()`/`goOnline()` machen „Backend nicht erreichbar" pro Test
+  gezielt simulierbar, ohne das gemeinsam genutzte Test-Backend anzufassen. `goOffline()`
+  schließt zusätzlich bereits offene Verbindungen aktiv (inkl. eines vom
+  `java.net.http`-Verbindungspool warmgehaltenen Keep-Alive-Sockets).
+- **`ClientOfflineRobustnessE2ETest`** (TestFX, 3 geordnete Tests): (1) laufende Ausführung
+  übersteht einen Backend-Ausfall (lokal abgeschlossen + im Journal hinterlegt → nach
+  Wiederverbindung repliziert, `finished=true` beim Backend); (2) neue Buchung wird offline
+  (Kartenlogin + Berechtigungs-/Guthabenprüfung gegen den Snapshot) akzeptiert, existiert beim
+  Backend zunächst NICHT, wird nach Wiederverbindung repliziert (inkl. `credit_accounting`);
+  (3) nach `locations.offline_max_duration_minutes=0` + `OfflineGateway#refreshSnapshot()` wird
+  eine neue Buchung mit demselben Fehlerbild wie C15 abgelehnt (`MainFormState.ERROR`).
+- **`ClientOfflineReplayIdempotencyE2ETest`** (bewusst KEIN TestFX): repliziert dasselbe Journal
+  zweimal gegen das echte Test-Backend und beweist über `executions`-/`credit_accounting`-
+  Zeilenzahlen, dass weder eine zweite Ausführung noch eine zweite Guthabenbuchung entsteht.
+- Netzwerkfreie Absicherung derselben Logik als Unit-Tests: `OfflineGatewayReplayTest`
+  (5 `@Test`: Paar-Reihenfolge/NPE, Dead-Letter, `clear()`-Race), `OfflineGatewayClockPlausibilityTest`
+  (3 `@Test`, Uhren-Plausibilität), Backend `ExecutionControllerOfflineReplayTest` (11 `@Test`,
+  Zeitstempel-Toleranz inkl. standortspezifischer `offline.max-duration`, Notification-
+  Unterdrückung für zu alte Ereignisse, Replay nach Löschung).
 
-**Testzahlen Phase 4 AP4 (2026-07-21, historisch)**: `run-client-e2e.sh` **28/28** (2×
-reproduziert), `run-ui-tests.sh` **46/46** (18 Unit-/Charakterisierungstests + 28 E2E),
-`run-cross-component-e2e.sh` (Alt-TCP-Protokoll, `ClientMaintenanceConnectionE2ETest`) **3/3**.
+## Client (JavaFX) – Cross-Component / Fernwartung
 
-## Client (JavaFX) – Cross-Component-/Fernwartungs-Suite umgestellt (Phase 4 AP5, 2026-07-21)
+Die Fernwartung ist eine ausgehende Terminal-WebSocket-Verbindung (siehe
+docs/kb/03-modules.md „Ausgehende Fernwartungs-Verbindung"). Der Cross-Component-Nachweis läuft
+über **`TerminalMaintenanceRealClientE2ETest`** (`backend/src/test/.../ws/`): der
+Backend-Spring-Kontext hält eine echte `TerminalMaintenanceService`-Bean als „Portal", ein
+echter, gepackter Client-Raspi-Jar läuft als Subprozess als „Terminal"; Status/Log/Restart-
+Roundtrips gehen über den echten WS-Kanal (5 `@Test`).
 
-Mit der Fernwartungs-Umkehr (siehe docs/kb/05-migration-plan.md „Arbeitspakete Phase 4" AP5,
-docs/kb/03-modules.md „Ausgehende Fernwartungs-Verbindung") spricht der Client-Raspi das Alt-TCP-
-Protokoll nicht mehr – `application/MaintenanceServerManager` und `configuration/
-LocationManager` sind aus `Client-Raspi/src/main` entfernt, damit auch der bisherige
-Cross-Component-Test `ClientMaintenanceConnectionE2ETest` (verband sich gegen einen echten
-`Common.MaintenanceServer` als „Portal"): **entfernt**, ersetzt durch
-`backend/src/test/java/.../ws/TerminalMaintenanceRealClientE2ETest.java` (siehe
-docs/kb/03-modules.md für die volle Beschreibung des Testaufbaus – Backend-Spring-Kontext mit
-echter `TerminalMaintenanceService`-Bean als „Portal", ein echter, gepackter Client-Raspi-Jar
-als Subprozess als „Terminal", Status/Log/Restart-Roundtrips über den echten WS-Kanal).
+- **Runner**: `Client-Raspi/run-cross-component-e2e.sh` installiert die Aggregator-Parent-POM
+  (`mvn -N install -DskipTests`), baut den Client-Raspi-Jar (`mvn package -DskipTests`; KEIN
+  Backend-Jar-Build nötig – der Backend-Kontext wird vom JUnit-Test selbst über
+  `@SpringBootTest(webEnvironment=RANDOM_PORT)` gestartet), löst die JavaFX-Plattform-Module aus
+  dem lokalen Maven-Repo auf (`--module-path`/`--add-modules javafx.controls,javafx.fxml,
+  javafx.web` – ein Standard-JDK startet dieses Application-Subclass-Fat-Jar sonst nicht:
+  `Error: JavaFX runtime components are missing`), bereitet eine frische, leere Postgres-Testdatenbank
+  vor (Flyway migriert über den Testkontext, der Test legt Standort/Token selbst über die echten
+  Repositories an) und startet die Suite unter `xvfb-run` (`mvn -f backend/pom.xml test
+  -Dtest=TerminalMaintenanceRealClientE2ETest`) – der reale Client-Subprozess braucht ein
+  Display, `-Dtest=...` überschreibt gezielt den `backend/pom.xml`-Standardausschluss dieser
+  Testklasse aus dem normalen `mvn test`-Lauf.
 
-**Auswirkung auf die bestehenden Client-Zahlen**: da die 3 alten Cross-Component-Tests
-(Log/Status/Restart) aus `Client-Raspi/src/test` (Klassenname endete auf `E2ETest`, daher
-sowohl in `run-ui-tests.sh`s ungefiltertem `mvn test` als auch in `run-client-e2e.sh`s
-`-Dtest='*E2ETest'`-Filter mitgezählt) ersatzlos entfernt sind (ihr Nachfolger lebt jetzt im
-`backend`-Modul, einem eigenen Testlauf), sinken beide Zahlen um 3:
-- `run-ui-tests.sh`: **46 → 43/43** grün (keine sonstige Änderung – 18 Unit-/
-  Charakterisierungstests + 25 E2E).
-- `run-client-e2e.sh`: **28 → 25/25** grün (2× reproduziert).
-- Neue, eigenständige Suite: `Client-Raspi/run-cross-component-e2e.sh` (gleicher Dateiname/
-  Pfad, komplett neuer Inhalt – siehe unten) treibt jetzt `TerminalMaintenanceRealClientE2ETest`
-  im `backend`-Modul an: **3/3** grün (Status/Log/Restart), 2× reproduziert.
+## Client – Testfall-Übersicht (C1–C16)
 
-**`run-cross-component-e2e.sh` (Phase 4 AP5, neuer Inhalt)**: installiert die Aggregator-
-Parent-POM (`mvn -N install -DskipTests` – das Common-Modul ist im Phase-5-Nachtrag aufgelöst,
-seine Klassen liegen jetzt im Client-Raspi-Modul), baut den
-Client-Raspi-Jar (`mvn package -DskipTests`, KEIN Backend-Jar-Build/-Start nötig – der
-Backend-Spring-Kontext wird vom JUnit-Test selbst über `@SpringBootTest(webEnvironment=
-RANDOM_PORT)` gestartet, siehe docs/kb/03-modules.md), löst die JavaFX-Plattform-Module aus dem
-lokalen Maven-Repo auf (`--module-path`/`--add-modules javafx.controls,javafx.fxml,
-javafx.web` – ein Standard-JDK kann ein `java -jar` dieses Application-Subclass-Fat-Jars sonst
-nicht starten: `Error: JavaFX runtime components are missing`, siehe Skript-Kommentar für die
-volle Begründung), bereitet eine frische, leere Postgres-Testdatenbank vor (analog zu
-`backend/run-backend-tests.sh` – Flyway migriert sie über den Testkontext, kein
-separates Seed-Skript nötig, der Test legt Standort/Token selbst über die echten
-Repositories an) und startet die Suite unter `xvfb-run` (`mvn -f backend/pom.xml test
--Dtest=TerminalMaintenanceRealClientE2ETest`) – der reale Client-Subprozess braucht ein
-Display, `-Dtest=...` überschreibt gezielt den in `backend/pom.xml` konfigurierten
-Standard-Ausschluss dieser Testklasse aus dem normalen `mvn test`-Lauf (siehe
-docs/kb/03-modules.md).
+Die Client-E2E-Fälle decken den Kern-Nutzungsablauf, Login-Varianten und den Execution-Lifecycle
+ab (Detail-Beschreibung und Fixtures: docs/kb/08-test-plan.md).
 
-## Offline-Robustheit (Phase 4 AP6, 2026-07-21)
+| ID | Testfall | Kern-Assertion |
+|----|----------|----------------|
+| C1 | Startup → Geräteauswahl | State `SELECT_DEVICE` |
+| C2 | Geräteliste rendert geseedetes Gerät des Standorts | Gerätename sichtbar |
+| C3 | Karten-Login gültiger Benutzer | `registeredUser` gesetzt |
+| C4 | Gerät wählen → Programmliste | State `CONFIRMATION`, Programm sichtbar |
+| C5 | FIXED-Programm bestätigen (Start) | laufende Execution in DB (Gateway geschaltet) |
+| C6 | Unbekannte Karte | `#userInfo` Style `card-unknown`, kein Login |
+| C7 | Gesperrter Benutzer | `#userInfo` Style `user-blocked`, kein Login |
+| C8 | Benutzergruppe am Standort nicht erlaubt | `#userInfo` Style `location-disallowed` |
+| C9 | Zu wenig Guthaben | `#confirmationPane` Style `credit-insufficient`, Start disabled |
+| C10 | Auto-Logout nach Inaktivität | `registeredUser` wird null |
+| C11 | Auto-Ende: keine Leistung → Ende nach `auto_end_wait_time` | Execution automatisch beendet |
+| C12 | Laufende Execution abbrechen | Execution gestoppt |
+| C13 | Unterbrochene Execution beim Start fortsetzen | Execution als laufend übernommen |
+| C14 | DYNAMIC-Programm: Preisanzeige | „Grundgebühr"/„Zeitpreis" sichtbar |
+| C15 | Backend beim Start nicht erreichbar (ohne nutzbaren Offline-Snapshot) → Fehlerzustand | State `ERROR`, Retry möglich (`ClientDatabaseErrorE2ETest`) |
+| C16 | Standortfremdes Gerät | erscheint **nicht** in der Liste |
 
-Neue Tests für die C15-Nachfolger-Szenarien (Backend nicht erreichbar, laufende Ausführung
-lokal beenden + nachmelden, Offline-Buchungen, Zeitfenster, Replay-Idempotenz), siehe
-docs/kb/05-migration-plan.md „Konzeptskizze: Offline-Buchungen am Terminal“ und
-docs/kb/03-modules.md „Offline-Robustheit (AP6)“.
+Offline-Nachfolger zu C15 (bei nutzbarem Snapshot startet der Client im Offline-Modus statt in
+`ERROR`):
 
-- **Neuer Test-Helfer `BackendProxy`** (`Client-Raspi/src/test/.../application/`, reine
-  JDK-TCP-Weiterleitung, analog `FhemSimulator`): der Client zeigt statt direkt auf
-  `TestBackend.url()` auf diesen lokalen Proxy; `goOffline()`/`goOnline()` machen „Backend
-  nicht erreichbar“ für einen einzelnen Test gezielt simulierbar, ohne das für die ganze
-  Suite gemeinsam genutzte Test-Backend anzufassen. `goOffline()` schließt zusätzlich
-  bereits offene Verbindungen aktiv (inkl. eines vom `java.net.http`-Verbindungspool
-  warmgehaltenen Keep-Alive-Sockets) – sonst könnte ein Test durch eine zufällig noch
-  funktionierende Altverbindung flaken.
-- **`ClientOfflineRobustnessE2ETest`** (TestFX, 3 geordnete Tests):
-  1. laufende Ausführung übersteht einen Backend-Ausfall (Abbruch schlägt am
-     Kommunikationsfehler fehl → lokal abgeschlossen + im Journal hinterlegt → nach
-     Wiederverbindung repliziert, Backend-DB zeigt danach `finished=true`).
-  2. eine neue Buchung wird offline (Kartenlogin + Berechtigungs-/Guthabenprüfung gegen den
-     Snapshot) akzeptiert, existiert beim Backend zunächst NICHT, wird nach Wiederverbindung
-     repliziert (inkl. Verbuchung über `credit_accounting`).
-  3. nach testweisem Setzen von `locations.offline_max_duration_minutes=0` +
-     `OfflineGateway#refreshSnapshot()` wird eine neue Buchung mit demselben Fehlerbild wie
-     C15 abgelehnt (`MainFormState.ERROR`) – kein neu erfundenes Fehlerbild.
-- **`ClientOfflineReplayIdempotencyE2ETest`** (bewusst KEIN TestFX – kleinste belastbare
-  Testform, siehe Klassen-Javadoc): repliziert dasselbe Journal zweimal gegen das echte
-  Test-Backend (simuliert einen Terminal-Absturz zwischen erfolgreichem Netzwerkaufruf und
-  Journal-Löschung bzw. einen sich überschneidenden zweiten Replay-Versuch) und beweist über
-  `executions`-/`credit_accounting`-Zeilenzahlen, dass dabei weder eine zweite Ausführung
-  noch eine zweite Guthabenbuchung entsteht.
-- **Backend**: `ExecutionControllerOfflineReplayTest` (8 reine Mockito-Unit-Tests, gleiches
-  Muster wie `ExecutionControllerNotificationTest` – kein zusätzlicher Spring-Testkontext),
-  deckt die Zeitstempel-Toleranz (inkl. standortspezifischer `offline.max-duration`) und die
-  Notification-Unterdrückung für zu alte Ereignisse ab.
+| ID | Testfall | Testklasse |
+|----|----------|------------|
+| C15a | Backend fällt während laufender Ausführung aus → lokal beendet + Journal → nach Reconnect repliziert (`finished=true`) | `ClientOfflineRobustnessE2ETest` |
+| C15b | Backend aus, neue Buchung innerhalb `offline.max-duration` → offline akzeptiert, erst nach Replay beim Backend | `ClientOfflineRobustnessE2ETest` |
+| C15c | Snapshot/Zeitfenster abgelaufen, Backend aus → neue Buchung abgelehnt (`ERROR`, Fehlerbild wie C15) | `ClientOfflineRobustnessE2ETest` |
+| C15d | Journal-Replay wiederholt → keine Doppelbuchung (Backend dedupliziert über Idempotenz-Schlüssel) | `ClientOfflineReplayIdempotencyE2ETest` |
 
-**Testzahlen Phase 4 AP6 (2026-07-21)**: `run-ui-tests.sh` **43/43 → 47/47**,
-`run-client-e2e.sh` **25/25 → 29/29** (2× hintereinander reproduziert), Cross-Component
-unverändert **3/3**, Backend-Suite **199/199 → 207/207**, Portal-E2E-Suite weiterhin
-**20/20** (P14 inkl. neuem Feld „Offline-Maximaldauer“, unveränderter Save-Roundtrip).
+## Backend-Portal (Vaadin Flow) – Playwright E2E
 
-## Alt-Portal (Vaadin 7) – Playwright E2E ⚠️ STILLGELEGT (Phase 3 AP6) und ENTFERNT (Phase 5 AP1)
-
-> **Historisch – existiert nicht mehr.** Diese Suite (`Portal/e2e/`) war der Maßstab für
-> P1–P20 und lief bis Phase 3 AP6 in der PR-CI. Sie wurde in Phase 3 AP6 durch
-> [`backend/e2e/`](#backend-vaadin-flow--playwright-e2e--umgesetzt-phase-3-ap6) (Vaadin Flow,
-> dasselbe Testplan-Inventar P1–P20) fachlich abgelöst und lief seither nicht mehr in der CI
-> (`.github/workflows/ci.yml`, Job `portal-legacy-build` baute das Alt-Portal-Modul nur noch,
-> ohne Playwright). Mit dem gesamten Alt-Portal-Modul ist auch `Portal/e2e/` in **Phase 5 AP1
-> vollständig aus dem Repository entfernt** – dieser Abschnitt bleibt als historische
-> Dokumentation stehen (siehe docs/kb/05-migration-plan.md, docs/kb/03-modules.md), ist aber nicht mehr
-> lokal ausführbar. Die maßgebliche, aktuelle Portal-E2E-Suite ist ausschließlich
-> `backend/e2e/` (siehe unten).
-
-Entscheidung (Auftraggeber, historisch): **Playwright (Node/TypeScript)**. Projekt war unter
-`Portal/e2e/` (entfernt, siehe oben).
-
-- **Browser**: vorinstalliertes Chromium (`/opt/pw-browsers/chromium`) via
-  `executablePath` – kein `playwright install` nötig.
-- **Orchestrierung** (historisch, mit dem Alt-Portal entfernt): `scripts/start-portal.sh`
-  (idempotent) startete PostgreSQL, seedete die `elwasys`-DB aus der damaligen
-  `database-init.sql`-Fixture (die es heute nicht mehr gibt – das 0.4.0-Schema kommt jetzt
-  ausschließlich aus der Flyway-V1-Baseline), schrieb `/etc/elwaportal/elwaportal.properties`,
-  installierte Common und startete `mvn jetty:run`. Playwright `webServer` wartet auf
-  `:8080`, führt die Tests aus und fährt Jetty wieder herunter. Mit `E2E_NO_WEBSERVER=1`
-  gegen einen bereits laufenden Server testbar.
-- **Vaadin-7-Selektoren**: keine stabilen IDs → Lokatoren über Vaadin-CSS-Klassen
-  (`input.v-textfield`, `.v-button`) und sichtbare Captions.
-
-**Letzter Stand vor der Stilllegung: 18/18 grün** (`tests/login.spec.ts`, `admin.spec.ts`,
-`admin-crud.spec.ts`, `dashboard.spec.ts`, `user-portal.spec.ts` – deckten P1–P10, P12–P20 ab;
-P11 „Gerät aktiv/inaktiv schalten" wurde hier nie umgesetzt, siehe docs/kb/08-test-plan.md).
-
-### Nicht weiter verfolgt
-- **Vaadin TestBench** (kommerziell/lizenzabhängig) – verworfen.
-
-## Backend (Vaadin Flow) – Playwright E2E ✅ (umgesetzt, Phase 3 AP6)
-
-Fachlicher Nachfolger der Alt-Suite oben, gegen das neue, ins Backend eingebettete Portal
-(`backend/.../ui/`, Vaadin Flow). Projekt unter `backend/e2e/`, analog zu `Portal/e2e/`
-aufgebaut (Playwright/Node/TS, gleiches `package.json`-Muster, gleiche Chromium-Bereitstellung).
+Die maßgebliche Portal-E2E-Suite läuft gegen das ins Backend eingebettete Vaadin-Flow-Portal
+(`backend/.../ui/`). Projekt unter `backend/e2e/` (Playwright/Node/TS).
 
 ### Aufbau
 
 - **`backend/e2e/playwright.config.ts`**: `baseURL`/`webServer.url` zeigen auf
-  `http://localhost:${E2E_BACKEND_PORT}` (Default **8081** – bewusst NICHT 8080, damit die
-  Suite nicht mit einem manuell laufenden Alt-`Portal/e2e`-Server auf demselben Host
-  kollidiert). `fullyParallel: false`/`workers: 1` (wie die Alt-Suite – die Tests teilen sich
-  Login-Sessions/globalen Zustand). `globalSetup: ./global-setup.ts`.
-- **`backend/e2e/scripts/start-backend.sh`** (Playwright `webServer.command`, fachlicher
-  Nachfolger von `Portal/e2e/scripts/start-portal.sh`): startet PostgreSQL, legt eine
-  **frische, dedizierte** Datenbank an (`elwasys_backend_e2e`, bei jedem Lauf gedroppt+neu
-  angelegt – anders als die Alt-Suite, die eine dauerhafte `elwasys`-DB wiederverwendet und
-  E2E-Fixtures per Namenspräfix aufräumt; hier ist „frische DB pro Lauf" einfacher UND
-  robuster für den Stabilitätsnachweis), baut das Backend-Jar über den Root-Reactor
-  (`mvn package -pl backend`, löst dabei die Aggregator-Parent-POM mit auf) im
-  **Produktionsmodus** (`-Pproduction` – der einzige in dieser Sandbox
-  lizenzcheck-freie Build-Weg, siehe docs/kb/05-migration-plan.md „Phase 3 AP2") und startet den
-  Jar im Vordergrund auf `SERVER_PORT`. Der Flyway-Baseline-Lauf beim ersten Start seedet
-  bereits `admin`/`admin`, die Gruppe „Default" und den Standort „Default" (Seed-Daten des
-  0.4.0-Schemas, heute einzige Quelle `V1__baseline_schema_0_4_0.sql`; historisch aus der
-  früheren `database-init.sql`-Fixture abgeleitet) – kein separates Seed-SQL-Skript nötig wie
-  bei der Alt-Suite.
+  `http://localhost:${E2E_BACKEND_PORT}` (Default **8081**). `fullyParallel: false`/`workers: 1`
+  (die Tests teilen sich Login-Sessions/globalen Zustand), `retries: 0` (Flakes sofort sichtbar),
+  `globalSetup: ./global-setup.ts`.
+- **`backend/e2e/scripts/start-backend.sh`** (Playwright `webServer.command`): startet
+  PostgreSQL, legt eine **frische, dedizierte** Datenbank an (`elwasys_backend_e2e`, bei jedem
+  Lauf gedroppt+neu angelegt), baut das Backend-Jar über den Root-Reactor (`mvn package -pl
+  backend`, löst die Aggregator-Parent-POM mit auf) im **Produktionsmodus** (`-Pproduction` – der
+  einzige in dieser Sandbox lizenzcheck-freie Build-Weg) und startet den Jar auf `SERVER_PORT`.
+  Der Flyway-Baseline-Lauf seedet bereits `admin`/`admin`, die Gruppe „Default" und den Standort
+  „Default" (Seed-Daten aus `V1__baseline_schema_0_4_0.sql`) – kein separates Seed-SQL nötig.
 - **`backend/e2e/global-setup.ts`**: seedet die zwei zusätzlichen Nicht-Admin-Testnutzer
-  (`e2e_portal_user`, `e2e_pwchange_user`, Passwort „test", SHA1-Alt-Hash – wird vom neuen
-  Backend im Parallelbetrieb unverändert akzeptiert, siehe Phase 2 AP3) für P15–P19. Läuft
-  **garantiert nach** `webServer`s Bereitschaftsprüfung und **vor** jedem Test (Playwright-
-  Ausführungsreihenfolge) – wichtig, weil das Schema erst existiert, sobald die Anwendung
-  hochgefahren ist und Flyway migriert hat; ein Seeding aus `start-backend.sh` selbst würde
-  mit Playwrights eigenem Bereitschafts-Poll auf denselben Port um dieselbe Ressource
-  wettlaufen (Details in den Kommentaren der Datei).
+  (`e2e_portal_user`, `e2e_pwchange_user`, Passwort „test", SHA1-Alt-Hash – vom Backend
+  akzeptiert) für die Benutzer-Portal-Fälle. Läuft garantiert **nach** der `webServer`-
+  Bereitschaftsprüfung (Schema existiert erst nach Flyway-Migration) und **vor** jedem Test.
 - **`backend/e2e/tests/helpers.ts`**: gemeinsame Lokatoren-Helfer (Login, Navigation,
-  ComboBox-Auswahl, Grid-Zeilen-Zugriff, Dialog-Handling) für alle Spec-Dateien.
-- **Spec-Dateien** (1:1 zur Alt-Suite benannt): `login.spec.ts` (P1/P2), `admin.spec.ts`
-  (P3–P5), `admin-crud.spec.ts` (P6–P14, inkl. dem neu ergänzten P11), `dashboard.spec.ts`
-  (P20), `user-portal.spec.ts` (P15–P19).
+  ComboBox-Auswahl, Grid-Zeilen-Zugriff, Dialog-Handling).
+- **Spec-Dateien**: `login.spec.ts`, `admin.spec.ts`, `admin-crud.spec.ts`, `dashboard.spec.ts`,
+  `user-portal.spec.ts`.
 
-### Vaadin-Flow-Selektoren (wichtige Erkenntnisse)
+### Vaadin-Flow-Selektoren (Selektor-Strategie)
 
-- Formularfelder haben – anders als Vaadin 7 – über `<label for="...">` echte, mit dem
-  internen `<input>` verknüpfte Labels → **`page.getByLabel('Feldname')`** funktioniert
-  zuverlässig (Playwright pierct dabei transparent die internen Shadow-Roots der
-  Vaadin-Komponenten). Bei mehrdeutigen Präfixen (z. B. „Name" vs. „Username") `{ exact:
-  true }` verwenden.
-- Login: `vaadin-login-form` rendert echte `<input name="username">`/`<input
-  name="password">` (Spring-Security-Standardnamen) – direkt per
-  `input[name="username"]` ansprechbar, kein Component-spezifisches Wissen nötig.
-- Dialoge (`Dialog`) rendern als **ein** `<vaadin-dialog-overlay>` pro offenem Dialog, Titel
-  in `h2[slot="title"]`.
-- RadioButtonGroup-Optionen und Checkboxen haben echte ARIA-Rollen
-  (`getByRole('radio', { name })`, `.check()`/`.uncheck({ force: true })`).
-- ComboBox-Auswahl: klicken, Text tippen (filtert), `Enter` drücken, Wert verifizieren
-  (`pickCombo()` in `helpers.ts`) – funktional identisch zum alten `pickCombo()` für
-  Vaadin 7s `v-filterselect`, nur die Selektoren sind neu.
+- Formularfelder haben über `<label for="...">` echte, mit dem internen `<input>` verknüpfte
+  Labels → **`page.getByLabel('Feldname')`** funktioniert zuverlässig (Playwright pierct die
+  internen Shadow-Roots). Bei mehrdeutigen Präfixen (z. B. „Name" vs. „Username") `{ exact: true }`.
+- Login: `vaadin-login-form` rendert echte `<input name="username">`/`<input name="password">`
+  (Spring-Security-Standardnamen) – direkt per `input[name="username"]` ansprechbar.
+- Dialoge (`Dialog`) rendern als **ein** `<vaadin-dialog-overlay>` pro offenem Dialog, Titel in
+  `h2[slot="title"]`.
+- RadioButtonGroup-Optionen und Checkboxen haben echte ARIA-Rollen (`getByRole('radio', { name })`,
+  `.check()`/`.uncheck({ force: true })`).
+- ComboBox-Auswahl: klicken, Text tippen (filtert), `Enter`, Wert verifizieren (`pickCombo()` in
+  `helpers.ts`).
 - **`vaadin-grid`-Zellen/Zeilen (wichtigster Fallstrick)**: Zellinhalte werden als
   **Light-DOM**-`<vaadin-grid-cell-content slot="...">`-Elemente gerendert, die Kinder von
-  `<vaadin-grid>` selbst sind – NICHT Nachkommen der zugehörigen `<tr>` (sie werden nur über
-  das `slot`-Attribut in einen `<td><slot></td>` innerhalb der Zeilen-Shadow-DOM
-  „hineingerendert"). `row.locator(...)` von einer per `getByRole('row', { name })`
-  gefundenen Zeile aus liefert deshalb **still und leise nichts** – `getByRole('row')`
-  funktioniert trotzdem, weil die Accessibility-Tree-Berechnung dem „geflatteten"
-  Rendering-Baum folgt, DOM-Traversal aber nicht. Lösung (`gridRowCells()`/
-  `gridRowActions()`/`rowActionButton()` in `helpers.ts`): die `slot`-NAMEN aus den
-  echten Shadow-DOM-Kindern der Zeile (`row.locator('td slot')`) auslesen und die
-  passenden `vaadin-grid-cell-content`-Elemente global über diesen Namen erneut
-  lokalisieren.
+  `<vaadin-grid>` selbst sind – NICHT Nachkommen der zugehörigen `<tr>` (sie werden nur über das
+  `slot`-Attribut in einen `<td><slot></td>` innerhalb der Zeilen-Shadow-DOM „hineingerendert").
+  `row.locator(...)` von einer per `getByRole('row', { name })` gefundenen Zeile aus liefert
+  deshalb **still und leise nichts** – `getByRole('row')` funktioniert trotzdem, weil die
+  Accessibility-Tree-Berechnung dem „geflatteten" Rendering-Baum folgt, DOM-Traversal aber nicht.
+  Lösung (`gridRowCells()`/`gridRowActions()`/`rowActionButton()` in `helpers.ts`): die
+  `slot`-NAMEN aus den echten Shadow-DOM-Kindern der Zeile (`row.locator('td slot')`) auslesen und
+  die passenden `vaadin-grid-cell-content`-Elemente global über diesen Namen erneut lokalisieren.
 - Icon-Buttons in Grid-Zeilen (Bearbeiten/Löschen/…) tragen ihren Hinweistext nur als
-  `vaadin-tooltip` (`aria-describedby` – trägt zur ARIA-**Beschreibung**, nicht zum
-  ARIA-**Namen** bei) → `getByRole('button', { name: 'Bearbeiten' })` findet dort **nichts**.
-  `rowActionButton()` adressiert sie deshalb bewusst über ihre Quellcode-Reihenfolge
-  (`actionButtons()`-Methode der jeweiligen View), genau wie die Alt-Suite es für Vaadin 7
-  tat.
-- **Aktiver Navigationspunkt**: Vaadin markiert das gerade ausgewählte `vaadin-side-nav-item`
-  mit dem Attribut **`[current]`** (nicht `[active]`). Für Assertions/Selektoren, die „der
-  Menüpunkt X ist aktiv" prüfen wollen, ist das der richtige Anker; die bestehenden Helfer
-  (`openAdminSection` prüft die URL, nicht das Attribut) sind davon unberührt.
+  `vaadin-tooltip` (`aria-describedby` – ARIA-**Beschreibung**, nicht ARIA-**Name**) →
+  `getByRole('button', { name: 'Bearbeiten' })` findet dort **nichts**. `rowActionButton()`
+  adressiert sie über ihre Quellcode-Reihenfolge (`actionButtons()`-Methode der jeweiligen View).
+- **Aktiver Navigationspunkt**: Vaadin markiert das gerade ausgewählte `vaadin-side-nav-item` mit
+  dem Attribut **`[current]`** (nicht `[active]`).
 
 ### Portal-Design zur Laufzeit (kein kompiliertes Theme)
 
-Seit 2026-07-22 liefert das Portal wieder den AdminLTE-Look des Alt-Portals aus (blauer Header,
-dunkle Sidebar, gerahmte Zebra-Tabellen, Login als Karte). Das Styling ist **bewusst kein
-kompiliertes Vaadin-Theme**, sondern ein zur Laufzeit in den `<head>` injiziertes Stylesheet
-(`ElwasysAppShell#configurePage` → `backend/src/main/resources/portal-theme.css`) – ein echtes
-`@Theme`/`@CssImport` würde einen Frontend-Bundle-Build und damit den Vaadin-24.10-Lizenzcheck
-erzwingen, der in dieser Umgebung abbricht (siehe docs/kb/05-migration-plan.md, Risikotabelle
-„Vaadin-Lizenzpflicht" + Änderungslog „Portal-Design-Wiederherstellung"). Für die E2E-Suite
-ist das **rein kosmetisch**: nur Farben/Rahmen ändern sich, keine Texte/Struktur/Selektoren –
-P1–P20 blieben nach der Änderung unverändert **19/19 grün** (sauberer `-Pproduction`-Build).
+Das Portal liefert den AdminLTE-Look aus (blauer Header, dunkle Sidebar, gerahmte
+Zebra-Tabellen, Login als Karte). Das Styling ist **bewusst kein kompiliertes Vaadin-Theme**,
+sondern ein zur Laufzeit in den `<head>` injiziertes Stylesheet (`ElwasysAppShell#configurePage`
+→ `backend/src/main/resources/portal-theme.css`) – ein echtes `@Theme`/`@CssImport` würde einen
+Frontend-Bundle-Build und damit den Vaadin-Lizenzcheck erzwingen, der in dieser Umgebung
+abbricht (siehe docs/kb/05-migration-plan.md). Für die E2E-Suite ist das rein kosmetisch: nur
+Farben/Rahmen, keine Texte/Struktur/Selektoren.
 
-### Test-für-Test-Status (P1–P20, letzter Lauf 2026-07-21)
+### Testfall-Übersicht (P1–P26)
 
-Alle 20 Testfälle grün, mehrfach (≥ 5 vollständige Läufe, 3 davon über den echten
-`webServer`-Pfad inkl. Produktions-Build+Jar-Neustart, 2 gegen einen bereits laufenden
-Server) ohne einen einzigen Fehlschlag oder Retry – `retries: 0` in der Config macht Flakes
-sofort sichtbar statt sie zu verschlucken.
+`backend/e2e/tests/` enthält **23 `test()`** (login 2 / admin 3 / admin-crud 12 / dashboard 1 /
+user-portal 5); P15/P18 teilen sich ein `test()`.
 
-| Test | Datei | Status |
-|---|---|---|
-| P1 Login-Seite rendert | login.spec.ts | grün |
-| P2 Admin-Login → Dashboard | login.spec.ts | grün |
-| P3 Falsches Passwort | admin.spec.ts | grün |
-| P4 Logout | admin.spec.ts | grün |
-| P5 Navigation aller Admin-Sektionen | admin.spec.ts | grün (inkl. neuem „Standorte"-Punkt) |
-| P6 Benutzer anlegen | admin-crud.spec.ts | grün |
-| P7 Benutzer sperren | admin-crud.spec.ts | grün |
-| P8 Guthaben aufladen | admin-crud.spec.ts | grün |
-| P9 Benutzergruppe anlegen | admin-crud.spec.ts | grün |
-| P10 Gerät anlegen | admin-crud.spec.ts | grün |
-| P11 Gerät aktiv/inaktiv schalten | admin-crud.spec.ts | grün – **neu ergänzt** (in der Alt-Suite nie umgesetzt) |
-| P12 Programm anlegen | admin-crud.spec.ts | grün |
-| P13 Benutzergruppe löschen | admin-crud.spec.ts | grün |
-| P14 Standort bearbeiten | admin-crud.spec.ts | grün – **angepasst**: eigener „Standorte"-Menüpunkt statt Dashboard-Dialog (dokumentierte, gewünschte UX-Änderung, keine Funktionsänderung, siehe docs/kb/05) |
-| P15 Nicht-Admin-Dashboard | user-portal.spec.ts | grün |
-| P16 Eigenes Passwort ändern | user-portal.spec.ts | grün – **angepasst**: nur der Neu-Portal-Teil (erneuter Login mit neuem Passwort) ist Testgegenstand, siehe docs/kb/05 „Entscheidungen" (Argon2id) |
-| P17 Benutzereinstellungen | user-portal.spec.ts | grün |
-| P18 Berechtigungen (kein Admin-Zugriff) | user-portal.spec.ts | grün – zusätzlich direkter URL-Zugriffsversuch auf eine Admin-Route geprüft |
-| P19 „Passwort vergessen?"-Dialog | user-portal.spec.ts | grün – zusätzlich Fehlerfall (unbekannte Email, kein SMTP konfiguriert) durchgespielt: Dialog bleibt offen, zeigt Fehlermeldung, **stürzt nicht ab** |
-| P20 Dashboard-Gerätestatus | dashboard.spec.ts | grün |
-
-**Nebenbefund/Bugfix**: beim Aufbau dieser Suite fiel auf, dass der „Passwort vergessen?"-
-Knopf auf der Login-Seite trotz sonst durchgehend eingedeutschter Formulartexte beim
-Vaadin-Default „Forgot password" (Englisch) hängengeblieben war (`LoginI18n.Form` hat ein
-eigenes `forgotPassword`-Feld, das `LoginView#buildGermanI18n` schlicht nicht gesetzt hatte).
-Gefixt (`form.setForgotPassword("Passwort vergessen?")`) – ein winziger, aber echter
-1:1-Verhaltensbruch zum Alt-Portal, der ohne den Blick auf die reale Portal-Seite nicht
-aufgefallen wäre.
+| ID | Datei | Testgegenstand |
+|----|-------|----------------|
+| P1 | login.spec.ts | Login-Seite rendert (Titel/Felder/Button) |
+| P2 | login.spec.ts | Admin-Login → Dashboard, Admin-Menü sichtbar |
+| P3 | admin.spec.ts | Login mit falschem Passwort, bleibt auf Login |
+| P4 | admin.spec.ts | Logout → zurück auf Login-Seite |
+| P5 | admin.spec.ts | Navigation aller Admin-Sektionen (inkl. „Standorte") |
+| P6 | admin-crud.spec.ts | Benutzer anlegen → erscheint in Liste |
+| P7 | admin-crud.spec.ts | Benutzer sperren → „Gesperrt" persistent |
+| P8 | admin-crud.spec.ts | Guthaben aufladen → Liste aktualisiert |
+| P9 | admin-crud.spec.ts | Benutzergruppe anlegen |
+| P10 | admin-crud.spec.ts | Gerät anlegen |
+| P11 | admin-crud.spec.ts | Gerät aktiv/inaktiv schalten |
+| P12 | admin-crud.spec.ts | Programm anlegen (FIXED) |
+| P13 | admin-crud.spec.ts | Benutzergruppe löschen (mit Bestätigung) |
+| P14 | admin-crud.spec.ts | Standort über den „Standorte"-Menüpunkt bearbeiten, Save-Roundtrip |
+| P15 | user-portal.spec.ts | Nicht-Admin-Dashboard („Guthaben"/„Übersicht") |
+| P16 | user-portal.spec.ts | Eigenes Passwort ändern → erneuter Login mit neuem Passwort |
+| P17 | user-portal.spec.ts | Benutzereinstellungen (E-Mail/Benachrichtigung) persistent |
+| P18 | user-portal.spec.ts | Kein Admin-Zugriff (auch direkter URL-Zugriff auf Admin-Route geprüft) |
+| P19 | user-portal.spec.ts | „Passwort vergessen?"-Dialog, inkl. Fehlerfall (unbekannte Email, kein SMTP → Dialog bleibt offen, Fehlermeldung, kein Absturz) |
+| P20 | dashboard.spec.ts | Dashboard-Gerätestatus „Frei/Besetzt" aus laufender Execution |
+| P23 | admin-crud.spec.ts (~Z. 122) | Guthaben-Aufladung lehnt nicht-positiven Betrag ab (#22) |
+| P24 | admin-crud.spec.ts (~Z. 147) | Auszahlung > Guthaben blockiert (#50) |
+| P25 | admin-crud.spec.ts (~Z. 194) | Benutzer löschen → verschwindet aus Liste (#50) |
+| P26 | user-portal.spec.ts (~Z. 57) | Öffentlicher Reset-Link lehnt ungültigen Key ab (#50) |
 
 ### Kommandos
 
 ```bash
 cd backend/e2e
 npm install                 # einmalig
-npx playwright test         # baut das Backend (-Pproduction), startet frische DB+Jar, testet
+npm test                    # baut das Backend (-Pproduction), startet frische DB+Jar, testet
 E2E_NO_WEBSERVER=1 npx playwright test   # gegen einen bereits laufenden Server (:8081)
 npx playwright show-report  # letzten HTML-Report öffnen
 ```
 
-Details/Begründungen siehe die Kommentare in `backend/e2e/playwright.config.ts`,
+Details/Begründungen: die Kommentare in `backend/e2e/playwright.config.ts`,
 `backend/e2e/scripts/start-backend.sh` und `backend/e2e/global-setup.ts`.
 
-### Post-Deploy-Smoke-Teilmenge (Phase 6 AP6, Rollout-Gate)
+### Post-Deploy-Smoke-Teilmenge (Rollout-Gate)
 
-Zusätzlich zur vollen P1–P20-Suite gibt es eine **schlanke, strikt READ-ONLY** Teilmenge, die
-NICHT die eigene Umgebung hochfährt, sondern gegen eine **bereits laufende, extern deployte**
-Umgebung läuft – das Rollout-Gate nach einem Deployment (siehe `deploy/smoke/README.md`,
-docs/kb/05-migration-plan.md „Phase 6"/„AP6"). Rein additiv; die Haupt-Suite (`playwright.config.ts`,
-`global-setup.ts`, `tests/`) bleibt unverändert.
+Zusätzlich zur vollen Suite gibt es eine **schlanke, strikt READ-ONLY** Teilmenge, die NICHT die
+eigene Umgebung hochfährt, sondern gegen eine **bereits laufende, extern deployte** Umgebung
+läuft – das Rollout-Gate nach einem Deployment (siehe `deploy/smoke/README.md`).
 
-- **`backend/e2e/playwright.smoke.config.ts`** – eigene Config: **KEIN** `webServer` (Umgebung
-  läuft schon), **KEIN** `globalSetup` (kein direkter DB-Seed), `baseURL` aus `E2E_BASE_URL`
-  (Default `http://localhost:8080`, der Compose-Produktions-Port), `testDir: './tests-smoke'`,
-  Chromium via `executablePath` wie die Haupt-Config, `workers:1`, `retries` per `SMOKE_RETRIES`
+- **`backend/e2e/playwright.smoke.config.ts`** – eigene Config: **KEIN** `webServer`, **KEIN**
+  `globalSetup`, `baseURL` aus `E2E_BASE_URL` (Default `http://localhost:8080`), `testDir:
+  './tests-smoke'`, Chromium via `executablePath`, `workers:1`, `retries` per `SMOKE_RETRIES`
   (Default 0).
-- **`backend/e2e/tests-smoke/smoke.spec.ts`** – 4 Liveness-Checks, **KEINE** Mutationen, **KEINE**
-  global-setup-Fixtures, **KEINE** Annahmen über konkrete Seed-/Produktivdaten (robust gegen
-  beliebige echte Daten): (1) Login-Seite rendert (P1-artig); (2) Admin-Login
-  (`SMOKE_ADMIN_USER`/`SMOKE_ADMIN_PASSWORD`, Default admin/admin) → Dashboard/Admin-Side-Nav
-  (P2-artig); (3) Kern-Admin-Sektionen Benutzer/Geräte/Programme rendern per nur lesender
-  Navigation (P5-artig, `current`-Attribut); (4) Dashboard rendert (Portal↔DB-Pfad lebt). Nutzt
-  `login()` aus `tests/helpers.ts`.
+- **`backend/e2e/tests-smoke/smoke.spec.ts`** – **4** Liveness-Checks, **KEINE** Mutationen,
+  keine Annahmen über konkrete Seed-/Produktivdaten: (1) Login-Seite rendert; (2) Admin-Login
+  (`SMOKE_ADMIN_USER`/`SMOKE_ADMIN_PASSWORD`, Default admin/admin) → Dashboard/Admin-Side-Nav;
+  (3) Kern-Admin-Sektionen Benutzer/Geräte/Programme rendern (nur lesende Navigation,
+  `current`-Attribut); (4) Dashboard rendert. Nutzt `login()` aus `tests/helpers.ts`.
 - Aufruf: `cd backend/e2e && E2E_BASE_URL=<url> SMOKE_ADMIN_*=… npm run smoke`, oder – mit
   vorgeschaltetem Health-Check als Gesamt-Gate – `deploy/smoke/post-deploy-smoke.sh`
-  (`GET /actuator/health` = `status:UP` UND Playwright grün → Exit 0). In der Sandbox (kein
-  Docker) gegen einen Produktionsmodus-`java -jar`-Server verifiziert: Health UP + 4/4 grün.
+  (`GET /actuator/health` = `status:UP` UND Playwright grün → Exit 0).
 
 ## Ausführung headless (Remote/CI)
-- Client-TestFX mit Monocle → **kein** X-Server nötig.
-- Falls doch ein Display gebraucht wird: **Xvfb** (virtuelles Framebuffer-Display) als
-  Fallback (siehe Cloud-Init).
 
-## Umsetzung (Ist-Stand)
+- Client-TestFX läuft headless via **Xvfb** (`xvfb-run mvn test`); ein X-Server wird über das
+  virtuelle Framebuffer-Display bereitgestellt.
+- Die Chromium-Bereitstellung für Playwright nutzt das vorinstallierte Chromium
+  (`/opt/pw-browsers/chromium`) via `executablePath` – kein `playwright install` nötig.
 
-**Harness steht (headless via Xvfb, nicht Monocle).** Entscheidung: Xvfb statt Monocle,
-weil Monocle-Versionen fragil zur JavaFX-Version passen müssen; Xvfb ist robust und in der
-Umgebung vorhanden.
+## Test-Inventar (Gesamtzahlen)
 
-- `Client-Raspi/pom.xml`: Test-Deps `junit-jupiter 5.10.2`, `testfx-core`/`testfx-junit5`
-  `4.0.18`; `maven-surefire-plugin 3.2.5` mit System-Properties
-  (`testfx.robot=glass`, `prism.order=sw`, …).
-- Tests laufen headless via `xvfb-run mvn test`.
-- Convenience-Skript: `Client-Raspi/run-ui-tests.sh [TestKlasse]`.
+Am Code gezählt:
 
-**Tests (grün, 2/2):**
-- `HeadlessFxSmokeTest` – reines FX (keine elwasys-Klassen); beweist die headless-Pipeline.
-- `ProgramListEntryFxmlTest` – lädt echtes App-FXML (`ProgramListEntry`, eine der wenigen
-  ElwaManager-freien Views) und prüft Controller-Wiring, `#detailBox`, Default-Preisformat.
+- **Backend (JUnit)**: **265 `@Test` in 51 Klassen** (57 Testdateien). Die separat gehaltene
+  `TerminalMaintenanceRealClientE2ETest` (5 `@Test`, per `backend/pom.xml`-Exclude, eigener
+  Harness) läuft nicht in der Standard-Suite → diese umfasst rund **260** Tests
+  (`backend/run-backend-tests.sh`).
+- **Portal-E2E (Playwright)**: **23 `test()`** in `backend/e2e/tests/` (login 2 / admin 3 /
+  admin-crud 12 / dashboard 1 / user-portal 5) zzgl. **4** READ-ONLY-Smoke-`test()` in
+  `tests-smoke/`.
+- **Client (TestFX/JUnit)**: **71 `@Test`** in 28 Testklassen (40 Testdateien inkl.
+  Simulatoren/Helfer).
 
-**Wichtige Erkenntnis (Testbarkeits-Blocker):** `ElwaManager.instance` ist ein eager
-Singleton, dessen Konstruktor eine Konfigurationsdatei lädt und bei Fehlen `System.exit(1)`
-aufruft (+ startet Maintenance-Server). Jede View, die `ElwaManager` (direkt/transitiv)
-berührt, ist daher aktuell **nicht** isoliert testbar. → In Phase 1 sollte diese Kopplung
-über Dependency-Injection/Interfaces aufgebrochen werden (bereits vorhandene Interfaces
-nutzen). Bis dahin: ElwaManager-freie Views zuerst testen.
+## Historie
 
-## Fortschritt
-- [x] TestFX + JUnit5 als Test-Dependencies (Client) ergänzen (Xvfb statt Monocle)
-- [x] Ersten headless-Smoke-Test (FX-Startup) zum Laufen bringen
-- [x] Erster Charakterisierungstest für echtes App-FXML (ProgramListEntry)
-- [x] Echtes Client-E2E (`Main` headless → SELECT_DEVICE, fhem-Simulator + Test-DB)
-- [x] Weitere Client-E2E-Flows (Karten-Login, Geräteliste, Programmstart, Login-Varianten,
-      Execution-Lifecycle) – C1–C16, siehe docs/kb/08-test-plan.md, Stand der Umsetzung
-- [x] Isolierte Charakterisierungstests der State-Machine nach `ElwaManager`-DI-Entkopplung
-      (Phase 1, `MainFormStateManager`-Tests)
-- [x] Alt-Portal-E2E mit Playwright + Test-DB – P1–P20 (bis auf P11), siehe „Alt-Portal
-      (Vaadin 7)" oben; **seit Phase 3 AP6 (2026-07-21) stillgelegt**, durch die Backend-Suite
-      unten abgelöst
-- [x] **Backend-(Vaadin-Flow-)Portal-E2E mit Playwright** – P1–P20 vollständig (inkl. neu
-      ergänztem P11), siehe „Backend (Vaadin Flow)" oben (Phase 3 AP6, 2026-07-21,
-      Abnahmekriterium für Phase 3 erfüllt)
-- [x] Cross-Component-E2E (P21/P22, Wartungsverbindung) – lief gegen das Alt-TCP-Protokoll bis
-      Phase 4 AP4; **seit Phase 4 AP5 (2026-07-21) ersetzt** durch
-      `TerminalMaintenanceRealClientE2ETest` (Backend-Modul, echter WS-Kanal), siehe „Client
-      (JavaFX) – Cross-Component-/Fernwartungs-Suite umgestellt" oben
-- [x] **Phase 4 AP1**: `DeconzSimulator` (REST+WebSocket, siehe „deCONZ-Simulator + beide
-      Gateways im E2E" oben) + drei deCONZ-Pendants zu bestehenden fhem-Kernszenario-Tests
-      (`ClientUsageDeconzE2ETest`/`ClientAutoEndDeconzE2ETest`/
-      `ClientAbortExecutionDeconzE2ETest`, C2–C5/C11/C12) sowie `ClientSmallUiSmokeE2ETest`
-      (erste E2E-Abdeckung für `ui/small`, 320×240) – Client-Suite **37/37 → 46/46**
-      (`run-ui-tests.sh`), **19/19 → 28/28** (`run-client-e2e.sh`), Cross-Component
-      unverändert 3/3
-- [x] **Phase 4 AP4**: Client-Cutover auf die REST-API abgeschlossen, Testharness aller drei
-      Skripte startet jetzt ein echtes Backend mit (`ci-support/start-test-backend.sh`, siehe
-      „Testharness startet seit Phase 4 AP4 ein echtes Backend" oben) – dabei den eigentlichen
-      Grund für das anfängliche Wegbrechen der vollen `run-client-e2e.sh`-Suite gefunden und
-      behoben (Vaadin-Dev-Modus-Lizenzcheck ohne `-Pproduction`, siehe dort). Client-Suite
-      weiterhin **46/46**/**28/28**/**3/3**, Backend-Suite **198/198**, Root-Reactor-Build
-      grün
-- [x] **Phase 4 AP5**: Fernwartung umgedreht (ausgehende Terminal-WebSocket-Verbindung,
-      `MaintenanceServerManager`/`LocationManager` entfernt), Cross-Component-Suite auf den
-      echten Backend-WS-Kanal umgestellt (siehe „Client (JavaFX) – Cross-Component-/
-      Fernwartungs-Suite umgestellt" oben). Client-Suite **46/46 → 43/43**
-      (`run-ui-tests.sh`), **28/28 → 25/25** (`run-client-e2e.sh`, 2× reproduziert) – Rückgang
-      um jeweils 3 durch den Wegfall von `ClientMaintenanceConnectionE2ETest`, siehe oben für
-      die Begründung. Neue, eigenständige Cross-Component-Suite (`backend`-Modul) **3/3** grün,
-      2× reproduziert. Backend-Suite **198/198 → 199/199** (1 neuer `requestStatus`-Unit-Test
-      in `TerminalWebSocketTest`; `TerminalMaintenanceRealClientE2ETest` läuft separat, siehe
-      oben, und zählt NICHT in dieser Zahl). Root-Reactor-Build grün.
+- **2026-07-23** — Test-Inventar code-verifiziert (Backend 265 `@Test`/51 Klassen, Portal-E2E
+  23 + 4 Smoke, Client 71 `@Test`); Backend-Standard-Suite zuletzt 259 grün, Portal-E2E grün
+  ([Worklog AP6](../worklog/2026-07-23-ap6-deployment-betrieb-cutover.md) ·
+  [Worklog AP7](../worklog/2026-07-23-ap7-kb-ueberarbeitung.md)).
+- **2026-07-23** — Pre-Launch AP5: `DemoDataSeederGuardTest`, `RouteAccessAnnotationsTest`
+  gehärtet, 3 #50-Portal-E2E-Fälle → `backend/e2e/tests/` auf 23 `test()`
+  ([Worklog AP5](../worklog/2026-07-23-ap5-portal-performance-crud.md)).
+- **2026-07-22/23** — Pre-Launch AP1–AP6 bauten die Suiten aus (Offline-Replay,
+  Terminal-Stabilität, Abrechnungs-Integrität, Brute-Force-Schutz, Health-Indikatoren);
+  Backend-Suite über die Pakete von 209 auf 259 grün gewachsen
+  ([Worklog AP1](../worklog/2026-07-22-ap1-offline-replay-kern.md) ·
+  [AP2](../worklog/2026-07-22-ap2-terminal-stabilitaet.md) ·
+  [AP3](../worklog/2026-07-22-ap3-abrechnungs-integritaet.md) ·
+  [AP4](../worklog/2026-07-22-ap4-umsetzung.md) ·
+  [AP6](../worklog/2026-07-23-ap6-deployment-betrieb-cutover.md)).
+- **2026-07-22** — Demo-Datenbestand (`DemoDataSeeder`, `run-demo.sh`) für visuelle UI-Checks
+  ([Worklog](../worklog/2026-07-22-demo-daten-ui-checks.md)); Portal-Design (AdminLTE-Look) zur
+  Laufzeit wiederhergestellt ([Worklog](../worklog/2026-07-22-portal-design.md)).
+- **2026-07-21** — Phase 4: `DeconzSimulator` + beide-Gateways-E2E (AP1), Client-Cutover auf die
+  REST-API mit echtem Test-Backend inkl. `-Pproduction`-Fix (AP4), Cross-Component auf den
+  WS-Kanal umgestellt (`TerminalMaintenanceRealClientE2ETest`, AP5), Offline-Robustheit (AP6);
+  laut Worklog Client 47/47 & Backend-Suite 207/207 grün
+  ([Worklog Phase 4](../worklog/2026-07-21-phase-4-terminal-modernisierung.md) ·
+  [Änderungslog](05-migration-plan.md)).
+- **2026-07-21** — Alt-Portal-E2E (`Portal/e2e`, Vaadin 7, letzter Stand 18/18) in Phase 3 AP6
+  durch `backend/e2e` (Vaadin Flow) abgelöst und in Phase 5 AP1 mit dem Alt-Portal-Modul aus dem
+  Repo entfernt ([Worklog Phase 5](../worklog/2026-07-21-phase-5-aufraeumen.md) ·
+  [Änderungslog](05-migration-plan.md)).
+- **2026-07-21** — Phase 3 AP6: Portal-E2E P1–P20 gegen das Vaadin-Flow-Portal umgesetzt (inkl.
+  neu ergänztem P11 und der Eindeutschung „Passwort vergessen?")
+  ([Worklog Phase 3](../worklog/2026-07-20-phase-3-portal-neubau.md)).
+- **2026-07-20** — Client-TestFX/Xvfb-Harness + erste Charakterisierungs-/E2E-Tests aufgebaut
+  ([Worklog Phase 0/1](../worklog/2026-07-20-phase-0-und-1-fundament.md)).

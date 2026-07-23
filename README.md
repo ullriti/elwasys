@@ -16,13 +16,13 @@ shared PostgreSQL database. See [docs/kb/00-overview.md](docs/kb/00-overview.md)
   with the official 7" touch screen. It controls wireless sockets that are plugged in front of
   the managed washing machines, talking to the backend exclusively via its REST API and an
   outgoing WebSocket connection (no direct database access) - see
-  [docs/kb/03-modules.md](docs/kb/03-modules.md).
+  [docs/kb/03-modules.md](docs/kb/03-modules.md). It also contains the six former `Common`
+  utility classes (enum type, formatting/config helpers); the standalone `Common` module was
+  dissolved, so the root reactor now has just two modules.
 - **`backend/`** – the central Spring Boot application: the REST API/WebSocket that the
   terminals use, the admin portal UI (Vaadin Flow, built into the backend - there is no
   separate portal module), and the notification service. Owns the PostgreSQL schema via
   Flyway migrations.
-- **`Common/`** – a small shared library (enum types, formatting/config helpers) used by
-  `Client-Raspi`.
 
 It uses the [ConBee2](https://phoscon.de/de/conbee2) stick to communicate with Zigbee smart plugs (e.g. [LIDL SilverCrest](https://www.lidl.de/p/silvercrest-3er-set-steckdosen-zwischenstecker-zigbee-smart-home-mit-energiezaehler/p800003184)).
 The wireless sockets are switched on if a user has enough credit and are switched off again when the washer is done.

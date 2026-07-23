@@ -26,3 +26,4 @@ Herleitung der Einzelentscheidungen findet sich im Modernisierungsplan
 | [0017](0017-abrechnungs-integritaet-locking.md) | Geld-/Abrechnungs-Integrität: pessimistisches Locking, Advisory-Locks, Idempotenz-Härtung | accepted |
 | [0018](0018-ap4-auth-security-entscheidungen.md) | Pre-Launch AP4 (Auth & Security): Reset-Enumeration neutralisieren, Passwort-Mindestlänge ≥ 8, Standort-Token-Restrisiko | accepted |
 | [0019](0019-ap6-vaadin-lizenz-restrisiko.md) | Pre-Launch AP6: Vaadin-Lizenz – Restrisiko bewusst akzeptiert | accepted |
+| [0020](0020-kb-ist-zustand-und-historie-footer.md) | KB-Artikel: Ist-Zustand im Body, Historie als Pointer-Footer | accepted |
