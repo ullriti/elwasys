@@ -109,9 +109,18 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   FINISH fachlich abgelehnt) wird per kompensierendem `abort` aufgeräumt + laut alarmiert (#68);
   das Dead-Lettern verliert bei Write-Fehler keinen Eintrag mehr (Write-before-Remove) und
   begrenzt den Busy-Loop über einen neustartfesten Fehlversuchszähler (#69).
-- **Nächster Schritt:** **Live-Gang / Betrieb** auf der Zielarchitektur (Cutover nach
-  [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md)); neue Vorhaben vorab als Spec in
-  [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.
+  Aktuell läuft die **finale Review vor dem Feldeinsatz** nach
+  [Spec 0001](../specs/0001-finale-review.md): **Teil A (R1 Zielerreichung, R2 kritische
+  Bugs, R6 Testabdeckung) ist abgeschlossen** – Reports in
+  [`../reviews/final/`](../reviews/final/); wichtigstes Ergebnis: 1 Hoch-Finding
+  (Replay-Paar-Atomizität über Lauf-Grenzen, `OfflineGateway`, siehe R2-Report) und
+  1 Testlücke (deCONZ-Reconnect-Regressionstest, R6).
+- **Nächster Schritt:** Finale Review **Teil B** (R3a–c Code-Qualität, R4 Doku, R5
+  Betrieb, R7 Repo-Hygiene; Prompt in [Spec 0001](../specs/0001-finale-review.md)), dann
+  Synthese + Behebung der priorisierten Findings; danach **Live-Gang / Betrieb** auf der
+  Zielarchitektur (Cutover nach
+  [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md)). Neue Vorhaben vorab als
+  Spec in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.
   Die Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).
 - **Details:** siehe den jeweils letzten Eintrag im [Worklog](../worklog/README.md).
 
