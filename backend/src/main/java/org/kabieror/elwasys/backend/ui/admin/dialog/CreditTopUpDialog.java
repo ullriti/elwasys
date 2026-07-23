@@ -81,6 +81,10 @@ public class CreditTopUpDialog extends Dialog {
         Button btnCancel = new Button("Abbrechen", e -> close());
         Button btnSave = new Button("Buchen", e -> execute(onSaved));
         btnSave.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        // Issue #49: Doppelklick-Schutz auf dem geldbewegenden "Buchen"-Knopf (deaktiviert bis
+        // zum Server-Roundtrip, danach automatisch wieder aktiv - blockiert eine Doppelbuchung
+        // aus zwei Klicks im selben UIDL-Batch bei langsamem Roundtrip).
+        btnSave.setDisableOnClick(true);
         getFooter().add(new HorizontalLayout(btnCancel, btnSave));
 
         addOpenedChangeListener(e -> {

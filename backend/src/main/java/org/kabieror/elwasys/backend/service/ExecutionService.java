@@ -12,6 +12,7 @@ import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.events.ExecutionChangedEvent;
 import org.kabieror.elwasys.backend.repository.ExecutionRepository;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -312,6 +313,26 @@ public class ExecutionService {
     @Transactional(readOnly = true)
     public List<ExecutionEntity> getExecutions(DeviceEntity device) {
         return this.executionRepository.findByDevice_IdAndStartIsNotNullOrderByStartDesc(device.getId());
+    }
+
+    /**
+     * Wie {@link #getExecutions(DeviceEntity)}, aber seitenweise (Issue #30 - Pre-Launch AP5):
+     * das Admin-Dashboard lädt die Geräte-Historie damit lazy statt vollständig - nach
+     * Übernahme der Alt-DB (Jahre an {@code executions}) sonst tausende Entities je Gerät und je
+     * Live-Update. Die Sortierung (neueste zuerst) wird über {@code pageable} vorgegeben.
+     */
+    @Transactional(readOnly = true)
+    public List<ExecutionEntity> getExecutions(DeviceEntity device, Pageable pageable) {
+        return this.executionRepository.findByDevice_IdAndStartIsNotNull(device.getId(), pageable).getContent();
+    }
+
+    /**
+     * Anzahl der gestarteten Ausführungen eines Geräts (Issue #30) - Count-Callback des lazy
+     * geladenen Dashboard-Historie-Grids.
+     */
+    @Transactional(readOnly = true)
+    public long countExecutions(DeviceEntity device) {
+        return this.executionRepository.countByDevice_IdAndStartIsNotNull(device.getId());
     }
 
     /**

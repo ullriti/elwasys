@@ -1,6 +1,7 @@
 package org.kabieror.elwasys.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.util.Set;
@@ -10,11 +11,14 @@ import org.kabieror.elwasys.backend.domain.DiscountType;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.ProgramType;
+import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
+import org.kabieror.elwasys.backend.exception.EntityInUseException;
 import org.kabieror.elwasys.backend.repository.DeviceRepository;
 import org.kabieror.elwasys.backend.repository.LocationRepository;
 import org.kabieror.elwasys.backend.repository.ProgramRepository;
 import org.kabieror.elwasys.backend.repository.UserGroupRepository;
+import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.kabieror.elwasys.backend.support.AbstractBackendIT;
 import org.kabieror.elwasys.backend.support.Fixtures;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,7 +38,11 @@ class DeviceServiceTest extends AbstractBackendIT {
     @Autowired
     private DeviceRepository deviceRepository;
     @Autowired
+    private UserRepository userRepository;
+    @Autowired
     private DeviceService deviceService;
+    @Autowired
+    private ExecutionService executionService;
 
     @Test
     void createsAndUpdatesADevice() {
@@ -79,7 +87,7 @@ class DeviceServiceTest extends AbstractBackendIT {
     }
 
     @Test
-    void deletesADeviceWithoutAGuard() {
+    void deletesADeviceWithoutARunningExecution() {
         LocationEntity location = this.locationRepository.save(new LocationEntity(Fixtures.unique("loc")));
         DeviceEntity device = this.deviceService.create(Fixtures.unique("dev"), 1, location, "", "", "", "", 1f,
                 Duration.ofSeconds(10), true, Set.of(), Set.of());
@@ -87,5 +95,27 @@ class DeviceServiceTest extends AbstractBackendIT {
         this.deviceService.delete(device);
 
         assertThat(this.deviceRepository.findById(device.getId())).isEmpty();
+    }
+
+    @Test
+    void refusesToDeleteADeviceWithARunningExecution() {
+        // Issue #49 (Pre-Launch AP5): ein belegtes Gerät darf nicht gelöscht werden - sonst
+        // fiele die laufende Ausführung per ON DELETE SET DEFAULT auf das Sentinel-Gerät -1 und
+        // belastete das Guthaben weiter.
+        LocationEntity location = this.locationRepository.save(new LocationEntity(Fixtures.unique("loc")));
+        DeviceEntity device = this.deviceService.create(Fixtures.unique("dev"), 1, location, "", "", "", "", 1f,
+                Duration.ofSeconds(10), true, Set.of(), Set.of());
+        ProgramEntity program = this.programRepository.save(
+                new ProgramEntity(Fixtures.unique("prog"), ProgramType.FIXED, 3600));
+        UserGroupEntity group = this.userGroupRepository.save(
+                new UserGroupEntity(Fixtures.unique("group"), DiscountType.NONE, 0));
+        UserEntity user = this.userRepository.save(
+                new UserEntity(Fixtures.unique("User"), Fixtures.unique("user"), group));
+        this.executionService.startExecution(this.executionService.createExecution(device, program, user));
+
+        assertThatThrownBy(() -> this.deviceService.delete(device))
+                .isInstanceOf(EntityInUseException.class);
+        assertThat(this.deviceRepository.findById(device.getId()))
+                .as("das belegte Gerät bleibt bestehen").isPresent();
     }
 }

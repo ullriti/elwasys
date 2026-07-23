@@ -17,6 +17,7 @@ import java.util.Locale;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.service.ExecutionService;
+import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
 
 /**
  * Dialog "Verfallene Ausführungsaufträge" (Phase 3 AP4, siehe docs/kb/05-migration-plan.md) -
@@ -59,6 +60,9 @@ public class ExpiredExecutionsDialog extends Dialog {
         explanation.addClassName("small");
 
         Button btnFinishAll = new Button("Alle abrechnen", e -> finishAll());
+        // Issue #49: Doppelklick-Schutz auf dem geldbewegenden Primär-Button (deaktiviert bis
+        // zum Server-Roundtrip, danach automatisch wieder aktiv).
+        btnFinishAll.setDisableOnClick(true);
 
         this.grid.setHeight("22em");
         this.grid.setWidthFull();
@@ -78,8 +82,10 @@ public class ExpiredExecutionsDialog extends Dialog {
     private HorizontalLayout rowButtons(ExecutionEntity execution) {
         Button btnFinish = new Button("Abrechnen", e -> finish(execution));
         btnFinish.addThemeVariants(ButtonVariant.LUMO_SMALL);
+        // Issue #49: Doppelklick-Schutz auf dem geldbewegenden "Abrechnen"-Knopf.
+        btnFinish.setDisableOnClick(true);
 
-        Button btnDelete = new Button(new Icon(VaadinIcon.TRASH), e -> delete(execution));
+        Button btnDelete = new Button(new Icon(VaadinIcon.TRASH), e -> confirmDelete(execution));
         btnDelete.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_ERROR, ButtonVariant.LUMO_TERTIARY);
 
         return new HorizontalLayout(btnFinish, btnDelete);
@@ -89,6 +95,16 @@ public class ExpiredExecutionsDialog extends Dialog {
         this.executionService.finishExecution(execution);
         loadData();
         this.onChanged.run();
+    }
+
+    /**
+     * Issue #49: Das Löschen eines abrechnungsrelevanten Datensatzes läuft - wie alle anderen
+     * Löschpfade im Portal - über eine ausdrückliche Bestätigung (kein Einzelklick-Löschen).
+     */
+    private void confirmDelete(ExecutionEntity execution) {
+        ConfirmDeleteDialog.show("Ausführung löschen",
+                "Möchten Sie diesen nicht abgerechneten Ausführungsauftrag wirklich löschen?",
+                () -> delete(execution));
     }
 
     private void delete(ExecutionEntity execution) {

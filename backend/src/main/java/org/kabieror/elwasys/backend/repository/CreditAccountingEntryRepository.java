@@ -27,6 +27,17 @@ public interface CreditAccountingEntryRepository extends JpaRepository<CreditAcc
     BigDecimal sumAmountByUserId(@Param("userId") Integer userId);
 
     /**
+     * Summiert die Buchungen MEHRERER Benutzer in EINER Abfrage (Issue #30 - Pre-Launch AP5):
+     * Grundlage der Guthaben-Spalte der Benutzerliste, die sonst pro Zeile eine eigene
+     * Summenabfrage auslöste. Liefert je Benutzer mit mindestens einer Buchung ein Paar
+     * {@code [userId, sum]}; Benutzer ohne Buchung fehlen (der Aufrufer setzt für sie
+     * {@code 0.00}, siehe {@code CreditService#getCredits}).
+     */
+    @Query("SELECT c.user.id, SUM(c.amount) FROM CreditAccountingEntryEntity c "
+            + "WHERE c.user.id IN :userIds GROUP BY c.user.id")
+    List<Object[]> sumAmountByUserIds(@Param("userIds") List<Integer> userIds);
+
+    /**
      * Entspricht {@code DataManager#getLastInpayment}: letzte positive Buchung
      * ({@code amount > 0}) eines Benutzers.
      */

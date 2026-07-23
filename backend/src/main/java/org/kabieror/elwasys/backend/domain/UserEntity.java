@@ -51,7 +51,11 @@ public class UserEntity {
     @Column(nullable = false)
     private boolean blocked = false;
 
-    @Column(length = 50)
+    // Issue #39 (Pre-Launch AP5): Die DB-Spalte ist seit V2 VARCHAR(255) (ein Argon2id-Hash
+    // ist ~97 Zeichen lang). Das frühere length=50 war nur wegen ddl-auto=none folgenlos -
+    // an die tatsächliche Spaltenbreite angeglichen, damit eine spätere Schema-Validierung
+    // (hibernate.ddl-auto=validate) nicht bricht.
+    @Column(length = 255)
     private String password;
 
     @Column(name = "is_admin", nullable = false)

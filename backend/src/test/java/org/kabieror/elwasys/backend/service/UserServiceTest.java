@@ -160,4 +160,38 @@ class UserServiceTest extends AbstractBackendIT {
                 group);
         assertThat(newUserWithSameName.getUsername()).isEqualTo(username);
     }
+
+    /**
+     * Issue #39 (Pre-Launch AP5): Ein Benutzername nahe der Spaltenbreite ließ das Lösch-Präfix
+     * {@code #del<id>#} die Spalte {@code users.username VARCHAR(50)} sprengen - der Alt-Code
+     * lief in einen DB-Fehler. Der Name wird jetzt auf 50 Zeichen gekürzt (Präfix priorisiert),
+     * das Löschen schlägt nicht mehr fehl und ist idempotent.
+     */
+    @Test
+    void deletingAUserWithAVeryLongUsernameTruncatesToColumnWidthAndIsIdempotent() {
+        UserGroupEntity group = group();
+        // 45 Zeichen (< 50, gültig anzulegen), aber Präfix + Name überschreitet 50.
+        String longUsername = Fixtures.unique("x".repeat(36)).toLowerCase();
+        assertThat(longUsername.length()).isEqualTo(45);
+        UserEntity user = this.userService.create("Long Name", longUsername, null, new String[0], false, group);
+        Integer id = user.getId();
+
+        this.userService.delete(user);
+
+        UserEntity reloaded = this.userRepository.findById(id).orElseThrow();
+        assertThat(reloaded.isDeleted()).isTrue();
+        assertThat(reloaded.getUsername()).as("auf Spaltenbreite gekürzt").hasSize(50);
+        assertThat(reloaded.getUsername()).startsWith("#del" + id + "#");
+        String truncatedAfterFirstDelete = reloaded.getUsername();
+
+        // Idempotent: ein zweites delete() darf den bereits gelöschten Namen nicht erneut
+        // präfixieren (kein "#del<id>##del<id>#...").
+        this.userService.delete(reloaded);
+        assertThat(this.userRepository.findById(id).orElseThrow().getUsername())
+                .isEqualTo(truncatedAfterFirstDelete);
+
+        // Der Original-Name ist frei geworden.
+        UserEntity reused = this.userService.create("Reuse", longUsername, null, new String[0], false, group);
+        assertThat(reused.getUsername()).isEqualTo(longUsername);
+    }
 }

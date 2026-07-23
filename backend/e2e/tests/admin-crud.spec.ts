@@ -144,6 +144,74 @@ test('admin cannot top up with a non-positive amount (P8, Issue #22)', async ({ 
   await expect(cells[4]).toContainText('0,00');
 });
 
+test('admin can pay out credit and is blocked when it exceeds the balance (P8, Issue #50)', async ({ page }) => {
+  // Issue #50 (Pre-Launch AP5): P8 deckte nur die Einzahlung ab - hier zusätzlich die
+  // Auszahlung UND der NotEnoughCreditException-Pfad (CreditService#payout).
+  const stamp = Date.now();
+  const name = `E2E Auszahlung ${stamp}`;
+  await createUser(page, name, `e2e_payout_${stamp}`);
+
+  const openCredit = async () => {
+    const creditBtn = await rowActionButton(page, name, 1); // "Guthaben aufladen"
+    await creditBtn.click();
+    const win = dialog(page);
+    await expect(win.locator('h2[slot="title"]')).toHaveText(`Guthaben von ${name}`);
+    return win;
+  };
+
+  // Erst 10,00 einzahlen.
+  let win = await openCredit();
+  await win.getByLabel('Betrag').fill('10');
+  await win.getByRole('button', { name: 'Buchen' }).click();
+  await expectNoDialog(page);
+  let cells = await gridRowCells(page, name);
+  await expect(cells[4]).toContainText('10,00');
+
+  // 4,00 auszahlen -> Guthaben 6,00.
+  win = await openCredit();
+  await win.getByRole('radio', { name: 'Auszahlung' }).click({ force: true });
+  await win.getByLabel('Betrag').fill('4');
+  await win.getByRole('button', { name: 'Buchen' }).click();
+  await expectNoDialog(page);
+  cells = await gridRowCells(page, name);
+  await expect(cells[4]).toContainText('6,00');
+
+  // Auszahlung über dem Guthaben (100,00) wird abgelehnt: Fehlermeldung, Dialog bleibt offen,
+  // nichts wird gebucht.
+  win = await openCredit();
+  await win.getByRole('radio', { name: 'Auszahlung' }).click({ force: true });
+  await win.getByLabel('Betrag').fill('100');
+  await win.getByRole('button', { name: 'Buchen' }).click();
+  await expect(
+    page.getByText('Das Guthaben des Benutzers reicht nicht aus für diese Operation.'),
+  ).toBeVisible();
+  await win.getByRole('button', { name: 'Abbrechen' }).click();
+  await expectNoDialog(page);
+  cells = await gridRowCells(page, name);
+  await expect(cells[4]).toContainText('6,00');
+});
+
+test('admin can delete a user (P13, Issue #50)', async ({ page }) => {
+  // Issue #50: P13 testete nur die Gruppen-Löschung - hier die Benutzer-Löschung
+  // (AdminUsersView#confirmDelete -> UserService#delete, Soft-Delete).
+  const stamp = Date.now();
+  const name = `E2E DelUser ${stamp}`;
+  const username = `e2e_deluser_${stamp}`;
+  await createUser(page, name, username);
+  await expect(page.getByText(name, { exact: true })).toBeVisible();
+
+  // AdminUsersView#actionButtons order: Bearbeiten(0), Guthaben(1), Umsätze(2), Löschen(3).
+  const deleteBtn = await rowActionButton(page, name, 3);
+  await deleteBtn.click();
+  await confirmDeletion(page);
+
+  // Auf das Verschwinden der GRID-ZEILE prüfen (getByRole('row') folgt dem Accessibility-Baum,
+  // also nur echten Zeilen) - NICHT über getByText: vaadin-grid poolt seine
+  // <vaadin-grid-cell-content>-Knoten im Light-DOM und lässt beim Löschen einen Knoten mit dem
+  // alten Zellentext zurück, den getByText sonst weiterhin (unsichtbar) zählen würde.
+  await expect(page.getByRole('row', { name: new RegExp(username) })).toHaveCount(0);
+});
+
 test('admin can create a user group (P9)', async ({ page }) => {
   const groupName = `E2E-Gruppe-${Date.now()}`;
 

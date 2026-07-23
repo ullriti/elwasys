@@ -12,6 +12,27 @@ im [Worklog](docs/worklog/README.md).
 
 ## [Unreleased]
 
+### Changed
+- Portal-Performance (Pre-Launch-Review AP5, Issues #30/#37): Das Admin-Dashboard lädt die
+  Geräte-Historie jetzt seitenweise (lazy) statt vollständig, und die Guthaben-Spalte der
+  Benutzerliste wird gebündelt in zwei Abfragen berechnet statt einer pro Zeile — das Portal
+  skaliert damit mit der übernommenen Alt-Datenbank. Neue DB-Indizes auf den heißen
+  Guthaben-/Historie-Pfaden (`executions`, `credit_accounting`, Migration V11).
+
+### Fixed
+- Portal-CRUD/Robustheit (Pre-Launch-Review AP5, Issues #38/#39/#49): Ein belegtes Gerät lässt
+  sich nicht mehr löschen (die laufende Ausführung würde sonst weiter Guthaben belasten); das
+  Löschen nicht abgerechneter Ausführungen verlangt eine Bestätigung, geldbewegende Knöpfe sind
+  gegen Doppelklick geschützt. Das Löschen eines Benutzers mit sehr langem Namen schlägt nicht
+  mehr fehl (Soft-Delete-Name wird auf die Spaltenbreite gekürzt, #39). Der Demo-Modus bricht ab,
+  statt versehentlich eine produktive Datenbank zu überschreiben (#38).
+
+### Tests
+- Testabdeckung/-determinismus (Pre-Launch-Review AP5, Issues #40/#50): Route-Zugriffsschutz per
+  Classpath-Scan aller Portal-Views abgesichert; neue E2E-Tests für Auszahlung/zu-wenig-Guthaben,
+  Benutzer-Löschung und den öffentlichen Passwort-Reset-Link; nichtdeterministische Wartezeiten
+  aus Backend- und E2E-Tests entfernt.
+
 ### Security
 - Auth & Security (Pre-Launch-Review AP4, Issues #21/#23/#24/#25/#26/#42/#44/#45/#46/#47/#48,
   ADR 0018): Kartenlogin sucht Kartennummern nicht mehr als regulären Ausdruck und validiert

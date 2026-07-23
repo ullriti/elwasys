@@ -3,8 +3,11 @@ package org.kabieror.elwasys.backend.service;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.kabieror.elwasys.backend.domain.CreditAccountingEntryEntity;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
@@ -106,6 +109,53 @@ public class CreditService {
             credit = credit.subtract(price);
         }
         return credit;
+    }
+
+    /**
+     * Berechnet das Guthaben MEHRERER Benutzer gebündelt in nur ZWEI Abfragen (Issue #30 -
+     * Pre-Launch AP5) statt der {@code 2·N} Abfragen, die {@code N}-mal {@link #getCredit}
+     * ausgelöst hätte (Summe + Unfinished-Scan je Benutzer). Fachlich identisch zu
+     * {@link #getCredit}: Buchungssumme minus Maximalpreis jeder noch nicht abgeschlossenen
+     * Ausführung des jeweiligen Benutzers. Für die Guthaben-Spalte der Benutzerliste
+     * ({@code AdminUsersView}).
+     *
+     * @return Map von Benutzer-Id auf Guthaben; enthält für jeden übergebenen Benutzer einen
+     *         Eintrag (auch ohne Buchungen: {@code 0.00}).
+     */
+    @Transactional(readOnly = true)
+    public Map<Integer, BigDecimal> getCredits(List<UserEntity> users) {
+        if (users.isEmpty()) {
+            return Map.of();
+        }
+        List<Integer> userIds = users.stream().map(UserEntity::getId).toList();
+
+        // (1) Buchungssummen aller Benutzer in einer Abfrage.
+        Map<Integer, BigDecimal> sums = new HashMap<>();
+        for (Object[] row : this.creditAccountingEntryRepository.sumAmountByUserIds(userIds)) {
+            sums.put((Integer) row[0], (BigDecimal) row[1]);
+        }
+
+        // (2) Nicht abgeschlossene Ausführungen aller Benutzer in einer Abfrage, nach Benutzer
+        //     gruppiert (unabhängig davon, ob gestartet - exakt wie getCredit, siehe
+        //     findByUser_IdAndFinishedFalse).
+        Map<Integer, List<ExecutionEntity>> unfinishedByUser =
+                this.executionRepository.findByUser_IdInAndFinishedFalse(userIds).stream()
+                        .collect(Collectors.groupingBy(e -> e.getUser().getId()));
+
+        Map<Integer, BigDecimal> result = new HashMap<>();
+        for (UserEntity user : users) {
+            BigDecimal credit = sums.getOrDefault(user.getId(), new BigDecimal("0.00"));
+            for (ExecutionEntity execution : unfinishedByUser.getOrDefault(user.getId(), List.of())) {
+                ProgramEntity program = execution.getProgram();
+                if (program == null) {
+                    continue;
+                }
+                Duration maxDuration = Duration.ofSeconds(program.getMaxDurationSeconds());
+                credit = credit.subtract(this.pricingService.getPrice(program, maxDuration, user));
+            }
+            result.put(user.getId(), credit);
+        }
+        return result;
     }
 
     /**

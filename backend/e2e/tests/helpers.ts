@@ -63,7 +63,11 @@ export async function pickCombo(page: Page, scope: Locator, label: string, item:
   const combo = scope.getByLabel(label, { exact: true });
   await combo.click();
   await combo.fill(item);
-  await page.waitForTimeout(200); // let the filtered overlay list settle before confirming
+  // Issue #40 (Pre-Launch AP5): deterministisch statt eines festen waitForTimeout(200) - auf den
+  // gefilterten Overlay-Eintrag warten, bevor Enter ihn bestätigt (kein Flake auf langsamer CI).
+  await expect(
+    page.locator('vaadin-combo-box-item', { hasText: item }).first(),
+  ).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(combo).toHaveValue(item);
 }

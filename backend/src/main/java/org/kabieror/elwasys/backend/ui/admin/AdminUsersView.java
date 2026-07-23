@@ -16,8 +16,11 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.shared.Registration;
 import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
+import java.math.BigDecimal;
 import java.text.NumberFormat;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.kabieror.elwasys.backend.auth.ElwasysUserPrincipal;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.events.CreditChangedEvent;
@@ -71,6 +74,13 @@ public class AdminUsersView extends VerticalLayout {
     private final String actingAdminName;
 
     private final Grid<UserEntity> grid = new Grid<>();
+
+    /**
+     * Guthaben je Benutzer-Id, in {@link #loadData()} gebündelt vorberechnet (Issue #30):
+     * {@link #formatCredit} liest daraus, statt pro Grid-Zeile eine eigene Guthabenabfrage
+     * auszulösen.
+     */
+    private Map<Integer, BigDecimal> creditByUserId = Map.of();
 
     private Registration broadcasterRegistration;
 
@@ -150,7 +160,9 @@ public class AdminUsersView extends VerticalLayout {
     }
 
     private String formatCredit(UserEntity user) {
-        return NumberFormat.getCurrencyInstance(Locale.GERMANY).format(this.creditService.getCredit(user));
+        // Issue #30: aus der in loadData() gebündelt geladenen Map statt einer Abfrage pro Zeile.
+        BigDecimal credit = this.creditByUserId.getOrDefault(user.getId(), BigDecimal.ZERO);
+        return NumberFormat.getCurrencyInstance(Locale.GERMANY).format(credit);
     }
 
     private Span statusBadge(UserEntity user) {
@@ -233,6 +245,10 @@ public class AdminUsersView extends VerticalLayout {
     }
 
     private void loadData() {
-        this.grid.setItems(this.userService.findAllActive());
+        List<UserEntity> users = this.userService.findAllActive();
+        // Issue #30: Guthaben aller Benutzer in zwei Abfragen bündeln, statt pro Grid-Zeile
+        // (formatCredit) eine eigene Guthabenabfrage auszulösen.
+        this.creditByUserId = this.creditService.getCredits(users);
+        this.grid.setItems(users);
     }
 }
