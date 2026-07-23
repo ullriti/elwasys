@@ -2,6 +2,7 @@ package org.kabieror.elwasys.backend.offline;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import org.kabieror.elwasys.backend.api.exception.InvalidReplayTimestampException;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.service.LocationService;
 import org.slf4j.Logger;
@@ -70,6 +71,58 @@ public class ClientTimestampPolicy {
             return now;
         }
         return clientTimestamp;
+    }
+
+    /**
+     * Prüft den Original-Zeitstempel einer privilegierten Offline-Nachmeldung ({@code replay},
+     * Issue #16) als Defense-in-Depth-Härtung (Issue #67) und wirft eine
+     * {@link InvalidReplayTimestampException}, wenn er nicht plausibel ist. Anders als
+     * {@link #resolve} (das einen Zeitstempel außerhalb des Fensters STILL durch die Serverzeit
+     * ersetzt) wird ein Replay hier ABGELEHNT - denn das {@code replay}-Flag umgeht alle
+     * fachlichen Wächter, und genau dann ist ein fehlender/„jetzt"-Zeitstempel das verdächtige
+     * Signal (ein Terminal, das die Wächter für eine Live-Buchung umgehen will), keine bloße
+     * Uhren-Drift.
+     *
+     * <p>Abgelehnt werden nur die tatsächlichen Missbrauchssignale:
+     * <ul>
+     *   <li><b>{@code null}</b> - eine echte Nachmeldung trägt immer den Original-Zeitpunkt;</li>
+     *   <li><b>„jetzt"/Zukunft</b> - der Zeitstempel muss mindestens {@code replay-min-backdating}
+     *       in der Vergangenheit liegen (ein bereits geschehenes Ereignis kann nicht „jetzt" oder
+     *       in der Zukunft sein). Genau hier läge das Signal eines Terminals, das mit dem
+     *       {@code replay}-Flag die Wächter für eine LIVE-Buchung umgehen will.</li>
+     * </ul>
+     *
+     * <p>Ein <b>zu ALTER</b> Zeitstempel wird bewusst NICHT abgelehnt (Issue #67-Review-Fix):
+     * Ein Stufe-B-{@code START} wird laut Paar-Reihenfolge erst nachgemeldet, wenn sein Ende im
+     * Journal liegt - sein Alter beim Replay ist also {@code Waschdauer + Wiederverbindungszeit}
+     * und kann das Offline-Fenster des Standorts durchaus überschreiten (ein langer Waschgang bei
+     * frischem Snapshot). Ein solcher Fall ist legitim; eine harte „zu alt"-Grenze würde ihn
+     * fälschlich ins Dead-Letter schieben und die Buchung nie abrechnen. Absurd alte Werte fängt
+     * stattdessen {@link #resolve} beim Aufrufer ab (Serverzeit-Ersatz + Protokollhinweis), ohne
+     * die Buchung zu verlieren.
+     *
+     * <p>{@code null}-Standort-Konfiguration bzw. eine Live-Buchung (kein {@code replay}) rufen
+     * diese Methode gar nicht auf.
+     */
+    public void requireValidReplayTimestamp(LocalDateTime clientTimestamp, LocationEntity location) {
+        if (clientTimestamp == null) {
+            this.logger.warn("Privilegierte Nachmeldung am Standort '{}' ohne Original-Zeitstempel abgelehnt "
+                    + "(Issue #67).", location.getName());
+            throw new InvalidReplayTimestampException(
+                    "Eine Offline-Nachmeldung erfordert den Original-Zeitstempel des Ereignisses.");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        Duration minBackdating = this.properties.getReplayMinBackdating();
+        LocalDateTime latestAccepted = now.minus(minBackdating);
+        if (clientTimestamp.isAfter(latestAccepted)) {
+            this.logger.warn(
+                    "Privilegierte Nachmeldung am Standort '{}' mit unplausibel aktuellem Zeitstempel {} abgelehnt "
+                            + "(muss mindestens {} in der Vergangenheit liegen, spätestens {}) - Issue #67.",
+                    location.getName(), clientTimestamp, minBackdating, latestAccepted);
+            throw new InvalidReplayTimestampException("Der Nachmelde-Zeitstempel " + clientTimestamp
+                    + " liegt zu nah an der aktuellen Zeit (erwartet: mindestens " + minBackdating
+                    + " in der Vergangenheit).");
+        }
     }
 
     /**
