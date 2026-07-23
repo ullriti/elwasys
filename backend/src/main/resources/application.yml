@@ -67,6 +67,18 @@ management:
         include: health,info
   endpoint:
     health:
+      # Custom-HealthIndicators (Issue #32 - Betriebskonzept Dauerbetrieb, Alerting-Grundlage)
+      # werden von Spring Boot automatisch eingebunden, sobald sie als Bean vorliegen (siehe
+      # org.kabieror.elwasys.backend.health.*): TerminalConnectivityHealthIndicator (aktiver
+      # Standort ohne verbundenes Terminal) und ExpiredExecutionsHealthIndicator (offene,
+      # abgelaufene, unabgerechnete Ausführungen). Sie ziehen /actuator/health bei einem
+      # betrieblichen Fehlerbild auf OUT_OF_SERVICE (HTTP 503), sind also für ein externes
+      # Alerting auswertbar. show-details bleibt when-authorized: der öffentlich erreichbare
+      # /actuator/health (siehe SecurityConfig) zeigt unangemeldet nur den Gesamt-Status,
+      # die aufschlüsselnden Details (z.B. betroffene Standortnamen) erst nach Anmeldung -
+      # kein Geheimnis-Leak. Die Kubernetes-Liveness-/Readiness-Gruppen enthalten diese
+      # Indicators bewusst NICHT (Spring-Boot-Default), damit ein fehlendes Terminal keine
+      # Backend-Pods neu startet.
       show-details: when-authorized
   health:
     # Der Actuator registriert automatisch einen Mail-Health-Indikator, sobald
@@ -121,6 +133,17 @@ elwasys:
   # siehe LocationEntity) - hier nur die globale Uhren-Drift-Toleranz.
   offline:
     clock-drift-tolerance: ${ELWASYS_OFFLINE_CLOCK_DRIFT_TOLERANCE:PT5M}
+
+  # Aufbewahrung der Terminal-Idempotenz-Schlüssel (Issue #32 - Betriebskonzept Dauerbetrieb,
+  # siehe IdempotencyKeyRetentionScheduler). Die Tabelle terminal_idempotency_keys bekommt einen
+  # Eintrag je terminal-gemeldetem Execution-Ereignis und wuchs bisher unbegrenzt. Ein täglicher
+  # Aufräum-Job (purge-cron, Default nachts um 03:00) löscht Einträge, die älter als
+  # retention-days sind. Der Default (30 Tage) liegt bewusst deutlich über der maximalen
+  # Offline-Journal-Lebensdauer eines Terminals, damit ein spätes Replay noch dedupliziert
+  # werden kann. Fehlt die Property, gilt der Code-Default (30 bzw. "0 0 3 * * *").
+  idempotency:
+    retention-days: ${ELWASYS_IDEMPOTENCY_RETENTION_DAYS:30}
+    purge-cron: ${ELWASYS_IDEMPOTENCY_PURGE_CRON:0 0 3 * * *}
 
 logging:
   level:

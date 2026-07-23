@@ -282,6 +282,21 @@ public class ExecutionService {
     }
 
     /**
+     * ALLE systemweit abgelaufenen, aber noch nicht abgerechneten Ausführungen (Issue #32 -
+     * Betriebskonzept Dauerbetrieb): gestartet, nicht abgeschlossen und über {@code maxDuration}
+     * hinaus (siehe {@link #isExpired}). Anders als {@link #getExpiredExecutions(UserEntity)}
+     * NICHT auf einen Benutzer eingeschränkt - Grundlage für den betrieblichen
+     * {@code ExpiredExecutionsHealthIndicator}, der solche Ausführungen sichtbar macht: sie
+     * werden nie automatisch abgerechnet und blockieren das Nutzerguthaben (Issue #60), bis ein
+     * Admin sie abräumt.
+     */
+    @Transactional(readOnly = true)
+    public List<ExecutionEntity> getAllExpiredExecutions() {
+        return this.executionRepository.findByFinishedFalseAndStartIsNotNull().stream().filter(this::isExpired)
+                .toList();
+    }
+
+    /**
      * 1:1-Portierung von {@code common.Execution#delete()} (dort zusätzlich gegen
      * Mehrfachaufruf/virtuelle Ausführungen [{@code id < 0}] geschützt - beides in der Praxis
      * nicht erreichbar für Ausführungen, die über {@link #getExpiredExecutions} aufgelistet
