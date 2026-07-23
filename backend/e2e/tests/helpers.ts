@@ -7,7 +7,10 @@ import { Page, Locator, expect } from '@playwright/test';
  */
 
 export const ADMIN_USERNAME = 'admin';
-export const ADMIN_PASSWORD = 'admin';
+// Mindestens 8 Zeichen (Issue #44, ADR 0018): der admin-cli-Seed setzt das Passwort über
+// PasswordService#setNewPassword, das die serverseitige Mindestlänge erzwingt. Muss mit
+// scripts/start-backend.sh (--password) übereinstimmen.
+export const ADMIN_PASSWORD = 'admin-e2e';
 
 /**
  * Fills Vaadin's built-in LoginForm and submits. The username/password inputs are plain

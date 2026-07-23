@@ -4,11 +4,11 @@ import { login, openUserMenu, dialog, expectNoDialog } from './helpers';
 /**
  * Non-admin user frontend & permissions E2E (test plan P15-P19) - fachlicher Nachfolger von
  * Portal/e2e/tests/user-portal.spec.ts (Vaadin 7). Uses the seeded non-admin accounts
- * e2e_portal_user / e2e_pwchange_user, both with password "test" (see ../global-setup.ts).
+ * e2e_portal_user / e2e_pwchange_user, both with password "testpass1" (see ../global-setup.ts).
  */
 
 test('a non-admin user reaches the user dashboard without admin access (P15/P18)', async ({ page }) => {
-  await login(page, 'e2e_portal_user', 'test');
+  await login(page, 'e2e_portal_user', 'testpass1');
 
   // The user dashboard shows the personal credit tile and the "Übersicht" side-nav entry (see
   // UserDashboardView/UserLayout).
@@ -41,23 +41,26 @@ test('the password-forgot dialog opens from the login page and handles errors wi
   await expect(win.getByLabel('Email', { exact: true })).toBeVisible();
 
   // No real mail is sent in the test environment (SMTP is not configured, see
-  // backend/e2e/scripts/start-backend.sh) - submitting with an email that isn't registered
-  // exercises PasswordResetService's error path and proves the dialog degrades gracefully
-  // (shows the same German error the legacy PasswordForgotWindow used, stays open) instead of
-  // crashing.
+  // backend/e2e/scripts/start-backend.sh). Seit Issue #24/ADR 0018 verrät der Reset die
+  // Kontenexistenz NICHT mehr: eine unbekannte Adresse führt (wie eine bekannte) zur SELBEN
+  // neutralen Bestätigung, still ohne Fehler - der Dialog schließt und zeigt die neutrale
+  // Meldung (statt der früheren "kein Benutzer gefunden"-Fehlermeldung).
   await win.getByLabel('Email', { exact: true }).fill('nobody-e2e@example.com');
   await win.getByRole('button', { name: 'OK' }).click();
 
-  await expect(page.getByText('Es konnte kein Benutzer mit der angegebenen Email-Adresse gefunden werden')).toBeVisible();
-  await expect(dialog(page)).toBeVisible();
+  await expect(
+    page.getByText('Falls ein Konto zu dieser Adresse existiert, wurde eine Email versandt.'),
+  ).toBeVisible();
+  await expectNoDialog(page);
 });
 
 test('a user can change their own password and log in with it (P16)', async ({ page }) => {
-  // Start from a known state: password "test". Per docs/kb/05-migration-plan.md, this is the ONE
+  // Start from a known state: password "testpass1" (>= 8 Zeichen, Issue #44/ADR 0018 - der
+  // Ändern-Dialog erzwingt die Mindestlänge). Per docs/kb/05-migration-plan.md, this is the ONE
   // test-plan case where the legacy-portal half no longer applies (the new backend stores
   // Argon2id, not SHA1) - only the "log in again with the new password" assertion carries
   // over, now against the new portal exclusively.
-  await login(page, 'e2e_pwchange_user', 'test');
+  await login(page, 'e2e_pwchange_user', 'testpass1');
   await expect(page.getByText('Guthaben', { exact: true })).toBeVisible();
 
   await openUserMenu(page, 'Passwort ändern');
@@ -65,7 +68,7 @@ test('a user can change their own password and log in with it (P16)', async ({ p
   await expect(win.locator('h2[slot="title"]')).toHaveText('Passwort ändern - E2E PwChange User');
 
   const pw = win.locator('input[type="password"]');
-  await pw.nth(0).fill('test'); // old
+  await pw.nth(0).fill('testpass1'); // old
   await pw.nth(1).fill('geheim123'); // new
   await pw.nth(2).fill('geheim123'); // repeat
   await win.getByRole('button', { name: 'OK' }).click();
@@ -77,19 +80,19 @@ test('a user can change their own password and log in with it (P16)', async ({ p
   await login(page, 'e2e_pwchange_user', 'geheim123');
   await expect(page.getByText('Guthaben', { exact: true })).toBeVisible();
 
-  // Restore the original password so the test stays repeatable.
+  // Restore the original password so the test stays repeatable (ebenfalls >= 8 Zeichen).
   await openUserMenu(page, 'Passwort ändern');
   win = dialog(page);
   const pw2 = win.locator('input[type="password"]');
   await pw2.nth(0).fill('geheim123');
-  await pw2.nth(1).fill('test');
-  await pw2.nth(2).fill('test');
+  await pw2.nth(1).fill('testpass1');
+  await pw2.nth(2).fill('testpass1');
   await win.getByRole('button', { name: 'OK' }).click();
   await expectNoDialog(page);
 });
 
 test('a user can edit their settings and they persist (P17)', async ({ page }) => {
-  await login(page, 'e2e_portal_user', 'test');
+  await login(page, 'e2e_portal_user', 'testpass1');
   await expect(page.getByText('Guthaben', { exact: true })).toBeVisible();
 
   const email = `e2e_portal_user_${Date.now()}@example.com`;

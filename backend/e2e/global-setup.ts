@@ -21,11 +21,13 @@ import { request } from '@playwright/test';
  * Idempotent (safe against E2E_NO_WEBSERVER=1 re-runs against an already-seeded database):
  * both inserts are guarded by "WHERE NOT EXISTS".
  *
- * Password for both users is "test" (SHA1 a94a8fe5ccb19ba61c4c0873d391e987982fbbd3, same
- * legacy hash the seed scripts have always used) - the backend's auth layer verifies legacy
- * SHA1 hashes unchanged (Phase 2 AP3 parallel-operation behaviour, rehash-on-login stays off
- * by default, see docs/kb/05-migration-plan.md), so this is a faithful stand-in for "a user who has
- * never logged into the new portal before".
+ * Password for both users is "testpass1" (SHA1 f953298876f062f1e31ec1a795f2013db8825b00) - the
+ * backend's auth layer verifies legacy SHA1 hashes unchanged (Phase 2 AP3 parallel-operation
+ * behaviour, rehash-on-login stays off by default, see docs/kb/05-migration-plan.md), so this is
+ * a faithful stand-in for "a user who has never logged into the new portal before". Das Passwort
+ * hat >= 8 Zeichen (Issue #44, ADR 0018): P16 setzt es am Ende über den Ändern-Dialog
+ * (PasswordService#setNewPassword) wieder zurück, was die serverseitige Mindestlänge erzwingt -
+ * ein 4-Zeichen-"test" würde dort scheitern.
  */
 async function globalSetup() {
   const port = process.env.E2E_BACKEND_PORT || '8081';
@@ -55,11 +57,11 @@ async function globalSetup() {
 
   const sql = `
     INSERT INTO users (name, username, password, is_admin, blocked, deleted, group_id)
-      SELECT 'E2E Portal User', 'e2e_portal_user', 'a94a8fe5ccb19ba61c4c0873d391e987982fbbd3',
+      SELECT 'E2E Portal User', 'e2e_portal_user', 'f953298876f062f1e31ec1a795f2013db8825b00',
         FALSE, FALSE, FALSE, (SELECT id FROM user_groups WHERE name = 'Default')
       WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'e2e_portal_user');
     INSERT INTO users (name, username, password, is_admin, blocked, deleted, group_id)
-      SELECT 'E2E PwChange User', 'e2e_pwchange_user', 'a94a8fe5ccb19ba61c4c0873d391e987982fbbd3',
+      SELECT 'E2E PwChange User', 'e2e_pwchange_user', 'f953298876f062f1e31ec1a795f2013db8825b00',
         FALSE, FALSE, FALSE, (SELECT id FROM user_groups WHERE name = 'Default')
       WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'e2e_pwchange_user');
   `;

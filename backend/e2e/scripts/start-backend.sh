@@ -64,15 +64,18 @@ export SERVER_PORT="$PORT"
 # unbekannter Email-Adresse, kein Crash) ohne konfiguriertes SMTP.
 export ELWASYS_PASSWORD_RESET_ENABLED="${ELWASYS_PASSWORD_RESET_ENABLED:-true}"
 
-# 4. Seed the admin/admin login (helpers.ts ADMIN_PASSWORD, P1/P2 login.spec.ts and every
-#    other spec that logs in as admin) BEFORE starting the server: the admin-cli profile
+# 4. Seed the admin login (helpers.ts ADMIN_PASSWORD, P1/P2 login.spec.ts and every other spec
+#    that logs in as admin) BEFORE starting the server: the admin-cli profile
 #    (AdminPasswordCliRunner) migrates the DB itself (same Flyway config as the real server,
 #    see application.yml/application-admin-cli.yml) and exits, then step 5 starts the actual
 #    server against the now-migrated, admin-seeded database - same two-step pattern as
 #    Client-Raspi/ci-support/start-test-backend.sh's token-cli seeding.
-echo "[start-backend] seeding admin/admin login (admin-cli)"
+#    Passwort >= 8 Zeichen (Issue #44, ADR 0018): PasswordService#setNewPassword erzwingt die
+#    Mindestlänge, "admin" würde den Seed (und damit den Serverstart) scheitern lassen. Muss mit
+#    helpers.ts ADMIN_PASSWORD übereinstimmen.
+echo "[start-backend] seeding admin login (admin-cli)"
 java -jar "$REPO_ROOT/backend/target/elwasys-backend.jar" \
-    --spring.profiles.active=admin-cli --username=admin --password=admin
+    --spring.profiles.active=admin-cli --username=admin --password=admin-e2e
 
 # 5. Run the backend (foreground; Playwright tears this down after the run).
 echo "[start-backend] starting backend on :${PORT}"

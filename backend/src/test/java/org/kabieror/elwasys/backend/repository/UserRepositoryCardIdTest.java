@@ -68,9 +68,13 @@ class UserRepositoryCardIdTest extends AbstractBackendIT {
         user.setCardIds(new String[] {realCard});
         this.userRepository.save(user);
 
-        // Das Regex-Muster ".*" hätte mit der alten Query den obigen Benutzer angemeldet.
-        assertThat(this.userRepository.findByCardId(".*"))
-                .as("a regex metacharacter pattern must not wildcard-match any stored card").isEmpty();
+        // Das Regex-Muster ".*" hätte mit der alten Query den obigen Benutzer angemeldet. Bewusst
+        // NICHT auf global-leeres Ergebnis geprüft: die Testsuite committet (kein Rollback je Test,
+        // siehe AbstractBackendIT) und ein anderer Test kann eine Karte ".*" literal anlegen
+        // (UserServiceTest) - ".*" darf nur die soeben angelegte ECHTE Karte nicht wildcard-treffen.
+        assertThat(this.userRepository.findByCardId(".*").map(UserEntity::getId).orElse(null))
+                .as("a regex metacharacter pattern must not wildcard-match the real card we stored")
+                .isNotEqualTo(user.getId());
         // Der exakte, literale Treffer funktioniert weiterhin.
         assertThat(this.userRepository.findByCardId(realCard)).map(UserEntity::getId).contains(user.getId());
     }
