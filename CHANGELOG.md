@@ -13,6 +13,34 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Changed
+- Deployment & Betrieb (Pre-Launch-Review AP6, Issues #31/#32/#35/#64, ADR 0019): Backend-Container
+  und Compose/Helm laufen jetzt fest auf Zeitzone `Europe/Berlin` (an die Terminals angeglichen),
+  der Compose-Stack bindet Port 8080 nur noch auf `127.0.0.1` (TLS-Proxy davor Pflicht) und begrenzt
+  die Container-Logs. Alle GitHub-/GHCR-Referenzen sind auf das kanonische Repo `ullriti/elwasys`
+  vereinheitlicht (vorher teils `kabieror`). Das Cutover-Runbook macht `https://` und die
+  Zeitzonen-Übereinstimmung zu Pflicht-Prüfpunkten und hat ein neues Kapitel „Dauerbetrieb"
+  (Backup, Alerting, Log-Rotation, Retention).
+- Betriebs-Health-Checks (Pre-Launch-Review AP6, Issue #32): `/actuator/health` meldet jetzt zwei
+  betriebliche Fehlerbilder als `OUT_OF_SERVICE` (HTTP 503, extern alertbar): ein aktiver Standort
+  ohne verbundenes Terminal sowie offene, abgelaufene, unabgerechnete Ausführungen (#60). Details
+  bleiben nur angemeldet sichtbar; der öffentliche Health-Endpunkt zeigt weiterhin nur den Status.
+
+### Fixed
+- Terminal-Auto-Update (Pre-Launch-Review AP6, Issues #34/#62/#63): Ein fehlgeschlagenes Deploy
+  löst keine Update/Rollback-Endlosschleife mehr aus — die fehlgeschlagene Zielversion wird gemerkt
+  und nicht erneut versucht, bis eine andere Version erscheint. Heruntergeladene Client-Jars werden
+  gegen eine mitveröffentlichte SHA-256-Prüfsumme verifiziert (manipuliertes/halbes Jar wird
+  verworfen, kein Deploy). `setup.sh` lädt idempotent (`.part`+`mv`, `ln -sfn`) und legt eine enge
+  sudoers-Regel für den Update-Kill an; schlägt der Kill mangels Rechten fehl, wird nicht mehr
+  grundlos zurückgerollt. Aufräumen weiterer Deployment-Inkonsistenzen (abgeleitete
+  Migrationsversion im Preflight, Helm-Passwort-Guard, realistisches Cron-Beispiel, #64).
+
+### Added
+- Idempotenz-Schlüssel-Aufräumung (Pre-Launch-Review AP6, Issue #32): Ein täglicher Job löscht
+  `terminal_idempotency_keys` älter als 30 Tage (konfigurierbar), damit die Tabelle im Dauerbetrieb
+  nicht unbegrenzt wächst.
+
+### Changed
 - Portal-Performance (Pre-Launch-Review AP5, Issues #30/#37): Das Admin-Dashboard lädt die
   Geräte-Historie jetzt seitenweise (lazy) statt vollständig, und die Guthaben-Spalte der
   Benutzerliste wird gebündelt in zwei Abfragen berechnet statt einer pro Zeile — das Portal
