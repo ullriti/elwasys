@@ -64,8 +64,9 @@ Flyway erkennt die fehlende `flyway_schema_history`-Tabelle, baselined die DB au
 (== der eingefrorene 0.4.0-Alt-Weg-Stand, KEIN erneutes Ausführen von V1) und wendet danach
 V2..V10 automatisch an (`baseline-on-migrate`, siehe `application.yml`,
 docs/kb/02-data-model.md). Das ist genau der Pfad, den `verify-cutover-migration.sh` (siehe
-unten) lokal nachstellt und verifiziert. Mit `curl http://<host>:8080/actuator/health`
-bestätigen, dass der Start sauber durchlief.
+unten) lokal nachstellt und verifiziert. Mit `curl http://<host>:8080/actuator/health/liveness`
+bestätigen, dass der Start sauber durchlief (Prozess-Health; das Root-`/actuator/health` steht
+ohne verbundene Terminals auf `503`, AP6 #32 – für Alerting, nicht als Start-Gate).
 
 ### 3. Standort-Tokens ausstellen
 
@@ -210,5 +211,5 @@ das wiederhergestellte Alt-Schema als auch den unveränderten Erhalt der Geschä
 `rollback-cutover.sh` ein **zweites Mal** aus (Idempotenz-Beweis: keine Fehler, Zustand
 unverändert) und startet danach das Backend-Jar erneut gegen die zurückgebaute DB (**Re-
 Cutover-Beweis**: Flyway baselined erneut auf V1 und wendet V2..V10 erneut erfolgreich an,
-Backend kommt wieder `/actuator/health` UP) - beweist, dass die DB nach einem Rollback wieder
+Backend kommt wieder `/actuator/health/liveness` UP) - beweist, dass die DB nach einem Rollback wieder
 sauber cutover-fähig ist, kein kaputter Zwischenzustand.

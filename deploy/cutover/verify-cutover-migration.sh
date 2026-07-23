@@ -15,8 +15,8 @@
 #      Abrechnungsposten) - Beweis für Datenerhalt beim Cutover.
 #   3. Backend-Jar gegen diese Alt-Weg-DB starten (Flyway baselined automatisch auf V1 und
 #      wendet V2..V10 an, siehe application.yml "baseline-on-migrate"), warten bis
-#      /actuator/health UP, dann sauber stoppen (trap - kein hängender Prozess, auch bei
-#      Fehlschlag).
+#      /actuator/health/liveness UP (Prozess-Health; Root-Health steht ohne Terminal auf 503,
+#      AP6 #32), dann sauber stoppen (trap - kein hängender Prozess, auch bei Fehlschlag).
 #   4. Asserts per psql: Flyway-Historie (BASELINE@1 + V2..V10 je success=true), die vor der
 #      Migration eingefügten Bestandsdaten UNVERÄNDERT, Schema-Härtung wirksam (siehe
 #      einzelne Asserts unten für die vollständige Liste).
@@ -126,8 +126,10 @@ BACKEND_PID=$!
 
 HEALTH=""
 for i in $(seq 1 60); do
-  if curl -sf "http://localhost:${CUTOVER_VERIFY_PORT}/actuator/health" > /dev/null 2>&1; then
-    HEALTH="$(curl -s "http://localhost:${CUTOVER_VERIFY_PORT}/actuator/health")"
+  # Liveness-Gruppe (nur Prozess-Status): das Root-/actuator/health steht hier auf 503, weil die
+  # migrierte Bestands-DB Standorte/Geraete enthaelt, aber kein Terminal verbunden ist (AP6 #32).
+  if curl -sf "http://localhost:${CUTOVER_VERIFY_PORT}/actuator/health/liveness" > /dev/null 2>&1; then
+    HEALTH="$(curl -s "http://localhost:${CUTOVER_VERIFY_PORT}/actuator/health/liveness")"
     break
   fi
   sleep 1

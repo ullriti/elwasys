@@ -38,8 +38,12 @@ class BackendApplicationTest {
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    void healthEndpointReportsUp() {
-        ResponseEntity<String> response = this.restTemplate.getForEntity("/actuator/health", String.class);
+    void livenessEndpointReportsUp() {
+        // Prozess-Health über die Liveness-Gruppe prüfen (NICHT das Root-/actuator/health): seit
+        // AP6 (#32) ziehen die betrieblichen Custom-Indicators das Root-Health je nach DB-Zustand
+        // auf OUT_OF_SERVICE (z.B. kein Terminal verbunden). Liveness/Readiness enthalten nur den
+        // Prozess-Status und sind daher der deterministische, orchestrierungsrelevante Check.
+        ResponseEntity<String> response = this.restTemplate.getForEntity("/actuator/health/liveness", String.class);
 
         assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
         assertThat(response.getBody()).contains("\"status\":\"UP\"");

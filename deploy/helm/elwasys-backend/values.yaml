@@ -93,21 +93,23 @@ resources:
   limits:
     memory: 768Mi
 
-# Liveness/Readiness gegen den kombinierten Actuator-Health-Endpoint (nicht die
-# Kubernetes-spezifischen Untergruppen /actuator/health/liveness|readiness - Spring Boot
-# aktiviert diese zwar automatisch, sobald es eine Kubernetes-Umgebung erkennt, aber der
-# einfache, immer verfügbare /actuator/health-Endpoint (siehe application.yml,
-# management.endpoints.web.exposure.include) braucht keine Annahme über dieses Verhalten und
-# ist öffentlich erreichbar, siehe SecurityConfig aus AP3).
+# Liveness/Readiness gegen die dedizierten Actuator-Untergruppen /actuator/health/liveness bzw.
+# /readiness (in application.yml per management.endpoint.health.probes.enabled=true aktiviert).
+# Bewusst NICHT das Root-/actuator/health: seit AP6 (#32) aggregieren betriebliche
+# Health-Indicators (getrenntes Terminal, offene abgelaufene Executions) in das Root-Health und
+# ziehen es auf 503 (OUT_OF_SERVICE). Als Liveness/Readiness-Probe würde das Pods faelschlich
+# neustarten bzw. aus dem Service nehmen - insbesondere beim Cutover, solange noch keine Terminals
+# verbunden sind. Die Untergruppen enthalten nur den Prozess-Status. Alerting laeuft ueber
+# /actuator/health bzw. /actuator/health/operational. Beide sind öffentlich (SecurityConfig, AP3).
 probes:
   liveness:
-    path: /actuator/health
+    path: /actuator/health/liveness
     initialDelaySeconds: 30
     periodSeconds: 15
     timeoutSeconds: 5
     failureThreshold: 3
   readiness:
-    path: /actuator/health
+    path: /actuator/health/readiness
     initialDelaySeconds: 15
     periodSeconds: 10
     timeoutSeconds: 5

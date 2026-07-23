@@ -87,7 +87,11 @@ USER elwasys
 EXPOSE 8080
 
 # Actuator-Health ist öffentlich erreichbar (siehe SecurityConfig, AP3) - kein Login nötig.
+# Bewusst die Liveness-Gruppe (nur Prozess-Status), NICHT das Root-/actuator/health: seit AP6
+# (#32) ziehen betriebliche Health-Indicators das Root-Health bei getrenntem Terminal / offenen
+# abgelaufenen Executions auf 503; als Container-HEALTHCHECK wuerde das faelschlich "unhealthy"
+# melden. Alerting laeuft ueber /actuator/health bzw. /actuator/health/operational.
 HEALTHCHECK --interval=10s --timeout=5s --start-period=45s --retries=5 \
-    CMD curl -f http://localhost:8080/actuator/health || exit 1
+    CMD curl -f http://localhost:8080/actuator/health/liveness || exit 1
 
 ENTRYPOINT ["java", "-jar", "/app/elwasys-backend.jar"]

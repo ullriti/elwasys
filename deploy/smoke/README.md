@@ -17,7 +17,7 @@ Portal/Backend brauchen **kein eigenes Upgrade-/Rollback-Skript** – Rollout un
 
 `post-deploy-smoke.sh` führt zwei Schritte aus, **beide** müssen grün sein (Exit 0 nur dann):
 
-1. **Health/Actuator** – `GET $BASE_URL/actuator/health` muss `"status":"UP"` liefern (mit ein
+1. **Health/Actuator** – `GET $BASE_URL/actuator/health/liveness` muss `"status":"UP"` liefern (mit ein
    paar Retries, um den Anlauf nach dem Redeploy zu überbrücken).
 2. **Playwright-Smoke-Teilmenge** – eine **schlanke, strikt READ-ONLY** Teilmenge der
    bestehenden Portal-E2E-Suite (`backend/e2e/tests-smoke/smoke.spec.ts`, Config

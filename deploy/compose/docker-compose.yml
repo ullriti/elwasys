@@ -19,7 +19,7 @@
 #   cd deploy/compose
 #   cp .env.example .env   # Platzhalter durch echte Werte ersetzen (siehe .env.example)
 #   docker compose up -d --build
-#   curl http://127.0.0.1:8080/actuator/health
+#   curl http://127.0.0.1:8080/actuator/health/liveness   # Prozess-Health (Root-/health = Alerting, AP6 #32)
 #
 # TLS ist Pflicht für den externen Zugriff (Issue #35): dieses Compose-File terminiert selbst
 # kein TLS und bindet den Backend-Port deshalb bewusst NUR an 127.0.0.1 (siehe "ports:" beim
@@ -114,8 +114,13 @@ services:
     # Healthcheck dupliziert den HEALTHCHECK aus backend/Dockerfile nicht (der greift
     # ohnehin), stellt aber sicher, dass "depends_on: condition: service_healthy" in anderen
     # Compose-Overlays (z.B. docker-compose.proxy.yml) darauf warten kann.
+    # Bewusst die Liveness-Gruppe (nur Prozess-Status), NICHT das Root-/actuator/health: seit
+    # AP6 (#32) ziehen betriebliche Health-Indicators das Root-Health bei getrenntem Terminal /
+    # offenen abgelaufenen Executions auf 503 - das würde den Container sonst faelschlich als
+    # "unhealthy" markieren und Neustarts/Wartezyklen ausloesen. Alerting laeuft ueber
+    # /actuator/health bzw. /actuator/health/operational (siehe Runbook "Dauerbetrieb").
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health/liveness"]
       interval: 10s
       timeout: 5s
       retries: 5

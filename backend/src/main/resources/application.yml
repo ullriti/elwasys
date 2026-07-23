@@ -71,15 +71,34 @@ management:
       # werden von Spring Boot automatisch eingebunden, sobald sie als Bean vorliegen (siehe
       # org.kabieror.elwasys.backend.health.*): TerminalConnectivityHealthIndicator (aktiver
       # Standort ohne verbundenes Terminal) und ExpiredExecutionsHealthIndicator (offene,
-      # abgelaufene, unabgerechnete Ausführungen). Sie ziehen /actuator/health bei einem
-      # betrieblichen Fehlerbild auf OUT_OF_SERVICE (HTTP 503), sind also für ein externes
-      # Alerting auswertbar. show-details bleibt when-authorized: der öffentlich erreichbare
-      # /actuator/health (siehe SecurityConfig) zeigt unangemeldet nur den Gesamt-Status,
-      # die aufschlüsselnden Details (z.B. betroffene Standortnamen) erst nach Anmeldung -
-      # kein Geheimnis-Leak. Die Kubernetes-Liveness-/Readiness-Gruppen enthalten diese
-      # Indicators bewusst NICHT (Spring-Boot-Default), damit ein fehlendes Terminal keine
-      # Backend-Pods neu startet.
+      # abgelaufene, unabgerechnete Ausführungen). Sie aggregieren in das Root-/actuator/health
+      # und ziehen es bei einem betrieblichen Fehlerbild auf OUT_OF_SERVICE (HTTP 503), sind also
+      # für ein externes Alerting auswertbar. show-details bleibt when-authorized: der öffentlich
+      # erreichbare /actuator/health (siehe SecurityConfig) zeigt unangemeldet nur den
+      # Gesamt-Status, die aufschlüsselnden Details (z.B. betroffene Standortnamen) erst nach
+      # Anmeldung - kein Geheimnis-Leak.
+      #
+      # WICHTIG - Trennung Orchestrierung vs. Alerting: Liveness/Readiness-Proben (Kubernetes,
+      # Compose-Healthcheck, Smoke-/Cutover-Gates) MÜSSEN die Gruppen /actuator/health/liveness
+      # bzw. /readiness nutzen. Diese enthalten NUR den Prozess-Status (livenessState/
+      # readinessState) und NICHT die betrieblichen Indicators - ein getrenntes Terminal oder
+      # eine offene abgelaufene Execution markiert das Backend also NICHT als "unhealthy" (kein
+      # Neustart-/Gate-Flattern, insbesondere beim Cutover, wenn noch keine Terminals verbunden
+      # sind). Für Alerting die dedizierte Gruppe /actuator/health/operational pollen (nur die
+      # beiden Indicators) oder das Root-/actuator/health (aggregiert alles).
       show-details: when-authorized
+      probes:
+        # Aktiviert /actuator/health/liveness und /readiness (sonst nur automatisch unter
+        # Kubernetes). Diese Gruppen sind das Ziel aller Orchestrierungs-/Gate-Healthchecks.
+        enabled: true
+      group:
+        operational:
+          # Dedizierte Alerting-Gruppe (Issue #32): bündelt genau die beiden betrieblichen
+          # Indicators, damit ein Monitoring gezielt darauf pollen und auf status != UP
+          # (HTTP 503) alarmieren kann, ohne den Prozess-/Liveness-Status zu vermischen.
+          include: terminalConnectivity,expiredExecutions
+          show-components: when-authorized
+          show-details: when-authorized
   health:
     # Der Actuator registriert automatisch einen Mail-Health-Indikator, sobald
     # spring-boot-starter-mail auf dem Klassenpfad liegt (AP5) - der würde per SMTP-NOOP

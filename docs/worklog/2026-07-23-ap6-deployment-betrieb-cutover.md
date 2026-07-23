@@ -19,8 +19,13 @@ Review-Gate im Hauptkontext. Drei 🧩-Auftraggeberentscheidungen vorab geklärt
 - **#32 Dauerbetrieb:** Purge-Job (`IdempotencyKeyRetentionScheduler`, täglich, Default 30 Tage,
   konfigurierbar) gegen unbegrenztes Wachstum von `terminal_idempotency_keys`; zwei betriebliche
   Custom-Health-Indicators (`TerminalConnectivityHealthIndicator`,
-  `ExpiredExecutionsHealthIndicator`) → `/actuator/health` = `OUT_OF_SERVICE`/503 als
-  Alerting-Grundlage (Details nur `when-authorized`, Actuator-Security unverändert). Runbook-Kapitel
+  `ExpiredExecutionsHealthIndicator`) → `OUT_OF_SERVICE`/503 als Alerting-Grundlage über die neue
+  Gruppe `/actuator/health/operational` (bzw. Root-`/actuator/health`), Details nur
+  `when-authorized`, Actuator-Security unverändert. **Trennung Orchestrierung/Alerting:** alle
+  Deploy-Gates und Probes (Kubernetes-Probes, Compose-/Dockerfile-Healthcheck, `post-deploy-smoke.sh`,
+  `verify-cutover-migration.sh`, `verify-rollback.sh`) auf `/actuator/health/liveness` bzw.
+  `/readiness` umgestellt (nur Prozess-Status) – sonst würde ein noch nicht verbundenes Terminal die
+  Gates/Container-Healthchecks fälschlich rot ziehen (v.a. beim Cutover). Runbook-Kapitel
   „Dauerbetrieb" (pg_dump-Cron + Retention, Health-Alerting, Log-Rotation); Compose-`logging`-Limits.
 - **#60 Terminal-Totalausfall:** Ins Runbook aufgenommen (hängende unabgerechnete Execution →
   Guthaben reserviert → ExpiredExecutions-View/Health-Alert) inkl. der Auftraggeber-Info, dass

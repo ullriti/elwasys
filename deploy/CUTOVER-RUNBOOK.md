@@ -110,10 +110,14 @@ cd deploy/compose
 docker compose up -d --no-deps backend   # bzw. helm upgrade ... für Kubernetes/Helm
 ```
 
-- **Beobachtung/Log:** Health lokal auf dem Host prüfen – das Backend bindet nur an
+- **Beobachtung/Log:** Prozess-Health lokal auf dem Host prüfen – das Backend bindet nur an
   `127.0.0.1` (Issue #35), extern läuft der Zugriff über den TLS-Proxy/-Ingress:
-  `curl http://127.0.0.1:8080/actuator/health` → `{"status":"UP"}` (bzw. über den Proxy
-  `curl https://<host>/actuator/health`). Logs auf saubere Flyway-Migration prüfen
+  `curl http://127.0.0.1:8080/actuator/health/liveness` → `{"status":"UP"}` (bzw. über den Proxy
+  `curl https://<host>/actuator/health/liveness`). **Wichtig:** für „läuft das Backend?" die
+  **Liveness-Gruppe** nutzen, NICHT das Root-`/actuator/health` – letzteres aggregiert die
+  betrieblichen Health-Indicators (Issue #32) und steht in diesem Schritt bewusst auf `503`
+  (`OUT_OF_SERVICE`), solange noch keine Terminals verbunden sind (das ist der Alerting-Kanal,
+  siehe „Dauerbetrieb"). Logs auf saubere Flyway-Migration prüfen
   (BASELINE@1, dann V2..V\<neueste\> `success`).
 - **Gate:** [`deploy/smoke/post-deploy-smoke.sh`](smoke/post-deploy-smoke.sh) – Health `UP`
   **und** die schlanke, strikt read-only Playwright-Teilmenge müssen grün sein. **Erst bei
@@ -162,7 +166,9 @@ Details zu 02/03/04: [`deploy/cutover/README.md`](cutover/README.md), Schritte 3
 ### Schritt 3c – Beobachten (bevor Terminals angefasst werden)
 
 Portal/Backend eine **definierte Zeit** (z. B. 15–30 min, je nach Wartungsfenster) beobachten:
-`/actuator/health` bleibt `UP`, Logs sauber, ein Admin-Login ins neue Portal funktioniert, die
+`/actuator/health/liveness` bleibt `UP` (Prozess-Health; das Root-`/actuator/health` steht hier
+noch bewusst auf `503`, solange keine Terminals verbunden sind – siehe „Dauerbetrieb"/7b), Logs
+sauber, ein Admin-Login ins neue Portal funktioniert, die
 Kernsektionen (Benutzer/Geräte/Programme/Dashboard) rendern. Erst dann die Terminals umstellen.
 Bleibt hier etwas rot → Rollback nach Schritt 3a, **bevor** Terminals umgehängt werden (dann
 ist der Rückweg am einfachsten, weil die Terminals noch am Alt-Stand hängen).
@@ -263,7 +269,8 @@ Plattform, DB über Backup/Reverse-DDL, Terminals einzeln über das vorherige Ja
 - [ ] **Benachrichtigungen** (falls in 3e scharfgeschaltet) an einem realen Vorgang bestätigt
       (eine Mail/Push kommt an, keine Doppelversände).
 - [ ] **Nutzerkommunikation „fertig"** – Waschküche wieder normal nutzbar.
-- [ ] **Monitoring** für den Dauerbetrieb: `/actuator/health` überwacht, Backend-/DB-Logs,
+- [ ] **Monitoring** für den Dauerbetrieb: `/actuator/health/operational` (bzw. das Root-
+      `/actuator/health`) fürs betriebliche Alerting überwacht, Backend-/DB-Logs,
       Terminal-Watchdog-Logs (`${ELWA_ROOT}/log/auto-update-watchdog.log`).
 - [ ] **Backup vom neuen Zustand** ziehen (frischer Ausgangspunkt nach dem Cutover).
 - [ ] Alt-Portal-WAR/Alt-Deployment außer Betrieb nehmen (das Alt-Portal-Modul ist bereits in
@@ -278,7 +285,7 @@ Plattform, DB über Backup/Reverse-DDL, Terminals einzeln über das vorherige Ja
 |---|---|---|---|
 | 0 | DB-Backup ziehen **und verifizieren**; Release-Artefakte + Rollback-Ziele festhalten | Backup restaurierbar | — |
 | 0b | `01-preflight-check.sh` gegen Produktiv-DB; Migration an Bestandskopie proben (`verify-cutover-migration.sh`) | Report ok, Asserts PASS | — |
-| 1 | **3a** Backend gegen Bestands-DB deployen (compose/Helm), Flyway migriert | `/actuator/health` UP, Flyway V2..Vn `success` | Plattform-Rollback |
+| 1 | **3a** Backend gegen Bestands-DB deployen (compose/Helm), Flyway migriert | `/actuator/health/liveness` UP, Flyway V2..Vn `success` | Plattform-Rollback |
 | 2 | **3a Gate** `post-deploy-smoke.sh` | Health UP **+** Playwright-Smoke grün | Plattform-Rollback / Backup-Restore / `rollback-cutover.sh` |
 | 3 | **3b** Standort-Tokens (`02`) + Admin-Passwort (`03`); optional `04` review | Token(s) erzeugt, Portal-Login möglich | — (rein additiv) |
 | 4 | **3c** Portal/Backend beobachten (definierte Zeit) | Health/Logs stabil, Admin-Login/Sektionen ok | Backend-Rollback (Terminals noch alt) |
@@ -317,17 +324,30 @@ nicht „unverlierbar" – Platten-, Bedien- oder Hardwarefehler bleiben möglic
 
 ### 7b. Alerting über die Health-Indicators
 
-Das Backend liefert (Pre-Launch AP6) zusätzliche Health-Indicators unter `/actuator/health`
-als **Alerting-Grundlage**:
+Das Backend liefert (Pre-Launch AP6, Issue #32) zwei betriebliche Health-Indicators als
+**Alerting-Grundlage**:
 
 - **WS-Verbindungen je Standort** – erkennt Terminals, deren Wartungs-WebSocket zum Backend
   abgerissen ist (ein Standort ohne verbundenes Terminal ist ein Frühwarnsignal).
 - **Offene abgelaufene Executions** – Ausführungen, deren `maxDuration` überschritten ist und
   die noch nicht abgerechnet/geschlossen wurden (siehe 7c).
 
-`/actuator/health` regelmäßig pollen (Monitoring/Uptime-Check) und auf `status != UP` bzw. auf
-die genannten Indicator-Komponenten alarmieren. Ergänzend beobachten: Backend-/DB-Logs und die
-Terminal-Watchdog-Logs (`${ELWA_ROOT}/log/auto-update-watchdog.log`).
+**Trennung Orchestrierung vs. Alerting (wichtig):**
+
+- **Alerting:** die dedizierte Gruppe **`/actuator/health/operational`** regelmäßig pollen
+  (Monitoring/Uptime-Check) und auf `status != UP` (HTTP `503`) alarmieren – sie bündelt genau
+  die beiden obigen Indicators. Das Root-`/actuator/health` aggregiert dieselben (plus DB usw.)
+  und ist als Gesamt-Statusseite ebenfalls nutzbar. Aufschlüsselnde Details (z. B. betroffene
+  Standortnamen) sind nur **angemeldet** sichtbar (`show-details: when-authorized`).
+- **Orchestrierung/Gates:** Liveness/Readiness-Proben (Kubernetes-Probes, Compose-Healthcheck,
+  `post-deploy-smoke.sh`) nutzen bewusst **`/actuator/health/liveness`** bzw. `/readiness` –
+  diese enthalten **nur** den Prozess-Status und **nicht** die betrieblichen Indicators. Sonst
+  würde ein getrenntes Terminal oder eine offene abgelaufene Execution das Backend fälschlich
+  als „unhealthy" markieren und Neustarts/Gate-Fehlschläge auslösen (insbesondere beim Cutover,
+  solange noch keine Terminals verbunden sind).
+
+Ergänzend beobachten: Backend-/DB-Logs und die Terminal-Watchdog-Logs
+(`${ELWA_ROOT}/log/auto-update-watchdog.log`).
 
 ### 7c. Terminal-Totalausfall – Betriebsrisiko (Issue #60)
 
@@ -366,7 +386,7 @@ zeitnah abrechnen/bereinigen.
 - **In der Sandbox real ausgeführt (DB-/Backend-Seite):**
   - `deploy/cutover/verify-cutover-migration.sh` – Bestandskopie → migriert, **21/21 Asserts
     PASS** (Flyway BASELINE@1 + V2..V10, Datenerhalt, Schema-Härtung; Backend-Jar gegen die
-    Alt-Weg-DB `/actuator/health` UP).
+    Alt-Weg-DB `/actuator/health/liveness` UP).
   - Das **Rollout-Gate** `deploy/smoke/post-deploy-smoke.sh` gegen einen im **Produktionsmodus**
     per `java -jar` gestarteten Server (derselbe Artefakt-Typ, den compose/Helm ausrollen; nur
     die Startmethode unterscheidet sich) – Health UP + schlanke Playwright-Teilmenge grün

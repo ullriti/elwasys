@@ -20,10 +20,13 @@ im [Worklog](docs/worklog/README.md).
   vereinheitlicht (vorher teils `kabieror`). Das Cutover-Runbook macht `https://` und die
   Zeitzonen-Übereinstimmung zu Pflicht-Prüfpunkten und hat ein neues Kapitel „Dauerbetrieb"
   (Backup, Alerting, Log-Rotation, Retention).
-- Betriebs-Health-Checks (Pre-Launch-Review AP6, Issue #32): `/actuator/health` meldet jetzt zwei
-  betriebliche Fehlerbilder als `OUT_OF_SERVICE` (HTTP 503, extern alertbar): ein aktiver Standort
-  ohne verbundenes Terminal sowie offene, abgelaufene, unabgerechnete Ausführungen (#60). Details
-  bleiben nur angemeldet sichtbar; der öffentliche Health-Endpunkt zeigt weiterhin nur den Status.
+- Betriebs-Health-Checks (Pre-Launch-Review AP6, Issue #32): Zwei betriebliche Health-Indicators
+  (aktiver Standort ohne verbundenes Terminal; offene, abgelaufene, unabgerechnete Ausführungen,
+  #60) melden als `OUT_OF_SERVICE` (HTTP 503) und sind extern alertbar – gezielt über die neue
+  Gruppe `/actuator/health/operational` oder das aggregierte Root-`/actuator/health`. Orchestrierung
+  und Deploy-Gates (Kubernetes-Probes, Compose-Healthcheck, Smoke-/Cutover-Checks) nutzen dagegen
+  `/actuator/health/liveness` bzw. `/readiness` (nur Prozess-Status), damit ein getrenntes Terminal
+  das Backend nicht fälschlich als „unhealthy" markiert. Details bleiben nur angemeldet sichtbar.
 
 ### Fixed
 - Terminal-Auto-Update (Pre-Launch-Review AP6, Issues #34/#62/#63): Ein fehlgeschlagenes Deploy
