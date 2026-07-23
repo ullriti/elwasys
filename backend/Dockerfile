@@ -55,6 +55,15 @@ RUN --mount=type=cache,target=/root/.m2/repository \
 # ---------------------------------------------------------------------------
 FROM eclipse-temurin:21-jre-jammy AS runtime
 
+# Zeitzone fest auf Europe/Berlin (Issue #31). Terminal- und Backend-Zeitzone MÜSSEN
+# übereinstimmen: die Terminals melden Ausführungs-Zeitstempel in ihrer lokalen Zone nach, und
+# ClientTimestampPolicy fällt bei einer Zonendifferenz in den Ersetzungszweig (der Backend-
+# Empfangszeitpunkt gewinnt statt des vom Terminal gemeldeten). Außerdem wäre DYNAMIC-Preis
+# (tageszeit-/wochentagabhängig) über die DST-Umstellungsnacht falsch, wenn das Backend in
+# einer anderen Zone (z.B. UTC im Container-Default) rechnet als das Terminal vor Ort.
+# Die JVM liest die TZ-Umgebungsvariable; das jammy-JRE-Basisimage bringt tzdata mit.
+ENV TZ=Europe/Berlin
+
 # curl wird ausschließlich für den HEALTHCHECK unten gebraucht (Actuator-Health per HTTP
 # abfragen) - kleine, gezielte Ergänzung statt eines vollen Basis-Images.
 RUN apt-get update \
@@ -78,7 +87,11 @@ USER elwasys
 EXPOSE 8080
 
 # Actuator-Health ist öffentlich erreichbar (siehe SecurityConfig, AP3) - kein Login nötig.
+# Bewusst die Liveness-Gruppe (nur Prozess-Status), NICHT das Root-/actuator/health: seit AP6
+# (#32) ziehen betriebliche Health-Indicators das Root-Health bei getrenntem Terminal / offenen
+# abgelaufenen Executions auf 503; als Container-HEALTHCHECK wuerde das faelschlich "unhealthy"
+# melden. Alerting laeuft ueber /actuator/health bzw. /actuator/health/operational.
 HEALTHCHECK --interval=10s --timeout=5s --start-period=45s --retries=5 \
-    CMD curl -f http://localhost:8080/actuator/health || exit 1
+    CMD curl -f http://localhost:8080/actuator/health/liveness || exit 1
 
 ENTRYPOINT ["java", "-jar", "/app/elwasys-backend.jar"]

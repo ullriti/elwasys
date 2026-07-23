@@ -3,20 +3,30 @@
 # ... oder Kubernetes"). Betriebsanleitung: docs/kb/04-build-and-run.md, Abschnitt "Deployment".
 #
 # Enthält: Backend-Container (aus backend/Dockerfile gebaut) + eine mitgelieferte PostgreSQL-
-# 16-Instanz für Neuinstallationen. Für die Variante "Anbindung an eine Bestands-DB" siehe
-# den Kommentar bei ELWASYS_DB_URL unten und deploy/compose/.env.example - der "postgres"-
-# Service wird dann einfach nicht gestartet (z.B. "docker compose up backend").
+# 16-Instanz für Neuinstallationen.
 #
-# Nutzung:
+# Zwei Betriebsvarianten (Issue #64):
+#   1. Neuinstallation (mitgelieferte DB): "docker compose up -d --build" startet beide
+#      Services (backend + postgres).
+#   2. Anbindung an eine Bestands-DB: den "postgres"-Service NICHT starten, ELWASYS_DB_URL auf
+#      die externe DB zeigen (siehe .env.example). WICHTIG: der Backend-Service hat unten ein
+#      "depends_on: postgres", d.h. ein blosses "docker compose up backend" würde den
+#      postgres-Service TROTZDEM mitstarten. Für die Bestands-DB-Variante daher zwingend
+#      "--no-deps" verwenden:
+#        docker compose up -d --no-deps backend
+#
+# Nutzung (Neuinstallation):
 #   cd deploy/compose
 #   cp .env.example .env   # Platzhalter durch echte Werte ersetzen (siehe .env.example)
 #   docker compose up -d --build
-#   curl http://localhost:8080/actuator/health
+#   curl http://127.0.0.1:8080/actuator/health/liveness   # Prozess-Health (Root-/health = Alerting, AP6 #32)
 #
-# TLS: dieses Compose-File terminiert selbst kein TLS (reiner HTTP-Zugriff auf Port 8080,
-# gedacht für den Betrieb hinter einem bereits vorhandenen Reverse Proxy/Load Balancer, oder
-# für lokale Entwicklung/Tests). Für einen eigenständigen TLS-Terminierungspunkt siehe das
-# optionale Overlay docker-compose.proxy.yml (Caddy, automatisches Let's-Encrypt-TLS):
+# TLS ist Pflicht für den externen Zugriff (Issue #35): dieses Compose-File terminiert selbst
+# kein TLS und bindet den Backend-Port deshalb bewusst NUR an 127.0.0.1 (siehe "ports:" beim
+# backend-Service unten), erreichbar für einen lokalen Reverse Proxy/Load Balancer, NICHT
+# direkt aus dem Netz im Klartext. Für einen eigenständigen TLS-Terminierungspunkt siehe das
+# optionale Overlay docker-compose.proxy.yml (Caddy, automatisches Let's-Encrypt-TLS) - es
+# erreicht das Backend über das Compose-interne Netz (nicht über den veröffentlichten Port):
 #   docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d --build
 
 services:
@@ -26,6 +36,17 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-elwasys}
       POSTGRES_USER: ${POSTGRES_USER:-elwasys}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD muss in .env gesetzt sein}
+      # Zeitzone (Issue #31) - konsistent mit dem Backend (Europe/Berlin), damit Server-Logs
+      # und ggf. now()-Defaults in derselben Zone wie die Anwendung stehen.
+      TZ: ${TZ:-Europe/Berlin}
+      PGTZ: ${TZ:-Europe/Berlin}
+    # Log-Rotation (Issue #32): json-file wächst sonst unbegrenzt (Dauerbetrieb). Kappt die
+    # Container-Logs auf max. 3x 10 MiB je Service.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       # Benannter Volume statt Bind-Mount: Datenpersistenz unabhängig vom Host-Pfad, siehe
       # "volumes:" unten. Kein gemountetes database-init.sql (siehe .env.example-Kommentar
@@ -67,16 +88,39 @@ services:
       ELWASYS_PUSHOVER_API_TOKEN: ${ELWASYS_PUSHOVER_API_TOKEN:-}
 
       ELWASYS_AUTH_REHASH_ON_LOGIN: ${ELWASYS_AUTH_REHASH_ON_LOGIN:-false}
+
+      # Zeitzone (Issue #31): muss mit der Terminal-Zeitzone übereinstimmen (Europe/Berlin),
+      # sonst fällt jede nachgemeldete Terminal-Meldung in den Ersetzungszweig von
+      # ClientTimestampPolicy und DYNAMIC-Preis rechnet über die DST-Nacht falsch. Das
+      # Image setzt denselben Default bereits (backend/Dockerfile), hier nochmal explizit,
+      # damit die Zone auch bei einem abweichenden Basis-Image gesetzt ist.
+      TZ: ${TZ:-Europe/Berlin}
+    # Nur an 127.0.0.1 binden (Issue #35, TLS-Pflicht): das Backend spricht selbst kein TLS,
+    # der Port darf deshalb NICHT im Klartext aus dem Netz erreichbar sein. Ein TLS-Reverse-
+    # Proxy (siehe docker-compose.proxy.yml) erreicht das Backend über das Compose-interne Netz
+    # (Service-Name "backend"), nicht über diesen veröffentlichten Port. Für den direkten
+    # Zugriff aus dem Netz ist zwingend ein vorgelagerter TLS-Terminierungspunkt nötig.
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
+    # Log-Rotation (Issue #32): siehe postgres-Service oben.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       postgres:
         condition: service_healthy
     # Healthcheck dupliziert den HEALTHCHECK aus backend/Dockerfile nicht (der greift
     # ohnehin), stellt aber sicher, dass "depends_on: condition: service_healthy" in anderen
     # Compose-Overlays (z.B. docker-compose.proxy.yml) darauf warten kann.
+    # Bewusst die Liveness-Gruppe (nur Prozess-Status), NICHT das Root-/actuator/health: seit
+    # AP6 (#32) ziehen betriebliche Health-Indicators das Root-Health bei getrenntem Terminal /
+    # offenen abgelaufenen Executions auf 503 - das würde den Container sonst faelschlich als
+    # "unhealthy" markieren und Neustarts/Wartezyklen ausloesen. Alerting laeuft ueber
+    # /actuator/health bzw. /actuator/health/operational (siehe Runbook "Dauerbetrieb").
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health/liveness"]
       interval: 10s
       timeout: 5s
       retries: 5

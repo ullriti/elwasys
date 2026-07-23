@@ -58,8 +58,9 @@ set -euo pipefail
 # Installationswurzel des Terminals (setup.sh: /opt/elwasys).
 ELWA_ROOT="${ELWA_ROOT:-/opt/elwasys}"
 
-# GitHub-Repo/Host wie in setup.sh install_elwasys / update.sh.
-ELWA_GITHUB_REPO="${ELWA_GITHUB_REPO:-kabieror/elwasys}"
+# GitHub-Repo/Host wie in setup.sh install_elwasys / update.sh (kanonisch: ullriti/elwasys,
+# Issue #64).
+ELWA_GITHUB_REPO="${ELWA_GITHUB_REPO:-ullriti/elwasys}"
 
 # Kommando, das den laufenden java-Prozess beendet (Neustart-Trigger). Wird auch
 # an update.sh durchgereicht.
@@ -122,6 +123,9 @@ CONFIG_FILE="${ELWA_ROOT}/elwasys.properties"
 CONFIG_SNAPSHOT="${ELWA_ROOT}/elwasys.properties.previous"
 # Optionaler ops/backend-getriggerter Override der Ziel-Version.
 UPDATE_TARGET_FILE="${ELWA_ROOT}/.update-target"
+# Persistierte, zuletzt GESCHEITERTE Ziel-Version (Issue #34): verhindert die Endlosschleife
+# Update->Rollback->Update... bei einem kaputten Release. Enthält genau eine Versionszeile.
+UPDATE_FAILED_FILE="${ELWA_ROOT}/.update-failed"
 
 # ==============================================================================
 # Hilfsfunktionen
@@ -263,6 +267,32 @@ terminal_is_busy() {
     return 1
 }
 
+# Persistiert die gescheiterte Ziel-Version (Issue #34) und raeumt so auf, dass ein erneuter
+# Cron-Lauf denselben kaputten Versuch NICHT wiederholt:
+#   1) ${UPDATE_FAILED_FILE} <- Version (der Guard am Laufanfang behandelt sie dann wie up-to-date),
+#   2) das lokal gecachte, fehlgeschlagene raspi-client-<version>.jar loeschen (nur wenn es NICHT
+#      das aktuell/vorherig verlinkte ist), damit ein unter DEMSELBEN Tag repariertes Asset spaeter
+#      neu geladen wird (sonst wuerde update.sh das alte, kaputte Jar behalten),
+#   3) einen etwaigen ops-Trigger (.update-target) konsumieren, damit er nicht erneut dieselbe
+#      kaputte Version anstoesst.
+mark_update_failed() {
+    local ver="$1"
+    echo "${ver}" > "${UPDATE_FAILED_FILE}" 2>/dev/null || true
+    log "Ziel-Version ${ver} als GESCHEITERT markiert (${UPDATE_FAILED_FILE}) - kein erneuter Auto-Update-Versuch, bis eine andere Version erscheint oder die Datei entfernt wird."
+    local failed_jar="raspi-client-${ver}.jar"
+    local latest_now previous_now
+    latest_now="$(link_target "${LATEST_LINK}")"
+    previous_now="$(link_target "${PREVIOUS_LINK}")"
+    if [[ "${failed_jar}" != "${latest_now}" && "${failed_jar}" != "${previous_now}" && -f "${failed_jar}" ]]; then
+        log "Entferne lokal gecachtes fehlgeschlagenes Jar ${failed_jar} (ein repariertes Release-Asset wird dann neu geladen)."
+        rm -f "${failed_jar}" 2>/dev/null || true
+    fi
+    if [[ -f "${UPDATE_TARGET_FILE}" ]]; then
+        log "Konsumiere ops-Trigger ${UPDATE_TARGET_FILE} (kaputte Ziel-Version)."
+        rm -f "${UPDATE_TARGET_FILE}" 2>/dev/null || true
+    fi
+}
+
 # ==============================================================================
 # Vorbereitung
 # ==============================================================================
@@ -309,6 +339,32 @@ fi
 
 if [[ -z "${target_version}" ]]; then
     alert "WARNUNG: Ziel-Version konnte nicht ermittelt werden (Netz? GitHub?). Kein Update, kein Rollback."
+    exit 0
+fi
+
+# ==============================================================================
+# Zuvor gescheiterte Ziel-Version? -> wie up-to-date behandeln (Issue #34)
+# ==============================================================================
+# Nach einem Rollback wird die kaputte Ziel-Version in ${UPDATE_FAILED_FILE} festgehalten.
+# Solange GitHub/ .update-target GENAU diese Version weiterhin als Ziel meldet, darf der
+# Watchdog sie NICHT erneut ausrollen - sonst entsteht die Endlosschleife
+# Update -> Start scheitert -> Rollback -> naechster Cron-Lauf -> Update ... Erscheint dagegen
+# eine ANDERE Ziel-Version (repariertes Release ODER manuell entferntes .update-failed), gilt
+# die Sperre nicht mehr und wird aufgehoben.
+failed_version=""
+if [[ -f "${UPDATE_FAILED_FILE}" ]]; then
+    failed_version="$(head -n1 "${UPDATE_FAILED_FILE}" | tr -d '[:space:]')"
+fi
+if [[ -n "${failed_version}" && "${target_version}" != "${failed_version}" ]]; then
+    log "Neue Ziel-Version ${target_version} weicht von der zuvor gescheiterten ${failed_version} ab - hebe die Fehlschlag-Sperre auf (entferne ${UPDATE_FAILED_FILE})."
+    rm -f "${UPDATE_FAILED_FILE}" 2>/dev/null || true
+    failed_version=""
+fi
+if [[ -n "${failed_version}" && "${target_version}" == "${failed_version}" ]]; then
+    # Bewusst leise (Cron-freundlich): nur in die Logdatei. KEIN Kill, KEIN Update-Versuch.
+    if [[ -d "${LOG_DIR}" ]]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Ziel-Version ${target_version} ist als GESCHEITERT markiert (${UPDATE_FAILED_FILE}) - kein erneuter Update-Versuch. Zum erneuten Versuch ein repariertes Release bereitstellen oder ${UPDATE_FAILED_FILE} entfernen." >> "${LOG_FILE}" 2>/dev/null || true
+    fi
     exit 0
 fi
 
@@ -371,22 +427,39 @@ log "Starte Update auf ${target_version} (restart_epoch=${restart_epoch}, marker
 # 3) update.sh aufrufen (rotiert latest/previous + Neustart-Trigger). Overrides
 #    durchreichen.
 update_ok=1
-if ELWA_ROOT="${ELWA_ROOT}" \
+# Exit-Code von update.sh bewusst merken (set -e temporaer aus), um Fehlerklassen zu trennen.
+set +e
+ELWA_ROOT="${ELWA_ROOT}" \
    ELWA_GITHUB_REPO="${ELWA_GITHUB_REPO}" \
    ELWA_RESTART_CMD="${ELWA_RESTART_CMD}" \
    ELWA_JAVA_PGREP="${ELWA_JAVA_PGREP}" \
-   bash "${ELWA_UPDATE_SCRIPT}" --version "${target_version}"; then
+   bash "${ELWA_UPDATE_SCRIPT}" --version "${target_version}"
+update_rc=$?
+set -e
+if (( update_rc == 0 )); then
     update_ok=0
+elif (( update_rc == 3 )); then
+    # Exit 3 (Issue #63): update.sh hat den Symlink zwar umgehaengt, konnte aber den Neustart
+    # NICHT ausloesen (fehlende sudoers-Rechte fuer 'killall java'). Der alte java-Prozess laeuft
+    # unveraendert weiter - das Terminal ist funktional weiterhin auf der bisherigen Version. Ein
+    # kill-basierter Rollback wuerde am selben Rechteproblem scheitern; deshalb NUR den Symlink
+    # konsistent zuruecksetzen (latest -> bisheriges Jar), die Ziel-Version als gescheitert
+    # markieren und OHNE java-Kill beenden. Das verhindert den grundlosen Rollback UND (via
+    # mark_update_failed) die Endlosschleife (Issue #34).
+    alert "FEHLER: update.sh --version ${target_version} konnte den Neustart nicht ausloesen (Rechte/sudoers?). Setze ${LATEST_LINK} zurueck auf ${current_jar}, markiere ${target_version} als gescheitert (KEIN java-Kill)."
+    ln -sfn "${current_jar}" "${LATEST_LINK}"
+    mark_update_failed "${target_version}"
+    exit 2
 else
     # B1-Fix: ein Fehlschlag von update.sh ist NICHT automatisch ein fehlgeschlagenes
     # Deploy - update.sh kann auch VOR jedem Symlink-Wechsel scheitern (Download/Netz/
-    # Tag/Platte, siehe update.sh "Neues Jar bereitstellen"). Unterscheiden anhand des
-    # latest-Symlinks: hat sich sein Ziel NICHT geaendert, wurde nie etwas ausgerollt -
+    # Tag/Platte/Integritaet, siehe update.sh "Neues Jar bereitstellen"). Unterscheiden anhand
+    # des latest-Symlinks: hat sich sein Ziel NICHT geaendert, wurde nie etwas ausgerollt -
     # dann NICHT in den Rollback-/java-Kill-Pfad, sondern nur warnen + non-zero beenden,
     # der naechste Cron-Lauf versucht den Fetch erneut.
     latest_after_attempt="$(link_target "${LATEST_LINK}")"
     if [[ "${latest_after_attempt}" == "${current_jar}" ]]; then
-        alert "WARNUNG: update.sh --version ${target_version} ist fehlgeschlagen, OHNE ${LATEST_LINK} zu aendern (weiterhin ${current_jar} - vermutlich Download-/Netzwerkfehler vor jedem Symlink-Wechsel). KEIN Rollback, KEIN java-Neustart - naechster Cron-Lauf versucht den Fetch erneut."
+        alert "WARNUNG: update.sh --version ${target_version} ist fehlgeschlagen, OHNE ${LATEST_LINK} zu aendern (weiterhin ${current_jar} - vermutlich Download-/Netzwerk-/Integritaetsfehler vor jedem Symlink-Wechsel). KEIN Rollback, KEIN java-Neustart - naechster Cron-Lauf versucht den Fetch erneut."
         exit 1
     else
         alert "FEHLER: update.sh --version ${target_version} ist fehlgeschlagen, NACHDEM ${LATEST_LINK} bereits auf ${latest_after_attempt} umgehaengt wurde (ungewoehnlich) - behandle wie einen fehlgeschlagenen Start, leite Rollback ein."
@@ -431,6 +504,11 @@ fi
 log "Rollback: setze ${LATEST_LINK} zurueck -> ${previous_jar}"
 ln -sfn "${previous_jar}" "${LATEST_LINK}"
 
+# a2) Gescheiterte Ziel-Version persistieren (Issue #34): verhindert, dass der naechste
+#     Cron-Lauf dieselbe kaputte Version erneut ausrollt (Endlosschleife). Loescht zugleich das
+#     lokal gecachte, fehlgeschlagene Jar und konsumiert einen etwaigen .update-target-Trigger.
+mark_update_failed "${target_version}"
+
 # b) Konfig aus Snapshot zurueckspielen, falls sie sich geaendert hat. (T1: in der
 #    Praxis aktuell immer unveraendert, siehe Kommentar beim Snapshot oben.)
 if [[ -f "${CONFIG_SNAPSHOT}" ]]; then
@@ -446,7 +524,13 @@ fi
 rollback_epoch="$(date +%s)"
 if ${ELWA_JAVA_PGREP} > /dev/null 2>&1; then
     log "Rollback: beende java-Prozess (Supervisor relauncht die vorige Version)."
-    ${ELWA_RESTART_CMD} || true
+    # Kill-Exit-Code pruefen (Issue #63): scheitert der Kill an fehlenden Rechten (sudoers), kann
+    # der Supervisor die vorige Version nicht neu starten - das explizit als Rechteproblem melden,
+    # statt es stumm zu verschlucken. Der Recovery-Marker-Check unten stellt den Endzustand fest.
+    rb_out="$(${ELWA_RESTART_CMD} 2>&1)"; rb_rc=$?
+    if (( rb_rc != 0 )) && printf '%s' "${rb_out}" | grep -qiE 'sudo|passwo|not allowed|permission|operation not permitted'; then
+        alert "FAILURE (KRITISCH): Rollback-Kill scheiterte an Rechten (sudoers?): ${rb_out}. Der Supervisor kann die vorige Version nicht automatisch neu starten - manueller Eingriff noetig."
+    fi
 else
     log "Rollback: kein java-Prozess aktiv - Supervisor startet beim naechsten Lauf die vorige Version."
 fi

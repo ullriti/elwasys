@@ -3,6 +3,13 @@
 -- Flyway-Migrationen V3..V10 (siehe backend/src/main/resources/db/migration/) so weit
 -- rückgängig, dass die DB wieder dem ALTEN Feld-Schema entspricht, wie es das Alt-Portal +
 -- der Alt-Client (JDBC-Direktzugriff) erwarten - OHNE Geschäftsdaten zu verlieren
+--
+-- WARTUNGSHINWEIS (Issue #64): Bei jeder NEUEN V*-Migration prüfen, ob sie hier zurückgebaut
+-- werden MUSS. Faustregel: nur strukturverändernde/härtende Migrationen, die das Alt-Portal/den
+-- Alt-Client stören würden, brauchen eine Umkehrung. Rein additive, für den Alt-Code
+-- unsichtbare Änderungen (z.B. zusätzliche Indizes, breitere Spalten) werden bewusst NICHT
+-- umgekehrt (siehe V2 und V11 unten). Aktueller Abdeckungsstand: V3..V10 werden zurückgebaut,
+-- V2 und V11 bewusst nicht (Begründung jeweils unten).
 -- (users/user_groups/locations/devices/programs/device_program_rel/executions/
 -- credit_accounting/*_valid_user_groups bleiben unangetastet, außer der rein
 -- Default-Fall-beschränkten Admin-Passwort-Wiederherstellung in Schritt V7 unten).
@@ -211,6 +218,15 @@ GRANT INSERT, DELETE ON reservations TO elwaapi;
 DROP TABLE IF EXISTS terminal_idempotency_keys;
 DROP TABLE IF EXISTS terminal_tokens;
 ALTER TABLE locations DROP COLUMN IF EXISTS offline_max_duration_minutes;
+
+-- ============================================================================================
+-- V11__add_performance_indexes.sql wird BEWUSST NICHT umgekehrt: V11 legt nur zusätzliche
+-- Indizes an (idx_executions_user_id/_device_id, idx_credit_accounting_user_id) - rein additiv,
+-- idempotent, für das Alt-Portal/den Alt-Client völlig unsichtbar (sie referenzieren keine
+-- Index-Namen, die Indizes beschleunigen nur Queries). Ein Rückbau wäre folgenlos und würde die
+-- DB nach einem Re-Cutover nur unnötig verlangsamen, bis Flyway V11 erneut anwendet. Deshalb
+-- wie V2 (siehe unten) NICHT umgekehrt.
+-- ============================================================================================
 
 -- ============================================================================================
 -- V2__widen_users_password_column.sql wird BEWUSST NICHT umgekehrt (kein

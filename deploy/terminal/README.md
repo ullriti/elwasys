@@ -137,10 +137,18 @@ darauf auf):
 um (`previous` bleibt unangetastet, damit das Rollback-Ziel nicht überschrieben
 wird) und stößt nur den Neustart an.
 
+**Integritätsprüfung (Issue #62):** Beim Online-Bezug (`--version`) lädt `update.sh` zusätzlich
+die `raspi-client-<tag>.jar.sha256` neben das Jar und verifiziert den Download **vor** dem
+Ausrollen per `sha256sum -c` **und** einer Zip/Jar-Strukturprüfung (`unzip -t`, Fallback:
+`PK`-Magic). Schlägt die Prüfung fehl, wird der Download (`.part`) verworfen und **nichts**
+verlinkt (Exit 1) – der Watchdog wertet das wie einen Fetch-Fehlschlag (kein Rollback, kein
+Kill). Ein unter demselben Tag repariertes Asset lässt sich mit `--force-download` erzwingen
+(verwirft ein lokal bereits vorliegendes, evtl. kaputtes Jar vor dem Neu-Download).
+
 **Env-Overrides** (für lokale Tests / Sonderfälle): `ELWA_ROOT` (Default
 `/opt/elwasys`), `ELWA_RESTART_CMD` (Default `sudo killall java`),
 `ELWA_JAVA_PGREP` (Default `pgrep -x java`), `ELWA_GITHUB_REPO` (Default
-`kabieror/elwasys`).
+`ullriti/elwasys`).
 
 ## Auto-Update mit Rollback (`auto-update-watchdog.sh`, Phase 6 AP5)
 
@@ -199,6 +207,28 @@ Aufruf: hat sich das Ziel **nicht** geändert, war es ein reiner No-op-Fehlschla
 → WARNUNG + Exit 1, **kein** Symlink-Anfassen, **kein** `java`-Kill. Nur wenn
 `latest` tatsächlich umgehängt wurde, der Marker danach aber nicht vorrückt, gilt
 es als echter fehlgeschlagener Deploy und der Rollback-Pfad greift.
+
+### Fehlschlag-Sperre gegen Endlosschleife (`.update-failed`, Issue #34)
+
+**Problem:** Nach einem echten Rollback (neue Version kam nicht hoch) meldet GitHub
+`latest` – oder eine `.update-target`-Datei – **weiterhin genau diese kaputte
+Zielversion**. Ohne Gegenmaßnahme würde der nächste Cron-Lauf sie erneut ausrollen,
+wieder scheitern, wieder zurückrollen – eine Endlosschleife aus Update → Rollback →
+Update, die das Terminal bei jedem Tick neu startet.
+
+**Lösung:** Bei jedem Rollback (und beim Kill-Rechte-Fehlschlag, siehe unten)
+schreibt der Watchdog die gescheiterte Version nach `${ELWA_ROOT}/.update-failed`.
+Am Laufanfang gilt: ist die ermittelte Zielversion **gleich** der gespeicherten
+gescheiterten Version, wird sie wie „up-to-date" behandelt (nur Logzeile, **kein**
+`update.sh`, **kein** `java`-Kill). Erscheint dagegen eine **andere** Zielversion
+(repariertes Release **oder** manuell entferntes `.update-failed`), wird die Sperre
+automatisch aufgehoben und normal aktualisiert. Zusätzlich löscht der Watchdog im
+Fehlerfall das lokal gecachte, kaputte `raspi-client-<version>.jar` (damit ein unter
+**demselben** Tag repariertes Asset neu geladen wird – ohne das würde `update.sh`
+das alte Jar behalten) und konsumiert einen etwaigen `.update-target`-Trigger.
+
+Manueller Wiederanlauf: entweder ein repariertes Release bereitstellen oder
+`rm ${ELWA_ROOT}/.update-failed` (dann versucht der nächste Cron-Lauf es erneut).
 
 ### Leerlauf-Gate (M1, QA-Nacharbeit)
 
@@ -265,16 +295,41 @@ unverändert. Watchdog-Marker-Pfad per `ELWA_MARKER_FILE` (Default
 ### Cron-Einrichtung
 
 Als **Terminal-User** (der auch den Client fährt), damit `${user.dir}`/Rechte
-passen. `sudo killall java` muss ohne Passwort laufen (bei `setup.sh`-Geräten via
-sudoers gegeben). Beispiel – alle 30 Minuten:
+passen. `sudo killall java` muss ohne Passwort laufen. `setup.sh` legt dafür
+(Issue #63) eine **enge** sudoers-Regel an – **kein** pauschales `NOPASSWD:ALL`:
+
+```sudoers
+# /etc/sudoers.d/elwasys  (von setup.sh geschrieben, 0440, per visudo -c geprüft)
+<user> ALL=(root) NOPASSWD: /usr/bin/killall java
+```
+
+Für ein Bestandsgerät ohne diese Regel (aus einem alten `setup.sh`) die Zeile
+einmalig mit `sudo visudo -f /etc/sudoers.d/elwasys` nachtragen (den Terminal-User
+statt `<user>` einsetzen). Ohne diese Regel scheitert der Neustart-Trigger; der
+Watchdog erkennt das seit Issue #63 als Rechteproblem und läuft **nicht** in einen
+grundlosen Rollback (siehe „Kill-Rechte" unten).
+
+**Cron-Beispiel – alle 30 Minuten** (die Update-/Watchdog-Skripte liegen aus dem
+Repo unter `deploy/terminal/`; für den Feldbetrieb **einmalig aufs Gerät kopieren**,
+z. B. nach `/opt/elwasys/bin/`, siehe Runbook-Schritt 3d – der frühere Beispielpfad
+`/opt/elwasys/../deploy/terminal/…` zeigte ins Leere):
 
 ```cron
 # /etc/cron.d/elwasys-watchdog  (oder `crontab -e` des Terminal-Users)
-*/30 * * * * pi /opt/elwasys/../deploy/terminal/auto-update-watchdog.sh >> /opt/elwasys/log/auto-update-watchdog.cron.log 2>&1
+# Felder: m h dom mon dow user command. "pi" = Terminal-User anpassen.
+*/30 * * * * pi /opt/elwasys/bin/auto-update-watchdog.sh >> /opt/elwasys/log/auto-update-watchdog.cron.log 2>&1
 ```
 
-(Pfad zum Skript an die Ablage anpassen; `update.sh` wird per Default **neben**
-dem Watchdog gesucht, überschreibbar via `ELWA_UPDATE_SCRIPT`.)
+(Ablagepfad an die tatsächliche Kopie anpassen; `update.sh` wird per Default
+**neben** dem Watchdog gesucht – also `/opt/elwasys/bin/update.sh` im Beispiel –,
+überschreibbar via `ELWA_UPDATE_SCRIPT`.)
+
+**Kill-Rechte (Issue #63/#34):** Der Neustart-Trigger ist `sudo killall java`.
+Fehlt die sudoers-Regel, gibt `update.sh` einen eigenen Exit-Code (3) zurück statt
+den Fehler zu verschlucken; der Watchdog setzt dann den Symlink konsistent zurück,
+markiert die Ziel-Version als gescheitert (`${ELWA_ROOT}/.update-failed`) und
+verzichtet auf einen kill-basierten Rollback (der am selben Rechteproblem
+scheitern würde). So entsteht **keine** Endlosschleife.
 
 **Empfehlung (siehe „Leerlauf-Gate" oben):** den Cron-Zeitpunkt bewusst in
 nutzungsarme Zeiten der jeweiligen Waschküche legen (z. B. nachts), auch wenn

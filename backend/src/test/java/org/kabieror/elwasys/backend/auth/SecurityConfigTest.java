@@ -1,5 +1,6 @@
 package org.kabieror.elwasys.backend.auth;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestBuilders.formLogin;
 import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.authenticated;
 import static org.springframework.security.test.web.servlet.response.SecurityMockMvcResultMatchers.unauthenticated;
@@ -58,7 +59,12 @@ class SecurityConfigTest {
 
     @Test
     void actuatorHealthIsPubliclyAccessible() throws Exception {
-        this.mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
+        // Entscheidend ist die Security-Regel (öffentlich, kein Login-Redirect/401), nicht der
+        // konkrete Health-Status. Seit AP6 (#32) kann das Root-/actuator/health je nach
+        // Betriebszustand 200 (UP) ODER 503 (OUT_OF_SERVICE durch einen betrieblichen Indicator)
+        // liefern; beides belegt, dass die Filterkette den Zugriff ohne Anmeldung durchlässt.
+        int status = this.mockMvc.perform(get("/actuator/health")).andReturn().getResponse().getStatus();
+        assertThat(status).isIn(200, 503);
     }
 
     @Test

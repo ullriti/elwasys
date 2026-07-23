@@ -67,7 +67,38 @@ management:
         include: health,info
   endpoint:
     health:
+      # Custom-HealthIndicators (Issue #32 - Betriebskonzept Dauerbetrieb, Alerting-Grundlage)
+      # werden von Spring Boot automatisch eingebunden, sobald sie als Bean vorliegen (siehe
+      # org.kabieror.elwasys.backend.health.*): TerminalConnectivityHealthIndicator (aktiver
+      # Standort ohne verbundenes Terminal) und ExpiredExecutionsHealthIndicator (offene,
+      # abgelaufene, unabgerechnete Ausführungen). Sie aggregieren in das Root-/actuator/health
+      # und ziehen es bei einem betrieblichen Fehlerbild auf OUT_OF_SERVICE (HTTP 503), sind also
+      # für ein externes Alerting auswertbar. show-details bleibt when-authorized: der öffentlich
+      # erreichbare /actuator/health (siehe SecurityConfig) zeigt unangemeldet nur den
+      # Gesamt-Status, die aufschlüsselnden Details (z.B. betroffene Standortnamen) erst nach
+      # Anmeldung - kein Geheimnis-Leak.
+      #
+      # WICHTIG - Trennung Orchestrierung vs. Alerting: Liveness/Readiness-Proben (Kubernetes,
+      # Compose-Healthcheck, Smoke-/Cutover-Gates) MÜSSEN die Gruppen /actuator/health/liveness
+      # bzw. /readiness nutzen. Diese enthalten NUR den Prozess-Status (livenessState/
+      # readinessState) und NICHT die betrieblichen Indicators - ein getrenntes Terminal oder
+      # eine offene abgelaufene Execution markiert das Backend also NICHT als "unhealthy" (kein
+      # Neustart-/Gate-Flattern, insbesondere beim Cutover, wenn noch keine Terminals verbunden
+      # sind). Für Alerting die dedizierte Gruppe /actuator/health/operational pollen (nur die
+      # beiden Indicators) oder das Root-/actuator/health (aggregiert alles).
       show-details: when-authorized
+      probes:
+        # Aktiviert /actuator/health/liveness und /readiness (sonst nur automatisch unter
+        # Kubernetes). Diese Gruppen sind das Ziel aller Orchestrierungs-/Gate-Healthchecks.
+        enabled: true
+      group:
+        operational:
+          # Dedizierte Alerting-Gruppe (Issue #32): bündelt genau die beiden betrieblichen
+          # Indicators, damit ein Monitoring gezielt darauf pollen und auf status != UP
+          # (HTTP 503) alarmieren kann, ohne den Prozess-/Liveness-Status zu vermischen.
+          include: terminalConnectivity,expiredExecutions
+          show-components: when-authorized
+          show-details: when-authorized
   health:
     # Der Actuator registriert automatisch einen Mail-Health-Indikator, sobald
     # spring-boot-starter-mail auf dem Klassenpfad liegt (AP5) - der würde per SMTP-NOOP
@@ -121,6 +152,17 @@ elwasys:
   # siehe LocationEntity) - hier nur die globale Uhren-Drift-Toleranz.
   offline:
     clock-drift-tolerance: ${ELWASYS_OFFLINE_CLOCK_DRIFT_TOLERANCE:PT5M}
+
+  # Aufbewahrung der Terminal-Idempotenz-Schlüssel (Issue #32 - Betriebskonzept Dauerbetrieb,
+  # siehe IdempotencyKeyRetentionScheduler). Die Tabelle terminal_idempotency_keys bekommt einen
+  # Eintrag je terminal-gemeldetem Execution-Ereignis und wuchs bisher unbegrenzt. Ein täglicher
+  # Aufräum-Job (purge-cron, Default nachts um 03:00) löscht Einträge, die älter als
+  # retention-days sind. Der Default (30 Tage) liegt bewusst deutlich über der maximalen
+  # Offline-Journal-Lebensdauer eines Terminals, damit ein spätes Replay noch dedupliziert
+  # werden kann. Fehlt die Property, gilt der Code-Default (30 bzw. "0 0 3 * * *").
+  idempotency:
+    retention-days: ${ELWASYS_IDEMPOTENCY_RETENTION_DAYS:30}
+    purge-cron: ${ELWASYS_IDEMPOTENCY_PURGE_CRON:0 0 3 * * *}
 
 logging:
   level:

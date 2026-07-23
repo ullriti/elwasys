@@ -58,6 +58,17 @@ public interface ExecutionRepository extends JpaRepository<ExecutionEntity, Inte
     List<ExecutionEntity> findByDevice_IdAndFinishedFalseAndStartIsNotNull(Integer deviceId);
 
     /**
+     * ALLE gestarteten, noch nicht abgeschlossenen Ausführungen - systemweit, unabhängig von
+     * Gerät/Benutzer (Issue #32 - Betriebskonzept Dauerbetrieb). Grundlage für die betriebliche
+     * Sichtbarkeit stiller Fehlerbilder: der Health-Indicator
+     * {@code ExpiredExecutionsHealthIndicator} filtert daraus die tatsächlich abgelaufenen
+     * (über {@code maxDuration}) heraus (siehe {@code ExecutionService#getAllExpiredExecutions}).
+     * Die Menge ist klein (höchstens eine je Gerät), daher genügt eine In-Java-Filterung wie
+     * beim bestehenden {@code getExpiredExecutions}.
+     */
+    List<ExecutionEntity> findByFinishedFalseAndStartIsNotNull();
+
+    /**
      * Entspricht {@code DataManager#getExecutions(Device)}.
      */
     List<ExecutionEntity> findByDevice_IdAndStartIsNotNullOrderByStartDesc(Integer deviceId);

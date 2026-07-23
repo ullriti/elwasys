@@ -9,7 +9,7 @@
 # `helm rollback`) - Portal/Backend brauchen dafür KEIN eigenes Rollback-Skript.
 #
 # Zwei Schritte, beide müssen grün sein:
-#   1. Health:     GET $BASE_URL/actuator/health  ->  "status":"UP"  (mit Retries für den Start)
+#   1. Health:     GET $BASE_URL/actuator/health/liveness  ->  "status":"UP"  (Retries für den Start)
 #   2. Playwright: die schlanke, strikt READ-ONLY Smoke-Teilmenge (backend/e2e/tests-smoke)
 #                  gegen $BASE_URL (npm run smoke).
 #
@@ -49,11 +49,15 @@ fail() {
 }
 
 # --- Schritt 1: Health/Actuator ------------------------------------------------
+# Gate gegen die Liveness-Gruppe (nur Prozess-Status), NICHT das Root-/actuator/health: seit
+# AP6 (#32) ziehen betriebliche Health-Indicators das Root-Health auf 503, solange kein Terminal
+# verbunden ist - beim Post-Deploy-Smoke (Terminals werden erst danach umgestellt) waere das ein
+# falsch-negatives Gate. Betriebliches Alerting laeuft ueber /actuator/health/operational.
 echo ""
-echo "[1/2] Health-Check: GET $BASE_URL/actuator/health (erwartet status=UP)"
+echo "[1/2] Health-Check: GET $BASE_URL/actuator/health/liveness (erwartet status=UP)"
 health_ok=0
 for i in $(seq 1 "$HEALTH_RETRIES"); do
-  body="$(curl -fsS --max-time 10 "$BASE_URL/actuator/health" 2>/dev/null || true)"
+  body="$(curl -fsS --max-time 10 "$BASE_URL/actuator/health/liveness" 2>/dev/null || true)"
   if printf '%s' "$body" | grep -q '"status":"UP"'; then
     echo "      Versuch $i/$HEALTH_RETRIES: UP  ($body)"
     health_ok=1

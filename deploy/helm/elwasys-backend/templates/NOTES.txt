@@ -3,11 +3,11 @@ elwasys-backend wurde installiert (Release "{{ .Release.Name }}" im Namespace "{
 Health prüfen:
 {{- if .Values.ingress.enabled }}
 {{- range .Values.ingress.hosts }}
-  curl https://{{ .host }}/actuator/health
+  curl https://{{ .host }}/actuator/health/liveness
 {{- end }}
 {{- else }}
   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "elwasys-backend.fullname" . }} 8080:{{ .Values.service.port }}
-  curl http://localhost:8080/actuator/health
+  curl http://localhost:8080/actuator/health/liveness
 {{- end }}
 
 Standort-Token erzeugen/widerrufen (Terminal-Registrierung, siehe docs/kb/04-build-and-run.md

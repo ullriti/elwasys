@@ -194,3 +194,48 @@ jobs:
       # denselben Weg, den ein frischer Image-Build in Produktion nähme).
       - name: Build backend container image (build only, no push)
         run: docker build -f backend/Dockerfile -t elwasys-backend:ci .
+
+  # ---------------------------------------------------------------------------
+  # Helm-Chart – billiger Render-/Lint-Gate (Issue #64): fängt kaputte Templates/Values früh
+  # ab, ohne ein echtes Cluster. "helm lint" prüft Chart-Struktur/Values, "helm template"
+  # rendert alle Manifeste einmal durch (inkl. des required-Guards auf secret.password aus
+  # templates/secret.yaml - daher hier ein Dummy-Passwort, das nie deployt wird).
+  # ---------------------------------------------------------------------------
+  helm:
+    name: Helm chart (lint + template)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: helm lint
+        run: helm lint deploy/helm/elwasys-backend --set secret.password=ci-dummy-not-deployed
+
+      - name: helm template (render smoke)
+        run: helm template elwasys-ci deploy/helm/elwasys-backend --set secret.password=ci-dummy-not-deployed > /dev/null
+
+  # ---------------------------------------------------------------------------
+  # Terminal-Update-Skripte – Trockentests des Auto-Update-Pfads (Issue #34/#62/#63). Der
+  # Selbsttest ist die einzige automatisierte Absicherung des Endlosschleifen-Guards
+  # (#34-B: "zweiter Cron-Lauf nach FAILURE versucht dasselbe kaputte Update nicht erneut"),
+  # der Checksummen-Prüfung (#62) und der Rollback-Pfade. Läuft rein offline (kein Netz/Root).
+  # Zusätzlich bash -n als billiger Syntax-Gate auf den geänderten Deploy-Skripten.
+  # ---------------------------------------------------------------------------
+  terminal-scripts:
+    name: Terminal update scripts (dry-run selftest)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax check deploy shell scripts
+        run: |
+          set -euo pipefail
+          bash -n deploy/terminal/auto-update-watchdog.sh
+          bash -n deploy/terminal/update.sh
+          bash -n deploy/terminal/auto-update-selftest.sh
+          bash -n Client-Raspi/setup.sh
+
+      - name: Run auto-update selftest (offline dry-run)
+        run: bash deploy/terminal/auto-update-selftest.sh

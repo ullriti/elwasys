@@ -257,6 +257,39 @@ class ExecutionServiceTest extends AbstractBackendIT {
     }
 
     @Test
+    void getAllExpiredExecutionsReturnsExpiredNotFinishedOnesAcrossUsers() {
+        // Issue #32 (Betriebskonzept Dauerbetrieb): systemweite Sicht (nicht pro Benutzer) auf
+        // abgelaufene, noch nicht abgerechnete Ausführungen - Grundlage des
+        // ExpiredExecutionsHealthIndicator. maxDuration 0 -> sofort abgelaufen (deterministisch,
+        // wie in isExpiredAndHasExpiredExecutionsFollowMaxDuration).
+        DeviceEntity device = newDevice();
+        ProgramEntity expiredProgram = newProgram(0);
+        ProgramEntity runningProgram = newProgram(3600);
+        UserEntity userA = newUser();
+        UserEntity userB = newUser();
+
+        // Abgelaufen bei zwei verschiedenen Benutzern -> beide müssen gezählt werden.
+        ExecutionEntity expiredA = this.executionService.startExecution(
+                this.executionService.createExecution(device, expiredProgram, userA));
+        ExecutionEntity expiredB = this.executionService.startExecution(
+                this.executionService.createExecution(device, expiredProgram, userB));
+        // Läuft noch (nicht abgelaufen) -> nicht enthalten.
+        ExecutionEntity running = this.executionService.startExecution(
+                this.executionService.createExecution(device, runningProgram, userA));
+        // Abgeschlossen -> nie abgelaufen -> nicht enthalten.
+        ExecutionEntity finished = this.executionService.finishExecution(this.executionService.startExecution(
+                this.executionService.createExecution(device, expiredProgram, userB)));
+
+        List<ExecutionEntity> expired = this.executionService.getAllExpiredExecutions();
+
+        assertThat(expired).extracting(ExecutionEntity::getId).contains(expiredA.getId(), expiredB.getId());
+        // Weder die noch laufende noch die abgeschlossene Ausführung darf gezählt werden.
+        assertThat(expired).extracting(ExecutionEntity::getId)
+                .doesNotContain(running.getId(), finished.getId());
+        assertThat(expired).allSatisfy(e -> assertThat(this.executionService.isExpired(e)).isTrue());
+    }
+
+    @Test
     void deleteRemovesTheExecution() {
         UserEntity user = newUser();
         DeviceEntity device = newDevice();

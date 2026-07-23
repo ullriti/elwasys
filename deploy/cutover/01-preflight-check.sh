@@ -44,6 +44,24 @@ column_exists() {
   [[ "$(q1 "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='${t}' AND column_name='${c}');")" == "t" ]]
 }
 
+# Höchste vorhandene Flyway-Migrationsversion aus dem Repo ableiten (Issue #64) - NICHT mehr
+# hart auf "10" verdrahtet, damit dieser Check bei neuen V*-Migrationen nicht veraltet. Das
+# migration-Verzeichnis liegt zwei Ebenen über deploy/cutover/ (Repo-Wurzel).
+MIGRATION_DIR="../../backend/src/main/resources/db/migration"
+EXPECTED_VERSION=""
+if [[ -d "${MIGRATION_DIR}" ]]; then
+  EXPECTED_VERSION="$(ls "${MIGRATION_DIR}"/V*__*.sql 2>/dev/null \
+    | sed -E 's#.*/V([0-9]+)__.*#\1#' | sort -n | tail -n1)"
+fi
+
+# Erwartete Zeitzonen (Issue #31): Backend- und Terminal-Zeitzone MÜSSEN übereinstimmen, sonst
+# fällt jede nachgemeldete Terminal-Meldung in den Ersetzungszweig von ClientTimestampPolicy und
+# der DYNAMIC-Preis rechnet über die DST-Nacht falsch. Auftraggeber-Vorgabe: Europe/Berlin.
+# Beide per Env überschreibbar, um im Sonderfall eine bewusst abweichende (aber übereinstimmende)
+# Zone zu prüfen. Backend-TZ-Default: der TZ-Env-Wert dieser Umgebung, sonst Europe/Berlin.
+EXPECTED_BACKEND_TZ="${ELWASYS_BACKEND_TZ:-${TZ:-Europe/Berlin}}"
+EXPECTED_TERMINAL_TZ="${ELWASYS_TERMINAL_TZ:-Europe/Berlin}"
+
 echo "================================================================"
 echo "elwasys Cutover-Preflight-Check"
 echo "  DB: ${CUTOVER_DB_HOST}:${CUTOVER_DB_PORT}/${CUTOVER_DB_NAME} (User: ${ELWASYS_DB_USER})"
@@ -52,6 +70,24 @@ echo "================================================================"
 if ! psql_cutover -tA -c "SELECT 1;" > /dev/null 2>&1; then
   echo "FEHLER: Verbindung zur Datenbank fehlgeschlagen. ELWASYS_DB_URL/_USER/_PASSWORD prüfen." >&2
   exit 1
+fi
+
+echo
+echo "--- 0) Zeitzonen-Gate (Issue #31) ---"
+echo "  Erwartete Backend-Zeitzone:  ${EXPECTED_BACKEND_TZ}"
+echo "  Erwartete Terminal-Zeitzone: ${EXPECTED_TERMINAL_TZ}"
+if [[ "${EXPECTED_BACKEND_TZ}" != "${EXPECTED_TERMINAL_TZ}" ]]; then
+  warn "Backend-TZ (${EXPECTED_BACKEND_TZ}) und Terminal-TZ (${EXPECTED_TERMINAL_TZ}) stimmen NICHT überein - Cutover so NICHT durchführen. Beide auf dieselbe Zone (Auftraggeber-Vorgabe: Europe/Berlin) setzen (backend/Dockerfile ENV TZ bzw. TZ in compose/Helm; Terminal = Systemzeit des Raspi)."
+elif [[ "${EXPECTED_BACKEND_TZ}" != "Europe/Berlin" ]]; then
+  warn "Backend-/Terminal-TZ ist ${EXPECTED_BACKEND_TZ}, nicht die Auftraggeber-Vorgabe Europe/Berlin - nur bewusst und für BEIDE gemeinsam abweichen."
+else
+  echo "  OK: Backend- und Terminal-TZ stimmen überein (${EXPECTED_BACKEND_TZ})."
+fi
+# Zusätzlich die aktuelle Session-Zeitzone der DB anzeigen (beeinflusst now()-Defaults) - rein
+# informativ, weicht bei Alt-Bestands-DBs oft ab (z.B. UTC); die Anwendung rechnet in der JVM-TZ.
+DB_TZ="$(q1 "SHOW timezone;" 2>/dev/null || true)"
+if [[ -n "${DB_TZ}" ]]; then
+  echo "  (Info) DB-Session-Zeitzone: ${DB_TZ}"
 fi
 
 echo
@@ -65,14 +101,16 @@ if table_exists "flyway_schema_history"; then
   if [[ "${FAILED}" != "0" ]]; then
     warn "${FAILED} fehlgeschlagene Migrations-Einträge (success=false) - vor dem Cutover klären, nicht einfach erneut starten!"
   fi
-  if [[ "${LATEST}" != "10" ]]; then
-    warn "Letzte angewendete Version ist ${LATEST}, nicht 10 (aktueller Stand laut backend/src/main/resources/db/migration) - Backend-Version prüfen bzw. Migration nachholen."
+  if [[ -z "${EXPECTED_VERSION}" ]]; then
+    warn "Höchste Migrationsversion konnte nicht aus ${MIGRATION_DIR} ermittelt werden (Verzeichnis nicht gefunden?) - Migrationsstand manuell gegen backend/src/main/resources/db/migration abgleichen."
+  elif [[ "${LATEST}" != "${EXPECTED_VERSION}" ]]; then
+    warn "Letzte angewendete Version ist ${LATEST}, nicht ${EXPECTED_VERSION} (höchste V*-Migration laut backend/src/main/resources/db/migration) - Backend-Version prüfen bzw. Migration nachholen."
   fi
 else
   echo "  flyway_schema_history existiert NOCH NICHT - das ist der erwartete Zustand einer"
   echo "  über den Alt-Weg (Schema 0.4.0) angelegten Bestands-DB vor dem ersten Start des neuen"
   echo "  Backends. Beim ersten Start baselined Flyway diese DB auf Version 1 und wendet"
-  echo "  danach V2..V10 automatisch an (baseline-on-migrate, siehe application.yml)."
+  echo "  danach V2..V${EXPECTED_VERSION:-<neueste>} automatisch an (baseline-on-migrate, siehe application.yml)."
 fi
 
 echo

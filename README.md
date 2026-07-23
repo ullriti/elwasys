@@ -43,5 +43,5 @@ The wireless sockets are switched on if a user has enough credit and are switche
 On a fresh Raspberry Pi, run the following command:
 
 ```bash
-bash <(curl -s https://raw.githubusercontent.com/kabieror/elwasys/master/Client-Raspi/setup.sh)
+bash <(curl -s https://raw.githubusercontent.com/ullriti/elwasys/master/Client-Raspi/setup.sh)
 ```

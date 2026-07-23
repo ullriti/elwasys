@@ -8,6 +8,8 @@ metadata:
   labels:
     {{- include "elwasys-backend.labels" . | nindent 4 }}
 data:
+  # Zeitzone (Issue #31) - muss mit der Terminal-Zeitzone übereinstimmen, siehe values.yaml.
+  TZ: {{ .Values.timezone | quote }}
   ELWASYS_DB_URL: {{ include "elwasys-backend.jdbcUrl" . | quote }}
   ELWASYS_NOTIFICATIONS_ENABLED: {{ .Values.notifications.enabled | quote }}
   ELWASYS_SMTP_HOST: {{ .Values.smtp.host | quote }}

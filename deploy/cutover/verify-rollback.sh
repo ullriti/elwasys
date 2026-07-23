@@ -198,8 +198,10 @@ BACKEND_PID=$!
 
 HEALTH=""
 for i in $(seq 1 60); do
-  if curl -sf "http://localhost:${ROLLBACK_VERIFY_PORT}/actuator/health" > /dev/null 2>&1; then
-    HEALTH="$(curl -s "http://localhost:${ROLLBACK_VERIFY_PORT}/actuator/health")"
+  # Liveness-Gruppe (nur Prozess-Status): das Root-/actuator/health steht auf 503, weil die DB
+  # Standorte/Geraete enthaelt, aber kein Terminal verbunden ist (AP6 #32).
+  if curl -sf "http://localhost:${ROLLBACK_VERIFY_PORT}/actuator/health/liveness" > /dev/null 2>&1; then
+    HEALTH="$(curl -s "http://localhost:${ROLLBACK_VERIFY_PORT}/actuator/health/liveness")"
     break
   fi
   sleep 1

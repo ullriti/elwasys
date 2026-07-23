@@ -59,6 +59,32 @@ jobs:
         tag: ${{ github.event.release.tag_name }}
         overwrite: true
 
+    - name: Generate SHA-256 checksum for the release jar
+      # Issue #62 (Jar-Integrität): eine .sha256-Prüfsumme neben das Jar legen, damit
+      # update.sh/setup.sh den Download vor dem Deploy verifizieren können (sha256sum -c).
+      # Die Prüfsummen-Zeile trägt bewusst den ASSET-Namen (raspi-client-<tag>.jar), NICHT den
+      # Build-Namen (...-jar-with-dependencies.jar): auf dem Terminal heißt die Datei so, wie
+      # sie als Release-Asset heruntergeladen wird, sonst schlüge "sha256sum -c" am Namen fehl.
+      run: |
+        set -euo pipefail
+        jar="Client-Raspi/target/raspi-client-${{ github.event.release.tag_name }}-jar-with-dependencies.jar"
+        asset="raspi-client-${{ github.event.release.tag_name }}.jar"
+        hash="$(sha256sum "$jar" | awk '{print $1}')"
+        # Standard-coreutils-Format "<hash>  <dateiname>" (zwei Leerzeichen) - so greift
+        # "sha256sum -c" auf dem Terminal gegen die gleichnamig heruntergeladene Datei.
+        printf '%s  %s\n' "$hash" "$asset" > "${asset}.sha256"
+        echo "Erzeugte Prüfsumme:"
+        cat "${asset}.sha256"
+
+    - name: Publish SHA-256 checksum
+      uses: svenstaro/upload-release-action@v2
+      with:
+        repo_token: ${{ github.token }}
+        file: raspi-client-${{ github.event.release.tag_name }}.jar.sha256
+        asset_name: raspi-client-${{ github.event.release.tag_name }}.jar.sha256
+        tag: ${{ github.event.release.tag_name }}
+        overwrite: true
+
     # Backend-Container-Image (Phase 2 AP6, siehe docs/kb/05-migration-plan.md und
     # backend/Dockerfile). Nutzt denselben, bereits per "versions:set" oben auf die
     # Release-Tag-Version gehobenen Arbeitsbaum als Docker-Build-Kontext, damit Jar-Version

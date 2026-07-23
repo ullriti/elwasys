@@ -81,13 +81,23 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   gekürzt/idempotent (#39); Testdeterminismus (#40); Geräte-Lösch-Wächter (`EntityInUseException`
   bei laufender Ausführung), Lösch-Bestätigung im ExpiredExecutions-Dialog und Doppelklick-Schutz
   auf Geldknöpfen (#49); RouteAccess per Classpath-Scan + neue E2E (Auszahlung/NotEnoughCredit,
-  Benutzer-Löschung, Reset-Link, #50). **#60 (Terminal-Totalausfall) bewusst nach AP6 verschoben**
-  (betrieblich; Auftraggeber-Info: die Steckdosen bleiben bei Terminal-Ausfall eingeschaltet →
-  unbeaufsichtigter Weiterlauf, für AP6/#32 Alerting/Runbook relevant).
-- **Nächster Schritt:** restliche Pre-Launch-Arbeitspakete – AP6 (Deployment/Betrieb/Cutover,
-  inkl. #60 und Vaadin-Lizenz-🧩) – als eigener PR, **AP7 (KB)** zuletzt; danach Betrieb/Nachpflege
-  auf der Zielarchitektur; neue Vorhaben
-  vorab als Spec in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.
+  Benutzer-Löschung, Reset-Link, #50).
+  **AP6 (Deployment/Betrieb/Cutover, #31/#32/#33/#34/#35/#60/#62/#63/#64) ist behoben** – Backend/
+  Compose/Helm fest auf Zeitzone `Europe/Berlin` + Preflight-/Runbook-Gate (#31); Dauerbetrieb
+  ausgearbeitet: Purge-Job für `terminal_idempotency_keys` (30 Tage, konfigurierbar) und zwei
+  Custom-Health-Indicators (Standort ohne Terminal-WS, offene abgelaufene Executions) → 503/Alerting,
+  Runbook-Kapitel „Dauerbetrieb" (Backup/Alerting/Log-Rotation/Retention) (#32); #60 (Terminal-
+  Totalausfall, Steckdose bleibt an → unbeaufsichtigter Weiterlauf) als Betriebsrisiko + Health-Alert
+  dokumentiert; Watchdog merkt fehlgeschlagene Zielversion (keine Update/Rollback-Endlosschleife, #34);
+  TLS-Pflicht (Compose bindet nur `127.0.0.1`, `https://` als Runbook-Gate, #35); Client-Jar-Integrität
+  per SHA-256 (#62); `setup.sh` idempotent + sudoers-Regel + Kill-Exit-Code geprüft (#63); Repo-/GHCR-
+  Referenzen auf **`ullriti/elwasys`** vereinheitlicht, Preflight-Migrationsversion abgeleitet, Helm-
+  Passwort-Guard + CI-`helm`-Lint (#64). **Vaadin-Lizenz-🧩 (#33): Restrisiko bewusst akzeptiert**
+  ([ADR 0019](../architecture/0019-ap6-vaadin-lizenz-restrisiko.md)). Ein späterer Repo-Umzug nach
+  `kabieror/elwasys` wird über Issue #75 nachgehalten.
+- **Nächster Schritt:** **AP7 (KB-Überarbeitung)** als letztes Pre-Launch-Arbeitspaket; danach
+  Betrieb/Nachpflege auf der Zielarchitektur; neue Vorhaben vorab als Spec in
+  [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.
   Die Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).
 - **Details:** siehe den jeweils letzten Eintrag im [Worklog](../worklog/README.md).
 
