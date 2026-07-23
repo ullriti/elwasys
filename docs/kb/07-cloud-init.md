@@ -11,14 +11,14 @@ Dieser Hook bereitet **jede Remote-Session** automatisch vor:
 - prüft Java/Maven,
 - stellt Xvfb bereit (Fallback für headless JavaFX; Monocle ist die bevorzugte, voll
   headless Variante),
-- installiert die **Aggregator-Parent-POM** ins lokale Maven-Repo (`mvn -N install` – das
-  Common-Modul ist im Phase-5-Nachtrag aufgelöst, seine Klassen liegen jetzt im
-  Client-Raspi-Modul),
-- wärmt die **Client-Raspi**-Dependencies vor (`dependency:go-offline`).
+- installiert die **Aggregator-Parent-POM** ins lokale Maven-Repo (`mvn -N install`),
+- wärmt die **Client-Raspi**-Dependencies vor (`dependency:go-offline`); die 6 Utility-Klassen
+  des Package `org.kabieror.elwasys.common` liegen im Client-Raspi-Modul und werden dabei
+  mitgebaut.
 
 Der Container-Zustand wird nach dem Hook gecacht → Folge-Builds/Tests sind schnell.
 Der Hook läuft **nur** remote (`$CLAUDE_CODE_REMOTE == true`), ist idempotent und
-non-interaktiv. Ausführungsmodus derzeit **synchron** (garantiert fertige Abhängigkeiten
+non-interaktiv. Ausführungsmodus **synchron** (garantiert fertige Abhängigkeiten
 vor Session-Start; kann bei Bedarf auf async umgestellt werden).
 
 > Wirksam für alle künftigen Sessions, sobald der Hook in den Default-Branch gemergt ist.
@@ -44,29 +44,28 @@ multipass launch --name elwasys --cloud-init deploy/cloud-init/cloud-config.yaml
 ```
 Bei EC2/GCE/Hetzner als *user-data* verwenden.
 
-## Verifizierter Zustand dieser Umgebung (2026-07-19)
+## Umgebung
 
-| Check | Ergebnis |
-|-------|----------|
-| OS | Ubuntu 24.04.4 LTS |
-| Java | OpenJDK 21.0.10 ✅ |
-| Maven | 3.9.11 ✅ |
-| Xvfb | vorhanden (`/usr/bin/Xvfb`, `xvfb-run`) ✅ |
-| `mvn install` Common | ✅ erfolgreich |
-| `mvn compile` Client-Raspi | ✅ erfolgreich |
-| `mvn test-compile` Client-Raspi | ✅ erfolgreich |
-| SessionStart-Hook end-to-end | ✅ Exit 0 |
-| Linter | ❌ keiner konfiguriert (Kandidat für Phase 1) |
-| Laufende Testsuite | ❌ noch keine (bestehende Tests sind TestNG-Simulatoren; UI-Tests folgen) |
+- **OS**: Ubuntu 24.04.4 LTS
+- **Java**: OpenJDK 21.0.10
+- **Maven**: 3.9.11
+- **Xvfb**: vorhanden (`/usr/bin/Xvfb`, `xvfb-run`)
+- **Docker-Daemon**: in dieser Sandbox nicht verfügbar (`docker ps` scheitert) – deshalb
+  nutzen Backend-Tests hier den Local-PostgreSQL-Override statt Testcontainers (siehe
+  docs/kb/04-build-and-run.md).
 
-## Hinweise / Stolperfallen
-- ~~**Portal** wird vom Hook bewusst **nicht** gebaut: Versionskonflikt
-  (`common:0.3.4-SNAPSHOT` vs. `0.0.0-local-development`) + schwergewichtige Vaadin-/GWT-
-  Widgetset-Compilation. Portal-Build/-Tests kommen in einer späteren Phase.~~ *(Historisch,
-  Stand Phase 0. Das Alt-Portal-Modul ist seit Phase 5 AP1 vollständig aus dem Repo entfernt;
-  im Phase-5-Nachtrag wurde zudem das Common-Modul aufgelöst – der Root-Reactor umfasst seither
-  nur noch Client-Raspi/backend (die 6 ehemaligen Common-Klassen liegen im Client-Raspi-Modul),
-  siehe 05-migration-plan.md; das neue Portal-UI [Vaadin Flow] ist Teil von `backend` und wird
-  normal mitgebaut.)*
-- Ausgehende HTTPS-Verbindungen laufen in dieser Umgebung über einen Agent-Proxy; der
-  Java-Truststore ist per `JAVA_TOOL_OPTIONS` gesetzt. Maven-Downloads funktionieren.
+Ausgehende HTTPS-Verbindungen laufen über einen Agent-Proxy; der Java-Truststore ist per
+`JAVA_TOOL_OPTIONS` gesetzt, Maven-Downloads funktionieren.
+
+## Historie
+
+- **2026-07-22** — Common-Modul aufgelöst; der Hook baut nur noch Client-Raspi/backend, die 6
+  ehemaligen Common-Klassen liegen im Client-Raspi-Modul
+  ([Worklog Phase-5-Nachtrag](../worklog/2026-07-22-phase-5-nachtrag-common-und-schema.md)).
+- **2026-07-21** — Alt-Portal-Modul (Vaadin 7 WAR) aus dem Repo entfernt; das neue Portal-UI
+  (Vaadin Flow) ist Teil von `backend` und wird normal mitgebaut
+  ([Worklog Phase 5](../worklog/2026-07-21-phase-5-aufraeumen.md) ·
+  [05-migration-plan.md](05-migration-plan.md)).
+- **2026-07-19** — SessionStart-Hook und portable Cloud-Init-Konfiguration angelegt; Remote-Setup
+  (JDK 21, Maven, Xvfb) verifiziert
+  ([Worklog Setup](../worklog/2026-07-19-setup-und-sicherheitsnetz.md)).

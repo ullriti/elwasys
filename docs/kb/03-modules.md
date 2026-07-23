@@ -1,85 +1,60 @@
 # 03 – Module im Detail
 
-## Common (`org.kabieror.elwasys.common`) – Modul aufgelöst (Phase-5-Nachtrag)
-
-Das früher eigenständige Common-Modul (kleine gemeinsame Bibliothek, JAR) wurde im
-Phase-5-Nachtrag **aufgelöst**: der Root-Reactor umfasst seither nur noch die zwei Module
-Client-Raspi und backend. Die 6 verbliebenen Klassen liegen unverändert im Package
-`org.kabieror.elwasys.common`, physisch jetzt unter
-`Client-Raspi/src/main/org/kabieror/elwasys/common/`, und werden mit dem Client (Sprachlevel 21)
-gebaut. **Nur der Terminal-Client nutzt sie zur Laufzeit** – das Backend hat ein eigenes
-Datenmodell und hatte nie eine Produktiv-Abhängigkeit auf `common` (0 Produktiv-Imports); die
-frühere test-scope-Abhängigkeit für 3 Auth-Parity-Tests entfällt, das Alt-SHA1-Format wird dort
-seither lokal über den Test-Helfer `LegacySha1` (`backend/src/test/.../auth/LegacySha1.java`)
-reproduziert.
-
-Vorgeschichte: **In Phase 5 AP1 (2026-07-21) war Common bereits auf das Nötigste geschrumpft**
-worden – `DataManager` (zentraler Alt-DB-Zugriff), die Alt-Domänenklassen (`User`, `UserGroup`,
-`Device`, `Location`, `Program`, `Execution`, `CreditAccountingEntry`), `DiscountType`,
-`NotEnoughCreditException` sowie das komplette `maintenance/`-Paket (Alt-TCP-
-Fernwartungsprotokoll) wurden entfernt, da seit dem Client-Cutover (Phase 4 AP4/AP5) bzw. mit
-dem Alt-Portal-Modul (unten) ungenutzt. Details/Testzahlen siehe docs/kb/05-migration-plan.md,
-Änderungslog „Phase 5 AP1".
-
-**Verbliebene Klassen** (jetzt in `Client-Raspi/src/main/org/kabieror/elwasys/common/`):
-- `ConfigurationManager` – Basis-Konfigurationsverwaltung
-- `Utilities` (enthält `APP_VERSION`, Passwort-Hilfsfunktionen inkl. `sha1`), `FormatUtilities`
-- `ProgramType` – Enum, von Client-Raspi weiterhin genutzt
-- Exceptions: `LocationOccupiedException`, `NoDataFoundException`
-
-Die von diesen Klassen benötigten Bibliotheken sind seither direkte Client-Raspi-Dependencies
-(u. a. Commons Lang3 direkt; der PostgreSQL-JDBC-Treiber nur noch **test-scope**, da nur die
-E2E-Harness per JDBC seedet).
-
-**Geteiltes Seed-Schema**: seit der Schema-Konsolidierung gibt es für das 0.4.0-Alt-/Basis-Schema
-nur noch **eine Quelle** – die Flyway-Baseline
-`backend/src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql`. Die früher hier genutzte
-SQL-Fixture (`Common/resources/database-init.sql`, später kurzzeitig `database/database-init.sql`
-samt `database/database-upgrade/`) war ein byte-äquivalentes Duplikat und wurde mitsamt dem
-Verzeichnis `database/` entfernt. Test-Harnesses, die eine ungetrackte 0.4.0-DB brauchen, spielen
-V1 direkt per psql ein (DB vorher per `CREATE DATABASE` anlegen). Die toten `ISO_7010_*.svg`
-(Alt-Portal-Reste) wurden gelöscht.
+Der Root-Reactor umfasst zwei Module: **Client-Raspi** (JavaFX-Terminal) und **backend**
+(zentrales Spring-Boot-Backend inkl. eingebettetem Vaadin-Flow-Portal). Beide bauen mit
+Sprachlevel **Java 21** gegen die gemeinsame PostgreSQL-Datenbank – die Terminals dabei
+ausschließlich über die REST-API v1 + WebSocket des Backends, nie direkt (siehe
+[ADR 0004](../architecture/0004-terminals-ohne-direkt-db-zugriff.md)).
 
 ## Client-Raspi (`org.kabieror.elwasys.raspiclient`)
 
-JavaFX-Terminal, fat-jar. Java 21 (der Client läuft auf einer Java-21-Runtime).
+JavaFX-Terminal, fat-jar, läuft auf einer Java-21-Runtime.
 
-**Datenzugriff seit Phase 4 AP5 (2026-07-21, Fernwartung umgedreht) vollständig umgestellt**:
-`Common.DataManager` ist komplett aus `Client-Raspi/src/main` raus (kein `DataManager`-/JDBC-
-Import mehr) – die REST-API v1 des Backends (`api/ApiClient`, seit Phase 4 AP4) und die neue,
-vom Terminal ausgehende WebSocket-Verbindung (`ws/TerminalWebSocketClient`, seit Phase 4 AP5)
-sind jetzt die EINZIGEN Datenzugriffspfade. Der zuvor transitional verbliebene Zugriffspunkt
-(Fernwartungs-Registrierung über `configuration/LocationManager` + serverseitiges
-`application/MaintenanceServerManager`) ist ersatzlos entfernt – siehe
-docs/kb/05-migration-plan.md, Änderungslog „Phase 4 AP5“.
+**Datenzugriff**: einzige Pfade sind die REST-API v1 des Backends (`api/ApiClient`) und die vom
+Terminal ausgehende WebSocket-Verbindung (`ws/TerminalWebSocketClient`) – beide über dieselbe
+Backend-URL und dasselbe Standort-Token (`backend.url`/`backend.token`). Kein `DataManager`,
+kein JDBC-Import in `src/main` (der PostgreSQL-Treiber ist nur noch test-scope, da nur die
+E2E-Harness per JDBC seedet).
 
-**Pakete** (siehe 01-architecture.md für Details):
-- `application/` – `Main`, `ElwaManager` (Singleton, verdrahtet einen `ApiClient` [AP4] + seit
-  AP5 einen `ws/TerminalWebSocketClient`), `SingleInstanceManager`, `ActionContainer`,
-  `ApplicationInterfaceType`, Close-Listener. (`MaintenanceServerManager` ist seit AP5
-  entfernt, s. u.)
-- `api/` – **neu (Phase 4 AP4)**: `ApiClient` (schlanke REST-Schicht auf `java.net.http`,
-  Standort-Token als `Authorization: Bearer`, `Idempotency-Key`-Header für
-  Execution-Endpunkte), `ApiException`, `dto/` (Records: `CardLoginRequest`,
-  `CreditResponse`, `DeviceDto`, `DeviceOverviewDto`, `ExecutionDto`,
-  `ExecutionEndRequest`/`-StartRequest`, `LocationDto`, `ProgramDto`,
-  `UpdateDeconzUuidRequest`, `UserDto`; seit Phase 4 AP6 zusätzlich `SnapshotDto` +
-  `SnapshotUserDto`/`SnapshotUserGroupDto`/`SnapshotDeviceDto`/`SnapshotProgramDto`/
-  `DiscountType`, Gegenstücke zu den gleichnamigen Backend-DTOs, siehe
-  `ApiClient#getSnapshot()`) – 1:1 an die Backend-REST-API v1 angelehnt (siehe docs/kb/03,
-  Abschnitt „REST-API v1“ weiter unten)
-- `ws/` – **neu (Phase 4 AP5)**: `TerminalWebSocketClient` (die ausgehende Fernwartungs-
-  Verbindung zum Backend, `/api/v1/terminal-ws`, dasselbe Standort-Token wie `api/ApiClient`;
-  Technologie: `org.springframework.web.socket.client.standard.StandardWebSocketClient`,
+**Ex-`Common`-Klassen**: sechs gemeinsame Utility-Klassen liegen im Package
+`org.kabieror.elwasys.common`, physisch unter `Client-Raspi/src/main/org/kabieror/elwasys/common/`,
+und werden mit dem Client gebaut. Nur das Terminal nutzt sie zur Laufzeit; das Backend hat ein
+eigenes, per Flyway verwaltetes Datenmodell und keine Produktiv- oder Test-Abhängigkeit auf
+`common` (das Alt-SHA1-Format bildet der Backend-Test-Helfer `LegacySha1` lokal nach):
+- `ConfigurationManager` – Basis-Konfigurationsverwaltung
+- `Utilities` (enthält `APP_VERSION`, Passwort-Hilfsfunktionen inkl. `sha1`, `maskCardId`,
+  `getCurrentLogFile`), `FormatUtilities`
+- `ProgramType` – Enum
+- Exceptions: `LocationOccupiedException`, `NoDataFoundException`
+
+Die von diesen Klassen benötigten Bibliotheken sind direkte Client-Raspi-Dependencies (u. a.
+Commons Lang3). Test-Harnesses, die eine 0.4.0-DB brauchen, spielen die Flyway-Baseline `V1`
+direkt per psql ein (DB vorher per `CREATE DATABASE` anlegen).
+
+**Pakete** (siehe [01-architecture.md](01-architecture.md) für Details):
+- `application/` – `Main`, `ElwaManager` (Singleton, verdrahtet `api/ApiClient` +
+  `ws/TerminalWebSocketClient`; `#cardLogin`/`#getDevicesForUser`/`#createExecution`/
+  `#getManagedDevices` kapseln Online-Pfad + Offline-Fallback hinter demselben DTO-Vertrag),
+  `SingleInstanceManager`, `ActionContainer`, `ApplicationInterfaceType`, Close-Listener,
+  `TerminalReadinessMarker`.
+- `api/` – `ApiClient` (schlanke REST-Schicht auf `java.net.http`, Standort-Token als
+  `Authorization: Bearer`, `Idempotency-Key`-Header für Execution-Endpunkte,
+  `replayCreateExecution` für den privilegierten Nachbuchungs-Pfad), `ApiException`, `dto/`
+  (Records: `CardLoginRequest`, `CreditResponse`, `DeviceDto`, `DeviceOverviewDto`,
+  `ExecutionDto`, `ExecutionEndRequest`/`-StartRequest`, `LocationDto`, `ProgramDto`,
+  `UpdateDeconzUuidRequest`, `UserDto`, `SnapshotDto` +
+  `SnapshotUserDto`/`SnapshotUserGroupDto`/`SnapshotDeviceDto`/`SnapshotProgramDto`,
+  `DiscountType`) – 1:1 an die Backend-REST-API v1 angelehnt (siehe „REST-API v1“ unten).
+- `ws/` – `TerminalWebSocketClient` (ausgehende Fernwartungs-Verbindung zum Backend,
+  `/api/v1/terminal-ws`, `org.springframework.web.socket.client.standard.StandardWebSocketClient`,
   identisches Muster zu `devices/deconz/DeconzEventListener`), `TerminalWsMessage`/
-  `TerminalWsMessageType` (Client-seitiges Gegenstück zum Backend-Protokoll, siehe „WebSocket-
-  Endpunkt“ weiter unten) – siehe Abschnitt „Ausgehende Fernwartungs-Verbindung (AP5)“ weiter
-  unten für Details (Auth/Heartbeat/Reconnect/Fachfunktionen).
-- `model/` – **neu (Phase 4 AP4)**: `ClientDevice`/`ClientExecution`/`ClientProgram`/
-  `ClientUser` – bilden über den `ApiClient` befüllte Adapterklassen, die den
-  Identitäts-Cache nachbilden, den `Common.DataManager` intern führte (wichtig für
-  konsistente Objektidentität über mehrere `ElwaManager#getManagedDevices()`-Aufrufe hinweg,
-  siehe `ElwaManager`-Javadoc)
+  `TerminalWsMessageType` (Client-seitiges Gegenstück zum Backend-Protokoll) – siehe
+  „Ausgehende Fernwartungs-Verbindung“ unten.
+- `model/` – `ClientDevice`/`ClientExecution`/`ClientProgram`/`ClientUser`: über den
+  `ApiClient` befüllte Adapterklassen, die einen Identitäts-Cache nachbilden (konsistente
+  Objektidentität über mehrere `ElwaManager#getManagedDevices()`-Aufrufe hinweg, siehe
+  `ElwaManager`-Javadoc). `ClientExecution#isOfflinePendingReplay()` markiert eine offline
+  gebuchte, noch nicht nachgemeldete Ausführung (entkoppelt von `isVirtual()`).
 - `ui/` – State-Machine + zwei UI-Größen:
   - `ui/small/` – 320×240 (`MainFormController`, `MainFormStateManager`, `ProgramListItem`)
   - `ui/medium/` – 800×480 (Haupt-UI): `MainFormController`, `MainFormStateManager`,
@@ -87,803 +62,501 @@ docs/kb/05-migration-plan.md, Änderungslog „Phase 4 AP5“.
     Toolbar, UserSettings, Wait, Copyright), `state/` (ErrorState, ToolbarState, Listener)
   - `ui/scheduler/` – `InactivityScheduler`, `InactivityJob/Future`, `BacklightManager`
   - `ui/` gemeinsam: `MainFormState`, `Icons`, `UiUtilities`, `AbstractMainFormController`
-- **Readiness-Marker (Phase 6 AP5)**: `application/TerminalReadinessMarker` schreibt beim
-  erfolgreichen Wechsel in den bedienbereiten Zustand `MainFormState.SELECT_DEVICE` (u. a.
-  beim `STARTUP → SELECT_DEVICE` eines frischen Starts) eine Marker-Datei mit frischem
-  `mtime` (`${user.dir}/.terminal-ready`, überschreibbar per System-Property
-  `elwasys.readyMarkerFile`). Aufgerufen als Einzeiler aus BEIDEN
-  `MainFormStateManager#gotoState` (medium + small) an der Stelle, an der `SELECT_DEVICE`
-  wirksam gesetzt wird. Robust: jeder IO-Fehler wird gefangen und nur geloggt, **nie** in die
-  UI geworfen – der Bedienfluss/die Zustandsmaschine ändern sich nicht. Der Shell-Watchdog
-  `deploy/terminal/auto-update-watchdog.sh` wertet den `mtime` aus, um einen erfolgreichen
-  Start einer frisch ausgerollten Version zu verifizieren (siehe docs/kb/04, „Auto-Update mit
-  Rollback"). Keine neuen `ConfigurationManager`-Keys (System-Property genügt).
-- `executions/` – `ExecutionManager`, `ExecutionFinisher` (Benachrichtigungsversand seit AP4
-  entfernt, siehe unten; seit AP6 fängt `ExecutionFinisher` einen reinen
-  Kommunikationsfehler beim Beenden/Abbrechen ab und journaliert lokal statt einen Fehler zu
-  melden, siehe „Offline-Robustheit (AP6)“ unten), Listener, `FhemException`
-- `offline/` – **neu (Phase 4 AP6)**: `OfflineSnapshotStore`, `OfflineJournal`(`Entry`),
-  `OfflinePricing`, `OfflineGateway`, `OfflineJsonSupport` – siehe „Offline-Robustheit (AP6)“
-  weiter unten für Details
+- `executions/` – `ExecutionManager`, `ExecutionFinisher`, Listener, `FhemException`
+- `offline/` – `OfflineSnapshotStore`, `OfflineJournal`(`Entry`), `OfflinePricing`,
+  `OfflineGateway`, `OfflineJsonSupport` – siehe „Offline-Robustheit“ unten
 - `devices/` – `deconz/` (Service, ApiAdapter, EventListener, PowerManager,
   RegistrationService, `model/`), `FhemDevicePowerManager`, Interfaces, `DevicePowerState`
 - `io/` – `CardReader`, `TelnetClient`, Card-Events
-- `configuration/` – `WashguardConfiguration` (liest seit AP4 `backend.url`/`backend.token`
-  statt DB-Zugangsdaten, siehe unten). (`LocationManager` ist seit AP5 entfernt, s. o.)
+- `configuration/` – `WashguardConfiguration` (liest `backend.url`/`backend.token`)
 - `util/` – `BlockingMap`
 
-### Ausgehende Fernwartungs-Verbindung (AP5, 2026-07-21, Package `ws/`)
+**Readiness-Marker**: `application/TerminalReadinessMarker` schreibt beim erfolgreichen Wechsel
+in den bedienbereiten Zustand `MainFormState.SELECT_DEVICE` eine Marker-Datei mit frischem
+`mtime` (`${user.dir}/.terminal-ready`, überschreibbar per System-Property
+`elwasys.readyMarkerFile`). Aufgerufen als Einzeiler aus BEIDEN `MainFormStateManager#gotoState`
+(medium + small). Jeder IO-Fehler wird gefangen und nur geloggt, nie in die UI geworfen – der
+Bedienfluss ändert sich nicht. Der Shell-Watchdog `deploy/terminal/auto-update-watchdog.sh`
+wertet den `mtime` aus, um einen erfolgreichen Start einer frisch ausgerollten Version zu
+verifizieren (siehe [04-build-and-run.md](04-build-and-run.md), „Auto-Update mit Rollback“).
 
-Ersetzt `application/MaintenanceServerManager` (Client lauschte als TCP-Server, Portal wählte
-über eine in `locations` registrierte IP an – NAT-/Firewall-unfreundlich, siehe
-docs/kb/05-migration-plan.md „Zielarchitektur“ Punkt 3) durch eine **vom Terminal ausgehende**,
-dauerhafte WebSocket-Verbindung zum Backend – dieselbe Richtung wie bereits die REST-API v1
-(AP4).
+### Ausgehende Fernwartungs-Verbindung (Package `ws/`)
 
-- **Transport/Technologie**: `org.springframework.web.socket.client.standard.
-  StandardWebSocketClient` + `TextWebSocketHandler` (`spring-boot-starter-websocket`, im
-  Client bereits Dependency, identisches Muster zu `devices/deconz/DeconzEventListener` – kein
-  neuer Client eingeführt).
+Das Terminal hält eine dauerhafte, von ihm ausgehende WebSocket-Verbindung zum Backend –
+dieselbe Richtung wie die REST-API v1, NAT-/Firewall-freundlich (siehe
+[ADR 0005](../architecture/0005-fernwartung-ueber-ausgehende-websocket-verbindung.md)).
+
+- **Transport/Technologie**: `StandardWebSocketClient` + `TextWebSocketHandler`
+  (`spring-boot-starter-websocket`, identisches Muster zu `devices/deconz/DeconzEventListener`).
 - **Auth**: derselbe Standort-Token wie `api/ApiClient`, als `Authorization: Bearer <token>`-
-  Header beim WebSocket-Handshake (geprüft von derselben `TerminalApiSecurityConfig`-Kette wie
-  die REST-Endpunkte, siehe docs/kb/03 „Standort-Token-Auth“ oben). **Kein neuer Konfig-Schlüssel**
-  nötig – `backend.url`/`backend.token` bedienen jetzt REST UND WebSocket.
+  Header beim Handshake (geprüft von derselben `TerminalApiSecurityConfig`-Kette wie die
+  REST-Endpunkte). Kein eigener Konfig-Schlüssel – `backend.url`/`backend.token` bedienen REST
+  UND WebSocket.
 - **Verbindungsaufbau**: `HELLO` (Payload `clientVersion`, `clientUid`) direkt nach
   `afterConnectionEstablished`, Backend antwortet `HELLO_ACK`.
-- **Heartbeat**: rein reaktiv – das Backend sendet periodisch `PING`
-  (`TerminalHeartbeatScheduler`), der Client antwortet nur mit `PONG`; ein eigener,
-  Client-initiierter Heartbeat ist nicht nötig (das Backend erkennt eine tote Verbindung über
-  sein eigenes 90s-Timeout).
+- **Heartbeat**: rein reaktiv – das Backend sendet periodisch `PING`, der Client antwortet nur
+  mit `PONG`; das Backend erkennt eine tote Verbindung über sein eigenes 90s-Timeout.
 - **Reconnect**: bei Verbindungsfehler/-abbruch automatischer Reconnect mit exponentiell
   wachsender Wartezeit (5s bis max. 5min) – identisches Muster zu
-  `DeconzEventListener#scheduleReconnect`. Die Verbindung überlebt einen vom Portal
-  ausgelösten Neustart bewusst (`onClose(restart=true)` baut NICHT ab, s. u.).
-- **Fachfunktionen** (bedient dieselben drei Anfragen, die früher über das Alt-TCP-Protokoll
-  liefen):
-  - `STATUS_REQUEST` (portal-initiiert, additiv im Backend ergänzt – siehe „WebSocket-
-    Endpunkt“ unten): Antwort enthält `clientVersion`, `startupTime` und die Ids aller aktuell
+  `DeconzEventListener#scheduleReconnect`. Die Verbindung überlebt einen vom Portal ausgelösten
+  Neustart bewusst (`onClose(restart=true)` baut NICHT ab).
+- **Fachfunktionen** (alle PORTAL-initiiert, Backend → Terminal, vermittelt über
+  `TerminalMaintenanceService`; der Client sendet nur `HELLO` und Antworten):
+  - `STATUS_REQUEST`: Antwort enthält `clientVersion`, `startupTime` und die Ids aller aktuell
     laufenden Ausführungen (rein lokal aus `ExecutionManager#getRunningExecutions()`, kein
-    Netzwerkzugriff nötig) – fachlicher Nachfolger von `GetStatusRequest`/`GetStatusResponse`.
-    Ergänzt (nicht ersetzt) die bereits seit AP4 bestehende, roundtrip-freie
-    „Verbunden“/„Verbunden seit“-Anzeige im Admin-Dashboard (`TerminalConnectionRegistry
-    #isConnected`/`#connectedSince`) sowie die je Gerät bereits sichtbaren laufenden
-    Ausführungen (Testfall P20, seit Phase 3 AP3, unabhängig vom Maintenance-Kanal).
-  - `LOG_REQUEST`: aktueller Inhalt der Logdatei (`Utilities#getCurrentLogFile()`) – fachlicher
-    Nachfolger von `GetLogRequest`/`GetLogResponse`.
-  - `RESTART_REQUEST`: `ElwaManager#restart()` – anders als das Alt-Protokoll (dort
-    „fire-and-forget“) bestätigt der Client den Empfang zuerst mit `RESTART_RESPONSE`, bevor
-    der Neustart ausgeführt wird.
-- Alle drei Anfragen sind PORTAL-initiiert (Backend → Terminal, vermittelt über
-  `TerminalMaintenanceService`, siehe „WebSocket-Endpunkt“ unten) – der Client sendet nur
-  `HELLO` und Antworten, nie selbst eine Anfrage.
+    Netzwerkzugriff).
+  - `LOG_REQUEST`: aktueller Inhalt der Logdatei (`Utilities#getCurrentLogFile()`, der
+    INFO-Appender `"FILE"`).
+  - `RESTART_REQUEST`: `ElwaManager#restart()`; der Client bestätigt den Empfang zuerst mit
+    `RESTART_RESPONSE`, bevor der Neustart ausgeführt wird.
 
-### Terminal-Robustheit & Härtung (Pre-Launch AP1/AP2, Epic #66)
+### Terminal-Robustheit & Härtung
 
-Reihe kleiner, gezielter Härtungen am Terminal – überwiegend für den Betrieb auf einem
-Raspberry Pi ohne RTC/mit möglichem Stromausfall sowie gegen Nebenläufigkeits-/Neustart-Lecks:
+Härtungen für den Betrieb auf einem Raspberry Pi ohne RTC/mit möglichem Stromausfall sowie gegen
+Nebenläufigkeits-/Neustart-Lecks:
 
-- **`OfflineJournal` stromausfallfest** (#55): `append` schreibt mit
-  `StandardOpenOption.DSYNC`, sodass ein Journaleintrag einen Stromausfall unmittelbar nach der
-  Buchung übersteht. Neben dem eigentlichen Journal führt es eine Dead-Letter-Datei
-  (`offline-journal.jsonl.deadletter`) samt `moveToDeadLetter`/`hasPendingEntries` – Ziel der
-  „Poison-Entries" beim Replay (siehe `OfflineGateway#replay` oben).
-- **Uhren-Plausibilität** (#54): der Snapshot-/Offline-Pfad gilt zusätzlich als unbrauchbar,
-  wenn `now < generatedAt` – ein Pi ohne RTC kann nach einem Stromausfall mit einer in der
-  Vergangenheit stehenden Uhr hochkommen, wodurch die Alters-/Ablaufprüfung des Snapshots sonst
-  unsinnige Ergebnisse lieferte. Herleitung siehe ADR 0016.
-- **`DeconzEventListener` reconnectet selbst** (#19): der Listener stößt den Reconnect jetzt
-  auch aus `afterConnectionClosed`/`handleTransportError` an (vorher nur bei einem
-  fehlgeschlagenen Verbindungs**aufbau**), sodass eine im Betrieb abreißende deCONZ-Verbindung
-  zuverlässig wieder aufgebaut wird; ein `isShutdown()`-Guard in `openConnection` verhindert
-  dabei einen Reconnect während des geplanten Herunterfahrens.
-- **Restart-Leak / WS-Lifecycle** (#27): `ElwaManager#initiate()` erzeugt den
-  `TerminalWebSocketClient` nur noch einmal (Null-Guard) und meldet ihn nach
-  `closeListeners.clear()` neu am Close-Event an – so bleibt nach einem In-Prozess-Neustart
-  (`ElwaManager#restart()`) genau ein WS-Client übrig statt eines pro Neustart. `CardReader
-  #listenToCardDetectedEvent` ist idempotent gemacht, und die UI-seitigen Handler werden über
+- **`OfflineJournal` stromausfallfest**: `append` schreibt mit `StandardOpenOption.DSYNC`, sodass
+  ein Journaleintrag einen Stromausfall unmittelbar nach der Buchung übersteht. Neben dem Journal
+  führt es eine Dead-Letter-Datei (`offline-journal.jsonl.deadletter`) samt
+  `moveToDeadLetter`/`hasPendingEntries` – Ziel der „Poison-Entries“ beim Replay.
+- **Uhren-Plausibilität**: der Snapshot-/Offline-Pfad gilt zusätzlich als unbrauchbar, wenn
+  `now < generatedAt` – ein Pi ohne RTC kann nach einem Stromausfall mit einer in der
+  Vergangenheit stehenden Uhr hochkommen (Herleitung siehe
+  [ADR 0016](../architecture/0016-offline-replay-haertung.md)).
+- **`DeconzEventListener` reconnectet selbst**: der Listener stößt den Reconnect auch aus
+  `afterConnectionClosed`/`handleTransportError` an; ein `isShutdown()`-Guard in `openConnection`
+  verhindert einen Reconnect während des geplanten Herunterfahrens.
+- **WS-Lifecycle neustartfest**: `ElwaManager#initiate()` erzeugt den `TerminalWebSocketClient`
+  nur einmal (Null-Guard) und meldet ihn nach `closeListeners.clear()` neu am Close-Event an –
+  nach einem In-Prozess-Neustart (`ElwaManager#restart()`) bleibt genau ein WS-Client übrig.
+  `CardReader#listenToCardDetectedEvent` ist idempotent, die UI-Handler werden über
   `MainFormController#installComponentHandlersOnce()` nur einmal installiert.
-- **Nebenläufigkeit / Doppel-Finish** (#28): `executionFinishers`/`plannedStops` sind
-  `ConcurrentHashMap`; `ExecutionFinisher#retry()` läuft jetzt über denselben `runGuarded()`-
-  Rumpf wie `run()` (Objekt- + Geräte-Lock, `executed`-Guard), sodass ein Retry eine bereits
-  abgeschlossene Ausführung nicht ein zweites Mal beenden/abrechnen kann.
-- **App-interner Geräte-Scan bricht nicht mehr ab** (#51): der Fremdeinschalt-/Geräte-Scan in
-  `ExecutionManager` überspringt ein nicht erreichbares Gerät (`return` → `continue`) und prüft
-  die übrigen weiter, statt beim ersten Ausfall den ganzen Durchlauf abzubrechen. (Klar zu
-  unterscheiden vom Shell-`auto-update-watchdog.sh`, siehe docs/kb/04 – hier geht es um die
-  App-interne Prüfschleife.)
-- **Kaputte 2xx-Antwort ist kein Offline-Fall** (#53): `ApiException.malformedResponse(...)`
-  (`isCommunicationFailure() == false`) wird von `ApiClient#parse` geworfen, wenn eine 2xx-Antwort
-  einen `JsonSyntaxException` auslöst – ein erreichbares, aber unlesbar antwortendes Backend
-  löst damit NICHT den Offline-Pfad aus (der ist reinen Kommunikationsfehlern vorbehalten).
-- **RFID-Log-Maskierung** (#56): `Utilities#maskCardId` zeigt nur die letzten 4 Stellen einer
-  Kartennummer; `CardReader` UND beide `MainFormController` (small/medium) loggen ausschließlich
-  maskiert. `Utilities#getCurrentLogFile` liefert dafür deterministisch den INFO-Appender
-  `"FILE"` (Querverweis: `LOG_REQUEST` der Fernwartung, siehe oben).
-- **Resume-Null-Check** (#57): eine beim Wiederaufnahme-Scan gefundene Ausführung, deren
-  Programm zwischenzeitlich entfernt wurde, wird mit einer Warnung übersprungen statt in einen
+- **Nebenläufigkeit / Doppel-Finish**: `executionFinishers`/`plannedStops` sind
+  `ConcurrentHashMap`; `ExecutionFinisher#retry()` läuft über denselben `runGuarded()`-Rumpf wie
+  `run()` (Objekt- + Geräte-Lock, `executed`-Guard), sodass ein Retry eine bereits abgeschlossene
+  Ausführung nicht ein zweites Mal beendet/abrechnet.
+- **App-interner Geräte-Scan bricht nicht ab**: der Fremdeinschalt-/Geräte-Scan in
+  `ExecutionManager` überspringt ein nicht erreichbares Gerät (`continue`) und prüft die übrigen
+  weiter.
+- **Kaputte 2xx-Antwort ist kein Offline-Fall**: `ApiException.malformedResponse(...)`
+  (`isCommunicationFailure() == false`) wird von `ApiClient#parse` bei einer 2xx-Antwort mit
+  `JsonSyntaxException` geworfen – ein erreichbares, aber unlesbar antwortendes Backend löst NICHT
+  den Offline-Pfad aus (der ist reinen Kommunikationsfehlern vorbehalten).
+- **RFID-Log-Maskierung**: `Utilities#maskCardId` zeigt nur die letzten 4 Stellen einer
+  Kartennummer; `CardReader` UND beide `MainFormController` loggen ausschließlich maskiert.
+- **Resume-Null-Check**: eine beim Wiederaufnahme-Scan gefundene Ausführung, deren Programm
+  zwischenzeitlich entfernt wurde, wird mit einer Warnung übersprungen statt in einen
   Fehlerzustand zu laufen.
-- **`ConfigurationManager`-Aufräumen / setup.sh-Härtung**: die sechs `getSmtp*`-Getter im
-  Terminal sind entfernt (#61, der Client versendet keine Mails mehr, siehe
-  „Benachrichtigungsdienst" im Backend); `setup.sh` erzeugt das deCONZ-Passwort jetzt per
-  `openssl rand -hex 16` (CSPRNG) statt aus einem ableitbaren `date`-Wert (#58).
+- **Setup-Härtung**: `setup.sh` erzeugt das deCONZ-Passwort per `openssl rand -hex 16` (CSPRNG).
+  Der Client versendet keine Mails mehr (keine `getSmtp*`-Getter im `ConfigurationManager`).
 
 **FXML** (unter `ui/small/` und `ui/medium/components/`): MainForm + DevicePane, WaitPane,
-ConfirmationPane, ToolbarPane, ErrorPane, AbortPane, UserSettingsPane, StartupPane,
-CopyrightBar, DeviceListEntry, ProgramListEntry.
+ConfirmationPane, ToolbarPane, ErrorPane, AbortPane, UserSettingsPane, StartupPane, CopyrightBar,
+DeviceListEntry, ProgramListEntry.
 
-**Tests** (`src/test/...`, JUnit 5 + TestFX/Xvfb, siehe docs/kb/06-ui-tests.md für den
-vollständigen, aktuellen Stand): u. a. `fhemsimulator/` (fake fhem über Telnet) und – seit
-Phase 4 AP1 – `deconzsimulator/` (`DeconzSimulator`/`DeconzWebSocketServer`/`SimulatedLight`,
-fake deCONZ über REST + einen selbst geschriebenen minimalen WebSocket-Server, JDK-only,
-keine neue Abhängigkeit) als austauschbare Gateway-Doubles für die `Client*E2ETest`-Klassen.
+**Tests** (`src/test/...`, JUnit 5 + TestFX/Xvfb, siehe [06-ui-tests.md](06-ui-tests.md) für den
+vollständigen Stand): u. a. `fhemsimulator/` (fake fhem über Telnet) und `deconzsimulator/`
+(`DeconzSimulator`/`DeconzWebSocketServer`/`SimulatedLight`, fake deCONZ über REST + einen
+minimalen, selbst geschriebenen WebSocket-Server, JDK-only) als austauschbare Gateway-Doubles für
+die `Client*E2ETest`-Klassen.
 
-**Konfiguration** (Stand Phase 4 AP5, 2026-07-21): `elwasys.properties` (Beispiel:
-`elwasys.example.properties`). Wichtige Keys: `backend.url`/`backend.token` (**einziger
-Datenzugriffspfad seit AP5** – Backend-Basis-URL + Standort-Token, bedient sowohl die REST-API
-als auch die ausgehende Fernwartungs-WebSocket-Verbindung, siehe docs/kb/04-build-and-run.md),
-`location` (nur noch Anzeigename, z. B. in Fehlermeldungen), `displayTimeout`, `startupDelay`,
-`sessionTimeout`, `portalUrl`, `deconz.*` **oder** `fhem.*`. Die zuvor hier dokumentierten
-`smtp.*`/`pushover.*`-Keys sind seit AP4 entfallen (der Client verschickt keine
-Benachrichtigungen mehr selbst, siehe unten); **seit AP5 zusätzlich entfallen**: `database.*`
-(DB-Zugangsdaten, zuvor transitional für die Fernwartungs-Registrierung) und
-`maintenance.server`/`maintenance.port`/`maintenance.ip` (der Client lauscht nicht mehr als
-Server, siehe „Ausgehende Fernwartungs-Verbindung“ oben). `setup.sh` fragt entsprechend keine
-Datenbank-/Maintenance-Port-Werte mehr ab.
+**Konfiguration**: `elwasys.properties` (Beispiel: `elwasys.example.properties`). Wichtige Keys:
+`backend.url`/`backend.token` (einziger Datenzugriffspfad – Backend-Basis-URL + Standort-Token,
+bedient REST-API und Fernwartungs-WebSocket), `location` (nur Anzeigename, z. B. in
+Fehlermeldungen), `displayTimeout`, `startupDelay`, `sessionTimeout`, `portalUrl`,
+`offline.pollIntervalSeconds` (Default 20), `deconz.*` **oder** `fhem.*`. `setup.sh` fragt keine
+Datenbank-/Maintenance-Port-Werte ab.
 
-**Abhängigkeiten (Stand Phase 4 AP4, 2026-07-21)**: `javafx-controls`/`-fxml`/`-web`
-**23.0.2** (zuvor 20 – die höchste über Maven Central verfügbare stabile JavaFX-Version,
-deren Bytecode [Klassendatei-Major 65] noch auf dem festgelegten Java-21-Client-Runtime
-läuft; JavaFX 24+ verlangt bereits JDK 22+ und würde den Client-Start brechen, siehe
-docs/kb/05-migration-plan.md „Technologie-Entscheidungen“), `slf4j-api` **2.0.18** (zuvor
-1.7.12), `logback-classic`/`-core` **1.5.38** (zuvor 1.2.9) – alle drei als direkte,
-versionierte Dependencies in `Client-Raspi/pom.xml` gesetzt (überschreiben die ältere
-`elwasys-parent`-`dependencyManagement` für dieses Modul allein über Maven-„nearest wins“,
-Common/Portal bleiben unangetastet auf den alten Versionen). `com.mashape.unirest:
-unirest-java:1.4.9`, `org.apache.httpcomponents:httpclient:4.5.13`/`httpasyncclient:4.0.2`/
-`httpmime:4.3.6` sowie `org.json:json` sind **entfernt** (siehe „HTTP-Client-Umstellung“
-unten). **Seit AP4 zusätzlich entfernt**: `pushover-client` und `commons-email` (Client
-verschickt keine Benachrichtigungen mehr selbst, das Backend übernimmt zentral – siehe
-docs/kb/03-modules.md, Abschnitt „Benachrichtigungsdienst“ weiter unten und
-docs/kb/05-migration-plan.md, Änderungslog „Phase 4 AP4“). `pi4j-core`, `gson` (jetzt primär für
-`api/ApiClient`s JSON-(De-)Serialisierung genutzt, seit AP5 auch für `ws/TerminalWsMessage`)
-unverändert. `spring-boot-starter-websocket` (bereits vor AP5 Dependency, für den
-deCONZ-WS-Client) wird seit AP5 zusätzlich tatsächlich für `ws/TerminalWebSocketClient`
-verwendet (kein neuer Dependency-Zugang nötig).
+**Abhängigkeiten**: `javafx-controls`/`-fxml`/`-web` **23.0.2** (höchste über Maven Central
+verfügbare stabile JavaFX-Version, deren Bytecode noch auf der Java-21-Runtime läuft; JavaFX 24+
+verlangt JDK 22+), `slf4j-api` **2.0.18**, `logback-classic`/`-core` **1.5.38** – alle drei als
+direkte, versionierte Dependencies in `Client-Raspi/pom.xml` (überschreiben die ältere
+`elwasys-parent`-`dependencyManagement` für dieses Modul über Maven-„nearest wins“). `pi4j-core`,
+`gson` (JSON-(De-)Serialisierung für `api/ApiClient` und `ws/TerminalWsMessage`) und
+`spring-boot-starter-websocket` (für `ws/TerminalWebSocketClient` und den deCONZ-WS-Client).
+REST läuft durchgängig über `java.net.http`; das Terminal versendet keine Benachrichtigungen mehr
+selbst (das Backend übernimmt zentral).
 
-**HTTP-Client-Umstellung auf `java.net.http` (Phase 4 AP2)**: die Roadmap-Annahme, `devices/
-deconz/` nutze noch unirest/HttpComponents für REST, traf beim Nachprüfen **nicht mehr zu** –
-`DeconzApiAdapter` (REST) war bereits seit dem allerersten deCONZ-Commit (2023,
-`26f91ab`/`625946c`, vor dieser Modernisierung) auf `java.net.http` implementiert, ebenso
-alle übrigen `devices/deconz/*`-Klassen (`DeconzService`, `DeconzRegistrationService` bauen
-`java.net.http.HttpRequest`s, die `DeconzApiAdapter#request` verschickt); der WebSocket-Teil
-(`DeconzEventListener`) nutzte schon vorher Springs `StandardWebSocketClient` – für deCONZ war
-also **keine Codeänderung nötig**. `devices/FhemDevicePowerManager` nutzt gar kein HTTP,
-sondern ausschließlich das Telnet-Protokoll über `io/TelnetClient` (rohe `java.net.Socket`) –
-auch hier gibt es keinen HTTP-Client zu migrieren; die Roadmap-Formulierung „Gateway-HTTP“ war
-für den fhem-Pfad irreführend. Der **einzige** tatsächliche Fund von unirest/HttpComponents/
-`org.json` in `src/main` war `executions/ExecutionFinisher` – dort verschickt der (laut
-docs/kb/03 „Benachrichtigungsdienst“-Inventar ohnehin nicht mehr genutzte, für Phase 5 zum Entfernen
-vorgesehene) elwaApp/Ionic-Push-Zweig eine JSON-POST-Anfrage über `Unirest.post(...)`. Dieser
-Zweig wurde 1:1 (gleiche URL, Header `PROFILE_TAG`/`Authorization`/`Content-Type`, gleiches
-JSON-Body-Format über Gson statt `org.json`, gleiche Statuscode-Schwelle `> 299`, Fehler
-weiterhin lokal geloggt und geschluckt statt propagiert) auf `java.net.http` umgestellt – damit
-ließen sich `unirest-java`, alle drei `httpcomponents`-Artefakte und `org.json` vollständig aus
-`Client-Raspi/pom.xml` entfernen (verifiziert per `mvn dependency:tree`: kein Client-Code
-referenziert sie mehr; `pushover-client` brachte zu diesem Zeitpunkt noch transitiv eine
-eigene, ältere `httpcomponents:httpclient:4.2.1` mit – außerhalb des AP2-Auftrags, da
-`pushover-client` selbst damals nicht angefasst werden sollte. **Update AP4**:
-`pushover-client` ist inzwischen komplett aus `Client-Raspi/pom.xml` entfernt [siehe oben],
-diese transitive Altlast ist damit ebenfalls weg).
+## Backend (`org.kabieror.elwasys.backend`)
 
-## Portal (`org.kabieror.elwasys.webportal`) – ⚠️ ENTFERNT (Phase 5 AP1, 2026-07-21)
+Spring-Boot-Modul (Java 21) – das zentrale Backend: REST-API/WebSocket für die
+Client-Raspi-Terminals UND das eingebettete Vaadin-Flow-Admin-Portal, auf derselben
+PostgreSQL-Datenbank wie die Terminals (siehe
+[ADR 0002](../architecture/0002-zentrales-spring-boot-backend.md) und
+[05-migration-plan.md](05-migration-plan.md), Zielarchitektur). Keine Abhängigkeit auf `common` –
+das Backend hat sein eigenes, per Flyway verwaltetes Datenmodell.
 
-> **Fachlich abgelöst** durch das neue, ins Backend eingebettete Portal
-> (`backend/.../ui/`, Vaadin Flow – siehe „Portal-UI (Vaadin Flow)" weiter unten), bereits seit
-> Phase 3 AP6 (2026-07-21) mit voller Feature-Parität (nachgewiesen über `backend/e2e/`,
-> P1–P20, siehe docs/kb/06-ui-tests.md). Das Alt-Portal-Modul war seither nur noch als reines
-> CI-Build-Ziel im Repo (`portal-legacy-build`-Job) und ist **in Phase 5 AP1 vollständig aus
-> dem Repository entfernt worden** (Vaadin-7-WAR, `Common.DataManager`-basiert, ~36
-> Java-Dateien, Manager `WashportalManager`/`SessionManager`/`MaintenanceConnectionManager`).
-> Die alte Fernwartungsverbindung (`MaintenanceConnectionManager`, Testfälle P21/P22) war
-> bereits seit Phase 4 AP5 fachlich tot (Client-Raspi spricht das dafür nötige Alt-TCP-Protokoll
-> nicht mehr); ihr Nachfolger läuft über den Backend-WS-Kanal (siehe docs/kb/06-ui-tests.md,
-> `Client-Raspi/run-cross-component-e2e.sh`) und ist von dieser Entfernung nicht betroffen.
-> Details/Testzahlen zur Entfernung: docs/kb/05-migration-plan.md, Änderungslog „Phase 5 AP1".
+### Datenmodell & Geschäftslogik
 
-## Backend (`org.kabieror.elwasys.backend`) – seit Phase 2 AP1, Zielarchitektur seit Phase 3/4
-
-Spring-Boot-Modul (Java 21) – das zentrale Backend der Zielarchitektur: REST-API/WebSocket
-für die Client-Raspi-Terminals UND das eingebettete Vaadin-Flow-Admin-Portal (siehe „Portal-UI
-(Vaadin Flow)" unten), auf derselben PostgreSQL-Datenbank wie die Terminals (siehe
-docs/kb/05-migration-plan.md, Zielarchitektur). Ursprünglich (Phase 2 AP1) im Strangler-Muster
-**parallel** zum Alt-Portal-Modul und dem noch direkt-DB-zugreifenden Client-Alt-Code
-begonnen – dieser Parallelbetrieb ist inzwischen vollständig abgelöst: das Alt-Portal ist seit
-Phase 3 AP6 fachlich abgelöst und seit Phase 5 AP1 aus dem Repo entfernt (siehe Abschnitt
-„Portal" oben), die Terminals sprechen seit Phase 4 AP4/AP5 nicht mehr direkt mit der DB.
-Reactor-Bezug zu `common`: **keiner mehr** – das Backend hat sein eigenes, per Flyway
-verwaltetes Datenmodell und hatte nie eine Produktiv-Abhängigkeit auf `common` (0
-Produktiv-Imports). Die frühere test-scope-Abhängigkeit für die Auth-Parity-Tests ist im
-Phase-5-Nachtrag entfallen (das Alt-SHA1-Format wird dort jetzt lokal über den Test-Helfer
-`LegacySha1` reproduziert, siehe unten); das eigenständige Common-Modul ist ohnehin aufgelöst
-(die 6 verbliebenen Klassen liegen im Client-Raspi-Modul, siehe Abschnitt „Common" oben).
-
-**Historischer Baustand, Arbeitspaket für Arbeitspaket** (Details/Testzahlen je AP siehe
-docs/kb/05-migration-plan.md, Änderungslog): Actuator-Health, Flyway-Baseline gegen das
-Bestandsschema (Phase 2 AP1), JPA-Entities/Repositories und die Kern-Geschäftslogik
-(Abrechnung, Berechtigungen, Preisberechnung, Execution-Lebenszyklus) als Services (AP2), Auth
-(Argon2id-Hashing + SHA1-Migrationspfad, session-basiertes Login) mit Spring Security (AP3),
-eine fachliche REST-API v1 (`/api/v1/**`, Standort-Token-Auth) + WebSocket-Endpunkt für
-Terminals (AP4, siehe Abschnitt „REST-API v1 + Standort-Token-Auth + WebSocket“ unten), ein
-Benachrichtigungsdienst hinter einem Konfig-Flag (AP5), Deployment-Artefakte (AP6) – das war
-Phase 2. Phase 3 baute darauf das **Vaadin-Flow-Admin-Portal** auf (Grundgerüst AP1,
-Stammdaten-Views AP2, Dashboard/Guthaben AP3, weitere Dialoge/Fernwartungs-Anbindung AP4,
-Cross-Session-Live-Updates AP5, Playwright-E2E-Portierung + Alt-Portal-Stilllegung als
-E2E-Ziel AP6) – seither hat das Portal volle Feature-Parität zum Alt-Portal (siehe
-docs/kb/06-ui-tests.md). Phase 4 stellte die Terminals auf diese REST-API/WebSocket-Schicht als
-alleinigen Datenzugriffspfad um (siehe Abschnitt „Client-Raspi" oben). Phase 5 entfernte das
-Alt-Portal-Modul und alte DB-Rollen/-Spalten/-Tabellen endgültig aus dem Repo/Schema.
-
-### Datenmodell & Geschäftslogik (AP2)
-
-**Entities** (`backend/.../domain/`, siehe docs/kb/02-data-model.md für die Tabellenherkunft):
-`UserGroupEntity`, `UserEntity`, `LocationEntity`, `DeviceEntity`, `ProgramEntity`,
-`ExecutionEntity`, `CreditAccountingEntryEntity`, `ConfigEntity` (Vollständigkeit, aktuell
-ungenutzt). Die vier n:m-Tabellen (`locations_valid_user_groups`,
+**Entities** (`backend/.../domain/`, siehe [02-data-model.md](02-data-model.md) für die
+Tabellenherkunft): `UserGroupEntity`, `UserEntity`, `LocationEntity`, `DeviceEntity`,
+`ProgramEntity`, `ExecutionEntity`, `CreditAccountingEntryEntity`, `ConfigEntity`
+(aktuell ungenutzt), `TerminalTokenEntity`. Die vier n:m-Tabellen (`locations_valid_user_groups`,
 `devices_valid_user_groups`, `programs_valid_user_groups`, `device_program_rel`) sind als
-`@ManyToMany`+`@JoinTable` modelliert (keine eigenen Entity-Klassen, Standard-JPA-Praxis
-für reine Verknüpfungstabellen). Postgres-native Enums (`DISCOUNT_TYPE`, `PROGRAM_TYPE`,
-`TIME_UNIT_TYPE`) werden über `@JdbcTypeCode(SqlTypes.NAMED_ENUM)` gebunden. Alle fachlich
-genutzten Assoziationen sind bewusst `FetchType.EAGER` (analog zum durchgängig eager
-ladenden Alt-`DataManager`; AP2 hat noch keine Web-/Transaktionsgrenze, die `LAZY` sauber
-absichern würde) – siehe docs/kb/05-migration-plan.md (Änderungslog, AP2) für die vollständige
-Begründung. `spring.jpa.hibernate.ddl-auto=none` ist explizit gesetzt: das Schema kommt
-ausschließlich von Flyway.
-
-Die App-Relikt-Spalten (`app_id`/`access_key`/`auth_key` auf `users`; Tabellen
-`reservations`/`foreign_authkeys`; Trigger `user_authkey_trigger`) waren bewusst NICHT
-gemappt (Rahmenbedingung, siehe docs/kb/05-migration-plan.md) und wurden in Phase 5 AP4 per
-`V10__drop_app_remnants.sql` entfernt.
+`@ManyToMany`+`@JoinTable` modelliert (keine eigenen Entity-Klassen). Postgres-native Enums
+(`DISCOUNT_TYPE`, `PROGRAM_TYPE`, `TIME_UNIT_TYPE`) werden über
+`@JdbcTypeCode(SqlTypes.NAMED_ENUM)` gebunden. Alle fachlich genutzten Assoziationen sind
+`FetchType.EAGER` (bildet den durchgängig eager ladenden Alt-`DataManager` nach).
+`spring.jpa.hibernate.ddl-auto=none` ist explizit gesetzt: das Schema kommt ausschließlich von
+Flyway. `CreditAccountingEntryEntity` bietet keine Setter für gespeicherte Buchungen, nur den
+Konstruktor – Buchungen sind strukturell unveränderlich.
 
 **Repositories** (`backend/.../repository/`): `UserGroupRepository`, `LocationRepository`,
-`DeviceRepository`, `ProgramRepository`, `UserRepository` (inkl. `findByCardId` –
-parametrisierte Nachbildung der Alt-Code-Kartennummernsuche; seit Pre-Launch AP4 (Epic #66,
-#21) **regex-frei** über `:cardId = ANY(string_to_array(card_ids, E'\n'))` statt der früheren
-Regex-Suche, flankiert von `@Pattern("[0-9A-Fa-f]{1,50}")` auf `CardLoginRequest.cardId`),
-`ExecutionRepository`, `CreditAccountingEntryRepository`.
+`DeviceRepository`, `ProgramRepository`, `UserRepository`, `ExecutionRepository`,
+`CreditAccountingEntryRepository`. `UserRepository#findByCardId` bildet die
+Alt-Code-Kartennummernsuche nach, regex-frei über
+`:cardId = ANY(string_to_array(card_ids, E'\n'))`, flankiert von `@Pattern("[0-9A-Fa-f]{1,50}")`
+auf `CardLoginRequest.cardId`. Für pessimistisches Zeilen-Locking gibt es
+`@Lock(LockModeType.PESSIMISTIC_WRITE) findWithLockById` auf `UserRepository`/
+`ExecutionRepository`.
 
-**Services** (`backend/.../service/`), jeweils 1:1-Portierung der entsprechenden
-Alt-Code-Logik (siehe Javadoc der Klassen für exakte Quellenverweise):
-- `PricingService` – Programmpreisberechnung (FIXED/DYNAMIC, Freiminuten, Gruppenrabatt),
-  aus `Common.Program#getPrice`/`#getDynamicPrice`.
+**Services** (`backend/.../service/`), jeweils 1:1-Portierung der Alt-Code-Logik (siehe Javadoc
+für Quellenverweise):
+- `PricingService` – Programmpreisberechnung (FIXED/DYNAMIC, Freiminuten, Gruppenrabatt).
 - `CreditService` – Guthabenberechnung und -buchung (Einzahlung, Auszahlung,
-  Ausführungs-Bezahlung; Buchungen sind unveränderlich), aus `Common.User#loadCredit`/
-  `#payExecution`/`#inpayment`/`#payout`.
-- `PermissionService` – Berechtigungs-Matrix (Standort/Gerät/Programm × Benutzergruppe,
-  gesperrte Benutzer, deaktivierte Geräte), aus den inline UI-Prüfungen in
-  `Client-Raspi/.../MainFormController`/`DeviceListEntry` sowie `Common.Device#getPrograms`.
-- `ExecutionService` – Execution-Lebenszyklus auf Persistenzebene (Anlegen/Start/Ende/
-  Abbruch/Reset, Preis, Ablauf-Erkennung), aus `Common.Execution` sowie den DB-Anteilen von
-  `Common.DataManager`/`Client-Raspi/.../ExecutionManager`/`ExecutionFinisher`
-  (hardwarenahe Teile – Leistungsmessung, Steckdose schalten, Benachrichtigungen – bleiben
-  bewusst im Terminal, siehe Zielarchitektur in docs/kb/05).
+  Ausführungs-Bezahlung; Buchungen unveränderlich). `getCredits(List)` berechnet die Guthaben
+  einer Liste in zwei statt 2·N Abfragen; `requirePositive` validiert Buchungsbeträge zentral.
+- `PermissionService` – Berechtigungs-Matrix (Standort/Gerät/Programm × Benutzergruppe, gesperrte
+  Benutzer, deaktivierte Geräte).
+- `ExecutionService` – Execution-Lebenszyklus auf Persistenzebene (Anlegen/Start/Ende/Abbruch/
+  Reset, Preis, Ablauf-Erkennung; hardwarenahe Teile bleiben im Terminal). `#startExecution`/
+  `#stopExecution`/`#finishExecution` haben Überladungen mit `clientTimestamp`-Parameter
+  (Verhalten bei `null` unverändert: `LocalDateTime.now()`). `#stopExecution` erzwingt
+  `stop = start`, falls ein nachgemeldeter `stop` VOR dem `start` läge (keine negative Dauer);
+  `getPrice` deckelt die abgerechnete Dauer auf `min(stop − start, maxDuration)`.
 
-**Auth-Parity-Tests**: Das Backend bindet `common` **nicht** (mehr) als Dependency ein – auch
-nicht test-scope. Die AP2 ursprünglich über eine echte Alt-Code-`DataManager` (test-scope-
-`common`) geführten Alt-vs-Neu-Vergleiche sind entfallen; die verbliebenen Parity-Prüfungen
-betreffen nur noch das Alt-Passwortformat und reproduzieren dieses byte-genau lokal über den
-Test-Helfer `LegacySha1` (`backend/src/test/.../auth/LegacySha1.java`, 1:1 nachgebildet aus
-`org.kabieror.elwasys.common.Utilities#sha1`), z. B. in
-`PasswordVerificationServiceParityTest`. Details/gefundene Alt-Code-Eigenheiten siehe
-docs/kb/05-migration-plan.md (Änderungslog, AP2, „Beobachtungen").
+Weitere Services: `DashboardService` (Standort→Geräte→Status, `LocationStatus`/`DeviceStatus`,
+Vaadin-frei), `UserService`, `UserGroupService`, `DeviceService`, `ProgramService`,
+`LocationService`, `PasswordService`, `PasswordResetService`, `RateLimiter`, `AdvisoryLockService`
+– Details in den jeweiligen Abschnitten unten.
 
-### Auth (AP3)
+Die App-Relikt-Spalten/-Tabellen (`app_id`/`access_key`/`auth_key`, `reservations`,
+`foreign_authkeys`, Trigger `user_authkey_trigger`) sind nicht gemappt und per Flyway entfernt
+(siehe [02-data-model.md](02-data-model.md)).
 
-**Package `backend/.../auth/`**:
+**Auth-Parity-Tests**: Das Backend bindet `common` nicht ein. Die verbliebenen Parity-Prüfungen
+betreffen nur das Alt-Passwortformat und reproduzieren es byte-genau lokal über den Test-Helfer
+`LegacySha1` (`backend/src/test/.../auth/LegacySha1.java`, 1:1 aus
+`org.kabieror.elwasys.common.Utilities#sha1`), z. B. in `PasswordVerificationServiceParityTest`.
+
+### Auth (Package `backend/.../auth/`)
+
 - `PasswordVerificationService` – erkennt und verifiziert BEIDE im Bestand vorkommenden
-  Passwortformate: Argon2id (neu, Präfix `$argon2id$`, über Spring Securitys
-  `Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8()`) und SHA1-Legacy (Alt-Format,
-  40-Zeichen-Hex, 1:1 nachgebildet aus `Common.Utilities#sha1`, konstanter Byte-Vergleich
-  über `MessageDigest.isEqual` statt `String#equals`). `encodeNew(...)` erzeugt IMMER
-  Argon2id – jedes Neusetzen eines Passworts über das Backend soll das neue Format
-  bekommen, unabhängig vom Re-Hash-Flag (das steuert nur die Migration bestehender
-  SHA1-Hashes beim Login).
-- `AuthProperties` – `elwasys.auth.rehash-on-login` (Default **`false`**): siehe
-  docs/kb/05-migration-plan.md ("Entscheidungen") für die vollständige Begründung, warum der
-  Re-Hash-Migrationspfad hinter diesem Flag steckt (historisch: Parallelbetrieb mit dem
-  SHA1-verifizierenden/-schreibenden Alt-Portal, das seit Phase 5 AP1 entfernt ist – der
-  ursprüngliche Sperrgrund entfällt damit; ob/wann das Flag aktiviert wird, ist eine
-  Entscheidung der Produktivumschaltung Phase 6, siehe AuthProperties-Javadoc).
-- `ElwasysAuthenticationProvider` – fachlicher Nachfolger von
-  `Portal/.../SessionManager#login` + `common.User#checkPassword`: lädt den Benutzer per
-  case-insensitivem Username-Vergleich (`UserRepository#findByUsernameIgnoreCaseAndDeletedFalse`,
-  schließt gelöschte Nutzer 1:1 wie der Alt-Code aus), prüft das Passwort über
-  `PasswordVerificationService`, migriert bei SHA1-Treffer + aktiviertem Flag transaktional
-  auf Argon2id, aktualisiert `last_login` (1:1 wie `common.User#updateLastLogin`) und
-  vergibt `ROLE_ADMIN`/`ROLE_USER` aus `users.is_admin`. **Bewusste Abweichung vom
-  Alt-Code**: weist gesperrte Nutzer (`blocked=true`) aktiv ab – der Alt-Portal-Login prüft
-  das NICHT (nur der Terminal-Kartenlogin tut das), siehe Klassen-Javadoc und
-  docs/kb/05-migration-plan.md ("Entscheidungen") für die Herleitung.
-- `ElwasysUserPrincipal` – `UserDetails`-Implementierung ohne echten Passwort-Hash in der
-  Session (`getPassword()` liefert immer `""`); trägt Benutzer-ID/-Name/Admin-Flag für
-  spätere Arbeitspakete.
-- `SecurityConfig` – eine `SecurityFilterChain`: `/actuator/health` `permitAll()`, alles
-  andere `authenticated()` mit Formular-Login. Seit Pre-Launch AP6 (Epic #66, #32) fallen unter
-  diese Health-`permitAll()` zusätzlich die Untergruppen `/actuator/health/liveness` +
-  `/actuator/health/readiness` (für die Orchestrierung) und `/actuator/health/operational`
-  (für das Alerting, siehe „Betriebs-Health-Indicators (Pre-Launch AP6)" unten). Bewusst so
-  gehalten, dass AP4 für die
-  Terminal-Standort-Token-Auth eine EIGENE, zustandslose `SecurityFilterChain` (eigener
-  `securityMatcher`, z. B. `/api/v1/**`, niedrigere `@Order`-Zahl) danebenstellen kann, ohne
-  diese Klasse zu ändern.
+  Passwortformate: Argon2id (Präfix `$argon2id$`, über
+  `Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8()`) und SHA1-Legacy (40-Zeichen-Hex, 1:1
+  aus `Utilities#sha1`, konstanter Byte-Vergleich über `MessageDigest.isEqual`). `encodeNew(...)`
+  erzeugt IMMER Argon2id – jedes Neusetzen eines Passworts bekommt das neue Format, unabhängig
+  vom Re-Hash-Flag (das steuert nur die Migration bestehender SHA1-Hashes beim Login).
+- `AuthProperties` – `elwasys.auth.rehash-on-login` (Default **`false`**): der
+  Re-Hash-Migrationspfad steckt hinter diesem Flag; ob/wann es aktiviert wird, ist eine
+  Entscheidung der Produktivumschaltung (siehe
+  [ADR 0007](../architecture/0007-passwort-hashing-argon2id-mit-rehash.md) und
+  `AuthProperties`-Javadoc). Zusätzlich `maxFailedLoginAttempts`/`loginLockoutWindow` (Brute-Force,
+  siehe unten).
+- `ElwasysAuthenticationProvider` – lädt den Benutzer per case-insensitivem Username-Vergleich
+  (`findByUsernameIgnoreCaseAndDeletedFalse`, schließt gelöschte Nutzer aus), prüft das Passwort
+  über `PasswordVerificationService`, migriert bei SHA1-Treffer + aktiviertem Flag transaktional
+  auf Argon2id, aktualisiert `last_login` und vergibt `ROLE_ADMIN`/`ROLE_USER` aus
+  `users.is_admin`. **Bewusste Abweichung vom Alt-Code**: weist gesperrte Nutzer (`blocked=true`)
+  aktiv ab (der Alt-Portal-Login prüfte das nicht; siehe
+  [ADR 0018](../architecture/0018-ap4-auth-security-entscheidungen.md)). **Brute-Force-Sperre**:
+  nach zu vielen Fehlversuchen (Default 5 / 15 min) wird der Login zeitweise gesperrt; die Sperre
+  meldet sich mit einer neutralen `BadCredentialsException` (kein Orakel), der Fehlversuchszähler
+  wird nur für existierende Nutzer geführt und bei Erfolg zurückgesetzt.
+- `ElwasysUserPrincipal` – `UserDetails`-Implementierung ohne echten Passwort-Hash in der Session
+  (`getPassword()` liefert `""`); trägt Benutzer-ID/-Name/Admin-Flag.
+- `SecurityConfig` – die Catch-all-`SecurityFilterChain`: `/actuator/health` (inkl. der
+  Untergruppen `/actuator/health/liveness`, `/actuator/health/readiness`,
+  `/actuator/health/operational`) `permitAll()`, alles andere `authenticated()`. Bindet
+  `LoginView` über `VaadinSecurityConfigurer` als Login-Ziel (siehe „Portal-UI“ unten). Bewusst so
+  gehalten, dass `TerminalApiSecurityConfig` eine eigene, zustandslose Kette (`/api/v1/**`,
+  niedrigere `@Order`-Zahl) danebenstellt, ohne diese Klasse zu ändern.
+- `AdminPasswordCliRunner` – setzt das Admin-Passwort über ein CLI-Profil (siehe
+  [04-build-and-run.md](04-build-and-run.md)).
+- `RateLimiter` (`service/`) – In-Memory-Fixed-Window-Zähler, ein einziger `@Component`-Singleton,
+  geteilt von der Login-Brute-Force-Sperre UND dem Passwort-Reset-Cooldown.
+- **Case-insensitiver Username-Guard**: Anlegen/Umbenennen prüft über
+  `existsByUsernameIgnoreCaseAndDeletedFalse` und wirft `DuplicateUsernameException` – bewusst OHNE
+  `LOWER(username)`-Migration (der Altbestand kann Namensvarianten enthalten).
 
-**Auth-Härtung (Pre-Launch AP4, Epic #66)**:
-- Neue `service/RateLimiter.java` – ein In-Memory-Fixed-Window-Zähler als einziger
-  `@Component`-Singleton, geteilt von der Login-Brute-Force-Sperre UND dem
-  Passwort-Reset-Cooldown (siehe `PasswordResetService` unten).
-- **Brute-Force-Sperre** in `ElwasysAuthenticationProvider`: nach zu vielen Fehlversuchen
-  wird der Login zeitweise gesperrt (Default 5 Versuche / 15 min, konfigurierbar über
-  `AuthProperties.maxFailedLoginAttempts`/`loginLockoutWindow`). Die Sperre meldet sich mit einer
-  **neutralen** `BadCredentialsException` – kein Orakel, das gültige von gesperrten Konten
-  unterscheidbar macht; der Fehlversuchszähler wird nur für tatsächlich existierende Nutzer
-  geführt und bei erfolgreichem Login zurückgesetzt.
-- **Case-insensitiver Username-Guard**: das Anlegen/Umbenennen prüft über
-  `UserRepository#existsByUsernameIgnoreCaseAndDeletedFalse` und wirft `DuplicateUsernameException`,
-  wenn ein Name unabhängig von Groß-/Kleinschreibung bereits vergeben ist – bewusst OHNE eine
-  `LOWER(username)`-Migration, weil der Altbestand potenziell schon Namensvarianten enthält, die
-  eine solche Migration brechen würde.
+`users.password` ist `VARCHAR(255)` (Argon2id-Strings mit den obigen Parametern sind konstant
+97 Zeichen; SHA1-Hex nur 40) – siehe [02-data-model.md](02-data-model.md), Migration `V2`.
 
-**Befund – Bestandsspalte `users.password` zu klein für Argon2id**: `VARCHAR(50)` reichte
-für die bisherigen 40-Zeichen-SHA1-Hex-Hashes, aber Argon2id-Strings mit den oben genannten
-Parametern sind empirisch gemessen konstant 97 Zeichen lang. Additive Flyway-Migration
-`V2__widen_users_password_column.sql` (`ALTER TABLE users ALTER COLUMN password TYPE
-VARCHAR(255)`) behoben – abwärtskompatibel, der Alt-Code prüft die Spaltenlänge nicht
-selbst. Siehe docs/kb/05-migration-plan.md ("Entscheidungen") für die vollständige Abwägung; die
-dadurch entstehende Schema-Divergenz gegenüber dem reinen Alt-Weg wird heute von der
-Cutover-Verifikation `deploy/cutover/verify-cutover-migration.sh` mit abgedeckt (das frühere
-`backend/verify-schema-baseline.sh` wurde mit der Alt-Schema-Konsolidierung entfernt).
+### Abhängigkeiten
 
-**Abhängigkeiten** (Spring Boot **3.5.16**, per BOM-Import in `dependencyManagement`
-eingebunden – nicht über `spring-boot-starter-parent`, da das Modul bereits `elwasys-parent`
-erbt und ein zweiter Parent in Maven nicht möglich ist):
-- `spring-boot-starter-web`, `-actuator`, `-jdbc`, `-validation`, `-data-jpa` (AP2),
-  `-security` (AP3)
-- `org.bouncycastle:bcprov-jdk18on` (AP3, fest gepinnte Version) – von Spring Securitys
-  `Argon2PasswordEncoder` als Kryptografie-Provider benötigt; bewusst NICHT vom
-  Spring-Boot-BOM verwaltet (offiziell als „optional, selbst hinzufügen" dokumentiert)
+Spring Boot **3.5.16** per BOM-Import in `dependencyManagement` (nicht über
+`spring-boot-starter-parent`, da das Modul bereits `elwasys-parent` erbt):
+- `spring-boot-starter-web`, `-actuator`, `-jdbc`, `-validation`, `-data-jpa`, `-security`,
+  `-websocket`, `-mail`
+- `org.bouncycastle:bcprov-jdk18on` (fest gepinnt) – von `Argon2PasswordEncoder` als
+  Kryptografie-Provider benötigt, bewusst NICHT vom Spring-Boot-BOM verwaltet
 - `flyway-core` + `flyway-database-postgresql`, PostgreSQL-Treiber
-- Tests: `spring-boot-starter-test`, `spring-security-test` (AP3), `testcontainers`
-  (`junit-jupiter`, `postgresql`) – **keine** `common`-Abhängigkeit mehr (die frühere
-  AP2-test-scope-Einbindung ist im Phase-5-Nachtrag entfallen, Auth-Parity jetzt über den
-  lokalen Test-Helfer `LegacySha1`, siehe oben)
-- **Wichtig**: `elwasys-parent`s eigene `dependencyManagement` pinnt `logback-classic`/
-  `-core` (1.2.9) und `slf4j-api` (1.7.12) für den Client-Raspi-Kontext fest – zu alt für Spring
-  Boot 3.5 (braucht Logback ≥ 1.5). Ein BOM-Import überschreibt nie eine bereits explizit
-  gepinnte Version, daher hat `backend/pom.xml` eigene, dem BOM entsprechende Overrides
-  (Logback 1.5.34, slf4j-api 2.0.18, Postgres-Treiber 42.7.11) – Details in
-  docs/kb/05-migration-plan.md (Änderungslog).
+- `vaadin-bom`/`vaadin-spring-boot-starter` **24.10.8** (siehe „Portal-UI“ unten)
+- Tests: `spring-boot-starter-test`, `spring-security-test`, `testcontainers`
+  (`junit-jupiter`, `postgresql`), `greenmail-junit5`
+- **Overrides**: `elwasys-parent`s `dependencyManagement` pinnt Logback/slf4j für den
+  Client-Kontext auf zu alte Versionen für Spring Boot 3.5; `backend/pom.xml` hat daher eigene
+  BOM-konforme Overrides (Logback 1.5.34, slf4j-api 2.0.18, Postgres-Treiber 42.7.11).
 
-**Struktur**:
-- `src/main/java/.../backend/BackendApplication.java` – Einstiegspunkt (`@SpringBootApplication`)
+**Build-Besonderheit**: `backend/pom.xml` setzt `maven.compiler.parameters=true` – ohne dieses
+Flag wirft Spring MVC zur Laufzeit eine `IllegalArgumentException` für jeden
+`@RequestParam`/`@PathVariable` ohne explizit angegebenen Namen. Der inkrementelle Compiler
+erkennt eine reine Properties-/Plugin-Konfigurationsänderung nicht immer als Grund für eine
+Neukompilierung – nach einer solchen Änderung ggf. `mvn clean` davor schalten.
+
+### Struktur
+
+- `.../backend/BackendApplication.java` – Einstiegspunkt (`@SpringBootApplication`)
 - `src/main/resources/application.yml` – Konfiguration (DB-URL/User/Passwort per
-  `ELWASYS_DB_URL`/`ELWASYS_DB_USER`/`ELWASYS_DB_PASSWORD` überschreibbar), Flyway-
-  (`baselineOnMigrate`), Actuator- und Logging-Einstellungen
-- `src/main/resources/db/migration/V1__baseline_schema_0_4_0.sql` – Flyway-Baseline, siehe
-  docs/kb/02-data-model.md
-- `src/main/resources/db/migration/V2__widen_users_password_column.sql` – `users.password`
-  `VARCHAR(50)` → `VARCHAR(255)` (AP3, Argon2id-Hashes brauchen ~97 Zeichen, siehe oben)
-- `src/main/resources/db/migration/V3__create_terminal_tokens.sql` – neue Tabelle
-  `terminal_tokens` (AP4, siehe docs/kb/02-data-model.md)
-- weitere additive Migrationen bis `V11` sind in docs/kb/02-data-model.md geführt; darunter
-  `V11` (Performance-Indizes, Pre-Launch AP5, Epic #66, #37) – Details/Spaltenliste dort.
-- `src/main/resources/application-token-cli.yml` – Profil `token-cli` für
-  `TerminalTokenCliRunner` (AP4, `spring.main.web-application-type: none`)
-- `src/main/java/.../backend/domain/` – JPA-Entities (AP2, siehe oben) + `TerminalTokenEntity`
-  (AP4)
-- `src/main/java/.../backend/repository/` – Spring-Data-Repositories (AP2) +
-  `TerminalTokenRepository` (AP4)
-- `src/main/java/.../backend/service/` – Geschäftslogik-Services (AP2)
-- `src/main/java/.../backend/exception/` – `NotEnoughCreditException` (AP2)
-- `src/main/java/.../backend/auth/` – Auth (AP3, siehe oben):
-  `PasswordVerificationService`, `AuthProperties`, `ElwasysAuthenticationProvider`,
-  `ElwasysUserPrincipal`, `SecurityConfig`
-- `src/main/java/.../backend/auth/terminal/` – Standort-Token-Auth (AP4, siehe unten):
-  `TerminalTokenService`, `IssuedTerminalToken`, `TerminalPrincipal`,
-  `TerminalAuthenticationToken`, `TerminalTokenAuthenticationFilter`,
-  `TerminalApiSecurityConfig`, `TerminalTokenCliRunner`
-- `src/main/java/.../backend/api/` – REST-API v1 (AP4, siehe unten): Controller
-  (`CardLoginController`, `LocationController`, `DeviceController`, `ExecutionController`,
-  `UserController`), `api/dto/` (DTOs), `api/exception/` (`ApiException`-Hierarchie),
-  `ApiExceptionHandler`, `TerminalScopeGuard`, `OpenApiConfig`
-- `src/main/java/.../backend/ws/` – WebSocket-Endpunkt (AP4, siehe unten):
-  `TerminalWsMessage`/`TerminalWsMessageType` (Protokoll), `TerminalWebSocketHandler`,
-  `TerminalHandshakeInterceptor`, `TerminalConnectionRegistry`, `TerminalHeartbeatScheduler`,
-  `TerminalWebSocketConfig`
-- `src/main/java/.../backend/ui/` – Vaadin-Flow-Admin-Portal (Phase 3 AP1, siehe Abschnitt
-  „Portal-UI (Vaadin Flow)“ unten): `RootView`, `login/LoginView`, `admin/AdminLayout` +
-  6 Admin-Views, `user/UserLayout` + `UserDashboardView`, `component/UserMenuBar`,
-  `component/PlaceholderView`
-- `src/main/java/.../backend/events/` – Domain-Events (Phase 3 AP5, siehe unten):
-  `DomainEvent` (sealed Marker-Interface) + 7 Records
-- `src/main/java/.../backend/ui/push/` – `UiBroadcaster` (Phase 3 AP5, siehe unten)
-- `src/main/frontend/` – von Vaadin auto-generierte Frontend-Tooling-Ausgabe (`generated/`
-  ist per `.gitignore` ausgeschlossen, nie hand-editiert; `index.html` ist das
-  Standard-Bootstrap-Template, wird committet)
-- `src/test/java/.../backend/BackendApplicationTest.java` – Integrationstest (Spring-Kontext +
-  Flyway-Migration gegen echtes PostgreSQL, prüft Health-Endpoint + Baseline-Schema/Seeds)
-- `src/test/java/.../backend/support/TestPostgres.java` – DB-Bereitstellung für Tests:
-  Testcontainers (Default) oder lokaler Override via `ELWASYS_TEST_JDBC_URL`
-- `src/test/java/.../backend/support/AbstractBackendIT.java`,
-  `LegacyDataManagerFactory.java`, `Fixtures.java` – Test-Support (AP2): Basisklasse für
-  DB-Integrationstests, Alt-Code-`DataManager`-Fabrik für Vergleichstests, eindeutige
-  Testdatennamen
-- `src/test/java/.../backend/service/`, `.../repository/` – Service-/Repository-Tests
-  (AP2, siehe oben)
-- `src/test/java/.../backend/auth/` – Auth-Tests (AP3): `PasswordVerificationServiceTest`
-  (reine Unit-Tests), `PasswordVerificationServiceParityTest` (Alt-vs-Neu über die echte
-  `Utilities.sha1`-Routine), `ElwasysAuthenticationProviderTest` (DB-Integrationstests,
-  Re-Hash-Flag AUS), `ElwasysAuthenticationProviderRehashEnabledTest` (Flag per
-  `@TestPropertySource` gezielt AN), `SecurityConfigTest` (MockMvc-End-to-End über die
-  echte HTTP-/Servlet-Schicht), `terminal/TerminalTokenServiceTest` (AP4)
-- `src/test/java/.../backend/api/` – REST-API-Tests (AP4, siehe unten):
-  `TerminalApiSecurityTest`, `CardLoginControllerTest`, `DeviceControllerTest`,
-  `ExecutionControllerTest`
-- `src/test/java/.../backend/support/AbstractApiIT.java` – Test-Support (AP4): Basisklasse
-  für REST-API-Integrationstests (MockMvc, beide Sicherheitsketten) + Fixture-Helfer
-  (Standort/Token/Benutzer/Gerät/Programm anlegen)
-- `src/test/java/.../backend/ws/TerminalWebSocketTest.java` – WebSocket-End-to-End-Test (AP4,
-  siehe unten)
-- `src/test/java/.../backend/ui/` – Portal-UI-Tests (Phase 3 AP1, siehe unten):
-  `VaadinPortalSecurityTest`, `RouteAccessAnnotationsTest`
+  `ELWASYS_DB_URL`/`ELWASYS_DB_USER`/`ELWASYS_DB_PASSWORD`), Flyway (`baselineOnMigrate`),
+  Actuator- und Logging-Einstellungen; `management.health.mail.enabled: false` (siehe
+  „Benachrichtigungsdienst“)
+- `src/main/resources/db/migration/` – Flyway-Migrationen `V1`–`V11` (siehe
+  [02-data-model.md](02-data-model.md))
+- `src/main/resources/application-token-cli.yml` – Profil `token-cli` für `TerminalTokenCliRunner`
+  (`spring.main.web-application-type: none`)
+- `.../domain/` – JPA-Entities
+- `.../repository/` – Spring-Data-Repositories
+- `.../service/` – Geschäftslogik-Services
+- `.../exception/` – `NotEnoughCreditException`, `DuplicateCardIdException`,
+  `DuplicateUsernameException`, `EntityInUseException`, `PasswordTooShortException` u. a.
+- `.../auth/` – Auth (siehe oben) + `auth/terminal/` – Standort-Token-Auth (siehe unten)
+- `.../api/` – REST-API v1 (siehe unten): Controller (`CardLoginController`,
+  `LocationController`, `DeviceController`, `ExecutionController`, `UserController`,
+  `SnapshotController`), `api/dto/`, `api/exception/` (`ApiException`-Hierarchie),
+  `ApiExceptionHandler`, `TerminalScopeGuard`, `OpenApiConfig`, `api/idempotency/`
+- `.../ws/` – WebSocket-Endpunkt (siehe unten)
+- `.../offline/` – `ClientTimestampPolicy`, `OfflineProperties` (siehe „Offline-Robustheit“)
+- `.../notification/` – Benachrichtigungsdienst (siehe unten)
+- `.../ui/` – Vaadin-Flow-Admin-Portal (siehe „Portal-UI“)
+- `.../events/` – Domain-Events: `DomainEvent` (sealed Marker-Interface) + 7 Records
+- `.../ui/push/` – `UiBroadcaster`
+- `src/main/frontend/` – von Vaadin auto-generierte Frontend-Tooling-Ausgabe (`generated/` per
+  `.gitignore` ausgeschlossen; `index.html` committet)
+- `src/test/java/.../support/` – Test-Support: `TestPostgres` (Testcontainers-Default oder
+  `ELWASYS_TEST_JDBC_URL`-Override), `AbstractBackendIT` (DB-Integrationstests, Nicht-Web-Kontext),
+  `AbstractApiIT` (REST-API-Integrationstests, beide Sicherheitsketten), `Fixtures`
 
-### REST-API v1 + Standort-Token-Auth + WebSocket (AP4, 2026-07-20)
+### REST-API v1 + Standort-Token-Auth + WebSocket
 
-Erste fachliche HTTP-/WS-Schicht des Backends (siehe docs/kb/05-migration-plan.md, Roadmap-Punkte
-5+6). Terminals sprechen bis Phase 4 weiter direkt SQL (Alt-Code unverändert) – diese Schicht
-wird in Phase 2 von niemandem produktiv konsumiert, sondern ist das Fundament, gegen das die
-Terminal-Modernisierung (Phase 4) später implementiert.
+Die fachliche HTTP-/WS-Schicht des Backends; alleiniger Datenzugriffspfad der Terminals.
 
 #### Standort-Token-Auth
 
 Package `backend/.../auth/terminal/`:
-- `TerminalTokenEntity`/`TerminalTokenRepository` – siehe docs/kb/02-data-model.md
+- `TerminalTokenEntity`/`TerminalTokenRepository` – siehe [02-data-model.md](02-data-model.md)
   (`terminal_tokens`).
-- `TerminalTokenService` – erzeugt Tokens (`createToken`: 32 Byte {@code SecureRandom},
-  Base64-URL-kodiert, Präfix `elwt_`), prüft sie (`authenticate`: SHA-256-Hash-Lookup,
-  aktualisiert `last_used_at` – seit Pre-Launch AP4 (Epic #66, #45) gedrosselt auf höchstens
-  einen Schreibvorgang alle 5 min je Token, damit die häufigen Terminal-Requests keine
-  Schreiblast pro Aufruf erzeugen), widerruft sie (`revoke`). Nur der Hash wird gespeichert, das
-  Klartext-Token existiert nur im Rückgabewert von `createToken` (`IssuedTerminalToken`).
+- `TerminalTokenService` – erzeugt Tokens (`createToken`: 32 Byte `SecureRandom`, Base64-URL,
+  Präfix `elwt_`), prüft sie (`authenticate`: SHA-256-Hash-Lookup, aktualisiert `last_used_at`
+  gedrosselt auf höchstens einen Schreibvorgang alle 5 min je Token), widerruft sie (`revoke`).
+  Nur der Hash wird gespeichert; das Klartext-Token existiert nur im Rückgabewert von
+  `createToken` (`IssuedTerminalToken`).
 - `TerminalPrincipal` (record: `tokenId`, `locationId`, `locationName`) +
-  `TerminalAuthenticationToken` – der Standort-Kontext im `SecurityContext` eines
-  authentifizierten Terminal-Requests.
+  `TerminalAuthenticationToken` – der Standort-Kontext im `SecurityContext`.
 - `TerminalTokenAuthenticationFilter` – liest `Authorization: Bearer <token>`, prüft über
-  `TerminalTokenService`, setzt bei Erfolg die `TerminalAuthenticationToken` in den
-  `SecurityContext`; bei fehlendem/unbekanntem/widerrufenem Token antwortet der Filter SELBST
-  mit `401` + `ProblemDetail` (kein Weiterreichen an einen Entry-Point).
+  `TerminalTokenService`, setzt bei Erfolg die `TerminalAuthenticationToken`; bei fehlendem/
+  unbekanntem/widerrufenem Token antwortet der Filter SELBST mit `401` + `ProblemDetail`.
 - `TerminalApiSecurityConfig` – eigene, zustandslose `SecurityFilterChain`
-  (`securityMatcher(new AntPathRequestMatcher("/api/v1/**"))`, `@Order(1)`, `STATELESS`,
-  CSRF aus), wie in `SecurityConfig` (AP3) vorgesehen, OHNE diese Klasse zu ändern. Zwei
-  Fallstricke dabei gefunden (siehe Klassen-Javadoc für Details): (1) jede
-  `Filter`-Spring-Bean wird von Spring Boot zusätzlich automatisch als globaler Servlet-Filter
-  für ALLE Pfade registriert – eine `FilterRegistrationBean` mit `setEnabled(false)`
-  unterdrückt das, sonst hätte der Token-Filter auch `/actuator/health` blockiert; (2)
-  `securityMatcher(String...)` löst über Spring MVC auf und braucht dafür die Bean
-  `mvcHandlerMappingIntrospector`, die in den `webEnvironment=NONE`-Tests dieses Moduls nicht
-  existiert – der explizite `AntPathRequestMatcher` umgeht das.
-- **Entscheidung – Header**: `Authorization: Bearer <token>` (Standard-HTTP-Mechanismus,
-  funktioniert unverändert für den WebSocket-Handshake, kein proprietärer Header nötig) statt
-  eines eigenen `X-Elwasys-Terminal-Token`-Headers.
-- **Entscheidung – Speicherung/Rotation**: nur der SHA-256-Hash landet in der DB (nie das
-  Klartext-Token); pro Standort sind beliebig viele aktive Tokens gleichzeitig gültig, das
-  ermöglicht Rotation ohne Ausfallfenster (neues Token anlegen, Terminal umstellen, altes
-  Token widerrufen).
-- **Verwaltungspfad (Phase 2, kein Admin-UI)**: `TerminalTokenCliRunner`
-  (`@Profile("token-cli")`, siehe `application-token-cli.yml`,
-  `spring.main.web-application-type: none`) – Kommandos siehe docs/kb/04-build-and-run.md. Das
+  (`securityMatcher(new AntPathRequestMatcher("/api/v1/**"))`, `@Order(1)`, `STATELESS`, CSRF aus).
+  Zwei Fallstricke (siehe Klassen-Javadoc): (1) jede `Filter`-Spring-Bean wird zusätzlich global
+  registriert – eine `FilterRegistrationBean` mit `setEnabled(false)` unterdrückt das; (2)
+  `securityMatcher(String...)` braucht `mvcHandlerMappingIntrospector`, der in den
+  `webEnvironment=NONE`-Tests fehlt – der explizite `AntPathRequestMatcher` umgeht das.
+- **Header**: `Authorization: Bearer <token>` (Standard-HTTP-Mechanismus, funktioniert unverändert
+  für den WebSocket-Handshake) statt eines proprietären Headers.
+- **Speicherung/Rotation**: nur der SHA-256-Hash landet in der DB; pro Standort sind beliebig
+  viele aktive Tokens gleichzeitig gültig – Rotation ohne Ausfallfenster.
+- **Verwaltungspfad**: `TerminalTokenCliRunner` (`@Profile("token-cli")`, siehe
+  `application-token-cli.yml`) – Kommandos siehe [04-build-and-run.md](04-build-and-run.md); das
   Klartext-Token wird genau einmal auf `stdout` ausgegeben.
+
+Siehe [ADR 0008](../architecture/0008-api-auth-standort-token-und-admin-session.md).
 
 #### REST-API v1 (`/api/v1/**`, Package `backend/.../api/`)
 
-DTOs (`api/dto/`, Java Records) statt Entity-Serialisierung an der API-Grenze (die AP2-EAGER-
-Assoziationen würden sonst ungefiltert/rekursiv serialisiert). Fehlerbilder einheitlich als
-RFC-7807-`ProblemDetail` über `ApiExceptionHandler` (`@RestControllerAdvice`, nur für
-`org.kabieror.elwasys.backend.api`), gespeist aus der `ApiException`-Hierarchie
+DTOs (`api/dto/`, Java Records) statt Entity-Serialisierung an der API-Grenze. Fehlerbilder
+einheitlich als RFC-7807-`ProblemDetail` über `ApiExceptionHandler` (`@RestControllerAdvice`, nur
+für `org.kabieror.elwasys.backend.api`), gespeist aus der `ApiException`-Hierarchie
 (`api/exception/`, je Unterklasse HTTP-Status + `type`-URI `urn:elwasys:<slug>` + Titel).
-Standort-Scope (Geräte/Executions nur am eigenen Standort, vgl. Client-E2E-Fall C16) über
-`TerminalScopeGuard` durchgesetzt – ein Gerät/eine Ausführung eines ANDEREN Standorts wird wie
-ein unbekanntes behandelt (`404`, nicht `403`, um keine Existenz an fremden Standorten zu
-verraten). API-Dokumentation: springdoc-openapi (`/v3/api-docs`, `/swagger-ui.html`, hinter
-der AP3-Catch-all-Kette, also login-pflichtig).
+Standort-Scope über `TerminalScopeGuard` durchgesetzt – ein Gerät/eine Ausführung eines ANDEREN
+Standorts wird wie unbekannt behandelt (`404`, nicht `403`, um keine Existenz an fremden
+Standorten zu verraten). API-Dokumentation: springdoc-openapi (`/v3/api-docs`,
+`/swagger-ui.html`, hinter der login-pflichtigen Catch-all-Kette).
 
 | Methode | Pfad | Zweck | Erfolg | Fehler |
 |---|---|---|---|---|
-| `POST` | `/api/v1/card-login` | Kartenlogin (`CardLoginRequest{cardId}` → `UserDto` inkl. Guthaben), 1:1 `MainFormController#onCardDetected` | `200` | `404 card-not-found`, `403 user-blocked`, `403 location-not-allowed` |
+| `POST` | `/api/v1/card-login` | Kartenlogin (`CardLoginRequest{cardId}` → `UserDto` inkl. Guthaben) | `200` | `404 card-not-found`, `403 user-blocked`, `403 location-not-allowed` |
 | `GET` | `/api/v1/locations/me` | Standort des Tokens (`LocationDto`) | `200` | – |
-| `GET` | `/api/v1/devices?userId=` | Geräteliste des Standorts, je Gerät `usableByUser`/`occupied`/gefilterte `programs` (`PermissionService`); seit AP3 zusätzlich mit Gateway-Konfigurationsfeldern (`fhemName`/`fhemSwitchName`/`fhemPowerName`/`deconzUuid`/`autoEndPowerThreshold`/`autoEndWaitTimeSeconds`) | `200` | `400` (userId fehlt), `404 user-not-found` |
+| `GET` | `/api/v1/devices?userId=` | Geräteliste des Standorts, je Gerät `usableByUser`/`occupied`/gefilterte `programs` (`PermissionService`) + Gateway-Konfigurationsfelder (`fhemName`/`fhemSwitchName`/`fhemPowerName`/`deconzUuid`/`autoEndPowerThreshold`/`autoEndWaitTimeSeconds`) | `200` | `400` (userId fehlt), `404 user-not-found` |
 | `GET` | `/api/v1/devices/{id}?userId=` | Einzelgerät (Standort-Scope) | `200` | `404 device-not-found`, `404 user-not-found` |
-| `GET` | `/api/v1/devices/overview` | **NEU (AP3)**: anonyme Geräteübersicht des Standorts OHNE `userId` (`DeviceOverviewDto`: Gateway-Konfiguration, `occupied`, `runningExecutionId`, `lastUserId`/`lastUserName`) - siehe „API-Erweiterungen (AP3)" unten | `200` | – |
-| `POST` | `/api/v1/executions` | Execution anlegen+starten (`ExecutionStartRequest{userId,deviceId,programId,clientTimestamp,replay}`, `clientTimestamp` seit AP3 optional, `replay` seit Pre-Launch AP1 optional – siehe Hinweis unter der Tabelle); akzeptiert seit AP3 optional den Header `Idempotency-Key` | `201 ExecutionDto` | `404 device/program/user-not-found`, `403 user-blocked/location-not-allowed/device-not-usable/program-not-available`, `409 device-occupied`, `402 insufficient-credit` |
+| `GET` | `/api/v1/devices/overview` | Anonyme Geräteübersicht OHNE `userId` (`DeviceOverviewDto`) | `200` | – |
+| `POST` | `/api/v1/executions` | Execution anlegen+starten (`ExecutionStartRequest{userId,deviceId,programId,clientTimestamp?,replay?}`); optionaler Header `Idempotency-Key` | `201 ExecutionDto` | `404 device/program/user-not-found`, `403 user-blocked/location-not-allowed/device-not-usable/program-not-available`, `409 device-occupied`, `402 insufficient-credit` |
 | `GET` | `/api/v1/executions/{id}` | Aktueller Stand einer Ausführung | `200` | `404 execution-not-found` |
-| `POST` | `/api/v1/executions/{id}/finish` | Reguläres Ende (bezahlt); seit AP3 optionaler Rumpf `ExecutionEndRequest{clientTimestamp}` + optionaler `Idempotency-Key`-Header; stößt seit Pre-Launch AP3 die Ende-Benachrichtigung NICHT mehr direkt an, sondern über ein `ExecutionNotificationEvent` (siehe Hinweis unter der Tabelle) | `200` | `404`, `409 execution-already-finished` |
-| `POST` | `/api/v1/executions/{id}/abort` | Vorzeitiger Abbruch (persistenzseitig identisch zu `finish`, eigener Endpunkt für API-Klarheit); seit AP3 wie `finish` mit optionalem Rumpf/Header, publiziert wie `finish` ein `ExecutionNotificationEvent` (Abbruch-Variante) | `200` | wie `finish` |
-| `POST` | `/api/v1/executions/{id}/reset` | Zurücksetzen ohne Abrechnung (Alt-Code: Steckdose ließ sich nach Anlegen nicht einschalten); seit AP3 optionaler `Idempotency-Key`-Header | `200` | `404` |
-| `GET` | `/api/v1/users/{id}/credit` | Guthabenabfrage (NICHT standortgebunden – Guthaben ist personenbezogen, siehe `UserController`-Javadoc) | `200 CreditResponse` | `404 user-not-found` |
-| `GET` | `/api/v1/snapshot` | **NEU (AP3)**: Standort-Snapshot für die Offline-Buchungs-Vorbereitung (`SnapshotDto`) - siehe „API-Erweiterungen (AP3)" unten | `200` | – |
+| `POST` | `/api/v1/executions/{id}/finish` | Reguläres Ende (bezahlt); optionaler Rumpf `ExecutionEndRequest{clientTimestamp}` + `Idempotency-Key`-Header; publiziert ein `ExecutionNotificationEvent` | `200` | `404`, `409 execution-already-finished` |
+| `POST` | `/api/v1/executions/{id}/abort` | Vorzeitiger Abbruch (persistenzseitig identisch zu `finish`, eigener Endpunkt für API-Klarheit); wie `finish` mit optionalem Rumpf/Header + `ExecutionNotificationEvent` | `200` | wie `finish` |
+| `POST` | `/api/v1/executions/{id}/reset` | Zurücksetzen ohne Abrechnung; optionaler `Idempotency-Key`-Header | `200` | `404` |
+| `GET` | `/api/v1/users/{id}/credit` | Guthabenabfrage (NICHT standortgebunden – Guthaben ist personenbezogen) | `200 CreditResponse` | `404 user-not-found` |
+| `GET` | `/api/v1/snapshot` | Standort-Snapshot für die Offline-Buchungs-Vorbereitung (`SnapshotDto`) | `200` | – |
 
 Alle Endpunkte (außer der reinen Standort-Selbstauskunft) prüfen Berechtigungen 1:1 über die
-AP2-Services (`PermissionService`, `PricingService`, `CreditService`, `ExecutionService`) –
-keine Duplikation der Fachlogik in der API-Schicht.
-
-**Privilegierter Nachbuchungs-Pfad** (`ExecutionStartRequest#replay`, Pre-Launch AP1, Epic #66,
-#16): mit `replay=true` überspringt `POST /api/v1/executions` sämtliche fachlichen Prüfungen
-(Sperrung/Standort/Nutzbarkeit/Belegung/Guthaben) und lässt insbesondere auch negative Salden
-zu – gedacht für die verzögerte Offline-Nachmeldung, bei der die Berechtigung bereits am
-Terminal geprüft wurde. Das Flag ist ausschließlich über den authentifizierten Terminal-Kanal
-setzbar. Herleitung siehe ADR 0016.
-
-**Benachrichtigung entkoppelt** (Pre-Launch AP3, Epic #66, #36): `ExecutionController` ruft
-`NotificationService` bei `finish`/`abort` nicht mehr direkt (in-Transaktion) auf, sondern
-publiziert ein `ExecutionNotificationEvent`. Ein `ExecutionNotificationListener` versendet die
-Mail per `@TransactionalEventListener(AFTER_COMMIT)` erst NACH dem erfolgreichen Commit,
-außerhalb der DB-Transaktion – ein Rollback der Buchung unterdrückt damit auch die Mail (keine
-„Programm beendet"-Mail für eine gar nicht persistierte Abrechnung). Dasselbe Entkopplungs-
-Muster nutzt bereits der `UiBroadcaster` für die Portal-Live-Updates (siehe „Live-Updates
-zwischen Sessions (AP5)" unten).
-
-**Eingabevalidierung deCONZ-UUID** (Pre-Launch AP4, Epic #66, #42): der Request zum Setzen der
-deCONZ-UUID (`UpdateDeconzUuidRequest`, vom Terminal nach dem Pairing genutzt) validiert das
-Feld jetzt mit `@NotBlank @Size(max=64)` – leere oder überlange UUIDs werden mit `400`
-abgewiesen statt ungeprüft persistiert.
-
-#### API-Erweiterungen (AP3, Phase 4, 2026-07-21, additiv)
-
-Vorbereitung des Terminal-Cutovers (AP4): Inventur aller `DataManager`-/Direkt-DB-Aufrufe des
-Client-Alt-Codes (`ExecutionManager`/`ExecutionFinisher`/`LocationManager`/UI-Controller,
-`ui/medium`+`ui/small`) gegen die bestehende REST-API v1 (AP4-Stand oben) abgeglichen.
-
-**Inventur-Tabelle** (Client-Aufruf → vorhandener Endpunkt/DTO-Feld bzw. Lücke):
-
-| Client-Aufruf (Alt-Code) | Zweck | Abdeckung |
-|---|---|---|
-| `DataManager#getLocation(name)` (`ElwaManager#initiate`, `LocationManager`) | eigenen Standort auflösen | ✅ `GET /api/v1/locations/me` |
-| `DataManager#getUserByCardId` (`MainFormController#onCardDetected`) | Kartenlogin | ✅ `POST /api/v1/card-login` |
-| `DataManager#getDevicesToDisplay`/`#getDevicesToDisplayXs` (`ElwaManager#getManagedDevices`, beide UI-Größen im Zustand `SELECT_DEVICE`, **VOR** jedem Kartenlogin) | Geräteliste anzeigen | ⚠️ Lücke bis AP3: `GET /api/v1/devices` verlangt `userId` (400 ohne) - in `SELECT_DEVICE` ist aber noch kein Benutzer bekannt (Karten-Scan kann jederzeit unabhängig erfolgen, siehe `MainFormController#onCardDetected`, das in JEDEM Nicht-Fehler-Zustand reagiert). **Behoben**: neuer, anonymer `GET /api/v1/devices/overview` (siehe unten) - der bestehende Vertrag von `GET /api/v1/devices` bleibt unverändert (weiterhin `400` ohne `userId`, siehe `DeviceControllerTest#missingUserIdParameterIsRejectedWith400`) |
-| Gerät-Objekt-Felder `fhemName`/`fhemSwitchName`/`fhemPowerName`/`deconzUuid`/`autoEndPowerThreshold`/`autoEndWaitTimeSeconds` (von `devices/deconz/`, `FhemDevicePowerManager`, `ExecutionManager`s 20s-Hintergrundabgleich ALLER verwalteten Geräte genutzt) | Gateway-Ansteuerung/Auto-Ende | ⚠️ Lücke bis AP3: weder `DeviceDto` noch ein anderer Endpunkt lieferten diese Felder. **Behoben**: additive Felder auf `DeviceDto` + `DeviceOverviewDto` |
-| `DataManager#getRunningExecution(Device)` je Gerät (`ElwaManager#initiate`, Wiederaufnahme-Scan, Testfall C13) | unterbrochene Ausführung beim Start fortsetzen | ⚠️ Lücke bis AP3: kein Endpunkt lieferte die laufende Execution-Id ohne bereits bekannten Benutzer. **Behoben**: `DeviceOverviewDto#runningExecutionId` (der Client ruft anschließend `GET /api/v1/executions/{id}` für die vollen Details) |
-| `DataManager#getLastUser(Device)` (`DeviceListEntry#onStart`/`ui/small`, „letzter Benutzer"-Anzeige je Gerätekachel) | UI-Hinweis | ⚠️ Lücke bis AP3. **Behoben**: `DeviceOverviewDto#lastUserId`/`#lastUserName` (kein eigener Endpunkt nötig) |
-| `DataManager#newExecution` + `ExecutionManager#startExecution` (Buchung/Programmstart) | Execution anlegen+starten | ✅ `POST /api/v1/executions` (bereits AP4) |
-| `Execution#reset()` (`ExecutionManager#startExecution`, catch-Block bei Steckdosenfehler) | Ausführung zurücksetzen | ✅ `POST /api/v1/executions/{id}/reset` (bereits AP4) |
-| `Execution#stop()` + `User#payExecution()` (`ExecutionFinisher#executeAction`, regulär/Abbruch) | Ende/Abbruch + Abrechnung | ✅ `POST /api/v1/executions/{id}/finish`/`/abort` (bereits AP4); seit AP3 zusätzlich an `NotificationService` angebunden (siehe unten) |
-| E-Mail/Pushover-Versand in `ExecutionFinisher#executeAction` | Benachrichtigung bei Ende/Abbruch | ⚠️ Lücke bis AP3: `NotificationService` existierte (Phase 2 AP5), war aber an keinen produktiven Ablauf angebunden. **Behoben**: Anbindung an `finish`/`abort` (siehe unten), weiterhin hinter `elwasys.notifications.enabled` (Default AUS) |
-| `Location#registerClient(uid)`/`#releaseLocation()` (`LocationManager`, IP-Registry für die Alt-Fernwartung) | Standort-„Erreichbarkeit" melden | **Kein REST-Äquivalent nötig** - laut Roadmap (AP5) wird dieser Mechanismus durch eine ausgehende WebSocket-Verbindung ersetzt (`TerminalConnectionRegistry`, bereits seit Phase 2 AP4 vorhanden), nicht durch einen REST-Endpunkt |
-| Execution-Start/Ende/Abbruch: keine Wiederholungssicherheit im Alt-Code (Direkt-DB, keine Netzwerk-Retries nötig) | Robustheit bei Netzwerkfehlern zwischen Terminal und Backend | ⚠️ Lücke bis AP3 (durch die Umstellung auf REST erst relevant). **Behoben**: Idempotenz-Schlüssel + Original-Zeitstempel (siehe unten) |
-| Standort-Daten für Offline-Buchungen (Konzeptskizze, noch kein Alt-Code-Äquivalent - komplett neue Anforderung) | Offline-Buchungs-Vorbereitung (AP6) | ⚠️ Lücke bis AP3. **Behoben**: `GET /api/v1/snapshot` (siehe unten) |
-
-**Ergebnis**: 13 identifizierte Client-Zugriffspunkte. 5 bereits über die AP4-API abgedeckt
-(Zeilen 1/2/7/8/9), 1 braucht laut Roadmap explizit KEIN REST-Äquivalent (`registerClient`/
-`releaseLocation`, wird durch AP5s ausgehende WS-Verbindung ersetzt), die verbleibenden 7
-Lücken sind additiv geschlossen (2 neue Endpunkte `GET /api/v1/devices/overview` + `GET
-/api/v1/snapshot`, 2 DTO-Erweiterungen, Idempotenz-Mechanik, Original-Zeitstempel,
-Notification-Anbindung). Kein bestehender Endpunkt-Vertrag geändert.
-
-**Status Phase 4 AP4 (2026-07-21): alle 12 REST-abgedeckten Zeilen dieser Tabelle sind jetzt
-tatsächlich UMGESTELLT** – der Client ruft die jeweiligen Endpunkte über die neue
-`api/ApiClient`-Schicht auf (`ElwaManager`/`ExecutionManager`/`ExecutionFinisher`/die
-UI-Controller nutzen `Common.DataManager` dafür nicht mehr, siehe oben „Client-Raspi").
-Nur die eine planmäßig ausgenommene Zeile (`registerClient`/`releaseLocation`, Fernwartungs-
-Registrierung) bleibt wie vorgesehen bis Phase 4 AP5 auf dem Alt-DB-Pfad.
+Services (`PermissionService`, `PricingService`, `CreditService`, `ExecutionService`) – keine
+Duplikation der Fachlogik in der API-Schicht.
 
 **Anonyme Geräteübersicht** (`GET /api/v1/devices/overview`, `DeviceOverviewDto`, Methode
-`DeviceController#overview`): bewusst ein NEUER Pfad statt `userId` auf dem bestehenden `GET
-/api/v1/devices` optional zu machen - der bestehende 400-Vertrag bei fehlendem `userId` bleibt
-dadurch unangetastet (siehe Inventur-Tabelle). Liefert je Gerät die Gateway-Konfiguration
-(fhem/deCONZ), `occupied`, `runningExecutionId` (für den Wiederaufnahme-Scan, Testfall C13) und
-`lastUserId`/`lastUserName` (fachlicher Nachfolger von `DataManager#getLastUser`). Enthält
-bewusst KEINE `programs`/`usableByUser`-Felder (die setzen einen bekannten Benutzer voraus) -
-nach einem Kartenlogin ruft der Client wie bisher `GET /api/v1/devices?userId=...` auf.
+`DeviceController#overview`): bewusst ein eigener Pfad statt `userId` auf `GET /api/v1/devices`
+optional zu machen – dessen 400-Vertrag bei fehlendem `userId` bleibt unangetastet. Liefert je
+Gerät die Gateway-Konfiguration (fhem/deCONZ), `occupied`, `runningExecutionId` (für den
+Wiederaufnahme-Scan) und `lastUserId`/`lastUserName`. Enthält bewusst KEINE
+`programs`/`usableByUser`-Felder (die setzen einen bekannten Benutzer voraus) – nach einem
+Kartenlogin ruft der Client `GET /api/v1/devices?userId=...` auf.
 
-**Idempotenz + Replay** (Package `backend/.../api/idempotency/`, siehe Konzeptskizze
-„Offline-Buchungen am Terminal" Punkt 3+4 „Persistentes Ereignis-Journal"/„Nachmeldung"):
-`IdempotencyService#execute` dedupliziert terminal-gemeldete Execution-Ereignisse über den
-optionalen Header `Idempotency-Key` (eine vom Terminal erzeugte UUID pro fachlichem Ereignis) -
-`POST /api/v1/executions`, `.../finish`, `.../abort`, `.../reset` akzeptieren ihn alle. Wird
-derselbe Schlüssel erneut gesendet (z.B. nach einem Verbindungsabbruch vor Erhalt der Antwort),
-liefert der Endpunkt die ZUERST berechnete Antwort erneut aus, OHNE die fachliche Aktion
-(Abrechnung, Execution-Anlage, Benachrichtigung) ein zweites Mal auszulösen. Speicherung in der
-additiven Tabelle `terminal_idempotency_keys` (Migration `V4`, siehe docs/kb/02-data-model.md):
-Schlüssel, Standort (informativ), Vorgangsart, HTTP-Status + JSON-Antwortkörper der ERSTEN
-erfolgreichen Ausführung. Fehlt der Header (Default-Fall, bestehende Aufrufer ohne Header),
-verhalten sich alle vier Endpunkte exakt wie vor AP3 - vollständig additiv/abwärtskompatibel.
-**Wichtiger Fallstrick** (im Code als Regressionstest festgehalten, siehe
-`ExecutionControllerNotificationTest#executionAlreadyFinishedIsCheckedInsideTheIdempotencyBranch`):
-der „bereits beendet"-Wächter von `finish`/`abort` (409 `execution-already-finished`) MUSS
-innerhalb des Idempotenz-Zweigs geprüft werden - eine Prüfung davor hätte einen Replay (die
-Ausführung ist durch den ERSTEN Aufruf bereits `finished=true`) fälschlich mit `409` statt der
-gespeicherten `200`-Antwort beendet (beim ersten Implementierungsversuch tatsächlich so
-aufgetreten, per Test aufgedeckt und behoben). Analog wandern bei `start` alle fachlichen
-Prüfungen (blockiert/Standort/Nutzbarkeit/Programm/Belegung/Guthaben) in den Idempotenz-Zweig,
-damit ein sich zwischenzeitlich ändernder Zustand (z.B. der Benutzer wird nach einem
-erfolgreichen Erstversuch gesperrt) einen Replay nicht fälschlich scheitern lässt. **Frühere
-Grenze seit Pre-Launch AP3 (Epic #66, #29/#41) geschlossen**: die vormals dokumentierte fehlende
-verteilte Sperre (zwei tatsächlich GLEICHZEITIGE Anfragen mit demselben Schlüssel konnten die
-fachliche Aktion beide einmal auslösen, bevor der zweite Insert an der Unique-Constraint
-scheiterte) entfällt – gleiche Schlüssel werden jetzt per `pg_advisory_xact_lock`
-**serialisiert** (zweiargumentige Namensraum-Form, Namensraum 2 für den Idempotenz-Schlüssel),
-sodass die zweite Anfrage blockiert, bis die erste committet hat, und dann sauber die
-gespeicherte Antwort erhält; der frühere `DataIntegrityViolationException`-Notnagel entfällt
-damit. Ergänzende Härtungen desselben Pakets: ein Schlüssel länger als 64 Zeichen wird mit `400`
-abgewiesen (`InvalidIdempotencyKeyException`); wird derselbe Schlüssel für eine ANDERE
-Vorgangsart wiederverwendet, antwortet der Endpunkt `409` (`IdempotencyKeyReusedException`); und
-ein Replay, dessen zwischenzeitlich gelöschtes `program`/`user` referenziert wird, liefert die
-gespeicherte Antwort statt `404` – `program`/`user` werden dafür im „neu"-Zweig aufgelöst, nur
-`device` bleibt bewusst außerhalb (siehe `IdempotencyService`-Javadoc).
+**Privilegierter Nachbuchungs-Pfad** (`ExecutionStartRequest#replay`): mit `replay=true`
+überspringt `POST /api/v1/executions` sämtliche fachlichen Prüfungen (Sperrung/Standort/
+Nutzbarkeit/Belegung/Guthaben) und lässt auch negative Salden zu – gedacht für die verzögerte
+Offline-Nachmeldung, bei der die Berechtigung bereits am Terminal geprüft wurde. Das Flag ist
+ausschließlich über den authentifizierten Terminal-Kanal setzbar (siehe
+[ADR 0016](../architecture/0016-offline-replay-haertung.md)).
 
-**Backend-seitiges Locking bei nebenläufigen Buchungen** (Pre-Launch AP3, Epic #66, #20):
-gleichzeitige Buchungen desselben Nutzers bzw. desselben Geräts werden serialisiert, statt sich
-gegenseitig zu überholen. Der Nutzer wird beim Start UND beim Finish per pessimistischem
-Zeilen-Lock geladen (`UserRepository`/`ExecutionRepository`
-`@Lock(LockModeType.PESSIMISTIC_WRITE) findWithLockById`; der Finish holt die Ausführung frisch
-gesperrt über `ExecutionService#getForUpdate`), sodass die Guthabenbuchung konsistent bleibt.
-Der Start-Pfad nimmt zusätzlich ein Advisory-Lock je Gerät (`AdvisoryLockService`,
-`pg_advisory_xact_lock` in der zweiargumentigen Namensraum-Form, Namensraum 1 = Gerät – vgl.
-Namensraum 2 für den Idempotenz-Schlüssel oben), das eine parallele Doppelbelegung desselben
-Geräts verhindert. Bewusst KEIN partieller Unique-Index auf „ein aktives Execution je Gerät" –
-die Serialisierung über das Advisory-Lock deckt den Fall vollständig ab, ohne das Schema
-zusätzlich zu belasten. Herleitung siehe ADR 0017.
+**Benachrichtigung entkoppelt**: `ExecutionController` ruft `NotificationService` bei
+`finish`/`abort` nicht direkt (in-Transaktion) auf, sondern publiziert ein
+`ExecutionNotificationEvent`. Ein `ExecutionNotificationListener` versendet die Mail per
+`@TransactionalEventListener(AFTER_COMMIT)` erst NACH dem erfolgreichen Commit – ein Rollback der
+Buchung unterdrückt damit auch die Mail. Dasselbe Entkopplungs-Muster nutzt der `UiBroadcaster`
+für die Portal-Live-Updates.
+
+**Eingabevalidierung deCONZ-UUID**: der Request zum Setzen der deCONZ-UUID
+(`UpdateDeconzUuidRequest`) validiert das Feld mit `@NotBlank @Size(max=64)` – leere oder
+überlange UUIDs werden mit `400` abgewiesen.
+
+**Idempotenz + Replay** (Package `backend/.../api/idempotency/`): `IdempotencyService#execute`
+dedupliziert terminal-gemeldete Execution-Ereignisse über den optionalen Header `Idempotency-Key`
+(eine vom Terminal erzeugte UUID pro fachlichem Ereignis) – `POST /api/v1/executions`,
+`.../finish`, `.../abort`, `.../reset` akzeptieren ihn alle. Wird derselbe Schlüssel erneut
+gesendet, liefert der Endpunkt die ZUERST berechnete Antwort erneut aus, OHNE die fachliche Aktion
+(Abrechnung, Execution-Anlage, Benachrichtigung) ein zweites Mal auszulösen. Speicherung in
+`terminal_idempotency_keys` (Migration `V4`). Fehlt der Header, verhalten sich alle vier
+Endpunkte exakt wie ohne – vollständig additiv/abwärtskompatibel. Mechanik:
+- Gleiche Schlüssel werden per `pg_advisory_xact_lock` (zweiargumentige Namensraum-Form,
+  Namensraum 2) **serialisiert** – eine zweite, gleichzeitige Anfrage blockiert, bis die erste
+  committet hat, und erhält dann die gespeicherte Antwort.
+- Der „bereits beendet“-Wächter von `finish`/`abort` (`409 execution-already-finished`) wird
+  INNERHALB des Idempotenz-Zweigs geprüft (ein Replay ist bereits `finished=true` und muss die
+  gespeicherte `200` erhalten, nicht `409`) – als Regressionstest festgehalten
+  (`ExecutionControllerNotificationTest#executionAlreadyFinishedIsCheckedInsideTheIdempotencyBranch`).
+  Analog wandern bei `start` alle fachlichen Prüfungen in den Idempotenz-Zweig, damit ein
+  zwischenzeitlich geänderter Zustand einen Replay nicht scheitern lässt.
+- Ein Schlüssel länger als 64 Zeichen → `400` (`InvalidIdempotencyKeyException`); Wiederverwendung
+  desselben Schlüssels für eine ANDERE Vorgangsart → `409` (`IdempotencyKeyReusedException`); ein
+  Replay mit zwischenzeitlich gelöschtem `program`/`user` liefert die gespeicherte Antwort statt
+  `404` (`program`/`user` werden im „neu“-Zweig aufgelöst, nur `device` bleibt außerhalb, siehe
+  `IdempotencyService`-Javadoc).
+
+**Backend-seitiges Locking bei nebenläufigen Buchungen**: gleichzeitige Buchungen desselben
+Nutzers bzw. Geräts werden serialisiert. Der Nutzer wird beim Start UND beim Finish per
+pessimistischem Zeilen-Lock geladen (`findWithLockById`; der Finish holt die Ausführung frisch
+gesperrt über `ExecutionService#getForUpdate`). Der Start-Pfad nimmt zusätzlich ein Advisory-Lock
+je Gerät (`AdvisoryLockService`, `pg_advisory_xact_lock`, Namensraum 1 = Gerät), das eine parallele
+Doppelbelegung desselben Geräts verhindert. Bewusst KEIN partieller Unique-Index auf „ein aktives
+Execution je Gerät“ – die Serialisierung über das Advisory-Lock deckt den Fall ab (siehe
+[ADR 0017](../architecture/0017-abrechnungs-integritaet-locking.md)).
 
 **Original-Zeitstempel**: `ExecutionStartRequest#clientTimestamp`/`ExecutionEndRequest#clientTimestamp`
-(beide optional, Typ `LocalDateTime`) lassen das Terminal den tatsächlichen Ereigniszeitpunkt
-mitschicken statt der Serverzeit beim Empfang - Vorbereitung für die Offline-Nachmeldung aus
-AP6 (Konzeptskizze Punkt 4: „Backend verbucht nachträglich ... mit Original-Zeitstempeln").
-`ExecutionService#startExecution`/`#stopExecution`/`#finishExecution` haben dafür neue
-Überladungen mit einem `clientTimestamp`-Parameter bekommen (Verhalten bei `null` unverändert
-zu vorher: `LocalDateTime.now()`). Uhren-Drift-Toleranz/Ablehnung zu alter Zeitstempel ist
-laut den vorläufigen Festlegungen zu den Offline-Detailfragen (docs/kb/05-migration-plan.md) erst
-für AP6 vorgesehen - AP3 nimmt den Zeitstempel unverändert entgegen.
-
-**Zeitstempel-Invariante** (Pre-Launch AP1, Epic #66, #18): `ExecutionService#stopExecution`
-erzwingt `stop = start`, falls ein nachgemeldeter `stop` VOR dem `start` läge (verhinderte
-negative Dauer bei driftenden Terminal-Uhren); `getPrice` deckelt die abgerechnete Dauer
-zusätzlich auf `min(stop − start, maxDuration)`. Der real gemeldete Stop-Zeitpunkt bleibt als
-Audit-Record erhalten, nur die Abrechnungsdauer wird begrenzt. Herleitung siehe ADR 0016.
+(beide optional, `LocalDateTime`) lassen das Terminal den tatsächlichen Ereigniszeitpunkt
+mitschicken statt der Serverzeit beim Empfang – für die Offline-Nachmeldung. `ClientTimestampPolicy`
+(Package `offline/`, siehe „Offline-Robustheit“) prüft ihn gegen ein Fenster; liegt er außerhalb,
+verwendet der `ExecutionController` die Serverzeit (Protokollhinweis, kein Fehler).
 
 **Standort-Snapshot** (`GET /api/v1/snapshot`, `SnapshotController`, `SnapshotDto` + vier
-Teil-DTOs in `api/dto/`, siehe Konzeptskizze „Offline-Buchungen am Terminal" Punkt 1 „Lokaler
-Daten-Snapshot"): liefert Nutzer (Kartennummern, Guthaben, Sperr-Status, Gruppen-Id), Geräte
-(inkl. Gateway-Konfiguration wie `DeviceOverviewDto`, zulässige Gruppen-Ids, Programm-Ids),
-Programme (Preisfelder, zulässige Gruppen-Ids) und Benutzergruppen (Rabattregel) des Standorts
-mit Zeitstempel. **Enthält bewusst KEINE Passwort-Hashes** (siehe `SnapshotUserDto`-Javadoc).
-**Scope-Entscheidung**: `users`/`userGroups` sind auf Benutzer/Gruppen beschränkt, die an DIESEM
-Standort zugelassen sind (`location.getValidUserGroups()`), statt ALLE Benutzer des Systems
-auszuliefern - ein Terminal muss offline nur wissen, wer bei ihm einchecken darf; eine Karte
-eines an diesem Standort nicht zugelassenen Nutzers würde offline wie eine unbekannte Karte
-behandelt (nicht wie das spezifischere „an diesem Standort nicht erlaubt") - eine bewusst
-konservative Vereinfachung im Sinne der Konzeptskizze Punkt 2 („Regeln bewusst konservativ").
-Dieses Arbeitspaket liefert nur die DATEN aus - die eigentliche Offline-Entscheidungslogik
-(Kartenlogin/Berechtigungs-/Guthabenprüfung gegen den Snapshot, Ereignis-Journal, Replay) wurde
-in AP6 umgesetzt (siehe unten).
+Teil-DTOs): liefert Nutzer (Kartennummern, Guthaben, Sperr-Status, Gruppen-Id), Geräte (inkl.
+Gateway-Konfiguration, zulässige Gruppen-Ids, Programm-Ids), Programme (Preisfelder, zulässige
+Gruppen-Ids) und Benutzergruppen (Rabattregel) des Standorts mit Zeitstempel und
+`offlineMaxDurationMinutes`. **Enthält bewusst KEINE Passwort-Hashes**. **Scope**:
+`users`/`userGroups` sind auf Benutzer/Gruppen beschränkt, die an DIESEM Standort zugelassen sind
+(`location.getValidUserGroups()`) – ein Terminal muss offline nur wissen, wer bei ihm einchecken
+darf; eine Karte eines dort nicht zugelassenen Nutzers wird offline wie eine unbekannte Karte
+behandelt (bewusst konservative Vereinfachung, siehe
+[ADR 0010](../architecture/0010-offline-buchungen-am-terminal.md)).
 
-### Offline-Robustheit (Phase 4 AP6, siehe docs/kb/05-migration-plan.md „Konzeptskizze:
-Offline-Buchungen am Terminal")
+#### Offline-Robustheit
 
-Zwei Stufen: (A) laufende, online gestartete Ausführungen bei einem Backend-Ausfall lokal zu
-Ende führen + nachmelden; (B) während des Ausfalls komplett neu gebuchte Ausführungen
-(„Offline-Buchungen"), solange der Standort-Snapshot nicht älter als dessen
-`offline.max-duration` ist.
+Zwei Stufen: (A) laufende, online gestartete Ausführungen bei einem Backend-Ausfall lokal zu Ende
+führen + nachmelden; (B) während des Ausfalls komplett neu gebuchte Ausführungen
+(„Offline-Buchungen“), solange der Standort-Snapshot nicht älter als dessen `offline.max-duration`
+ist. Siehe [ADR 0010](../architecture/0010-offline-buchungen-am-terminal.md).
 
-**Backend-seitig additiv** (kein bestehender Endpunkt-Vertrag geändert):
-- `locations.offline_max_duration_minutes` (Migration V5, Default 60, siehe
-  docs/kb/02-data-model.md) - pro Standort im Portal-Standorte-Dialog editierbar
-  (`LocationFormDialog`, Feld „Offline-Maximaldauer (Minuten)"; `LocationService#create`/
-  `#update` haben dafür eine 3-Arg-Überladung bekommen, die 2-Arg-Signaturen bleiben
-  unverändert bestehen) und über `SnapshotDto#offlineMaxDurationMinutes()` ans Terminal
-  ausgeliefert.
-- Neues Package `backend/.../offline/`: `ClientTimestampPolicy` (+ `OfflineProperties`,
-  Konfigurationsschlüssel `elwasys.offline.clock-drift-tolerance`, Default `PT5M`) prüft
-  einen vom Terminal mitgeschickten `clientTimestamp` (Execution-Start/-Ende/-Abbruch, siehe
-  AP3 oben) gegen das Fenster `[jetzt - (offline.max-duration + Toleranz), jetzt + Toleranz]`
-  - liegt er außerhalb, verwendet `ExecutionController` stattdessen die Serverzeit
-  (Protokollhinweis, kein Fehler). Zusätzlich unterdrückt `ClientTimestampPolicy
-  #isNotificationSuppressed` die `finish`/`abort`-Benachrichtigung, wenn das Ereignis selbst
-  älter als `offline.max-duration` ist (ohne die Toleranz) - beides Auftraggeber-Vorgabe (siehe
-  docs/kb/05-migration-plan.md „Festlegungen zu den Offline-Detailfragen"). Das eigentliche
-  Deduplizieren wiederholter Meldungen läuft weiterhin unverändert über den seit AP3
-  bestehenden `Idempotency-Key`-Mechanismus (`IdempotencyService`) - AP6 ist der erste
-  produktive Konsument, der ihn für eine Nachmeldung nutzt, die tatsächlich Minuten/Stunden
-  später erfolgt.
+**Backend-seitig** (additiv, kein bestehender Endpunkt-Vertrag geändert):
+- `locations.offline_max_duration_minutes` (Migration `V5`, Default 60) – pro Standort im
+  Portal-Standorte-Dialog editierbar (`LocationFormDialog`; `LocationService#create`/`#update`
+  haben eine 3-Arg-Überladung) und über `SnapshotDto#offlineMaxDurationMinutes()` ausgeliefert.
+- Package `backend/.../offline/`: `ClientTimestampPolicy` (+ `OfflineProperties`,
+  Konfigurationsschlüssel `elwasys.offline.clock-drift-tolerance`, Default `PT5M`) prüft einen vom
+  Terminal mitgeschickten `clientTimestamp` gegen das Fenster `[jetzt − (offline.max-duration +
+  Toleranz), jetzt + Toleranz]` – außerhalb verwendet der `ExecutionController` die Serverzeit.
+  `#isNotificationSuppressed` unterdrückt die `finish`/`abort`-Benachrichtigung, wenn das Ereignis
+  selbst älter als `offline.max-duration` ist (ohne Toleranz). Das Deduplizieren wiederholter
+  Meldungen läuft über den `Idempotency-Key`-Mechanismus.
 
-**Client-seitig, neues Package `Client-Raspi/.../offline/`** (Terminal spricht weiterhin
-ausschließlich über die bestehende REST-API v1 - keine neuen Endpunkte nötig):
+**Client-seitig, Package `Client-Raspi/.../offline/`** (Terminal spricht ausschließlich über die
+bestehende REST-API v1):
 - `OfflineSnapshotStore`: persistiert den zuletzt geladenen `SnapshotDto` als JSON
-  (`offline-snapshot.json` im Arbeitsverzeichnis, wie `.client-uid`/`elwasys.properties`) -
-  neustartfest, unverschlüsselt (Auftraggeber-Entscheidung, keine Passwort-Hashes enthalten).
-- `OfflineJournal`: neustartfestes, append-only Ereignis-Journal
-  (`offline-journal.jsonl`, eine JSON-Zeile je `OfflineJournalEntry` - Start/Ende/Abbruch mit
-  Idempotenz-Schlüssel, Original-Zeitstempel, und bei Ende/Abbruch entweder einer bereits
-  echten Backend-Id [Stufe A] oder dem Idempotenz-Schlüssel des zugehörigen `START`-Eintrags
-  [Stufe B, die Ausführung wurde selbst offline angelegt]). `computeOfflineDebits()` leitet
-  das lokal aufgelaufene, vom gecachten Guthaben abzuziehende Offline-Delta direkt aus dem
-  Journal her (kein separates Ledger nötig) - jeder Ende/Abbruch-Eintrag trägt dafür den
-  lokal berechneten Preis (`chargedPrice`, rein informativ, nie an das Backend geschickt).
-- `OfflinePricing`: 1:1-Portierung von `PricingService` für die Offline-Preisberechnung
-  (Snapshot liefert Flagfall/Rate/Zeiteinheit/Rabattregel, siehe `SnapshotProgramDto`/
-  `SnapshotUserGroupDto`).
+  (`offline-snapshot.json` im Arbeitsverzeichnis) – neustartfest, unverschlüsselt (keine
+  Passwort-Hashes enthalten).
+- `OfflineJournal`: neustartfestes, append-only Ereignis-Journal (`offline-journal.jsonl`, eine
+  JSON-Zeile je `OfflineJournalEntry` – Start/Ende/Abbruch mit Idempotenz-Schlüssel,
+  Original-Zeitstempel, und bei Ende/Abbruch entweder einer echten Backend-Id [Stufe A] oder dem
+  Idempotenz-Schlüssel des zugehörigen `START`-Eintrags [Stufe B]). `computeOfflineDebits()`
+  leitet das lokal aufgelaufene, vom gecachten Guthaben abzuziehende Offline-Delta direkt aus dem
+  Journal her (jeder Ende/Abbruch-Eintrag trägt den lokal berechneten `chargedPrice`, rein
+  informativ, nie an das Backend geschickt).
+- `OfflinePricing`: 1:1-Portierung von `PricingService` für die Offline-Preisberechnung.
 - `OfflineGateway`: zentrale Offline-Entscheidungslogik + Journal-Replay.
-  - Kartenlogin/Geräte-Übersicht/Geräte-für-Benutzer/Buchen liefern JEWEILS dieselben
-    Wire-DTOs (`UserDto`/`DeviceOverviewDto`/`DeviceDto`) bzw. dasselbe Fehler-Vokabular
-    (`ApiException`-Status/Slug) wie der Online-Pfad - der komplette UI-/Modellcode
-    (`ClientUser.of`, `ClientDevice.updateFrom`, `ClientProgram.of`,
-    `MainFormController#onCardDetected`s Fehlerbehandlung) bleibt dadurch UNVERÄNDERT
-    nutzbar.
-  - Fehlt ein nutzbarer (nicht abgelaufener) Snapshot, wird die URSPRÜNGLICHE
-    `ApiException` (der Kommunikationsfehler) unverändert weitergereicht - kein neu
-    erfundenes Fehlerbild, sondern exakt das bestehende C15-Bild.
-  - `replay()`: überträgt das komplette Journal in Reihenfolge über die (bereits seit AP3
-    idempotenten) Execution-Endpunkte. **Seit Pre-Launch AP1 (Epic #66, #17) robust gegen
-    Teilfehler** (vorher: Abbruch bei JEDEM Fehler, Journal blieb komplett unverändert): der
-    Replay bricht jetzt NUR bei einem reinen Kommunikationsfehler (`isCommunicationFailure()`)
-    ab – die restlichen Einträge bleiben dann für den nächsten Versuch erhalten. Ein FACHLICHER
-    Fehler bzw. „Poison-Entry" (404/403/402, zwischenzeitlich gelöschtes Gerät/Programm, ein
-    nicht mehr auflösbarer Start, ein unbekannter Eintragstyp) wird in eine Dead-Letter-Datei
-    (`offline-journal.jsonl.deadletter`) verschoben, statt den gesamten Replay dauerhaft zu
-    blockieren; der Replay fährt mit dem nächsten Eintrag fort. Erfolgreich übertragene Einträge
-    werden einzeln per `removeEntry` aus dem Journal entfernt (kein pauschales `clear()`), die
-    Paar-Reihenfolge bleibt gewahrt (ein `START` wird erst nachgemeldet, wenn seine Terminierung
-    vorliegt), und das Auflösen der echten Backend-Id ist gegen `null` abgesichert (NPE-Schutz).
-    Die eigentliche Nachmeldung eines offline gebuchten Starts läuft über den privilegierten
-    `ApiClient#replayCreateExecution` (`replay=true`, siehe „Privilegierter Nachbuchungs-Pfad"
-    oben). Weiterhin sicher gegen Doppelverarbeitung, weil das Backend über den
-    `Idempotency-Key`-Header dedupliziert (siehe
-    `ExecutionControllerOfflineReplayTest`/`ClientOfflineReplayIdempotencyE2ETest`). Herleitung
-    siehe ADR 0016.
-- `ClientExecution#isOfflinePendingReplay()` (entkoppelt von `isVirtual()`, das weiterhin
-  ausschließlich die rein lokale „Tür öffnen"-Funktion markiert): eine offline gebuchte,
-  noch nicht nachgemeldete Ausführung referenziert ihren Journal-`START`-Eintrag über den
-  Idempotenz-Schlüssel statt einer echten Backend-Id - `ExecutionFinisher` journaliert ihr
-  Ende/Abbruch deshalb IMMER, ohne einen (unmöglichen) Live-Aufruf zu versuchen.
-- `application.ElwaManager#cardLogin`/`#getDevicesForUser`/`#createExecution` kapseln
-  Online-Pfad (`ApiClient`) + Offline-Fallback (`OfflineGateway`) hinter demselben
-  DTO-Vertrag - `ui/medium/MainFormController`, `ui/medium/.../ConfirmationViewController`
-  und `ui/small/MainFormController` rufen nur noch diese Methoden auf (Wechsel des
-  Zielobjekts, sonst unveränderte Aufrufstellen). `#getManagedDevices()` (zentral für die
-  Geräteliste, seit AP3/AP4) ist ebenso offline-fähig gemacht.
-- **Stufe A** (`executions/ExecutionFinisher#executeAction`): der Live-`finish`/`abort`-
-  Aufruf wird wie bisher versucht; scheitert er an einem reinen Kommunikationsfehler
-  (`ApiException#isCommunicationFailure()`), wird die Ausführung stattdessen lokal
-  abgeschlossen und im Journal hinterlegt (kein Fehler-/Retry-UX) - ein ECHTER fachlicher
-  Fehler (z. B. 409 „bereits beendet") löst weiterhin das bestehende Retry-UX aus.
+  - Kartenlogin/Geräte-Übersicht/Geräte-für-Benutzer/Buchen liefern JEWEILS dieselben Wire-DTOs
+    (`UserDto`/`DeviceOverviewDto`/`DeviceDto`) bzw. dasselbe Fehler-Vokabular
+    (`ApiException`-Status/Slug) wie der Online-Pfad – der komplette UI-/Modellcode bleibt
+    unverändert nutzbar.
+  - Fehlt ein nutzbarer (nicht abgelaufener) Snapshot, wird die URSPRÜNGLICHE `ApiException`
+    unverändert weitergereicht.
+  - `replay()`: überträgt das Journal in Reihenfolge über die idempotenten Execution-Endpunkte.
+    Robust gegen Teilfehler: bricht NUR bei einem reinen Kommunikationsfehler
+    (`isCommunicationFailure()`) ab (die restlichen Einträge bleiben für den nächsten Versuch
+    erhalten); ein FACHLICHER Fehler / „Poison-Entry“ (404/403/402, zwischenzeitlich gelöschtes
+    Gerät/Programm, ein unbekannter Eintragstyp) wandert in eine Dead-Letter-Datei, statt den
+    Replay dauerhaft zu blockieren. Erfolgreich übertragene Einträge werden einzeln per
+    `removeEntry` entfernt; die Paar-Reihenfolge bleibt gewahrt (ein `START` wird erst nachgemeldet,
+    wenn seine Terminierung vorliegt). Die Nachmeldung eines offline gebuchten Starts läuft über
+    `ApiClient#replayCreateExecution` (`replay=true`); Doppelverarbeitung schützt der
+    `Idempotency-Key` (siehe [ADR 0016](../architecture/0016-offline-replay-haertung.md)).
+- **Stufe A** (`executions/ExecutionFinisher#executeAction`): der Live-`finish`/`abort`-Aufruf
+  wird versucht; scheitert er an einem reinen Kommunikationsfehler, wird die Ausführung lokal
+  abgeschlossen und im Journal hinterlegt (kein Fehler-/Retry-UX) – ein echter fachlicher Fehler
+  (z. B. 409) löst weiterhin das bestehende Retry-UX aus.
 - **Periodischer Hintergrundabgleich** (`ElwaManager#initiate`, eigener
-  `ScheduledExecutorService`, Intervall `offline.pollIntervalSeconds` in
-  `elwasys.properties`, Default 20s wie der bestehende `ExecutionManager`-Loop):
-  aktualisiert den Snapshot und ruft `OfflineGateway#replay()` auf, sobald das Backend
-  erreichbar ist. Ist das Backend beim Terminal-Start nicht erreichbar, aber ein noch nicht
-  abgelaufener Snapshot vorhanden, bootet der Client im Offline-Modus statt in den
-  Fehlerzustand (C15) zu gehen (`ElwaManager#initiate`, Reachability-Check).
+  `ScheduledExecutorService`, Intervall `offline.pollIntervalSeconds`, Default 20s): aktualisiert
+  den Snapshot und ruft `OfflineGateway#replay()` auf, sobald das Backend erreichbar ist. Ist das
+  Backend beim Terminal-Start nicht erreichbar, aber ein noch nicht abgelaufener Snapshot
+  vorhanden, bootet der Client im Offline-Modus statt in den Fehlerzustand.
 
-**Restrisiko** (siehe Abschlussbericht/kb/05 „Risiken"): startet der Client selbst NEU,
-während er offline ist UND eine Ausführung gerade läuft, kann diese laufende Ausführung
-nicht wiederaufgenommen werden (der Wiederaufnahme-Scan, Testfall C13, braucht die
-Backend-Antwort auf `GET /api/v1/devices/overview`/`GET /api/v1/executions/{id}` - offline
-liefert der Snapshot dafür bewusst keine Belegungsdaten, siehe `OfflineGateway
-#getDevicesOverview` Javadoc). Das ist ein enger, dokumentierter Sonderfall (Terminal-Neustart
-UND Backend-Ausfall gleichzeitig), kein Verlust bereits gemeldeter Buchungsdaten.
+**Restrisiko**: startet der Client selbst NEU, während er offline ist UND eine Ausführung gerade
+läuft, kann diese laufende Ausführung nicht wiederaufgenommen werden (der Wiederaufnahme-Scan
+braucht die Backend-Antwort auf `GET /api/v1/devices/overview`/`GET /api/v1/executions/{id}` –
+offline liefert der Snapshot bewusst keine Belegungsdaten). Ein enger, dokumentierter Sonderfall
+(Terminal-Neustart UND Backend-Ausfall gleichzeitig), kein Verlust bereits gemeldeter Daten.
 
 #### WebSocket-Endpunkt (`/api/v1/terminal-ws`, Package `backend/.../ws/`)
 
 Liegt bewusst unter `/api/v1/**`, damit dieselbe `TerminalApiSecurityConfig`-Kette auch den
-Handshake absichert – der Handshake ist zunächst eine normale HTTP-Anfrage und durchläuft
-daher den `TerminalTokenAuthenticationFilter` wie jeder REST-Aufruf.
-`TerminalHandshakeInterceptor` übernimmt danach den bereits authentifizierten
-`TerminalPrincipal` aus dem `SecurityContext` in die `WebSocketSession`-Attribute
-(`elwasys.terminal.locationId`/`elwasys.terminal.locationName`).
+Handshake absichert (der Handshake ist zunächst eine normale HTTP-Anfrage und durchläuft den
+`TerminalTokenAuthenticationFilter`). `TerminalHandshakeInterceptor` übernimmt danach den bereits
+authentifizierten `TerminalPrincipal` aus dem `SecurityContext` in die
+`WebSocketSession`-Attribute (`elwasys.terminal.locationId`/`elwasys.terminal.locationName`).
 
 **Nachrichtenformat** (JSON, `TerminalWsMessage`, versioniert über das Feld `v`):
 ```json
 { "v": 1, "type": "HELLO", "id": "<Korrelations-Id>", "payload": { "clientVersion": "0.4.0" } }
 ```
 `id` wird vom Absender vergeben; eine Antwort trägt dieselbe `id` wie die auslösende Anfrage
-(`TerminalWsMessage.inReplyTo`), damit der Absender Anfrage/Antwort zuordnen kann. Unbekannte
-zusätzliche Felder werden ignoriert (Vorwärtskompatibilität).
+(`TerminalWsMessage.inReplyTo`). Unbekannte zusätzliche Felder werden ignoriert
+(Vorwärtskompatibilität).
 
 **Nachrichtentypen** (`TerminalWsMessageType`):
 
@@ -891,847 +564,481 @@ zusätzliche Felder werden ignoriert (Vorwärtskompatibilität).
 |---|---|---|
 | `HELLO` | Terminal → Backend | Server antwortet `HELLO_ACK` |
 | `HELLO_ACK` | Backend → Terminal | Payload `locationId`, `locationName`, `serverTime`, `protocolVersion` |
-| `PING` | beide Richtungen | Empfänger antwortet `PONG` (server-seitig; ein vom Backend gesendetes `PING`, siehe Heartbeat unten, erwartet ein `PONG` vom Terminal) |
+| `PING` | beide Richtungen | Empfänger antwortet `PONG` (das Backend sendet periodisch `PING`, siehe Heartbeat) |
 | `PONG` | beide Richtungen | Aktualisiert intern den „zuletzt gesehen“-Zeitstempel der Verbindung |
-| `STATUS_REQUEST` | beide Richtungen | **Terminal → Backend** (Gerüst, seit AP4): Server antwortet SELBST `STATUS_RESPONSE` (`locationId`, `locationName`, `connectedSince`, `serverTime`) – reiner Verbindungsbeweis, kein echter Terminal-Status. **Backend → Terminal** (seit Phase 4 AP5, additiv): Portal-initiierte Anfrage (`TerminalMaintenanceService#requestStatus`), Antwort vom ECHTEN Terminal mit `clientVersion`/`startupTime`/`runningExecutionIds` (fachliche Referenz `GetStatusRequest`) |
-| `STATUS_RESPONSE` | beide Richtungen | Bis AP4: nur geloggt, kein Handler (die Portal-UI nutzt für den Verbindungsstatus stattdessen direkt `TerminalConnectionRegistry#isConnected`/`#connectedSince` – kein Bedarf für einen Roundtrip für die reine "Verbunden"-Anzeige). **Seit Phase 4 AP5** (additiv): wird, wenn vom Terminal als Antwort auf ein portal-initiiertes `STATUS_REQUEST` gesendet, wie `LOG_RESPONSE`/`RESTART_RESPONSE` über die Korrelations-`id` an die wartende Anfrage zurückgeroutet (fachliche Referenz `GetStatusResponse`) |
-| `LOG_REQUEST` | **Backend → Terminal** (seit Phase 3 AP4) | Portal-initiierte Anfrage (`TerminalMaintenanceService#requestLog`, Admin-Dashboard „Log anzeigen“), kein Payload (fachliche Referenz `GetLogRequest`) |
-| `LOG_RESPONSE` | **Terminal → Backend** (seit Phase 3 AP4) | Antwort auf `LOG_REQUEST`, Payload `{"lines": [...]}` (fachliche Referenz `GetLogResponse`); wird über die Korrelations-`id` an die wartende Anfrage zurückgeroutet |
-| `RESTART_REQUEST` | **Backend → Terminal** (seit Phase 3 AP4) | Portal-initiierte Anfrage (`TerminalMaintenanceService#requestRestart`, Admin-Dashboard „Neustart“), kein Payload (fachliche Referenz `RestartAppRequest`) |
-| `RESTART_RESPONSE` | **Terminal → Backend, NEU seit Phase 3 AP4** | Bestätigung von `RESTART_REQUEST` (im Alt-Protokoll gab es dafür keine Entsprechung – dort „fire-and-forget“; bewusste UX-Verbesserung, der Admin erfährt zuverlässig, ob der Befehl ankam) |
+| `STATUS_REQUEST` | beide Richtungen | Portal-initiiert (Backend → Terminal, `TerminalMaintenanceService#requestStatus`): Antwort vom Terminal mit `clientVersion`/`startupTime`/`runningExecutionIds`. Terminal → Backend: Server antwortet SELBST `STATUS_RESPONSE` (`locationId`, `locationName`, `connectedSince`, `serverTime`) als reiner Verbindungsbeweis |
+| `STATUS_RESPONSE` | beide Richtungen | Antwort des Terminals auf ein portal-initiiertes `STATUS_REQUEST` – über die Korrelations-`id` an die wartende Anfrage zurückgeroutet |
+| `LOG_REQUEST` | Backend → Terminal | Portal-initiierte Anfrage (`TerminalMaintenanceService#requestLog`, Admin-Dashboard „Log anzeigen“), kein Payload |
+| `LOG_RESPONSE` | Terminal → Backend | Antwort auf `LOG_REQUEST`, Payload `{"lines": [...]}`; über die Korrelations-`id` zurückgeroutet |
+| `RESTART_REQUEST` | Backend → Terminal | Portal-initiierte Anfrage (`TerminalMaintenanceService#requestRestart`, Admin-Dashboard „Neustart“), kein Payload |
+| `RESTART_RESPONSE` | Terminal → Backend | Bestätigung von `RESTART_REQUEST` – der Admin erfährt zuverlässig, ob der Befehl ankam |
 | `ERROR` | beide Richtungen | Protokoll-/Verarbeitungsfehler, `payload.reason` (`malformed-message`/`not-implemented`) |
 
-**Phase 3 AP4 (Fernwartungs-Vermittlung, siehe docs/kb/05-migration-plan.md)**: `TerminalMaintenanceService`
-(Package `ws`) ist die Portal-seitige Vermittlung für `LOG_REQUEST`/`RESTART_REQUEST` – sendet mit
-einer selbst vergebenen Korrelations-`id`, merkt sich ein `CompletableFuture` je Anfrage und
-erfüllt es, sobald `TerminalWebSocketHandler` eine `LOG_RESPONSE`/`RESTART_RESPONSE` mit
-passender `inReplyTo`-Id empfängt (`completeIfPending`). **Seit Pre-Launch AP4 (Epic #66, #26)**
-prüft `completeIfPending(senderLocationId, …)` zusätzlich, dass die Antwort vom ADRESSIERTEN
-Standort stammt – eine Antwort mit passender Korrelations-`id` von einem anderen Standort kann
-eine wartende Anfrage nicht mehr fälschlich erfüllen. Ein nicht verbundener Standort
-(`TerminalConnectionRegistry#isConnected` false) liefert SOFORT `TerminalNotConnectedException`
-ohne Nachrichtenversand; eine Anfrage ohne Antwort innerhalb von 10s liefert
-`TerminalRequestTimeoutException`. **Realität in Phase 3**: da sich Alt-Clients laut
-docs/kb/05-migration-plan.md erst in Phase 4 über diesen Kanal verbinden, zeigt die Admin-Dashboard-
-Toolbar in der Praxis fast immer „Nicht verbunden“ – der laut Auftrag geforderte klare Zustand.
-Die Vermittlungslogik selbst ist über einen SIMULIERTEN WS-Client in `TerminalWebSocketTest`
-(JUnit, kein echter Terminal) bewiesen: erfolgreiches Log/Neustart-Roundtrip, sofortiger Fehler
-bei nicht verbundenem Standort, Timeout bei einem verbundenen, aber nicht antwortenden Terminal.
-**Bewusst NICHT portiert**: das Alt-TCP-Protokoll (`Common.maintenance.*`,
-`MaintenanceConnectionManager`/`-Server`) selbst – dieser Cutover ist seit Phase 4 AP5
-vollzogen (der Client spricht das Protokoll nicht mehr, siehe unten); der Code selbst war laut
-Roadmap bis Phase 5 unverändert im Repo geblieben und ist seit Phase 5 AP1 vollständig entfernt
-(`Common.maintenance.*` mit dem Rest von `Common`s Altbestand, `MaintenanceConnectionManager`
-mit dem gesamten Alt-Portal-Modul, siehe docs/kb/05-migration-plan.md, „Entscheidungen").
+**Fernwartungs-Vermittlung**: `TerminalMaintenanceService` (Package `ws`) ist die Portal-seitige
+Vermittlung für `STATUS_REQUEST`/`LOG_REQUEST`/`RESTART_REQUEST` – sendet mit einer selbst
+vergebenen Korrelations-`id`, merkt sich ein `CompletableFuture` je Anfrage und erfüllt es, sobald
+`TerminalWebSocketHandler` die passende Antwort mit passender `inReplyTo`-Id empfängt
+(`completeIfPending`). `completeIfPending(senderLocationId, …)` prüft zusätzlich, dass die Antwort
+vom ADRESSIERTEN Standort stammt – eine Antwort mit passender Korrelations-`id` von einem anderen
+Standort kann eine wartende Anfrage nicht fälschlich erfüllen. Ein nicht verbundener Standort
+(`TerminalConnectionRegistry#isConnected` false) liefert SOFORT `TerminalNotConnectedException`;
+eine Anfrage ohne Antwort innerhalb von 10s liefert `TerminalRequestTimeoutException`.
+`requestStatus` ist bewusst NICHT an einen Portal-UI-Knopf angebunden, bleibt aber als getesteter,
+aufrufbarer Service verfügbar („läuft der Client“/„laufende Ausführungen“ sind über die
+Verbunden-Anzeige bzw. die Geräte-Panels des Admin-Dashboards bereits sichtbar).
 
-**Verbindungsregistry**: `TerminalConnectionRegistry` (in-memory, `Map<locationId, Session>`)
-– ersetzt fachlich die alte `client_ip`/`client_port`-Registrierung in `locations` (siehe
-docs/kb/02-data-model.md). Genau eine aktive Session pro Standort: verbindet sich ein Terminal
-erneut, wird die alte Session geschlossen und ersetzt.
+**Verbindungsregistry**: `TerminalConnectionRegistry` (in-memory, `Map<locationId, Session>`) –
+genau eine aktive Session pro Standort: verbindet sich ein Terminal erneut, wird die alte Session
+geschlossen und ersetzt. Die Admin-Dashboard-Toolbar zieht „Verbunden“/„Verbunden seit“ direkt aus
+`isConnected`/`connectedSince` (kein Roundtrip nötig).
 
 **Heartbeat**: `TerminalHeartbeatScheduler` (`@Scheduled(fixedRate = 30_000)`) sendet allen
 verbundenen Terminals ein `PING` und schließt Verbindungen, deren letztes `PONG` länger als 90
 Sekunden zurückliegt. `@EnableScheduling` sitzt auf `TerminalWebSocketConfig`, die bewusst
-`@Profile("!token-cli")` trägt: Spring Boots Standard-Scheduler-Thread ist kein Daemon-Thread
-und hätte den einmaligen `TerminalTokenCliRunner`-Prozess sonst nie beendet (beim manuellen
-Testen der CLI gefunden und behoben).
+`@Profile("!token-cli")` trägt (Spring Boots Standard-Scheduler-Thread ist kein Daemon-Thread und
+hätte den einmaligen `TerminalTokenCliRunner`-Prozess sonst nie beendet).
 
-**Tests**: `TerminalWebSocketTest` nutzt den JDK-eigenen `java.net.http`-WebSocket-Client
-(keine zusätzliche Testabhängigkeit – derselbe Client, den der Terminal laut
-docs/kb/05-migration-plan.md ohnehin nutzen soll) gegen einen echten, per
-`@SpringBootTest(webEnvironment=RANDOM_PORT)` gestarteten Server: Handshake ohne/mit
-ungültigem Token wird abgelehnt, HELLO/HELLO_ACK, PING/PONG, STATUS_REQUEST/STATUS_RESPONSE
-und ein unimplementierter Typ (→ `ERROR`) sind grün.
-
-**Phase 4 AP5 (Fernwartung umgedreht, 2026-07-21, siehe docs/kb/05-migration-plan.md)**: der
-Client-Raspi verbindet sich jetzt tatsächlich (`ws/TerminalWebSocketClient`, siehe
-docs/kb/03-modules.md Abschnitt „Client-Raspi") und bedient `LOG_REQUEST`/`RESTART_REQUEST` sowie -
-additiv im Backend ergänzt - auch `STATUS_REQUEST` (`TerminalMaintenanceService#requestStatus`,
-neue Methode, analog zu `#requestLog`/`#requestRestart`; `TerminalWebSocketHandler` routet ein
-vom Terminal gesendetes `STATUS_RESPONSE` jetzt genauso wie `LOG_RESPONSE`/`RESTART_RESPONSE`
-über `completeIfPending` zurück, statt es nur zu loggen). Die Admin-Dashboard-Toolbar
-(„Verbunden"/„Verbunden seit", Log/Neustart-Knöpfe) ist dadurch unverändert (nutzt weiterhin
-direkt `isConnected`/`connectedSince`/`requestLog`/`requestRestart`) - `requestStatus` ist
-bewusst NICHT an einen neuen Portal-UI-Knopf angebunden (kein Auftrag dafür; „läuft der
-Client"/„laufende Ausführungen" sind über die bestehende Verbunden-Anzeige bzw. die
-Geräte-Panels des Admin-Dashboards - Testfall P20, seit Phase 3 AP3, unabhängig vom
-Maintenance-Kanal - bereits sichtbar), bleibt aber als getesteter, aufrufbarer Service für
-künftige Bedarfe verfügbar. Die eigentliche End-to-End-Abdeckung mit einem ECHTEN,
-verbundenen Client - inkl. eines echten Restart-Roundtrips - liefert die neue
-`TerminalMaintenanceRealClientE2ETest` (eigener Test, siehe „Nachfolger der
-Cross-Component-Suite" unten und docs/kb/06-ui-tests.md); `TerminalWebSocketTest` bleibt mit einem
-zusätzlichen `requestStatus`-Test (SIMULIERTER Terminal, wie schon für Log/Restart) ergänzt.
-
-**Nachfolger der Cross-Component-Suite (Testplan P21/P22, Phase 4 AP5)**:
-`backend/src/test/java/.../ws/TerminalMaintenanceRealClientE2ETest.java` ersetzt
-`Client-Raspi/src/test/.../ClientMaintenanceConnectionE2ETest.java` (Alt-TCP-Protokoll,
-entfernt). Bootet den Backend-Spring-Kontext SELBST (`@SpringBootTest(webEnvironment=
-RANDOM_PORT)`, wie `TerminalWebSocketTest`), damit `TerminalMaintenanceService` als ECHTE,
-Spring-verwaltete Bean direkt aufgerufen werden kann - exakt die Portal-seitige Vermittlung,
-die `AdminDashboardView` im Produktivbetrieb verwendet, nur ohne Browser-UI-Umweg. Der
-"Client" ist dagegen kein Test-Double, sondern der ECHTE, gepackte
-`raspi-client-*-jar-with-dependencies.jar`, als Subprozess gestartet (`-dry`, kein Gateway
-nötig) und über `--module-path`/`--add-modules` mit den JavaFX-Plattform-Modulen aus dem
-lokalen Maven-Repo versorgt (ein reines `java -jar` scheitert auf einem Standard-JDK ohne das
-mit „JavaFX runtime components are missing" - anders als auf den produktiv eingesetzten
-`bellsoft-java21-runtime-full`-Installationen, die JavaFX bereits als Plattform-Modul
-mitbringen, siehe `Client-Raspi/run-cross-component-e2e.sh`; die Produktions-Main-Class/der
-Startmechanismus selbst ist davon unberührt). Drei Testfälle (Reihenfolge über
-`@TestMethodOrder`): Status, Log, Restart. Der Restart-Test verifiziert NUR die echte
-`RESTART_RESPONSE`-Bestätigung des Terminals plus dass die WebSocket-Verbindung den Neustart
-überlebt (`TerminalWebSocketClient#onClose` baut bei `restart=true` bewusst nicht ab) und
-danach weiterhin Anfragen beantwortet - er tötet den Subprozess NICHT und beobachtet keinen
-OS-Prozess-Neustart ("Neustart" bedeutet in dieser Anwendung seit jeher ein In-Prozess-
-Reinitialisieren des Hauptfensters, `ElwaManager#restart()`, kein Prozess-Neustart - identischer
-Prüfumfang wie die entfernte Alt-Suite). Harness: `Client-Raspi/run-cross-component-e2e.sh`
-(gleicher Dateiname/Pfad wie zuvor, komplett neuer Inhalt) baut den Client-Jar,
-bereitet eine frische, leere Postgres-Datenbank vor (Flyway migriert sie über den Testkontext
-- kein manuelles Seeding wie zuvor nötig) und startet die Suite unter `xvfb-run` (der reale
-Client-Subprozess braucht ein Display). `TerminalMaintenanceRealClientE2ETest` ist über
-`<excludes>` in `backend/pom.xml` bewusst NICHT Teil des normalen `mvn test`/
-`run-backend-tests.sh`-Laufs (braucht den gepackten Client-Jar + Xvfb, analog dazu, wie
-`backend/e2e/` [Playwright] ebenfalls nicht Teil davon ist) - `-Dtest=...` in
+**Tests**: `TerminalWebSocketTest` nutzt den JDK-eigenen `java.net.http`-WebSocket-Client gegen
+einen echten, per `@SpringBootTest(webEnvironment=RANDOM_PORT)` gestarteten Server (Handshake
+ohne/mit ungültigem Token abgelehnt, HELLO/HELLO_ACK, PING/PONG, STATUS_REQUEST/STATUS_RESPONSE,
+ein unimplementierter Typ → `ERROR`, sowie die Fernwartungs-Vermittlung mit einem SIMULIERTEN
+WS-Client: Status-/Log-/Neustart-Roundtrip, sofortiger Fehler bei nicht verbundenem Standort,
+Timeout bei einem verbundenen, aber nicht antwortenden Terminal). Die End-to-End-Abdeckung mit
+einem ECHTEN, verbundenen Client liefert `TerminalMaintenanceRealClientE2ETest`
+(`@SpringBootTest(webEnvironment=RANDOM_PORT)`, ruft `TerminalMaintenanceService` als echte Bean
+auf; der „Client“ ist der echte, gepackte `raspi-client-*-jar-with-dependencies.jar` als Subprozess
+mit `-dry`, über `--module-path`/`--add-modules` mit den JavaFX-Plattform-Modulen versorgt). Drei
+Testfälle (`@TestMethodOrder`): Status, Log, Restart. Der Restart-Test verifiziert die echte
+`RESTART_RESPONSE`-Bestätigung plus dass die WebSocket-Verbindung den Neustart überlebt
+(`onClose(restart=true)` baut nicht ab) und danach weiter antwortet – „Neustart“ ist ein
+In-Prozess-Reinitialisieren (`ElwaManager#restart()`), kein OS-Prozess-Neustart. Harness:
+`Client-Raspi/run-cross-component-e2e.sh` (baut den Client-Jar, bereitet eine frische Postgres-DB
+vor, Flyway migriert über den Testkontext, startet die Suite unter `xvfb-run`).
+`TerminalMaintenanceRealClientE2ETest` ist über `<excludes>` in `backend/pom.xml` bewusst NICHT
+Teil des normalen `mvn test`/`run-backend-tests.sh`-Laufs; `-Dtest=...` in
 `run-cross-component-e2e.sh` überschreibt den Ausschluss gezielt.
 
 **Tests der REST-API/Token-Auth**: `TerminalApiSecurityTest` (401 bei fehlendem/unbekanntem/
 widerrufenem Token, 200 bei gültigem, Terminal-Token gewährt KEINEN Zugriff auf die
-AP3-Catch-all-Kette), `TerminalTokenServiceTest` (Erzeugung/Prüfung/Rotation/Widerruf,
-Hash-statt-Klartext), `CardLoginControllerTest`, `DeviceControllerTest` (inkl. Standort-Scope,
-Programm-Filterung, `occupied`/`usableByUser`), `ExecutionControllerTest` (voller
-Lebenszyklus + alle Fehlerfälle, orientiert an C9/C16). 44 neue Tests, siehe
-docs/kb/05-migration-plan.md (Änderungslog, AP4) für die Gesamtzahl.
+Catch-all-Kette), `TerminalTokenServiceTest` (Erzeugung/Prüfung/Rotation/Widerruf,
+Hash-statt-Klartext), `CardLoginControllerTest`, `DeviceControllerTest` (Standort-Scope,
+Programm-Filterung, `occupied`/`usableByUser`), `ExecutionControllerTest` (voller Lebenszyklus +
+alle Fehlerfälle), `ExecutionControllerNotificationTest`/`ExecutionControllerOfflineReplayTest`
+(Idempotenz-/Replay-Fallstricke).
 
-**Build-Besonderheit**: `backend/pom.xml` setzt `maven.compiler.parameters=true` (nur für
-dieses Modul) – ohne dieses Flag wirft Spring MVC zur Laufzeit eine
-`IllegalArgumentException` für jeden `@RequestParam`/`@PathVariable` ohne explizit
-angegebenen Namen („parameter name information not available via reflection“); **Vorsicht
-bei künftigen `pom.xml`-Änderungen**: der Maven-Compiler-Plugin erkennt eine reine
-Properties-/Plugin-Konfigurationsänderung nicht immer als Grund für eine Neukompilierung
-(inkrementeller Compiler) – nach einer solchen Änderung ggf. `mvn clean` davor schalten,
-sonst bleiben alte, ohne `-parameters` kompilierte Klassen im `target`-Verzeichnis liegen
-(in AP4 tatsächlich aufgetreten, siehe docs/kb/05-migration-plan.md).
+### Benachrichtigungsdienst (Package `backend/.../notification/`)
 
-### Benachrichtigungsdienst (AP5, 2026-07-20, Package `backend/.../notification/`)
+1:1-Portierung der Benachrichtigungslogik aus dem Alt-Code: das Ende einer Programmausführung
+(regulär oder Abbruch) löst E-Mail und Pushover aus; zusätzlich verschickt das Portal
+Passwort-Reset-Mails. Aktuelle Kanäle und Empfängerregeln:
 
-1:1-Portierung der Benachrichtigungslogik aus `ExecutionFinisher#executeAction()` im
-Client-Alt-Code (`Client-Raspi/.../executions/ExecutionFinisher.java`): dort löst das
-Ende einer Programmausführung (regulär oder Abbruch) bis zu drei Benachrichtigungskanäle
-aus. Vollständiges Alt-Inventar und Portierungsstand:
-
-| Auslöser (Alt-Code) | Kanal | Empfängerregel (Alt-Code) | Portiert? |
+| Auslöser | Kanal | Empfängerregel | Methode |
 |---|---|---|---|
-| `ExecutionFinisher`: Programm regulär beendet | E-Mail (`Utilities#sendEmail`, commons-mail `SimpleEmail`) | `user.getEmailNotification()` (Spalte `email_notification`) | **Ja** – `NotificationService#notifyExecutionFinished` |
-| `ExecutionFinisher`: Programm regulär beendet | Pushover (`net.pushover.client`) | `user.getPushoverUserKey()` nicht leer (Spalte `pushover_user_key`) | **Ja** |
-| `ExecutionFinisher`: Ausführung abgebrochen | E-Mail | wie oben | **Ja** – `NotificationService#notifyExecutionAborted` |
-| `ExecutionFinisher`: Ausführung abgebrochen | Pushover | wie oben | **Ja** |
-| `ExecutionFinisher`: beide obigen Fälle | elwaApp-Push (`https://api.ionic.io/push/notifications`) | `user.isPushEnabled()` (Spalte `push_notification`, **nicht** `pushover_user_key`!) und `pushIonicId` gesetzt | **Nein** – mobile App laut Auftraggeber nicht relevant, Reste (`app_id`) in Phase 5 AP4 entfernt; Auftrag ist zudem explizit auf „SMTP + Pushover" begrenzt |
-| Portal `PasswordForgotWindow`: „Passwort vergessen" | E-Mail (dieselbe `Utilities#sendEmail`) | Nutzer per E-Mail-Adresse gefunden | **Ja** (Phase 3 AP4) – `NotificationService#sendPasswordResetEmail`, aufgerufen von `PasswordResetService#requestReset`; eigener Schalter `elwasys.password-reset.enabled` (Default **AN**, siehe unten) statt `elwasys.notifications.enabled` |
-| Portal `UserWindow`: Admin setzt neues Passwort | E-Mail | Admin-Aktion im Nutzer-Fenster | **Ja** (Phase 3 AP4) – `NotificationService#sendNewPasswordEmail`, aufgerufen von `PasswordResetService#resetPasswordByAdminAndNotify` (Checkbox „Sende dem Benutzer per Email ein neues Passwort" im `UserFormDialog`); derselbe Schalter wie oben |
+| Programm regulär beendet | E-Mail | `user.emailNotification` (Spalte `email_notification`) | `NotificationService#notifyExecutionFinished` |
+| Programm regulär beendet | Pushover | `pushover_user_key` nicht leer | dieselbe Methode |
+| Ausführung abgebrochen | E-Mail / Pushover | wie oben | `NotificationService#notifyExecutionAborted` |
+| „Passwort vergessen“ (Selbstbedienung) | E-Mail | Nutzer per E-Mail-Adresse gefunden | `NotificationService#sendPasswordResetEmail` (via `PasswordResetService#requestReset`) |
+| Admin setzt neues Passwort | E-Mail | Admin-Aktion im Nutzer-Dialog | `NotificationService#sendNewPasswordEmail` (via `PasswordResetService#resetPasswordByAdminAndNotify`) |
 
-**Wichtiger Fallstrick** (im Code dokumentiert, siehe `NotificationService`-Javadoc):
-`users.push_notification` (Entity-Feld `UserEntity#isPushNotification()`) ist im Alt-Code
-das Opt-in für den **nicht** portierten elwaApp/Ionic-Kanal, nicht für Pushover. Das
-Pushover-Opt-in ergibt sich ausschließlich daraus, ob `pushover_user_key` gesetzt ist.
+Der elwaApp/Ionic-Push-Kanal des Alt-Codes ist bewusst NICHT umgesetzt (mobile App laut
+Auftraggeber nicht relevant; Auftrag explizit auf „SMTP + Pushover“ begrenzt).
 
-**Passwort-Reset-Mails (Phase 3 AP4) hängen an einem EIGENEN Schalter, nicht an
-`elwasys.notifications.enabled`**: `elwasys.password-reset.enabled` (Default **`true`**, siehe
-`PasswordResetProperties`). Begründung (siehe auch docs/kb/05-migration-plan.md, „Entscheidungen"):
-`elwasys.notifications.enabled` schützt vor einem *Doppelversand* – im Parallelbetrieb
-verschickt Client-Raspi weiterhin selbst Ausführungs-Benachrichtigungen für JEDES
-Programmende, ein zusätzlicher Versand durch das Backend für dasselbe automatische Ereignis
-wäre doppelt. Ein Passwort-Reset ist dagegen KEIN automatisches, wiederkehrendes Ereignis,
-sondern eine explizite, interaktive Aktion einer einzelnen Portal-Session (Klick auf „Passwort
-vergessen?" bzw. Admin setzt ein neues Passwort) – es gibt keinen Alt-Code-Pfad, der auf
-dasselbe Backend-Ereignis reagiert und doppelt verschicken würde. Der Schalter existiert
-trotzdem als Ops-Bremse (z.B. um das Backend ohne konfigurierten SMTP-Server sauber laufen zu
-lassen). Nutzt denselben `spring.mail.*`-Transport wie oben.
+**Fallstrick** (im `NotificationService`-Javadoc dokumentiert): `users.push_notification`
+(Entity-Feld `isPushNotification()`) ist das Opt-in für den nicht umgesetzten elwaApp-Kanal, nicht
+für Pushover. Das Pushover-Opt-in ergibt sich ausschließlich daraus, ob `pushover_user_key` gesetzt
+ist.
 
 **Komponenten**:
 - `NotificationsProperties` (`@ConfigurationProperties(prefix = "elwasys.notifications")`):
-  `enabled` (Default **`false`**, kritisch – siehe unten), `smtp.sender-address`,
-  `pushover.api-token`, `pushover.base-url` (für Tests überschreibbar).
-- `NotificationService`: `notifyExecutionFinished`/`notifyExecutionAborted` bauen Betreff/
-  Kurztext/Langtext wortgleich zum Alt-Code (deutsch, inkl. eines Alt-Code-Tippfehlers/
-  Leerzeichens, das bewusst 1:1 übernommen wurde) und lösen darauf basierend E-Mail/
-  Pushover aus. Versandfehler werden geloggt, brechen aber nie den Aufruf ab (wie im
-  Alt-Code, dort `catch (EmailException/PushoverException)`, hier bewusst breiter
-  `catch (Exception)`, siehe Klassen-Javadoc).
-- E-Mail-Transport: `spring-boot-starter-mail`/`JavaMailSender`, Konfiguration über die
-  Standard-Properties `spring.mail.*` (Mapping zu den Alt-`ConfigurationManager`-Feldern
-  `smtp.server`/`-port`/`-user`/`-password`/`-useSSL` in `application.yml` dokumentiert).
-- Pushover-Transport: `PushoverClient` (`java.net.http`, kein Fremd-Client) – Formular-
-  Request 1:1 aus dem Bytecode der Alt-Bibliothek `com.github.sps.pushover.net:
-  pushover-client:1.0.0` hergeleitet (Felder `token/user/message/title/url/url_title/
-  priority`, `url`/`url_title` sind wie im Alt-Aufruf fest verdrahtet, nicht konfigurierbar).
+  `enabled` (Default **`false`**), `smtp.sender-address`, `pushover.api-token`,
+  `pushover.base-url` (für Tests überschreibbar).
+- `NotificationService`: baut Betreff/Kurztext/Langtext wortgleich zum Alt-Code (deutsch, inkl.
+  eines bewusst 1:1 übernommenen Alt-Code-Tippfehlers) und löst E-Mail/Pushover aus. Versandfehler
+  werden geloggt, brechen aber nie den Aufruf ab.
+- E-Mail-Transport: `spring-boot-starter-mail`/`JavaMailSender`, Konfiguration über
+  `spring.mail.*` (Mapping zu den Alt-`smtp.*`-Feldern in `application.yml` dokumentiert).
+- Pushover-Transport: `PushoverClient` (`java.net.http`, kein Fremd-Client) – Formular-Request 1:1
+  aus dem Bytecode der Alt-Bibliothek hergeleitet (Felder `token/user/message/title/url/url_title/
+  priority`; `url`/`url_title` wie im Alt-Aufruf fest verdrahtet).
+- `ExecutionNotificationEvent`/`ExecutionNotificationListener` – Entkopplung über
+  `@TransactionalEventListener(AFTER_COMMIT)` (siehe „Benachrichtigung entkoppelt“ oben).
 
-**Scharfschaltung (kritisch, Doppelversand-Risiko)**: `elwasys.notifications.enabled`
-(Env `ELWASYS_NOTIFICATIONS_ENABLED`) ist per Default **aus**. Seit Phase 4 AP3 ist der
-Dienst an den API-Execution-Lebenszyklus angebunden: `ExecutionController#finish`/`#abort`
-lösen die Benachrichtigung aus (seit Pre-Launch AP3 (Epic #66, #36) entkoppelt über ein
-`ExecutionNotificationEvent` + `ExecutionNotificationListener` mit
-`@TransactionalEventListener(AFTER_COMMIT)` statt eines direkten In-Transaktions-Aufrufs, siehe
-REST-Abschnitt oben). Der Controller/Listener kennt den Schalter nicht, das Gating bleibt
-vollständig in `NotificationService#dispatch` gekapselt - solange das Flag AUS bleibt, bleibt
-jeder Aufruf ein wirkungsloser No-Op, siehe `dispatch`-Javadoc. **Update AP4 (2026-07-21, Client-Cutover
-abgeschlossen)**: der Alt-Versandcode ist jetzt tatsächlich aus `ExecutionFinisher` entfernt
-(Commons-Email/Pushover-Client-Deps raus aus `Client-Raspi/pom.xml`, siehe
-docs/kb/05-migration-plan.md, Änderungslog „Phase 4 AP4“) - das vormals beschriebene
-Doppelversand-Risiko besteht damit nicht mehr. Das Backend-Flag selbst bleibt trotzdem
-bewusst per Code-Default AUS (abgesichert durch `NotificationsPropertiesDefaultTest`); das
-tatsächliche Scharfschalten (`ELWASYS_NOTIFICATIONS_ENABLED=true` in der jeweiligen
-Deployment-Konfiguration, z. B. `deploy/compose/.env`) ist ein **operativer** Schritt, der
-laut Roadmap erst bei der eigentlichen Produktivumschaltung (Phase 6) ansteht, wenn reale
-Terminals im Feld auf den neuen Unterbau umgestellt werden - in dieser
-Entwicklungs-/Sandbox-Umgebung bleibt es aus. Bei einem idempotenten Replay derselben
-Execution-Meldung (siehe „API-Erweiterungen (AP3)" oben) wird die Benachrichtigung NICHT
-erneut ausgelöst, weil die komplette fachliche Aktion (inkl. Benachrichtigung) bei einem
-Replay gar nicht erst erneut ausgeführt wird. Analog zu `elwasys.auth.rehash-on-login`
-(AP3 der Auth, nicht zu verwechseln mit dieser Phase-4-AP3).
+**Scharfschaltung** (kritisch, Doppelversand-Risiko): `elwasys.notifications.enabled` (Env
+`ELWASYS_NOTIFICATIONS_ENABLED`) ist per Default **aus** (abgesichert durch
+`NotificationsPropertiesDefaultTest`). Der Controller/Listener kennt den Schalter nicht; das Gating
+bleibt vollständig in `NotificationService#dispatch` gekapselt – solange das Flag AUS bleibt, ist
+jeder Aufruf ein wirkungsloser No-Op. Das tatsächliche Scharfschalten
+(`ELWASYS_NOTIFICATIONS_ENABLED=true` in der Deployment-Konfiguration, z. B.
+`deploy/compose/.env`) ist ein operativer Schritt der Produktivumschaltung. Bei einem idempotenten
+Replay derselben Execution-Meldung wird die Benachrichtigung NICHT erneut ausgelöst (die fachliche
+Aktion wird bei einem Replay gar nicht erneut ausgeführt). Siehe
+[ADR 0009](../architecture/0009-zentraler-benachrichtigungsdienst-hinter-flag.md).
 
-**Actuator-Nebenwirkung**: `spring-boot-starter-mail` auf dem Klassenpfad aktiviert
-automatisch einen Mail-Health-Indikator, der ohne konfigurierten SMTP-Server den
-Health-Endpoint auf `DOWN` zieht – `management.health.mail.enabled: false` in
-`application.yml` deaktiviert ihn (kein aussagekräftiges Signal, solange der Dienst
-per Default aus ist).
+**Passwort-Reset-Mails hängen an einem EIGENEN Schalter**: `elwasys.password-reset.enabled` (Default
+**`true`**, `PasswordResetProperties`), NICHT `elwasys.notifications.enabled`. Begründung: der
+`notifications`-Schalter schützt vor einem Doppelversand bei automatischen, wiederkehrenden
+Ereignissen (Programmende) – ein Passwort-Reset ist dagegen eine explizite, interaktive Aktion, für
+die es keinen zweiten sendenden Pfad gibt. Der Schalter existiert als Ops-Bremse (Backend ohne
+konfigurierten SMTP-Server sauber betreiben). Nutzt denselben `spring.mail.*`-Transport.
 
-**Tests** (11 neu, Package `backend/.../notification/`):
-- `NotificationServiceEmailTest`: echter lokaler Test-SMTP (GreenMail, `greenmail-junit5`
-  Testabhängigkeit) – Betreff/Body/Empfänger/Absender byte-genau geprüft (Betreff/Body als
-  wörtliches Zitat aus dem Alt-Code kommentiert, da `Utilities#sendEmail` sich ohne echte
-  `DataManager`/DB-Anbindung nicht isoliert mit einer echten E-Mail-Adresse aufrufen lässt –
-  anders als die SHA1-Parität in AP3). Deckt auch Opt-in aus und Versandfehler ab.
-- `NotificationServicePushoverTest`: eingebetteter JDK-`HttpServer` als Mock – prüft
-  Methode/Pfad/Content-Type/alle Formularfelder inkl. der fest verdrahteten `url`/
-  `url_title`/`priority`-Werte; eigener Regressionstest für den `push_notification`-
-  Fallstrick oben.
-- `NotificationsPropertiesDefaultTest`: voller Spring-Kontext, beweist `enabled=false` ohne
-  gesetzte Umgebungsvariable.
+**Actuator-Nebenwirkung**: `spring-boot-starter-mail` aktiviert automatisch einen
+Mail-Health-Indikator, der ohne konfigurierten SMTP-Server den Health-Endpoint auf `DOWN` zieht –
+`management.health.mail.enabled: false` in `application.yml` deaktiviert ihn.
 
-### Betrieb: Health-Indicators & geplante Aufgaben (Pre-Launch AP6, Epic #66)
+**Tests** (Package `backend/.../notification/`): `NotificationServiceEmailTest` (echter lokaler
+Test-SMTP GreenMail, Betreff/Body/Empfänger/Absender byte-genau), `NotificationServicePushoverTest`
+(eingebetteter JDK-`HttpServer` als Mock – Methode/Pfad/Content-Type/alle Formularfelder inkl. der
+fest verdrahteten Werte; Regressionstest für den `push_notification`-Fallstrick),
+`NotificationsPropertiesDefaultTest` (voller Spring-Kontext, beweist `enabled=false`).
+
+### Betrieb: Health-Indicators & geplante Aufgaben
 
 **Betriebs-Health-Indicators**: zwei fachliche Actuator-Indicators liefern ein Alerting-Signal
-über den reinen „läuft der Prozess"-Zustand hinaus – `TerminalConnectivityHealthIndicator`
-(sind die erwarteten Terminals verbunden?) und `ExpiredExecutionsHealthIndicator` (stauen sich
-nicht abgerechnete, abgelaufene Ausführungen?). Beide hängen bewusst in einer EIGENEN
-Health-Gruppe `/actuator/health/operational` (für das Alerting) – getrennt von den für die
-Orchestrierung gedachten Gruppen `/actuator/health/liveness` + `/actuator/health/readiness`, die
-ein fachliches Alerting-Signal NICHT enthalten sollen (sonst würde ein Container-Orchestrator
-z. B. bei fehlenden Terminal-Verbindungen unnötig neu starten). Alle drei Gruppen liegen unter
-der Health-`permitAll()` von `SecurityConfig` (siehe Auth-Abschnitt oben).
+über den reinen „läuft der Prozess“-Zustand hinaus – `TerminalConnectivityHealthIndicator` (sind
+die erwarteten Terminals verbunden?) und `ExpiredExecutionsHealthIndicator` (stauen sich nicht
+abgerechnete, abgelaufene Ausführungen?). Beide hängen in einer EIGENEN Health-Gruppe
+`/actuator/health/operational` (für das Alerting) – getrennt von den für die Orchestrierung
+gedachten Gruppen `/actuator/health/liveness` + `/actuator/health/readiness`, die ein fachliches
+Alerting-Signal NICHT enthalten (sonst würde ein Orchestrator z. B. bei fehlenden
+Terminal-Verbindungen unnötig neu starten). Alle drei Gruppen liegen unter der Health-`permitAll()`
+von `SecurityConfig`.
 
 **`IdempotencyKeyRetentionScheduler`**: täglicher Purge-Lauf, der abgelaufene Einträge aus
-`terminal_idempotency_keys` (siehe „Idempotenz + Replay" oben) entfernt – Default-Aufbewahrung
-30 Tage (konfigurierbar). Hält die Idempotenz-Tabelle beschränkt, ohne die kurzfristige
-Replay-Sicherheit anzutasten.
+`terminal_idempotency_keys` entfernt – Default-Aufbewahrung 30 Tage (konfigurierbar). Hält die
+Idempotenz-Tabelle beschränkt, ohne die kurzfristige Replay-Sicherheit anzutasten.
 
-### Portal-UI (Vaadin Flow, Phase 3 AP1–AP6, 2026-07-20/21, Package `backend/.../ui/`)
+### Portal-UI (Vaadin Flow, Package `backend/.../ui/`)
 
-**AP6 (2026-07-21, letztes Arbeitspaket der Phase-3-Roadmap)**: Feature-Parität mit dem
-Alt-Portal ist jetzt durch eine portierte Playwright-Suite (`backend/e2e/`, P1–P20
-vollständig inkl. dem zuvor nie umgesetzten P11) nachgewiesen – Details, Selektor-Strategie
-und Test-für-Test-Status in docs/kb/06-ui-tests.md. Ein dabei gefundener kleiner, aber echter
-1:1-Abweichungs-Bug (`LoginView`: „Passwort vergessen?"-Knopf blieb beim Vaadin-Default
-„Forgot password" hängen) wurde behoben. Das Alt-Portal-Modul war damit als E2E-Ziel
-stillgelegt (siehe Abschnitt „Portal" oben) und ist seit Phase 5 AP1 vollständig aus dem Repo
-entfernt.
-
-Admin-Portal als Vaadin-Flow-UI im Backend (siehe docs/kb/05-migration-plan.md, Zielarchitektur
-„Portal ist Teil des Backends“) – AP1 lieferte das Grundgerüst (Login/Layout/Navigation/
-Rollen-Guard, siehe unten), AP2 füllte die 5 Stammdaten-Views (Benutzer, Benutzergruppen,
-Geräte, Programme, Standorte) mit echten Listen + CRUD-Dialogen (siehe Abschnitt
-„Stammdaten-Views (AP2)“), AP3 füllte Admin-Dashboard, Guthaben-Aufladen/-Historie und
-UsersDashboard (siehe Abschnitt „Dashboard, Guthaben, UsersDashboard (AP3)“), AP4 ergänzte die
-restlichen Dialoge/Funktionen – eigenes Passwort ändern (P16), Passwort per Email
-zurücksetzen (P19, Selbstbedienung + Admin-Reset), UserSettings (P17), ExpiredExecutions
-sowie Log-Viewer/Fernwartung über den bestehenden WebSocket-Kanal – siehe Abschnitt „Dialoge/
-Funktionen (AP4)". **AP5 ergänzt Live-Updates zwischen Sessions** (Domain-Events + Vaadin
-Push, ersetzt die `events/`-Listener + Vaadin-Push-Mechanik des Alt-Portals) – siehe Abschnitt
-„Live-Updates zwischen Sessions (AP5)“ am Ende dieses Kapitels.
+Admin-Portal als Vaadin-Flow-UI im Backend (siehe
+[ADR 0003](../architecture/0003-portal-als-vaadin-flow-im-backend.md)). Feature-Parität mit dem
+Alt-Portal ist über eine Playwright-Suite (`backend/e2e/`, P1–P20) nachgewiesen – Details,
+Selektor-Strategie und Test-für-Test-Status in [06-ui-tests.md](06-ui-tests.md).
 
 **Abhängigkeiten**: `vaadin-bom`/`vaadin-spring-boot-starter` (Version **24.10.8**) per
-BOM-Import, analog zum Spring-Boot-BOM (siehe AP1 oben). Zwei Ausschlüsse aus
-`vaadin-spring-boot-starter`:
-- `hilla` (TypeScript/React-Gegenstück zu Flow – nicht Auftrag, siehe docs/kb/05
-  „Technologie-Entscheidungen“: „Vaadin Flow 24“). Ohne diesen Ausschluss wirft
-  `com.vaadin.flow.spring.security.RequestUtil#isAllowedHillaView` beim Auswerten der
-  Sicherheitskette eine `IllegalStateException` in jedem Testkontext ohne echten,
-  Servlet-Container-gebootstrappten `ServletContainerInitializer` (u. a. `SecurityConfigTest`,
-  `AbstractApiIT`-Unterklassen, `webEnvironment=MOCK`) – hätte die komplette Backend-Testsuite
-  gebrochen.
-- `collaboration-engine` (kommerzielles Vaadin-Pro-Add-on für Echtzeit-Kollaboration, hier
-  nirgends genutzt) – sauberer Ausschluss statt funktionslosem Mitschleppen.
+BOM-Import. Zwei Ausschlüsse aus `vaadin-spring-boot-starter`:
+- `hilla` (TypeScript/React-Gegenstück zu Flow – nicht Auftrag). Ohne diesen Ausschluss wirft
+  `RequestUtil#isAllowedHillaView` beim Auswerten der Sicherheitskette eine `IllegalStateException`
+  in jedem Testkontext ohne echten, Servlet-Container-gebootstrappten
+  `ServletContainerInitializer` (u. a. `SecurityConfigTest`, `AbstractApiIT`-Unterklassen,
+  `webEnvironment=MOCK`).
+- `collaboration-engine` (kommerzielles Vaadin-Pro-Add-on, hier nirgends genutzt).
 
-**Wichtiger Befund – Vaadin-Lizenzpflicht im Dev-Modus** (siehe docs/kb/05-migration-plan.md,
-Risikotabelle, für die vollständige Herleitung und den Klärungsbedarf mit dem Auftraggeber):
-unabhängig von den beiden Ausschlüssen oben verlangt Vaadin 24.10.x beim ersten
-`VaadinServlet#init()` im Dev-Modus einen Online-Lizenzcheck gegen vaadin.com ("This Vaadin
-version requires an extended maintenance subscription" – die 24-Linie gilt inzwischen als
-kostenpflichtige „Extended Maintenance“). Diese Sandbox-/Build-Umgebung hat keinen
-Netzwerkzugriff auf vaadin.com; `mvn spring-boot:run` (Dev-Modus) scheitert hier daher beim
-Servlet-Start, ein erzwungener Produktionsmodus findet mangels gebautem
-`-Pproduction`-Bundle kein Frontend. Die automatisierte Testsuite ist davon nicht betroffen
-(erzwingt `vaadin.productionMode=true` für alle Tests, siehe unten – kein Test ruft eine
-Vaadin-UI-Route über einen echten Servlet-Container auf).
-
-**Update AP2 (2026-07-20, siehe docs/kb/05-migration-plan.md, Änderungslog „Phase 3 AP2“)**: der
-Produktionsmodus-Build (`mvn -f backend/pom.xml package -Pproduction`) wurde als
-De-Risking-Auftrag geprüft und läuft in dieser Sandbox tatsächlich grün durch (auch nach
-`mvn clean`) – Vaadin erkennt, dass für diese rein aus Standard-Flow-Komponenten bestehende
-UI kein eigener Frontend-Build nötig ist, und liefert ein vorgefertigtes Produktions-Bundle
-aus den `vaadin-core`-Jars aus (kein npm/Netzwerkzugriff im Build-Log). Das damit gebaute Jar
-wurde gegen eine frische Postgres-Instanz gestartet: `/actuator/health` → `200 UP`, `/login` →
-`200` mit echtem Vaadin-Bootstrap-HTML samt ausgeliefertem JS/CSS-Bundle. Der Server loggt
-beim Start dennoch dieselbe Lizenz-Fehlermeldung wie im Dev-Modus, bricht aber – anders als
-dort – nicht ab. Für AP6 heißt das: eine Playwright-Suite kann gegen einen
-produktionsmodus-gebauten, hier gestarteten Server laufen, ohne dass eine
-Extended-Maintenance-Subscription/ein Offline-Lizenzschlüssel beschafft werden muss (die
-rechtliche Frage, ob das so betrieben werden darf, bleibt trotzdem offen – siehe docs/kb/05,
-„Offene Fragen“).
+**Vaadin-Lizenzpflicht im Dev-Modus** (Restrisiko, siehe
+[ADR 0019](../architecture/0019-ap6-vaadin-lizenz-restrisiko.md)): Vaadin 24.10.x verlangt beim
+ersten `VaadinServlet#init()` im Dev-Modus einen Online-Lizenzcheck gegen vaadin.com (die 24-Linie
+gilt als kostenpflichtige „Extended Maintenance“). Eine Sandbox ohne Netzwerkzugriff auf vaadin.com
+lässt `mvn spring-boot:run` (Dev-Modus) am Servlet-Start scheitern. Der Produktionsmodus-Build
+(`mvn -f backend/pom.xml package -Pproduction`) läuft dagegen grün durch: Vaadin erkennt, dass für
+diese rein aus Standard-Flow-Komponenten bestehende UI kein eigener Frontend-Build nötig ist, und
+liefert ein vorgefertigtes Bundle aus den `vaadin-core`-Jars (kein npm/Netzwerkzugriff). Der Server
+loggt beim Start dieselbe, aber NICHT fatale `MissingLicenseKeyException`. Die automatisierte
+Testsuite ist nicht betroffen (erzwingt `vaadin.productionMode=true` für alle Tests).
 
 **Views/Layouts**:
-- `login/LoginView` (Route `/login`, `@AnonymousAllowed`) – Vaadins eingebaute `LoginForm`
-  mit deutschen Texten 1:1 aus dem Alt-Portal (`Portal/.../PublicLayout`,
-  `SessionManager#login`): Titel „Login"/Beschriftung „Waschportal“, Felder
-  „Benutzername"/„Passwort", Fehlermeldung „Login fehlgeschlagen"/„Bitte prüfen Sie die
-  Anmeldedaten und versuchen Sie es erneut.". Formular postet über Spring Securitys
-  Standard-Mechanismus an `/login` (siehe `SecurityConfig` unten) – authentifiziert weiterhin
-  über den unveränderten `ElwasysAuthenticationProvider` (AP3), inkl. dessen Verschärfung
-  „gesperrte Nutzer werden abgewiesen".
-- `RootView` (Route `""`, `@PermitAll`) – fachlicher Nachfolger von
-  `WaschportalUI#loadSessionContent`: leitet nach dem Login abhängig von der Rolle sofort
-  weiter (`AuthenticationContext#hasRole("ADMIN")`) – Administratoren zu
-  `AdminDashboardView`, alle anderen angemeldeten Benutzer zu `UserDashboardView` (vgl. P2/P15).
-- `admin/AdminLayout` (`AppLayout` + `SideNav`) – fachlicher Nachfolger von
-  `Portal/.../AdministratorLayout` + `components/MainMenu`: Navigation Dashboard/Benutzer/
-  Benutzergruppen/Programme/Geräte/**Standorte**. „Standorte" ist NEU als eigener Menüpunkt
-  (im Alt-Portal nur über einen Dashboard-Dialog erreichbar, `components/LocationWindow`,
-  vgl. P14) – bewusste, vom Auftraggeber ausdrücklich gewünschte UX-Verbesserung (siehe
-  docs/kb/05-migration-plan.md, „Entscheidungen“, Gestaltungsrahmen Portal-Neubau), keine
+- `login/LoginView` (Route `/login`, `@AnonymousAllowed`) – Vaadins `LoginForm` mit deutschen
+  Texten 1:1 aus dem Alt-Portal (Titel „Login“/„Waschportal“, Felder „Benutzername“/„Passwort“,
+  Fehlermeldung „Login fehlgeschlagen“/…). Postet über Spring Securitys Standard-Mechanismus an
+  `/login`, authentifiziert über `ElwasysAuthenticationProvider` (inkl. „gesperrte Nutzer werden
+  abgewiesen“). Der „Passwort vergessen?“-Knopf ist aktiv und öffnet `PasswordForgotDialog`.
+- `RootView` (Route `""`, `@PermitAll`) – leitet nach dem Login abhängig von der Rolle weiter
+  (`AuthenticationContext#hasRole("ADMIN")`): Administratoren zu `AdminDashboardView`, alle anderen
+  zu `UserDashboardView`.
+- `admin/AdminLayout` (`AppLayout` + `SideNav`) – Navigation Dashboard/Benutzer/Benutzergruppen/
+  Programme/Geräte/Standorte. „Standorte“ ist ein eigener Menüpunkt (im Alt-Portal nur über einen
+  Dashboard-Dialog erreichbar) – eine vom Auftraggeber gewünschte UX-Verbesserung, keine
   Funktionsänderung. 6 Views (`AdminDashboardView`, `AdminUsersView`, `AdminUserGroupsView`,
-  `AdminProgramsView`, `AdminDevicesView`, `AdminLocationsView`), alle `@RolesAllowed("ADMIN")`
-  – seit AP3 haben auch `AdminDashboardView` und die Guthaben-Dialoge in `AdminUsersView`
-  echte Inhalte (siehe Abschnitt „Dashboard, Guthaben, UsersDashboard (AP3)“ unten).
-- `user/UserLayout` (`AppLayout` + `SideNav`, ein Menüpunkt „Übersicht") – fachlicher
-  Nachfolger des schlanken `Portal/.../UserLayout`; laut Auftraggeber loggen sich im
-  Wesentlichen nur Admins ein (docs/kb/05-migration-plan.md, „Entscheidungen“), entsprechend
-  niedrigere Parity-Priorität. `UserDashboardView` (`@RolesAllowed("USER")`) zeigt seit AP3
-  Guthaben/Übersicht (vgl. P15, siehe Abschnitt „Dashboard, Guthaben, UsersDashboard (AP3)“
-  unten).
-- `component/UserMenuBar` – gemeinsame Kopfzeilenkomponente (Name des angemeldeten Benutzers +
-  Logout-Knopf, `AuthenticationContext#logout()`) für Admin-/Benutzer-Layout; fachlicher
-  Nachfolger des Benutzermenüs in `Portal/.../components/MainMenu`. „Einstellungen"/„Passwort
-  ändern" (dort zusätzlich vorhanden) sind bewusst NICHT Teil dieses Grundgerüsts.
-- `component/PlaceholderView` – gemeinsame Basis aller Platzhalter-Views (Titel + Hinweistext).
+  `AdminProgramsView`, `AdminDevicesView`, `AdminLocationsView`), alle `@RolesAllowed("ADMIN")`.
+- `user/UserLayout` (`AppLayout` + `SideNav`, Menüpunkt „Übersicht“); `UserDashboardView`
+  (`@RolesAllowed("USER")`) zeigt Guthaben/Übersicht.
+- `ResetPasswordView` (Route `/reset-password?key=<token>`, `@AnonymousAllowed`) – Setzen des neuen
+  Passworts.
+- `component/UserMenuBar` – gemeinsame Kopfzeile (Name des angemeldeten Benutzers +
+  aufklappbares Menü „Einstellungen“/„Passwort ändern“/„Logout“, `AuthenticationContext#logout()`).
+- `component/PlaceholderView` – gemeinsame Basis von Platzhalter-Views.
 
-**Security-Integration** (`backend/.../auth/SecurityConfig`, unverändertes Paket seit AP3):
-statt `formLogin(Customizer.withDefaults())` jetzt
-`http.with(VaadinSecurityConfigurer.vaadin(), c -> c.loginView(LoginView.class).anyRequest(AuthorizedUrl::authenticated))`.
-Das bindet `LoginView` als Login-Ziel, gibt die Login-Route + alle Vaadin-internen statischen
-Ressourcen für nicht angemeldete Anfragen frei und aktiviert Vaadins routenweise
-`NavigationAccessControl` (wertet `@RolesAllowed`/`@PermitAll`/`@AnonymousAllowed` an den
-Views aus – siehe oben). Der `AuthenticationManager` (`ElwasysAuthenticationProvider`) bleibt
-unverändert derselben Kette zugeordnet. Terminal-API-Kette (`TerminalApiSecurityConfig`,
-`/api/v1/**`) und WebSocket-Endpunkt sind UNBERÜHRT – eigene, niedrigere `@Order`-Kette
-(AP4), dedizierter Regressionstest (`TerminalApiSecurityTest`, unverändert grün) beweist das.
-
-**Zwei nicht offensichtliche Fallstricke gefunden und behoben** (Details siehe Javadoc
+**Security-Integration** (`backend/.../auth/SecurityConfig`): statt `formLogin` jetzt
+`http.with(VaadinSecurityConfigurer.vaadin(), c -> c.loginView(LoginView.class).anyRequest(...authenticated))`.
+Das bindet `LoginView` als Login-Ziel, gibt Login-Route + Vaadin-interne statische Ressourcen für
+nicht angemeldete Anfragen frei und aktiviert Vaadins routenweise `NavigationAccessControl` (wertet
+`@RolesAllowed`/`@PermitAll`/`@AnonymousAllowed` aus). Der `AuthenticationManager`
+(`ElwasysAuthenticationProvider`) bleibt derselben Kette zugeordnet. Terminal-API-Kette
+(`TerminalApiSecurityConfig`, `/api/v1/**`) und WebSocket-Endpunkt sind UNBERÜHRT (eigene,
+niedrigere `@Order`-Kette). Zwei nicht offensichtliche Fallstricke (Javadoc
 `SecurityConfig`/`AbstractBackendIT`):
 1. Vaadins Spring-Autokonfigurationsklassen (`SpringBootAutoConfiguration`,
-   `SpringSecurityAutoConfiguration`, `VaadinScopesConfig`, siehe
-   `vaadin-spring`s `META-INF/spring/...AutoConfiguration.imports`) sind NICHT auf
-   `@ConditionalOnWebApplication` eingeschränkt und versuchen daher auch in den bestehenden
-   `webEnvironment=NONE`-Tests (`AbstractBackendIT`, AP2) einen `WebApplicationContext`/eine
-   `ServletRegistrationBean<SpringServlet>` zu autowiren – hätte ALLE Service-/Repository-/
-   Auth-Tests aus AP2/AP3 gebrochen. Fix: `AbstractBackendIT` schließt alle drei
-   Autokonfigurationsklassen explizit aus (`spring.autoconfigure.exclude`).
-2. `VaadinSecurityConfigurer` braucht für den Login-Routen-Pfad zwingend einen echten
-   `ServletContext`-Bean (`getServletContextPath()`) – in einem Nicht-Web-Kontext wäre die
-   `securityFilterChain`-Bean-Erzeugung mit einer `NullPointerException` gescheitert. Fix:
-   `@ConditionalOnWebApplication` NUR auf dieser einen Bean-Methode (nicht auf der ganzen
-   `SecurityConfig`-Klasse, sonst hätte `TerminalApiSecurityConfig` seinen von
-   `@EnableWebSecurity` bereitgestellten `HttpSecurity`-Bean verloren).
+   `SpringSecurityAutoConfiguration`, `VaadinScopesConfig`) sind nicht auf
+   `@ConditionalOnWebApplication` eingeschränkt und versuchen auch in den
+   `webEnvironment=NONE`-Tests einen `WebApplicationContext` zu autowiren – `AbstractBackendIT`
+   schließt alle drei explizit aus (`spring.autoconfigure.exclude`).
+2. `VaadinSecurityConfigurer` braucht einen echten `ServletContext`-Bean – `@ConditionalOnWebApplication`
+   sitzt daher NUR auf dieser einen Bean-Methode (nicht auf der ganzen `SecurityConfig`-Klasse,
+   sonst hätte `TerminalApiSecurityConfig` seinen `HttpSecurity`-Bean verloren).
+
+**Push / Live-Updates zwischen Sessions**: echte Cross-Session-Live-Updates über Domain-Events +
+Vaadin Push.
+- **Ereignis-Infrastruktur** (Vaadin-freies Package `backend/.../events/`): `DomainEvent` – `sealed`
+  Marker-Interface, `permits` listet alle 7 Ereignistypen explizit auf. 7 Records:
+  `UserChangedEvent(userId)`, `UserGroupChangedEvent(userGroupId)`, `DeviceChangedEvent(deviceId)`,
+  `ProgramChangedEvent(programId)`, `LocationChangedEvent(locationId)`, `CreditChangedEvent(userId)`,
+  `ExecutionChangedEvent(executionId, deviceId, userId)`.
+- **Auslösung in der Service-Schicht** (nicht in der UI, damit API-ausgelöste Änderungen dieselben
+  Events feuern): alle 7 Fachlogik-Services bekamen einen `ApplicationEventPublisher` und
+  publizieren nach jeder erfolgreichen Änderung das passende Ereignis, unmittelbar nach dem
+  `repository.save`/`.delete`. Da die Auslösung in `ExecutionService`/`CreditService` selbst liegt,
+  feuern Terminal-API-Aufrufe automatisch dieselben Ereignisse wie ein Klick im Portal. Zwei
+  bewusste Vereinfachungen: `ExecutionService#stopExecution` (nur intern von `finishExecution`
+  aufgerufen) publiziert selbst nicht; `UserGroupService#setValidLocations`/`-Devices`/`-Programs`
+  publizieren jeweils nur ein `UserGroupChangedEvent`.
+- **`UiBroadcaster`** (`backend/.../ui/push/`, klassisches Vaadin-„Broadcaster“-Muster):
+  Spring-`@Component`, hört über `@TransactionalEventListener(fallbackExecution=true)` zu
+  (Default-Phase `AFTER_COMMIT` – ein zurückgerollter Service-Aufruf löst KEINEN Push aus).
+  `register(UI, Consumer<DomainEvent>)` merkt sich Aufrufer-`UI` + Listener und liefert eine
+  `Registration`; Verteilung ruft `ui.access(() -> listener.accept(event))` – Zustellungsfehler
+  werden geloggt statt die übrigen Listener zu blockieren.
+- **Vaadin Push aktiviert**: `backend/.../ui/ElwasysAppShell implements AppShellConfigurator`,
+  annotiert `@Push(value=PushMode.AUTOMATIC, transport=Transport.WEBSOCKET_XHR)` – WebSocket
+  bevorzugt, Fallback auf lang laufende XHR-Requests. `flow-push` (Atmosphere) hängt bereits
+  transitiv an `vaadin-spring`.
+- **Security-/Pfad-Koexistenz**: Vaadins Push-Endpunkt läuft über die normale
+  Vaadin-Servlet-Zuordnung, der Terminal-WebSocket liegt unter dem disjunkten Pfad
+  `/api/v1/terminal-ws` (eigene `@Order(1)`-Kette) – keine Pfad-Kollision.
+  `VaadinSecurityConfigurer` erkennt Vaadin-interne Anfragen (über
+  `HandlerHelper#isFrameworkInternalRequest`) und lässt sie unabhängig vom Anmeldestatus durch; die
+  eigentliche Autorisierung bleibt Sache der einzelnen Views (`@RolesAllowed` usw.) – der Push-Kanal
+  transportiert nur bereits serverseitig autorisierte Updates.
+- **Views abonniert** (Muster überall identisch): `onAttach` → `registration =
+  broadcaster.register(ui, listener)`; `onDetach` → `registration.remove()` + Feld auf `null`
+  (verhindert Session-Leaks). `AdminDashboardView` reagiert auf
+  `DeviceChangedEvent`/`ExecutionChangedEvent` mit gezieltem Nachladen NUR des betroffenen
+  Geräte-Panels (`refreshDevice(deviceId)` schlägt das Panel in einer
+  `Map<Integer, VerticalLayout>` nach und baut den Panel-Inhalt in-place neu auf); ein
+  `LocationChangedEvent` oder ein Ereignis für ein noch nicht angezeigtes Gerät fällt auf ein
+  vollständiges `loadData()` zurück. Die 5 Stammdaten-Grids laden bei ihrem `*ChangedEvent`
+  vollständig neu; `AdminUsersView` zusätzlich bei `CreditChangedEvent`/`ExecutionChangedEvent`
+  (Guthaben-Spalte + Warndreieck-Icon). `UserDashboardView` abonniert
+  `CreditChangedEvent`/`ExecutionChangedEvent`, gefiltert auf die EIGENE Benutzer-Id
+  (`concernsOwnUser`, ein Java-21-Pattern-Matching-`switch`).
 
 **Build-Konfiguration** (`backend/pom.xml`): Default-`mvn package` bleibt schnell (nur
-`vaadin-maven-plugin:prepare-frontend`, kein npm-Bundling); neues Maven-Profil `production`
-(`mvn package -Pproduction`) baut zusätzlich das produktive Frontend-Bundle
-(`build-frontend`, `vaadin.productionMode=true`). Surefire-Konfiguration erzwingt
-`vaadin.productionMode=true` als System-Property für ALLE Testläufe dieses Moduls – verhindert,
-dass ein Testfall mit echtem eingebettetem Servlet-Container (z. B. `TerminalWebSocketTest`,
-`BackendApplicationTest`, `webEnvironment=RANDOM_PORT`) Vaadins Dev-Modus (inkl. des oben
-beschriebenen Lizenzchecks) startet.
+`vaadin-maven-plugin:prepare-frontend`, kein npm-Bundling); das Profil `production`
+(`mvn package -Pproduction`) baut zusätzlich das produktive Frontend-Bundle (`build-frontend`,
+`vaadin.productionMode=true`). Die Surefire-Konfiguration erzwingt `vaadin.productionMode=true` für
+ALLE Testläufe dieses Moduls – verhindert, dass ein Test mit echtem eingebettetem
+Servlet-Container Vaadins Dev-Modus (inkl. Lizenzcheck) startet.
 
-**Tests** (9 neu, Package `backend/.../ui/`): bewusst KEIN Test über einen echten
-eingebetteten Servlet-Container, der eine Vaadin-UI-Route tatsächlich rendern lässt – siehe
-„Wichtiger Befund" oben, ein solcher Test könnte in dieser Sandbox nicht grün laufen.
+**Portal-Tests** (Package `backend/.../ui/`): bewusst KEIN Test über einen echten eingebetteten
+Servlet-Container, der eine Vaadin-UI-Route rendert (könnte in dieser Sandbox nicht grün laufen).
 Stattdessen:
-- `VaadinPortalSecurityTest` (5, `webEnvironment=MOCK`, genügt für alles, was rein in der
-  Spring-Security-Filterkette entschieden wird): geschützte Routen (`/`, `/admin`) leiten
-  nicht angemeldete Anfragen um; Formular-Login über die Vaadin-Login-Route authentifiziert
-  gültige Zugangsdaten UND weist gesperrte Nutzer ab (`ElwasysAuthenticationProvider`-
-  Integration); Logout leitet zur Login-Seite um.
+- `VaadinPortalSecurityTest` (`webEnvironment=MOCK`): geschützte Routen (`/`, `/admin`) leiten nicht
+  angemeldete Anfragen um; Formular-Login authentifiziert gültige Zugangsdaten UND weist gesperrte
+  Nutzer ab; Logout leitet zur Login-Seite um.
 - `RouteAccessAnnotationsTest` (ohne Spring-Kontext/DB): beweist die
-  `@AnonymousAllowed`/`@PermitAll`/`@RolesAllowed`-Zuordnung der View-Klassen – das ist genau
-  die Information, die Vaadins `NavigationAccessControl` zur Laufzeit auswertet (vgl. Testfall
-  P18). **Seit Pre-Launch AP5 (Epic #66, #50)** zählt der Test die Views nicht mehr von Hand auf,
-  sondern **scannt den Classpath** über das `ui`-Paket
-  (`ClassPathScanningCandidateComponentProvider`) und fordert von jeder gefundenen View eine
-  explizite Absicherung (`@RolesAllowed`/`@PermitAll`), während `@AnonymousAllowed` für neu
-  hinzukommende Views verboten ist (abgesehen von den bewusst öffentlichen Routen `LoginView`/
-  `ResetPasswordView`) – so fällt jede künftig hinzugefügte, versehentlich ungesicherte View
-  automatisch durch, ohne dass der Test angepasst werden muss.
+  `@AnonymousAllowed`/`@PermitAll`/`@RolesAllowed`-Zuordnung. Der Test scannt den Classpath über das
+  `ui`-Paket (`ClassPathScanningCandidateComponentProvider`) und fordert von jeder gefundenen View
+  eine explizite Absicherung (`@RolesAllowed`/`@PermitAll`), während `@AnonymousAllowed` für neu
+  hinzukommende Views verboten ist (abgesehen von `LoginView`/`ResetPasswordView`) – so fällt jede
+  künftig versehentlich ungesicherte View automatisch durch.
 
-Ein vollständiger, per Browser/JS getriebener Login-Durchstich (Vaadins `LoginForm` ist eine
-clientseitig gerenderte Web-Komponente, kein klassisches Server-HTML-Formular mit
-scrapebarem CSRF-Feld) bleibt der späteren Playwright-E2E-Suite vorbehalten (docs/kb/08-test-plan.md, P18).
+Ein vollständiger, per Browser/JS getriebener Login-Durchstich bleibt der Playwright-E2E-Suite
+vorbehalten (siehe [08-test-plan.md](08-test-plan.md), P18).
 
-**Build/Test/Run**: siehe docs/kb/04-build-and-run.md (Abschnitt „Backend bauen, testen, lokal
-starten“). `backend/run-backend-tests.sh` für den Docker-losen lokalen Testweg;
-`deploy/cutover/verify-cutover-migration.sh` für den `baselineOnMigrate`-/Datenerhalt-Nachweis
-gegen eine simulierte Bestands-DB (das frühere `backend/verify-schema-baseline.sh` wurde mit der
-Alt-Schema-Konsolidierung entfernt).
+#### Stammdaten-Views
 
-#### Stammdaten-Views (AP2, 2026-07-20)
+Die 5 Admin-Views (`AdminUsersView`, `AdminUserGroupsView`, `AdminDevicesView`,
+`AdminProgramsView`, `AdminLocationsView`) sind je ein Vaadin `Grid` mit Symbolleiste „Neu“ und
+Zeilen-Aktionen (Bearbeiten/Löschen), die einen modalen `Dialog` (`ui/admin/dialog/`) öffnen –
+fachliche Nachfolger der Alt-`components/*Window`: `UserFormDialog`, `UserGroupFormDialog`,
+`DeviceFormDialog`, `ProgramFormDialog`, `LocationFormDialog`. Die gemeinsame Komponente
+`ui/component/ConfirmDeleteDialog` nutzt Vaadins `ConfirmDialog` mit „Ja“/„Nein“. Mehrfachauswahlen
+(Standorte/Geräte/Programme/Benutzergruppen) sind als `MultiSelectComboBox` umgesetzt.
 
-Die 5 Admin-Platzhalter-Views aus AP1 (`AdminUsersView`, `AdminUserGroupsView`,
-`AdminDevicesView`, `AdminProgramsView`, `AdminLocationsView`) haben jetzt echte Inhalte –
-Feature-Parität zum Alt-Portal (siehe docs/kb/08-test-plan.md, Testfälle P6/P7/P9–P14). `@Route`/
-`@PageTitle`/`@RolesAllowed` sind dabei UNVERÄNDERT geblieben (nur die Basisklasse wechselt
-von `PlaceholderView` auf `VerticalLayout` mit echtem Inhalt) – `RouteAccessAnnotationsTest`
-brauchte deshalb keine Anpassung.
-
-**Services** (`backend/.../service/`, jeweils mit den entsprechenden Alt-Fenstern als
-fachlicher Referenz):
-- `UserService` – Anlegen/Bearbeiten/weiches Löschen von Benutzern (fachlicher Nachfolger von
-  `Portal/.../components/UserWindow`, ohne dessen Admin-Passwort-Reset-Teil – der ist AP4).
-  Löschen entspricht 1:1 `Common.User#setDeleted`: der Benutzername wird zusätzlich mit
-  `#del<id>#` präfixiert, damit er (UNIQUE-Constraint auf `users.username`) sofort wieder
-  frei ist. Kartennummer-Mehrfachvergabe wirft `DuplicateCardIdException` (neu, Package
-  `backend/.../exception/`).
-- `UserGroupService` – Anlegen/Bearbeiten/Löschen (fachlicher Nachfolger von
-  `Portal/.../components/UserGroupWindow`). Löschen entspricht 1:1
-  `Common.UserGroup#delete`: Benutzer der gelöschten Gruppe werden einer anderen Gruppe
-  zugewiesen (`UserGroupRepository#findFirstByIdNotOrderByIdAsc` bildet die Alt-SQL nach);
-  gibt es keine andere Gruppe, wirft der Service `EntityInUseException` (neu) statt eines
-  NOT-NULL-Constraint-Verstoßes wie im Alt-Code. Besonderheit: `UserGroupEntity` selbst
-  besitzt KEINE Sammlung ihrer Standorte/Geräte/Programme (die drei `@ManyToMany`-Relationen
-  sind unidirektional von `LocationEntity`/`DeviceEntity`/`ProgramEntity` aus modelliert,
-  siehe deren Klassenkommentare) – `setValidLocations`/`-Devices`/`-Programs` togglen die
-  Gruppenzugehörigkeit deshalb von der jeweils anderen Tabellenseite aus (iterieren über alle
-  Standorte/Geräte/Programme).
-- `DeviceService` – Anlegen/Bearbeiten/Löschen (fachlicher Nachfolger von
-  `Portal/.../components/DeviceWindow`). Regulär gelöschte Geräte behalten ihren Bezug per
-  `ON DELETE SET DEFAULT` auf ein virtuelles Gerät (siehe docs/kb/02-data-model.md). **Seit
-  Pre-Launch AP5 (Epic #66, #49)** ist das Löschen jedoch NICHT mehr wächterlos (vorher 1:1
-  `Common.Device#delete`): `DeviceService.delete` wirft `EntityInUseException`, wenn am Gerät
-  noch eine laufende oder abgelaufene Ausführung hängt (`start IS NOT NULL AND finished=false`)
-  – so lässt sich ein aktiv genutztes Gerät nicht mehr unter einer noch offenen Abrechnung
-  wegräumen.
-- `ProgramService` – Anlegen/Bearbeiten/Löschen (fachlicher Nachfolger von
-  `Portal/.../components/ProgramWindow`). Löschen mit Wächter: ein Programm, das noch
-  mindestens einem Gerät zugeordnet ist, wird NICHT gelöscht (1:1
-  `Portal/.../views/ProgramsView#deleteProgram` – eine fachliche Schutzregel, obwohl
-  `device_program_rel` selbst `ON DELETE CASCADE` trägt und die DB das technisch zuließe).
-- `LocationService` – Anlegen/Bearbeiten/Löschen. Standorte sind seit AP1 ein eigener
-  Menüpunkt (`AdminLocationsView`, im Alt-Portal nur über einen Dashboard-Dialog erreichbar,
-  `Portal/.../components/LocationWindow`) – eine vom Auftraggeber gewünschte
-  UX-Verbesserung. Löschen mit Wächter analog zu `ProgramService` (ein Standort mit noch
-  zugeordneten Geräten wird nicht gelöscht, entspricht fachlich
-  `DataManager#removeUnusedLocations`, jetzt als expliziter Admin-Vorgang statt impliziter
-  Hintergrundaktion).
+**Services** (jeweils mit den Alt-Fenstern als fachlicher Referenz):
+- `UserService` – Anlegen/Bearbeiten/weiches Löschen. Löschen entspricht 1:1
+  `Common.User#setDeleted`: der Benutzername wird mit `#del<id>#` präfixiert, damit er (UNIQUE auf
+  `users.username`) sofort wieder frei ist. Kartennummer-Mehrfachvergabe wirft
+  `DuplicateCardIdException`. `#updateOwnSettings` ändert bewusst NUR Email/Email-Benachrichtigung/
+  Pushover-Key.
+- `UserGroupService` – Löschen entspricht 1:1 `Common.UserGroup#delete`: Benutzer der gelöschten
+  Gruppe werden einer anderen Gruppe zugewiesen (`findFirstByIdNotOrderByIdAsc`); gibt es keine,
+  wirft der Service `EntityInUseException`. `UserGroupEntity` besitzt KEINE Sammlung ihrer
+  Standorte/Geräte/Programme (die drei `@ManyToMany`-Relationen sind unidirektional von
+  `LocationEntity`/`DeviceEntity`/`ProgramEntity` aus modelliert) –
+  `setValidLocations`/`-Devices`/`-Programs` togglen von der jeweils anderen Tabellenseite aus.
+- `DeviceService` – regulär gelöschte Geräte behalten ihren Bezug per `ON DELETE SET DEFAULT` auf
+  ein virtuelles Gerät. `delete` wirft `EntityInUseException`, wenn am Gerät noch eine laufende oder
+  abgelaufene Ausführung hängt (`start IS NOT NULL AND finished=false`). `#findByLocation`
+  (Nachfolger von `DataManager#getDevicesToDisplay`).
+- `ProgramService` – Löschen mit Wächter: ein Programm, das noch mindestens einem Gerät zugeordnet
+  ist, wird NICHT gelöscht (obwohl `device_program_rel` `ON DELETE CASCADE` trägt).
+- `LocationService` – Standorte sind ein eigener Menüpunkt. Löschen mit Wächter analog zu
+  `ProgramService` (ein Standort mit zugeordneten Geräten wird nicht gelöscht) – jetzt als
+  expliziter Admin-Vorgang statt der impliziten `DataManager#removeUnusedLocations`-Hintergrundaktion.
 
 Neue Repository-Methoden: `UserGroupRepository#findFirstByIdNotOrderByIdAsc`,
 `DeviceRepository#findAllByOrderByNameAsc`/`#findByPrograms_Id`,
 `ProgramRepository#findAllByOrderByNameAsc`.
 
-**UI** (neues Sub-Paket `backend/.../ui/admin/dialog/`): jede der 5 Views ist ein Vaadin
-`Grid` (Spalten wie im Alt-Portal, siehe docs/kb/08-test-plan.md) mit Symbolleiste „Neu“ und
-Zeilen-Aktionen (Bearbeiten/Löschen), die einen modalen `Dialog` öffnen – fachliche
-Nachfolger der Alt-`components/*Window`-Fenster: `UserFormDialog`, `UserGroupFormDialog`,
-`DeviceFormDialog`, `ProgramFormDialog`, `LocationFormDialog`. Neue gemeinsame Komponente
-`backend/.../ui/component/ConfirmDeleteDialog` (Nachfolger von
-`Portal/.../components/ConfirmWindow`) nutzt Vaadins eingebauten `ConfirmDialog` mit
-deutschen „Ja“/„Nein“-Beschriftungen. Die Alt-`TwinColSelect`-Mehrfachauswahlen (Standorte/
-Geräte/Programme/Benutzergruppen) sind als `MultiSelectComboBox` umgesetzt – funktional
-identisch, moderneres Bedienelement (UX-Verbesserung im erlaubten Rahmen, siehe
-docs/kb/05-migration-plan.md, „Entscheidungen“).
+**Tests** (Package `backend/.../service/`): `UserServiceTest`, `UserGroupServiceTest` +
+`UserGroupServiceDeleteGuardTest` (Mockito-Unit-Test für den Randfall „keine andere Gruppe mehr“),
+`DeviceServiceTest`, `ProgramServiceTest`, `LocationServiceTest`.
 
-**Bewusst NICHT Teil dieses Arbeitspakets** (bewusste Abweichungen, keine stillen Lücken):
-Admin-Passwort-Reset im Benutzer-Dialog (AP4); „Nicht abgerechnete Programmausführungen“-
-Warnicon (`ExpiredExecutionsWindow`, eigener Roadmap-Punkt „Dialoge/Funktionen“, AP4);
-`DeviceWindow`s Inline-Standort-Anlage entfällt ersatzlos (durch die eigenständige
-Standort-Verwaltung überflüssig). Guthaben-AUFLADEN (`UserCreditWindow`) folgte in AP3, siehe
-unten.
+#### Dashboard, Guthaben, UsersDashboard
 
-**Tests** (19 neu, Package `backend/.../service/`, Muster wie Phase 2 AP2 –
-`AbstractBackendIT`/`Fixtures`): `UserServiceTest`, `UserGroupServiceTest` +
-`UserGroupServiceDeleteGuardTest` (reiner Mockito-Unit-Test für den in der gemeinsam
-genutzten Testdatenbank nicht sauber herstellbaren Randfall „keine andere Gruppe mehr
-vorhanden“), `DeviceServiceTest`, `ProgramServiceTest`, `LocationServiceTest`. Backend-Suite
-insgesamt **135/135** grün. Bewusst KEIN Test, der über einen echten eingebetteten
-Servlet-Container eine Vaadin-Route rendert (unverändertes Risiko aus AP1) – siehe
-„Wichtiger Befund“ oben für den De-Risking-Nachweis über den Produktionsmodus-Build.
+**Admin-Dashboard** (`AdminDashboardView`): zeigt je Standort dessen Geräte mit „Frei“/„Besetzt“
+(direkt aus der laufenden `ExecutionEntity` in der DB abgeleitet, kein Client-Kontakt), bei einer
+laufenden Ausführung zusätzlich Programm, Benutzer und Restzeit (Restzeit ist eine zusätzliche
+Information, im Alt-Dashboard nicht vorhanden), sowie je Gerät die Ausführungshistorie
+(Datum/Benutzer/Dauer/Preis, laufende/abgelaufene Zeile hervorgehoben über
+`Grid#setPartNameGenerator`). Die Historie wird lazy paginiert (`CallbackDataProvider` gegen
+`ExecutionService.getExecutions(device, Pageable)`/`countExecutions`, stabiler Sortierschlüssel
+`start DESC, id DESC`). Je Standort eine Kopfzeile mit Verbindungsstatus
+(„Verbunden“/„Nicht verbunden“, aus `TerminalConnectionRegistry`) plus den Knöpfen „Log anzeigen“
+(`LogViewerDialog`) und „Neustart“ (beide über `TerminalMaintenanceService`; für einen nicht
+verbundenen Standort derselbe Fehlertext wie der Alt-Code). Der Service `DashboardService` kapselt
+die gesamte Datenbeschaffung (Standorte → Geräte → Status, `LocationStatus`/`DeviceStatus`) ohne
+Vaadin-Abhängigkeit, damit die Live-Updates dieselbe Abfrage wiederverwenden.
 
-#### Dashboard, Guthaben, UsersDashboard (AP3, 2026-07-20)
-
-**Admin-Dashboard** (`AdminDashboardView`, fachlicher Nachfolger von
-`Portal/.../views/AdminDashboardView`): zeigt je Standort dessen Geräte mit „Frei“/„Besetzt“
-(Testfall P20 – direkt aus der laufenden `ExecutionEntity` in der DB abgeleitet, kein
-Client-Kontakt), bei einer laufenden Ausführung zusätzlich Programm, Benutzer und Restzeit
-(Restzeit ist eine bewusste ZUSÄTZLICHE Information, im Alt-Dashboard nicht vorhanden – reine
-Ergänzung, keine Verhaltensänderung), sowie je Gerät die Ausführungshistorie
-(Datum/Benutzer/Dauer/Preis, mit hervorgehobener laufender/abgelaufener Zeile über
-`Grid#setPartNameGenerator`) – analog zur Tabelle im Alt-`AdminDashboardLocationPanel`. **Seit
-Pre-Launch AP5 (Epic #66, #30)** wird diese Historie nicht mehr vollständig geladen, sondern
-lazy paginiert (`CallbackDataProvider` gegen `ExecutionService.getExecutions(device, Pageable)`/
-`countExecutions`, stabiler Sortierschlüssel `start DESC, id DESC`, neueste zuerst) – das hält
-den Dashboard-Aufbau auch bei Geräten mit langer Historie schlank. Die
-Wartungsverbindungs-Toolbar des Alt-Dashboards (Log-Datei ansehen, Client neu starten,
-Verbindungsstatus/IP) ist bewusst NICHT Teil dieses Arbeitspakets, siehe Roadmap-Punkt
-„Fernwartung“ (AP4). Aktualisierung erfolgt beim Seitenaufruf; kein Live-Push (laut Auftrag
-nicht nötig, folgt als eigener Roadmap-Punkt „Live-Updates zwischen Sessions“, AP5).
-
-Neuer Service `DashboardService` (`backend/.../service/`) kapselt die gesamte
-Datenbeschaffung (Standorte → Geräte → Status, `LocationStatus`/`DeviceStatus`-Records) OHNE
-Vaadin-Abhängigkeit – bewusst so geschnitten, damit AP5 (Live-Updates) dieselbe Abfrage
-wiederverwenden kann statt einer zweiten Implementierung. Neue Repository-unabhängige Methode
-`DeviceService#findByLocation` (Nachfolger von `DataManager#getDevicesToDisplay`). Seit
-Pre-Launch AP5 (Epic #66, #30) trägt der `DeviceStatus`-Record die vollständige
-Ausführungshistorie NICHT mehr – diese wird stattdessen paginiert nachgeladen (siehe
-Admin-Dashboard oben).
-
-**Guthaben aufladen/Historie** (Testfall P8, in `AdminUsersView` über zwei neue
-Zeilen-Aktionen erreichbar, wie im Alt-`UsersView`):
-- `CreditTopUpDialog` – fachlicher Nachfolger von `Portal/.../components/UserCreditWindow`:
-  Einzahlung/Auszahlung (Radiobuttons, Default „Einzahlung“), Betrag, Buchungstext (vorbelegt
-  mit „Einzahlung/Auszahlung vom Waschportal von &lt;angemeldeter Admin&gt;“, 1:1 wie im
-  Alt-Fenster). Ruft AUSSCHLIESSLICH die bestehenden Phase-2-Methoden
-  `CreditService#inpayment`/`#payout` auf – erzeugt damit strukturell immer nur einen NEUEN
-  Buchungssatz, ändert/löscht nie einen bestehenden. Eine Auszahlung über das verfügbare
-  Guthaben hinaus zeigt dieselbe Fehlermeldung wie im Alt-Portal
-  („Das Guthaben des Benutzers reicht nicht aus für diese Operation.“,
-  `NotEnoughCreditException`). **Seit Pre-Launch AP5 (Epic #66, #49)** trägt der „Buchen“-Knopf
-  `setDisableOnClick(true)` (Doppelklick-Schutz gegen eine versehentliche Doppelbuchung); die
-  Guthaben-Spalte der Benutzerliste in `AdminUsersView` bezieht ihre Werte seit Pre-Launch AP5
-  (#30) gebündelt über `CreditService.getCredits(List)` statt je Zeile einzeln (siehe oben).
-- `CreditHistoryDialog` – fachlicher Nachfolger von
-  `Portal/.../components/CreditAccountingWindow` („Umsätze ansehen“): rein lesende Liste
-  (Datum/Betrag/Buchungstext, neueste zuerst) über die neue Methode
+**Guthaben aufladen/Historie** (in `AdminUsersView` über zwei Zeilen-Aktionen):
+- `CreditTopUpDialog` – Einzahlung/Auszahlung (Radiobuttons, Default „Einzahlung“), Betrag,
+  Buchungstext (vorbelegt mit „Einzahlung/Auszahlung vom Waschportal von <Admin>“, 1:1 wie im
+  Alt-Fenster). Ruft AUSSCHLIESSLICH `CreditService#inpayment`/`#payout` auf – erzeugt strukturell
+  immer nur einen NEUEN Buchungssatz, ändert/löscht nie einen bestehenden. Eine Auszahlung über das
+  Guthaben hinaus zeigt dieselbe Fehlermeldung wie im Alt-Portal (`NotEnoughCreditException`). Der
+  „Buchen“-Knopf trägt `setDisableOnClick(true)` (Doppelklick-Schutz); die Guthaben-Spalte der
+  Benutzerliste bezieht ihre Werte gebündelt über `CreditService.getCredits(List)`.
+- `CreditHistoryDialog` – rein lesende Liste (Datum/Betrag/Buchungstext, neueste zuerst) über
   `CreditService#getAccountingEntries` – bietet bewusst KEINE Bearbeitungs-/Löschfunktion.
 
-Zwei neue `CreditService`-Methoden (beide reine Lese-Delegationen an bestehende
-Repository-Queries, siehe `CreditAccountingEntryRepository`): `getAccountingEntries` (=
-`DataManager#getAccountingEntries`) und `getLastInpayment` (=
-`DataManager#getLastInpayment`) – letztere auch vom UsersDashboard genutzt (siehe unten).
+Zwei `CreditService`-Lesemethoden: `getAccountingEntries` (= `DataManager#getAccountingEntries`)
+und `getLastInpayment` (= `DataManager#getLastInpayment`, auch vom UsersDashboard genutzt).
 
-Zwei weitere `CreditService`-Ergänzungen der Pre-Launch-Phase (Epic #66): `getCredits(List<
-UserEntity>)` berechnet die Guthaben einer ganzen Liste in zwei statt 2·N Abfragen (fachlich
-identisch zum bestehenden `getCredit`, Pre-Launch AP5 #30 – genutzt u. a. von der
-Guthaben-Spalte der Benutzerliste, siehe `CreditTopUpDialog` unten); `requirePositive` validiert
-den Buchungsbetrag zentral (`signum() <= 0` → `IllegalArgumentException`, Pre-Launch AP3 #22),
-sodass Ein-/Auszahlungen über `0`/negativ nicht mehr durchrutschen.
+**UsersDashboard** (`UserDashboardView`): zeigt eigenes Guthaben (`CreditService#getCredit`) und
+letzte Einzahlung (`getLastInpayment`) als Kacheln sowie die vollständige eigene Buchungshistorie
+(`getAccountingEntries`) in einer Tabelle. **Datenisolation**: der angezeigte Benutzer kommt
+ausschließlich aus dem `ElwasysUserPrincipal` der Session
+(`AuthenticationContext#getAuthenticatedUser`), nicht aus einem Pfad-/Query-Parameter – ein
+Nicht-Administrator kann strukturell nur eigene Daten sehen.
 
-**UsersDashboard** (`UserDashboardView`, fachlicher Nachfolger von
-`Portal/.../views/UsersDashboardView`, Testfall P15: „Guthaben“/„Übersicht“ sichtbar –
-„Übersicht“ ist bereits seit AP1 der Menüpunkt in `UserLayout`, „Guthaben“ die Kachel in
-dieser View): zeigt eigenes Guthaben (`CreditService#getCredit`) und letzte Einzahnung
-(`CreditService#getLastInpayment`) als Kacheln sowie die vollständige eigene Buchungshistorie
-(`CreditService#getAccountingEntries`) in einer Tabelle „Buchungen“ – 1:1 wie im Alt-Portal.
-**Datenisolation**: der angezeigte Benutzer kommt ausschließlich aus dem
-`ElwasysUserPrincipal` der Session (`AuthenticationContext#getAuthenticatedUser`), nicht aus
-einem Pfad-/Query-Parameter – ein Nicht-Administrator kann über diese View strukturell nur
-eigene Daten sehen.
+**Unveränderlichkeit der Buchungen**: strukturell sichergestellt – `CreditAccountingEntryEntity`
+bietet keine Setter für gespeicherte Buchungen; alle drei UI-Bausteine (`CreditTopUpDialog`,
+`CreditHistoryDialog`, `UserDashboardView`) rufen ausschließlich lesende Methoden oder die
+anfügenden `CreditService#inpayment`/`#payout` auf, nie ein Update/Delete auf `credit_accounting`.
 
-**Unveränderlichkeit der Buchungen**: strukturell sichergestellt, nicht nur durch Konvention –
-`CreditAccountingEntryEntity` (seit Phase 2 AP2) bietet keine Setter für gespeicherte
-Buchungen, nur den Konstruktor; alle drei neuen/wiederverwendeten UI-Bausteine
-(`CreditTopUpDialog`, `CreditHistoryDialog`, `UserDashboardView`) rufen ausschließlich
-lesende Methoden oder die anfügenden `CreditService#inpayment`/`#payout` auf, nie ein
-Update/Delete auf `credit_accounting`.
+**Tests** (Package `backend/.../service/`): `DashboardServiceTest` (freies/besetztes/abgelaufenes
+Gerät, Standort-Gruppierung, Historie), `CreditServiceAccountingHistoryTest` (Sortierung neueste
+zuerst, unveränderte Werte bei wiederholtem Abruf, `getLastInpayment` ignoriert Auszahlungen).
 
-**Tests** (9 neu, Package `backend/.../service/`): `DashboardServiceTest` (5 – freies/
-besetztes/abgelaufenes Gerät, Standort-Gruppierung, Historie), `CreditServiceAccountingHistoryTest`
-(3 – Sortierung neueste zuerst, unveränderte Werte bei wiederholtem Abruf,
-`getLastInpayment` ignoriert Auszahlungen), plus ein neuer Test in `DeviceServiceTest`
-(`findByLocation`). Backend-Suite insgesamt **144/144** grün. Bewusst KEIN Test, der über
-einen echten eingebetteten Servlet-Container eine Vaadin-Route rendert (unverändertes Risiko
-aus AP1); `RouteAccessAnnotationsTest` brauchte keine Anpassung (keine neuen Routen, nur
-Inhalte bestehender Views/neue Dialoge).
+#### Dialoge/Funktionen
 
-#### Dialoge/Funktionen (AP4, 2026-07-21)
+**Eigenes Passwort ändern** (`ChangePasswordDialog`, erreichbar über das Benutzermenü in
+`UserMenuBar`): der Vaadin-freie Service `PasswordService#changeOwnPassword` prüft das aktuelle
+Passwort über `PasswordVerificationService` (akzeptiert Argon2id- und SHA1-Bestandshashes) und
+setzt das neue Passwort IMMER im Argon2id-Format (`#encodeNew`). `PasswordService` erzwingt zentral
+eine Mindestlänge von 8 Zeichen (`MIN_PASSWORD_LENGTH`, sonst `PasswordTooShortException`) – sowohl
+beim administrativen `setNewPassword` als auch beim `changeOwnPassword`. **Konsequenz** (in
+`PasswordService`-Javadoc dokumentiert): ein über das neue Portal gesetztes Argon2id-Passwort kann
+sich in einem SHA1-vergleichenden Alt-Portal nicht mehr anmelden – eine bewusste Einschränkung, die
+erst greift, wenn ein Nutzer AKTIV das neue Portal nutzt (siehe
+[ADR 0007](../architecture/0007-passwort-hashing-argon2id-mit-rehash.md)).
 
-Letztes Arbeitspaket der Phase-3-Roadmap „Dialoge/Funktionen“ (vor Live-Updates [AP5] und der
-Playwright-Portierung [AP6]) – siehe docs/kb/05-migration-plan.md für die vollständige
-Entscheidungs-Historie.
+**UserSettings** (`UserSettingsDialog`): Email, Email-Benachrichtigung (Checkbox), Pushover-Key –
+dieselben drei Felder wie im Alt-Fenster, über `UserService#updateOwnSettings`.
 
-**Eigenes Passwort ändern** (`ChangePasswordDialog`, Testfall P16, fachlicher Nachfolger von
-`Portal/.../components/ChangePasswordWindow`): erreichbar über das jetzt aufklappbare
-Benutzermenü in `UserMenuBar` (bis AP4 nur ein Logout-Knopf, seit AP4 Menü mit
-„Einstellungen“/„Passwort ändern“/„Logout“ – 1:1 wie das Alt-`MainMenu`). Neuer,
-Vaadin-freier Service `PasswordService#changeOwnPassword` prüft das aktuelle Passwort über
-`PasswordVerificationService` (akzeptiert sowohl Argon2id- als auch SHA1-Bestandshashes) und
-setzt das neue Passwort IMMER im Argon2id-Format (`#encodeNew`, 1:1 wie der Rest von AP3).
-**Seit Pre-Launch AP4 (Epic #66, #44)** erzwingt `PasswordService` zentral eine Mindestlänge
-von 8 Zeichen (`MIN_PASSWORD_LENGTH`, sonst `PasswordTooShortException`) – und zwar sowohl beim
-administrativen `setNewPassword` als auch beim `changeOwnPassword`, damit keiner der beiden Pfade
-ein zu kurzes Passwort durchlässt.
-**Wichtige Konsequenz für den Parallelbetrieb** (in `PasswordService`-Javadoc dokumentiert):
-das Alt-Portal (`common.User#checkPassword`) vergleicht weiterhin `SHA1(eingegebenes
-Passwort) == gespeicherter String` – ein über das NEUE Portal gesetztes Argon2id-Passwort kann
-sich daher NICHT mehr im Alt-Portal anmelden. Das ist eine bewusste, dokumentierte
-Einschränkung (kein Verstoß gegen „Nutzer dürfen sich nicht umstellen müssen“, weil sie erst
-greift, wenn ein Nutzer AKTIV das neue Portal nutzt) – siehe docs/kb/05-migration-plan.md,
-„Entscheidungen“.
-
-**UserSettings** (`UserSettingsDialog`, Testfall P17, fachlicher Nachfolger von
-`Portal/.../components/UserSettingsWindow`): Email, Email-Benachrichtigung (Checkbox),
-Pushover-Key – 1:1 dieselben drei Felder wie im Alt-Fenster, über den neuen
-`UserService#updateOwnSettings` (ändert bewusst NUR diese drei Felder, nicht
-Name/Username/Kartennummern/Gruppe/Gesperrt-Status/Admin-Flag – wie im Alt-Fenster).
-
-**Passwort per Email zurücksetzen** (Testfall P19, docs/kb/03 Notification-Tabelle oben):
-- Selbstbedienung: `LoginView`s „Passwort vergessen?“-Knopf ist jetzt aktiv (bis AP4 über
-  `setForgotPasswordButtonVisible(false)` deaktiviert) und öffnet `PasswordForgotDialog`
-  (fachlicher Nachfolger von `PasswordForgotWindow`) – Email-Eingabe, ruft
-  `PasswordResetService#requestReset` auf.
-- Neue öffentliche Route `ResetPasswordView` (`/reset-password?key=<token>`,
-  `@AnonymousAllowed`, `RouteAccessAnnotationsTest` erweitert) zum Setzen des neuen Passworts –
-  fachlicher Nachfolger von `ResetPasswordWindow` (dort ein modales Fenster über der bereits
-  geladenen Alt-Portal-Seite mit `?rp=<key>`; hier eine eigene Vaadin-Route, weil Flow
-  serverseitiges Routing mit eigenen URLs kennt – fachlich gleichwertig).
+**Passwort per Email zurücksetzen**:
+- Selbstbedienung: `LoginView`s „Passwort vergessen?“-Knopf öffnet `PasswordForgotDialog`
+  (Email-Eingabe → `PasswordResetService#requestReset`).
+- Öffentliche Route `ResetPasswordView` (`/reset-password?key=<token>`, `@AnonymousAllowed`) zum
+  Setzen des neuen Passworts.
 - Admin-seitig: `UserFormDialog` hat die Checkbox „Sende dem Benutzer per Email ein neues
-  Passwort“ zurück (in AP2 bewusst ausgespart, siehe dortiger Abschnitt) – ruft
-  `PasswordResetService#resetPasswordByAdminAndNotify` auf.
-- Neuer Service `PasswordResetService`: **Schlüssel-Speicherung** nutzt bewusst die
-  BESTEHENDEN Bestandsspalten `users.password_reset_key`/`password_reset_timeout` (Teil der
-  Flyway-Baseline `V1`, siehe docs/kb/02-data-model.md) statt einer neuen Migration – additiv im
-  Sinne der Rahmenbedingung, weil diese Spalten bereits existieren und der Alt-Code sie
-  ebenfalls liest/schreibt (kein Konflikt). **Format**: 24 `SecureRandom`-Bytes, Base64-URL
-  ohne Padding (32 Zeichen, passt in die bestehende Spaltenbreite) statt des Alt-Formats
-  (`SHA1` über `Math.random()`-Bytes) – kryptographisch stärker. **Gültigkeit**: 2 Stunden
-  (konfigurierbar, `elwasys.password-reset.token-validity`), 1:1 wie der Alt-Code. **Reset-URL**:
-  `<elwasys.password-reset.portal-base-url>/reset-password?key=<token>` – anders als der
-  Alt-Code (leitet die URL aus der aktuellen Browser-Anfrage ab,
-  `WashportalUtilities#getPasswordResetUrl`) bewusst über eine Konfigurationseigenschaft
-  gebaut (robuster hinter einem Reverse Proxy/wenn der Versand nicht im Kontext einer
-  laufenden HTTP-Anfrage passiert). **Schalter**: `elwasys.password-reset.enabled` (Default
-  **AN**), bewusst NICHT `elwasys.notifications.enabled` – vollständige Begründung siehe
-  docs/kb/05-migration-plan.md „Entscheidungen“ und `PasswordResetProperties`-Javadoc (Kurzfassung:
-  kein Doppelversand-Risiko, weil der Versand an eine explizite interaktive Aktion gebunden
-  ist, nicht an ein wiederkehrendes Ereignis wie ein Ausführungsende).
-- **Härtung Pre-Launch AP4 (Epic #66, #24/#47)**: Der öffentliche Selbstbedienungs-Pfad ist
-  neutralisiert – eine unbekannte Adresse führt zu einem stillen Abbruch mit einer neutralen
-  Einheitsmeldung (keine `UserNotFoundForEmailException` nach außen), sodass sich über die
-  Rückmeldung nicht ablesen lässt, welche Adressen registriert sind. Der Versand teilt sich den
-  `RateLimiter`-Singleton (siehe Auth-Härtung oben) als Cooldown, der erst NACH einem
-  erfolgreichen Versand markiert wird (ein fehlgeschlagener Versand verbraucht das Zeitfenster
-  nicht). `PasswordResetService` löst die Adresse zudem über `findByEmailIgnoreCase…` als `List`
-  auf und schreibt ALLE Treffer an (mehrere Konten auf derselben Adresse werden nicht mehr
-  stillschweigend übergangen).
+  Passwort“ → `PasswordResetService#resetPasswordByAdminAndNotify`.
+- `PasswordResetService`: **Schlüssel-Speicherung** nutzt die bestehenden Bestandsspalten
+  `users.password_reset_key`/`password_reset_timeout` (Flyway-Baseline `V1`) statt einer neuen
+  Migration. **Format**: 24 `SecureRandom`-Bytes, Base64-URL ohne Padding (32 Zeichen) statt des
+  Alt-Formats (`SHA1` über `Math.random()`) – kryptographisch stärker. **Gültigkeit**: 2 Stunden
+  (`elwasys.password-reset.token-validity`). **Reset-URL**:
+  `<elwasys.password-reset.portal-base-url>/reset-password?key=<token>` – über eine
+  Konfigurationseigenschaft gebaut (robuster hinter einem Reverse Proxy). **Schalter**:
+  `elwasys.password-reset.enabled` (Default AN). **Härtung**: der öffentliche
+  Selbstbedienungs-Pfad ist neutralisiert – eine unbekannte Adresse führt zu einem stillen Abbruch
+  mit einer neutralen Einheitsmeldung (keine Existenz-Auskunft nach außen); der Versand teilt sich
+  den `RateLimiter`-Singleton als Cooldown (erst NACH erfolgreichem Versand markiert). Die Adresse
+  wird über `findByEmailIgnoreCase…` als `List` aufgelöst und ALLE Treffer werden angeschrieben.
 
-**ExpiredExecutions** (`ExpiredExecutionsDialog`, fachlicher Nachfolger von
-`Portal/.../components/ExpiredExecutionsWindow`): in `AdminUsersView` öffnet ein
-Warndreieck-Symbol (nur sichtbar für nicht gesperrte Benutzer mit
-`ExecutionService#hasExpiredExecutions`, 1:1-Priorität wie
-`Portal/.../views/UsersView#fillItemWithUserData` – Gesperrt-Icon geht vor Warndreieck) den
-Dialog mit allen abgelaufenen, nicht abgerechneten Ausführungen (`getExpiredExecutions`, neue
-Methode). Je Zeile „Abrechnen“ (`ExecutionService#finishExecution`, entspricht
-`User#payExecution` + `Execution#finish`) oder „Löschen“ (neue Methode
-`ExecutionService#delete`, entspricht `Execution#delete`), zusätzlich „Alle abrechnen“ als
-Sammelaktion – 1:1 wie im Alt-Fenster. **Seit Pre-Launch AP5 (Epic #66, #49)** verlangt
-„Löschen“ vorher einen Bestätigungsdialog (kein versehentliches Entfernen einer nicht
-abgerechneten Ausführung), und „Abrechnen“/„Alle abrechnen“ tragen `setDisableOnClick(true)`
-(Doppelklick-Schutz gegen eine versehentliche Doppelabrechnung).
+**ExpiredExecutions** (`ExpiredExecutionsDialog`): in `AdminUsersView` öffnet ein Warndreieck-Symbol
+(nur für nicht gesperrte Benutzer mit `ExecutionService#hasExpiredExecutions`; Gesperrt-Icon geht
+vor Warndreieck) den Dialog mit allen abgelaufenen, nicht abgerechneten Ausführungen
+(`getExpiredExecutions`). Je Zeile „Abrechnen“ (`ExecutionService#finishExecution`) oder „Löschen“
+(`ExecutionService#delete`), zusätzlich „Alle abrechnen“. „Löschen“ verlangt einen
+Bestätigungsdialog; „Abrechnen“/„Alle abrechnen“ tragen `setDisableOnClick(true)`
+(Doppelklick-Schutz gegen Doppelabrechnung).
 
-**Log-Viewer + Fernwartung** (Status/Logs/Restart, siehe WS-Protokolltabelle oben für die
-Nachrichtentypen/`TerminalMaintenanceService`): `AdminDashboardView` zeigt je Standort jetzt
-eine Kopfzeile mit Verbindungsstatus („Verbunden“/„Nicht verbunden“, aus
-`TerminalConnectionRegistry` – ersetzt die Alt-„IP-Adresse“, die mit der ausgehenden
-Verbindung entfällt, siehe docs/kb/02-data-model.md) sowie den Knöpfen „Log anzeigen“
-(`LogViewerDialog`, fachlicher Nachfolger von `LogViewerWindow`) und „Neustart“ – fachlicher
-Nachfolger der `AdminDashboardLocationPanel`-Toolbar. Beide Knöpfe rufen
-`TerminalMaintenanceService` auf und zeigen für einen NICHT verbundenen Standort denselben
-Fehlertext wie der Alt-Code („Keine Verbindung zum Client“/„...zum Standort.“) – zum
-Implementierungszeitpunkt (Phase 3 AP4, siehe Roadmap: Alt-Clients verbanden sich erst in
-Phase 4 über diesen Kanal) praktisch immer der erwartbare Fall; **seit Phase 4 AP5** verbindet
-sich der Client-Raspi tatsächlich (siehe „Ausgehende Fernwartungs-Verbindung“ oben), die
-Toolbar zeigt jetzt im Normalbetrieb „Verbunden“ und beide Knöpfe funktionieren gegen einen
-echten Terminal. **Bewusst NICHT portiert**: das Alt-TCP-Protokoll selbst
-(`MaintenanceConnectionManager`/`Common.maintenance.*`) – dieser Cutover ist mit AP5 vollzogen;
-der Alt-Code war bis Phase 5 unverändert im Repo geblieben und ist seit Phase 5 AP1 vollständig
-entfernt, siehe docs/kb/05-migration-plan.md, „Entscheidungen“.
+**Tests**: `PasswordServiceTest` (inkl. Migration eines SHA1-Bestandshashes beim Ändern),
+`PasswordResetServiceTest` (echter SMTP-Mock GreenMail – Token-Erzeugung/-Gültigkeit/
+-Einmalverwendung, unbekannte Email, Admin-Reset), Tests in `ExecutionServiceTest`
+(`getExpiredExecutions`, `delete`), `RouteAccessAnnotationsTest` (`ResetPasswordView` ist
+`@AnonymousAllowed`).
 
-**Tests** (17 neu): `PasswordServiceTest` (4, inkl. Migration eines SHA1-Bestandshashes beim
-Ändern), `PasswordResetServiceTest` (6, mit echtem SMTP-Mock GreenMail durch den vollen
-Spring-Kontext – Token-Erzeugung/-Gültigkeit/-Einmalverwendung, unbekannte Email, Admin-Reset),
-2 neue Tests in `ExecutionServiceTest` (`getExpiredExecutions`, `delete`), 1 neuer Test in
-`RouteAccessAnnotationsTest` (`ResetPasswordView` ist `@AnonymousAllowed`), 4 neue Tests in
-`TerminalWebSocketTest` (Fernwartungs-Vermittlung mit einem SIMULIERTEN WS-Client als
-Terminal-Gegenstelle – Log-/Neustart-Roundtrip, sofortiger Fehler bei nicht verbundenem
-Standort, Timeout bei einem verbundenen, aber nicht antwortenden Terminal; bewusst in die
-bestehende Testklasse integriert statt einer eigenen, um keinen weiteren Spring-Kontext/
-Connection-Pool gegen den gemeinsam genutzten Test-Postgres-Cluster zu öffnen – das hatte in
-einer eigenen Klasse "too many clients" ausgelöst, siehe docs/kb/05-migration-plan.md). Backend-Suite
-insgesamt **161/161** grün. Bewusst KEIN Test, der über einen echten eingebetteten
-Servlet-Container eine Vaadin-Route rendert (unverändertes Risiko aus AP1).
+**Live-Update-Tests**: `UiBroadcasterTest` (reiner Unit-Test ohne Spring-Kontext – `UI#access` per
+Mockito synchron simuliert: Verteilung an registrierte Listener einzeln + an mehrere gleichzeitig,
+Abmelden), `DomainEventsTest` (echter Spring-Kontext über `AbstractBackendIT`/`Fixtures` – je ein
+Test pro Service-Ereignisquelle, ein Execution-Lebenszyklus-Test [create→start→finish erzeugt
+mindestens 3 `ExecutionChangedEvent`s mit derselben `deviceId`], ein Abmelde-Test über den vollen
+Stack). Surefire-Konvention beachten: Testklassen enden auf `*Test` (die Standard-Includes sind
+`**/*Test.java`, `**/*IT.java` ist der Failsafe/`mvn verify`-Konvention vorbehalten – in diesem Modul
+nur die abstrakten Basisklassen `AbstractBackendIT`/`AbstractApiIT`).
 
-#### Live-Updates zwischen Sessions (AP5, 2026-07-21)
+## Historie
 
-Letztes Arbeitspaket der Phase-3-Roadmap vor der Playwright-Portierung (AP6, siehe
-docs/kb/05-migration-plan.md) – ersetzt die `events/`-Listener + Vaadin-Push-Mechanik des
-Alt-Portals durch echte Cross-Session-Live-Updates.
-
-**Befund zum Alt-Portal** (wichtig für die Einordnung „Feature-Parität"): `Portal/pom.xml`
-bindet zwar `vaadin-push` ein und die Komponenten-Inventur (docs/kb/05) listet „Vaadin-Push" für
-`events/`, aber im tatsächlichen Alt-Code steht NIRGENDS ein `@Push` (weder auf
-`WaschportalUI` noch sonstwo). Die 5 Interfaces in `Portal/.../events/`
-(`IUserUpdatedEventListener`, `IUserGroupUpdatedEventListener`, `IDeviceUpdatedEventListener`,
-`IProgramUpdatedEventListener`, `ILocationUpdatedEventListener`) sind reine SAME-SESSION-
-Callbacks: z.B. registriert `DevicesView` beim Öffnen von `DeviceWindow` einen Listener
-(`win.addDeviceUpdatedEventListener(d -> this.updateDevice(d))`), den `DeviceWindow` nach dem
-Speichern synchron im selben `VaadinSession`/UI-Thread aufruft
-(`DeviceWindow#save` iteriert `this.listeners`) – analog `AdminDashboardLocationPanel implements
-ILocationUpdatedEventListener`, dessen `onLocationUpdated` von `LocationWindow#save` aus
-derselben Session heraus aufgerufen wird. Es gibt im Alt-Code KEINEN Mechanismus, der eine
-ANDERE offene Browser-Session über eine Änderung informiert. Das heißt: der in AP5 geforderte
-Mindeststandard „mindestens gleichziehen mit dem Alt-Portal" war für Cross-Session-Updates
-trivial erreichbar (das Alt-Portal aktualisiert dort gar nichts) – AP5 hat trotzdem die volle,
-im Auftrag beschriebene Infrastruktur gebaut, nicht nur das Minimum.
-
-**Ereignis-Infrastruktur** (neues, Vaadin-freies Package `backend/.../events/`):
-`DomainEvent` – `sealed` Marker-Interface, `permits` listet alle 7 Ereignistypen explizit auf
-(vollständige Inventur an einer Stelle sichtbar). 7 Records, je einer pro fachlicher
-Ereignisquelle: `UserChangedEvent(userId)`, `UserGroupChangedEvent(userGroupId)`,
-`DeviceChangedEvent(deviceId)`, `ProgramChangedEvent(programId)`,
-`LocationChangedEvent(locationId)`, `CreditChangedEvent(userId)`,
-`ExecutionChangedEvent(executionId, deviceId, userId)`.
-
-**Auslösung in der Service-Schicht** (Auftrag: nicht in der UI, damit API-ausgelöste
-Änderungen dieselben Events feuern): alle 7 Fachlogik-Services (`UserService`,
-`UserGroupService`, `DeviceService`, `ProgramService`, `LocationService`, `CreditService`,
-`ExecutionService`) bekamen einen `ApplicationEventPublisher`-Konstruktorparameter und
-publizieren nach jeder erfolgreichen Änderung das passende Ereignis, unmittelbar nach dem
-`repository.save`/`.delete`-Aufruf. Geprüfte Quelle für API-ausgelöste Executions:
-`backend/.../api/ExecutionController` ruft `ExecutionService#createExecution`/
-`#startExecution`/`#finishExecution`/`#resetExecution` auf (`CreditService#payExecution`
-läuft dabei innerhalb von `finishExecution` mit) – da die Ereignis-Auslösung in
-`ExecutionService`/`CreditService` selbst liegt, feuern Terminal-API-Aufrufe automatisch
-dieselben Ereignisse wie ein Klick im Portal-UI (verifiziert in `DomainEventsTest`, siehe
-„Tests" unten). Zwei bewusste Vereinfachungen (dokumentiert, keine stillen Lücken): (1)
-`ExecutionService#stopExecution` (nur intern von `finishExecution` aufgerufen) publiziert
-selbst NICHT, um pro Aufruf nicht zwei Ereignisse zu erzeugen; (2)
-`UserGroupService#setValidLocations`/`-Devices`/`-Programs` publizieren jeweils nur ein
-`UserGroupChangedEvent` statt zusätzlicher Events je einzeln betroffener
-Location/Device/Program – keine der Stammdaten-Grids dieser drei Entitäten zeigt
-Gruppenzugehörigkeit an, ein feingranulareres Event hätte keinen sichtbaren Effekt.
-
-**`UiBroadcaster`** (neu, `backend/.../ui/push/`, klassisches Vaadin-„Broadcaster"-Muster):
-Spring-`@Component`, hört über `@TransactionalEventListener(fallbackExecution=true)` zu
-(Default-Phase `AFTER_COMMIT` – ein wegen einer Exception zurückgerollter Service-Aufruf,
-z.B. `DuplicateCardIdException`, löst also KEINEN Push aus, weil das Event nie „committet"
-wird). `register(UI ui, Consumer<DomainEvent> listener)` merkt sich Aufrufer-`UI` + Listener
-und liefert eine `Registration` zum Abmelden zurück; Verteilung eines Ereignisses iteriert alle
-Registrierungen und ruft `ui.access(() -> listener.accept(event))` – Zustellungsfehler (UI
-evtl. schon geschlossen, z.B. Browser-Tab zu/Session-Timeout) werden geloggt statt die übrigen
-Listener zu blockieren.
-
-**Vaadin Push aktiviert**: neue Klasse `backend/.../ui/ElwasysAppShell implements
-AppShellConfigurator`, annotiert `@Push(value=PushMode.AUTOMATIC,
-transport=Transport.WEBSOCKET_XHR)` – WebSocket bevorzugt, automatischer Fallback auf lang
-laufende XHR-Requests, falls ein Proxy/eine Firewall WebSockets blockiert (Vaadins
-Standardkombination). Kein neuer Dependency-Eintrag nötig: `flow-push` (Atmosphere) hängt
-bereits transitiv an `vaadin-spring` (Teil von `vaadin-spring-boot-starter`, seit AP1
-eingebunden).
-
-**Security-/Pfad-Koexistenz** (Auftrag – geprüft, nicht nur behauptet):
-1. **Terminal-WebSocket**: Vaadins Push-Endpunkt läuft über die normale
-   Vaadin-Servlet-Zuordnung (Atmosphere-Transport innerhalb desselben Request-Handlings), der
-   Terminal-WebSocket-Endpunkt liegt unter dem disjunkten Pfad `/api/v1/terminal-ws`
-   (`TerminalApiSecurityConfig`, eigene `@Order(1)`-Kette, `securityMatcher("/api/v1/**")`,
-   siehe Abschnitt „WebSocket-Endpunkt" oben) – keine Pfad-Kollision. Bestätigt durch
-   `TerminalWebSocketTest` weiterhin grün (10/10) und einen manuellen Smoke-Test des
-   produktionsmodus-gebauten Jars (siehe „Build-Verifikation" unten).
-2. **`VaadinSecurityConfigurer`** (`auth/SecurityConfig`, Catch-all-Kette, unverändert seit
-   AP1): der Push-Handshake ist zunächst eine normale HTTP-Anfrage und durchläuft daher diese
-   Kette. `VaadinSecurityConfigurer` erkennt Vaadin-interne Anfragen (über
-   `com.vaadin.flow.server.HandlerHelper#isFrameworkInternalRequest`, verifiziert per
-   `javap` gegen `flow-server-24.10.9.jar`) und lässt sie unabhängig vom Anmeldestatus durch –
-   dieselbe Freigabe wie für Themes/Icons/das JS-Bundle selbst, die bereits seit AP1 in
-   `SecurityConfig`s Javadoc als „Push-Endpunkt" erwähnt wird. Die eigentliche Autorisierung
-   (welche Daten eine Session sehen darf) bleibt Sache der einzelnen Views (`@RolesAllowed`
-   usw.) – der Push-Kanal selbst transportiert nur bereits serverseitig autorisierte Updates.
-   `VaadinPortalSecurityTest` (5/5) blieb unverändert grün.
-3. **Produktionsmodus-Build** (die für dieses Arbeitspaket kritischste Prüfung, weil `@Push`
-   das Frontend-Bundle ändern kann, siehe docs/kb/05-migration-plan.md, AP2-Befund):
-   `mvn -f backend/pom.xml clean package -Pproduction -DskipTests` läuft weiterhin grün durch
-   (auch nach `clean`, kein gecachter Alt-Zustand) – Vaadin liefert unverändert „A production
-   mode bundle build is not needed" und nutzt das vorgefertigte `vaadin-core`-Bundle. Ein damit
-   gestarteter Server liefert `/actuator/health` → `200`, `/login` → `200` wie vor AP5, mit
-   derselben, bereits aus AP2 bekannten, NICHT fatalen `MissingLicenseKeyException` im Log
-   (keine NEUE, durch `@Push` verursachte Fehlermeldung).
-
-**Views abonniert** (Muster überall identisch – Lifecycle-Anforderung aus dem Auftrag
-eingehalten): `onAttach(AttachEvent)` → `this.registration = broadcaster.register(
-attachEvent.getUI(), listener)`; `onDetach(DetachEvent)` → `registration.remove()` + Feld auf
-`null`, verhindert Session-Leaks (eine dauerhaft referenzierte `UI` nach Verlassen der Route).
-- `AdminDashboardView`: reagiert auf `DeviceChangedEvent`/`ExecutionChangedEvent` mit
-  GEZIELTEM Nachladen NUR des betroffenen Geräte-Panels – `refreshDevice(deviceId)` schlägt das
-  Panel in einer `Map<Integer, VerticalLayout> devicePanelsByDeviceId` nach und ruft
-  `populateDevicePanel(panel, dashboardService.getDeviceStatus(device))`, das den Panel-INHALT
-  in-place neu aufbaut (`removeAll()` + neu befüllen), OHNE einen neuen DOM-Knoten zu erzeugen
-  – nutzt damit genau die Methode, die `DashboardService` laut seinem AP3-Javadoc extra für
-  diesen Zweck bereitstellt ("... damit AP5 sie wiederverwenden kann"). Ein `LocationChangedEvent`
-  oder ein Ereignis für ein (noch) nicht angezeigtes Gerät (z.B. gerade neu angelegt) fällt auf
-  ein vollständiges `loadData()` zurück.
-- Die 5 Stammdaten-Grids (`AdminUsersView`, `AdminUserGroupsView`, `AdminDevicesView`,
-  `AdminProgramsView`, `AdminLocationsView`) laden bei ihrem jeweiligen `*ChangedEvent`
-  vollständig neu (`grid.setItems(service.findAll())`); `AdminUsersView` zusätzlich bei
-  `CreditChangedEvent`/`ExecutionChangedEvent`, weil die Liste eine Guthaben-Spalte und ein
-  Warndreieck-Icon für abgelaufene Ausführungen zeigt (beide hängen von diesen Ereignissen ab).
-- `UserDashboardView`: für AP5 refaktoriert – Guthaben-/„Letzte Einzahlung"-Kachel und die
-  Buchungstabelle sind jetzt Felder (`Span`/`Grid`) statt lokaler Konstruktor-Variablen, eine
-  neue `refresh()`-Methode aktualisiert nur deren Inhalt. Abonniert `CreditChangedEvent`/
-  `ExecutionChangedEvent`, gefiltert auf die EIGENE Benutzer-Id (`concernsOwnUser`, ein
-  Java-21-Pattern-Matching-`switch` über die `DomainEvent`-Records) – andere Benutzer betreffen
-  diese Session dank der seit AP3 bestehenden Datenisolation (Benutzer kommt aus
-  `ElwasysUserPrincipal`, nicht aus einem Pfad-/Query-Parameter) ohnehin nicht.
-
-**Bewusst NICHT Teil dieses Arbeitspakets** (siehe docs/kb/05-migration-plan.md, „Offene
-Punkte/Risiken"): der bestehende blockierende Request/Response-Aufruf der
-Fernwartungs-Knöpfe (`AdminDashboardView#showLog`/`#restart` → `TerminalMaintenanceService`,
-synchron im Vaadin-Request-Thread, bis zu ~10s bei einem verbundenen, aber nicht antwortenden
-Terminal) auf einen asynchronen Aufruf mit Ladeindikator umzustellen – die dafür nötige
-Push-Infrastruktur steht jetzt zur Verfügung, der Umbau selbst war nicht Auftragsgegenstand
-dieses Arbeitspakets und bleibt offen für ein künftiges Arbeitspaket.
-
-**Tests** (12 neu, Backend-Suite insgesamt **173/173** grün, 161 vorher + 12 neu):
-- `UiBroadcasterTest` (4, Package `backend/.../ui/push/`, reiner Unit-Test OHNE Spring-Kontext
-  – `UI#access` per Mockito synchron simuliert, kein echter Servlet-Container nötig): deckt
-  „Broadcaster verteilt an registrierte Listener" (einzeln + an mehrere gleichzeitig) und
-  „Abmelden funktioniert" (inkl. „nur der abgemeldete Listener verstummt, andere bleiben aktiv")
-  laut Auftrag ab.
-- `DomainEventsTest` (8, Package `backend/.../events/`, ECHTER Spring-Kontext über
-  `AbstractBackendIT`/`Fixtures`): deckt zusätzlich Springs `@TransactionalEventListener`/
-  `AFTER_COMMIT`-Mechanismus selbst mit ab (nicht nur den reinen Verteil-Mechanismus von
-  `UiBroadcasterTest`) – je ein Test pro Service-Ereignisquelle (User/UserGroup/Device/Program/
-  Location/Credit), ein Execution-Lebenszyklus-Test (create→start→finish erzeugt mindestens 3
-  `ExecutionChangedEvent`s, alle mit derselben `deviceId`) sowie ein Abmelde-Test über den
-  vollen Stack (Service → Event → `UiBroadcaster`).
-- Bewusst KEIN Test, der über einen echten eingebetteten Servlet-Container eine Vaadin-Route
-  rendert (unverändertes Risiko/Vorgabe aus AP1, siehe docs/kb/05-migration-plan.md, Lizenz-Befund)
-  – die geänderten Views sind stattdessen durch Compile + `RouteAccessAnnotationsTest`
-  (unverändert grün, keine Routen/Rollen-Annotationen angefasst) + `VaadinPortalSecurityTest`
-  (unverändert grün) + den manuellen Produktionsmodus-Smoke-Test oben abgesichert.
-- **Naming-Fallstrick gefunden und behoben**: eine ursprünglich `DomainEventsIT` genannte
-  Testklasse wurde von Maven Surefire (Standard-Includes `**/*Test.java`, NICHT `**/*IT.java` –
-  letzteres ist die Failsafe/`mvn verify`-Konvention, dieses Projekt/`run-backend-tests.sh`
-  laufen `mvn test`) beim ersten Testlauf stillschweigend NIE ausgeführt (0 Fehler, weil 0
-  Tests gefunden – nicht sofort auffällig). Behoben durch Umbenennen auf `DomainEventsTest`;
-  seither sind `*IT.java`-Dateien in diesem Modul wieder ausschließlich die beiden abstrakten
-  Test-Basisklassen (`AbstractBackendIT`, `AbstractApiIT`), wie im übrigen Modul bereits
-  durchgängige Konvention.
-
-**Build-Verifikation**: `mvn -f backend/pom.xml compile`/`test-compile` grün;
-`backend/run-backend-tests.sh` **173/173** grün; `mvn -f backend/pom.xml clean package
--Pproduction -DskipTests` grün (siehe oben, kritische Prüfung wegen `@Push`); `git status`/
-`git diff --stat` bestätigen 0 Quelländerungen an Common/Client-Raspi/Portal (nur `backend/`,
-`docs/kb/`).
+- **2026-07-23** — Betriebs-Health-Indicators (`/actuator/health/operational` neben
+  `liveness`/`readiness`) und `IdempotencyKeyRetentionScheduler` ergänzt
+  ([Worklog AP6](../worklog/2026-07-23-ap6-deployment-betrieb-cutover.md)).
+- **2026-07-23** — Portal-Performance/CRUD-Härtung: paginierte Dashboard-Historie,
+  `CreditService.getCredits(List)`, `setDisableOnClick`-Doppelklick-Schutz, Löschwächter auf
+  `DeviceService`/ExpiredExecutions, regex-freie Kartensuche, classpath-scannender
+  `RouteAccessAnnotationsTest`
+  ([Worklog AP5](../worklog/2026-07-23-ap5-portal-performance-crud.md)).
+- **2026-07-22** — Auth-/Eingabe-Härtung: `RateLimiter`-Singleton, Login-Brute-Force-Sperre,
+  case-insensitiver Username-Guard, zentrale Passwort-Mindestlänge, deCONZ-UUID-Validierung,
+  gedrosseltes `last_used_at`, `completeIfPending`-Absender-Prüfung, neutralisierter
+  Passwort-Reset-Pfad ([Worklog AP4](../worklog/2026-07-22-ap4-umsetzung.md) ·
+  [ADR 0018](../architecture/0018-ap4-auth-security-entscheidungen.md)).
+- **2026-07-22** — Abrechnungs-Integrität: pessimistische Zeilen-Locks + geräte-/schlüsselweise
+  `pg_advisory_xact_lock` (Serialisierung nebenläufiger Buchungen und Idempotenz-Replays),
+  Benachrichtigung über `ExecutionNotificationEvent`/`AFTER_COMMIT` entkoppelt, `requirePositive`
+  ([Worklog AP3](../worklog/2026-07-22-ap3-abrechnungs-integritaet.md) ·
+  [ADR 0017](../architecture/0017-abrechnungs-integritaet-locking.md)).
+- **2026-07-22** — Terminal-Stabilität: `OfflineJournal` DSYNC + Dead-Letter, Uhren-Plausibilität,
+  selbst-reconnectender `DeconzEventListener`, neustartfester WS-Lifecycle, Doppel-Finish-Schutz,
+  RFID-Log-Maskierung, `setup.sh`-CSPRNG
+  ([Worklog AP2](../worklog/2026-07-22-ap2-terminal-stabilitaet.md)).
+- **2026-07-22** — Offline-Replay-Kern: privilegierter `replay=true`-Nachbuchungs-Pfad,
+  teilfehler-robuster `OfflineGateway#replay` mit Dead-Letter, Zeitstempel-Invariante `stop ≥ start`
+  ([Worklog AP1](../worklog/2026-07-22-ap1-offline-replay-kern.md) ·
+  [ADR 0016](../architecture/0016-offline-replay-haertung.md)).
+- **2026-07-22** — `Common`-Modul aufgelöst: die 6 verbliebenen Utility-Klassen liegen im
+  Client-Raspi-Modul, das Backend bindet `common` nicht mehr (Auth-Parity über den Test-Helfer
+  `LegacySha1`); Schema-Konsolidierung (`database/`-Duplikat entfernt, `V1` als einzige Quelle)
+  ([Worklog Phase-5-Nachtrag](../worklog/2026-07-22-phase-5-nachtrag-common-und-schema.md)).
+- **2026-07-21** — Alt-Portal-Modul (Vaadin 7) und Alt-DB-Rollen/-Spalten/-Tabellen (`V6`–`V10`)
+  aus Repo und Schema entfernt; `MaintenanceServerManager`/`LocationManager`,
+  `Common.maintenance.*` und die Config-Keys `smtp.*`/`database.*`/`maintenance.*` fallen weg
+  ([Worklog Phase 5](../worklog/2026-07-21-phase-5-aufraeumen.md) ·
+  [Änderungslog](05-migration-plan.md)).
+- **2026-07-21** — Terminal-Cutover: die Terminals sprechen ausschließlich über REST-API v1
+  (`api/`, `model/`), die ausgehende Fernwartungs-WebSocket (`ws/`) und den Offline-Pfad
+  (`offline/`); HTTP durchgängig `java.net.http`, Benachrichtigung an das Backend abgegeben
+  ([Worklog Phase 4](../worklog/2026-07-21-phase-4-terminal-modernisierung.md) ·
+  [ADR 0004](../architecture/0004-terminals-ohne-direkt-db-zugriff.md) ·
+  [ADR 0005](../architecture/0005-fernwartung-ueber-ausgehende-websocket-verbindung.md) ·
+  [ADR 0010](../architecture/0010-offline-buchungen-am-terminal.md)).
+- **2026-07-20/21** — Vaadin-Flow-Admin-Portal aufgebaut (Grundgerüst, Stammdaten-Views,
+  Dashboard/Guthaben, Dialoge/Fernwartung, Cross-Session-Live-Updates, Playwright-E2E-Portierung)
+  ([Worklog Phase 3](../worklog/2026-07-20-phase-3-portal-neubau.md) ·
+  [ADR 0003](../architecture/0003-portal-als-vaadin-flow-im-backend.md)).
+- **2026-07-20** — Backend-Gerüst: JPA-Entities/Repositories, Kern-Services, Auth (Argon2id +
+  SHA1-Migrationspfad), REST-API v1 + Standort-Token-Auth + WebSocket-Endpunkt,
+  Benachrichtigungsdienst hinter `elwasys.notifications.enabled`
+  ([Worklog Phase 2](../worklog/2026-07-20-phase-2-backend-geruest.md) ·
+  [ADR 0002](../architecture/0002-zentrales-spring-boot-backend.md) ·
+  [ADR 0008](../architecture/0008-api-auth-standort-token-und-admin-session.md) ·
+  [ADR 0009](../architecture/0009-zentraler-benachrichtigungsdienst-hinter-flag.md)).
