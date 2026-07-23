@@ -112,6 +112,11 @@ public class DeviceService {
     /**
      * Löscht ein Gerät.
      *
+     * <p>Der Wächter greift bei einer GESTARTETEN, nicht abgeschlossenen Ausführung
+     * ({@code start IS NOT NULL AND finished = false}) - dem laufenden/abgelaufenen Fall des
+     * Issue-#49-Scopes. Eine nur angelegte, noch nie gestartete Ausführung ({@code start IS NULL})
+     * ist bewusst nicht abgedeckt (sie entsteht praktisch nur transient im Start-Pfad).
+     *
      * @throws EntityInUseException wenn das Gerät noch eine nicht abgeschlossene
      *                              (laufende/abgelaufene) Ausführung trägt (Issue #49)
      */

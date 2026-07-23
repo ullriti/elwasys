@@ -410,4 +410,30 @@ class ExecutionServiceTest extends AbstractBackendIT {
         assertThat(this.executionService.getExecutions(device, PageRequest.of(1, 2, newestFirst)))
                 .extracting(ExecutionEntity::getId).containsExactly(oldest.getId());
     }
+
+    @Test
+    void getExecutionsPagedIsStableAcrossPagesWhenStartTimestampsAreIdentical() {
+        // Issue #30 / Review-Finding: Bei identischen start-Zeitstempeln braucht die
+        // Lazy-Pagination einen stabilen Zweit-Sortierschlüssel (id), sonst könnte eine Zeile
+        // über die Seiten hinweg doppelt oder gar nicht erscheinen. Das Dashboard sortiert
+        // deshalb start DESC, id DESC.
+        DeviceEntity device = newDevice();
+        ProgramEntity program = newProgram(3600);
+        UserEntity user = newUser();
+        LocalDateTime sameStart = LocalDateTime.of(2020, 5, 5, 12, 0, 0);
+        ExecutionEntity e1 = this.executionService.startExecution(
+                this.executionService.createExecution(device, program, user), sameStart);
+        ExecutionEntity e2 = this.executionService.startExecution(
+                this.executionService.createExecution(device, program, user), sameStart);
+        ExecutionEntity e3 = this.executionService.startExecution(
+                this.executionService.createExecution(device, program, user), sameStart);
+
+        Sort stable = Sort.by(Sort.Direction.DESC, "start").and(Sort.by(Sort.Direction.DESC, "id"));
+        List<ExecutionEntity> page0 = this.executionService.getExecutions(device, PageRequest.of(0, 2, stable));
+        List<ExecutionEntity> page1 = this.executionService.getExecutions(device, PageRequest.of(1, 2, stable));
+
+        // Deterministisch id DESC; keine Ueberschneidung, keine verlorene Zeile.
+        assertThat(page0).extracting(ExecutionEntity::getId).containsExactly(e3.getId(), e2.getId());
+        assertThat(page1).extracting(ExecutionEntity::getId).containsExactly(e1.getId());
+    }
 }

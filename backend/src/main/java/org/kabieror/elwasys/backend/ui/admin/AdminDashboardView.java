@@ -352,10 +352,15 @@ public class AdminDashboardView extends VerticalLayout {
         // Issue #30 (Pre-Launch AP5): lazy, seitenweise geladene Historie (neueste zuerst) statt
         // der vollständigen Liste. Der Preis (N+1 über lazy program/user/group) wird damit nur
         // noch für die tatsächlich sichtbaren Zeilen berechnet, nicht für die gesamte Historie.
+        //
+        // Stabiler Zweit-Sortierschlüssel (id DESC): Bei Lazy-Pagination stellt der Callback pro
+        // Seite eine eigene SQL-Abfrage. Teilten sich zwei Ausführungen denselben start-Zeitstempel
+        // (realistisch bei importierten/Demo-Daten), könnte Postgres sie über die Seiten hinweg in
+        // unterschiedlicher Reihenfolge liefern - eine Zeile erschiene sonst doppelt oder gar nicht.
+        Sort newestFirst = Sort.by(Sort.Direction.DESC, "start").and(Sort.by(Sort.Direction.DESC, "id"));
         grid.setItems(
                 query -> this.executionService.getExecutions(device,
-                        PageRequest.of(query.getPage(), query.getPageSize(),
-                                Sort.by(Sort.Direction.DESC, "start"))).stream(),
+                        PageRequest.of(query.getPage(), query.getPageSize(), newestFirst)).stream(),
                 query -> (int) this.executionService.countExecutions(device));
         return grid;
     }
