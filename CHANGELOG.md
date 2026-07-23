@@ -13,6 +13,15 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Changed
+- Offline-Replay-Härtung II (Code-Review-Follow-ups zu Epic #66, ADR 0021): Der privilegierte
+  Replay-Pfad (#67) verlangt jetzt einen plausibel in der Vergangenheit liegenden
+  Original-Zeitstempel und lehnt fehlende/„jetzt"/Zukunfts-Zeitstempel ab
+  (`422 invalid-replay-timestamp`, neuer Knopf `elwasys.offline.replay-min-backdating`, Default
+  60 s; ein zu alter Zeitstempel – langer Waschgang – wird weiterhin akzeptiert und wie bisher
+  auf Serverzeit gesetzt); jede privilegierte Nachbuchung wird auditiert. Das Terminal (#69) verliert einen
+  Poison-Eintrag nicht mehr, wenn der Dead-Letter-Write scheitert (Write-before-Remove) und
+  begrenzt den Wiederhol-Busy-Loop bei defektem Datenträger über einen neustartfesten
+  Fehlversuchszähler.
 - Deployment & Betrieb (Pre-Launch-Review AP6, Issues #31/#32/#35/#64, ADR 0019): Backend-Container
   und Compose/Helm laufen jetzt fest auf Zeitzone `Europe/Berlin` (an die Terminals angeglichen),
   der Compose-Stack bindet Port 8080 nur noch auf `127.0.0.1` (TLS-Proxy davor Pflicht) und begrenzt
@@ -29,6 +38,11 @@ im [Worklog](docs/worklog/README.md).
   das Backend nicht fälschlich als „unhealthy" markiert. Details bleiben nur angemeldet sichtbar.
 
 ### Fixed
+- Geister-Execution beim Offline-Replay (#68, ADR 0021): Gelingt der `START` einer offline
+  gebuchten Ausführung, scheitert sein `FINISH`/`ABORT` aber fachlich und wird dead-lettert,
+  räumt das Terminal die serverseitig „laufende" Execution jetzt per kompensierendem `abort`
+  auf (best effort) und alarmiert laut, statt sie stumm bis zum Ablauf der Maximaldauer belegt
+  zu lassen.
 - Terminal-Auto-Update (Pre-Launch-Review AP6, Issues #34/#62/#63): Ein fehlgeschlagenes Deploy
   löst keine Update/Rollback-Endlosschleife mehr aus — die fehlgeschlagene Zielversion wird gemerkt
   und nicht erneut versucht, bis eine andere Version erscheint. Heruntergeladene Client-Jars werden
