@@ -300,6 +300,19 @@ public class OfflineGateway {
      *       {@code START} die nur in dieser Methode gelernte echte Backend-Id verloren gehen und
      *       ein späterer {@code FINISH}-Replay das Ende nie nachmelden (die längst fertige
      *       Maschine würde beim nächsten Terminal-Neustart sogar wieder eingeschaltet).</li>
+     *   <li><b>Paar-Atomizität über Lauf-Grenzen hinweg</b> (Issue #80): ein erfolgreich
+     *       nachgemeldeter {@code START} wird NICHT sofort aus dem Journal entfernt, sondern erst
+     *       zusammen mit seiner Terminierung ({@code pendingStartRemoval}, siehe unten) - egal ob
+     *       diese erfolgreich nachgemeldet wird oder (fachlich) dead-lettert. Bricht der Lauf
+     *       stattdessen wegen eines Kommunikationsfehlers vor der Terminierung ab ({@code return
+     *       false}), bleibt der {@code START} unverändert im Journal liegen: die in
+     *       {@code resolvedStartKeys} gelernte Backend-Id ist nur lauflokal und ginge sonst
+     *       verloren, während der {@code START} selbst schon als erledigt gälte - der nächste Lauf
+     *       liefe dann in einen verwaisten Terminator (der zugehörige {@code START} fehlt im
+     *       Journal, aber sein Ereignis ist noch offen) und würde ihn faelschlich dead-lettern,
+     *       ohne dass die Ausführung serverseitig je beendet wird. Der nächste Lauf meldet den
+     *       {@code START} stattdessen erneut nach (der Replay-Endpunkt ist idempotent und liefert
+     *       dieselbe Id), sodass die Terminierung wieder auflösbar ist.</li>
      *   <li><b>Kein {@code clear()}-Race</b>: erfolgreich übertragene Einträge werden EINZELN
      *       aus dem Journal entfernt ({@code removeEntry}), nie das ganze Journal geleert -
      *       ein während des Replays parallel hinzugekommener Eintrag (eine gerade endende
@@ -327,6 +340,13 @@ public class OfflineGateway {
         }
 
         Map<String, Integer> resolvedStartKeys = new HashMap<>();
+        // Erfolgreich nachgemeldete STARTs (Schluessel = eigener idempotencyKey), deren Entfernung
+        // aus dem Journal auf ihre Terminierung wartet (Issue #80 - siehe Klassenkommentar von
+        // replay() "Paar-Atomizität ueber Lauf-Grenzen hinweg"). NUR lauflokal: bricht der Lauf per
+        // "return false" ab, bevor die Terminierung das Journal verlaesst, wird diese Map einfach
+        // verworfen und der zugehoerige START bleibt (weil nie removeEntry(...) aufgerufen wurde)
+        // unveraendert im Journal liegen.
+        Map<String, OfflineJournalEntry> pendingStartRemoval = new HashMap<>();
         int replayed = 0;
         int deadLettered = 0;
         for (OfflineJournalEntry entry : entries) {
@@ -339,7 +359,14 @@ public class OfflineGateway {
             }
             try {
                 replayOne(entry, resolvedStartKeys);
-                this.journal.removeEntry(entry.idempotencyKey());
+                if (OfflineJournalEntry.TYPE_START.equals(entry.type())) {
+                    // Noch NICHT aus dem Journal entfernen - erst wenn die zugehoerige Terminierung
+                    // das Journal ebenfalls verlaesst (unten, Erfolgs- ODER Dead-Letter-Pfad).
+                    pendingStartRemoval.put(entry.idempotencyKey(), entry);
+                } else {
+                    this.journal.removeEntry(entry.idempotencyKey());
+                    removePairedStartIfPending(entry, pendingStartRemoval);
+                }
                 replayed++;
             } catch (ApiException e) {
                 if (e.isCommunicationFailure()) {
@@ -355,6 +382,7 @@ public class OfflineGateway {
                                 + "fort.", entry.idempotencyKey(), entry.type(), e.getHttpStatus(), e.getTypeSlug(), e);
                 compensateGhostExecutionIfNeeded(entry, resolvedStartKeys);
                 this.journal.moveToDeadLetter(entry, deadLetterReason(entry, e));
+                removePairedStartIfPending(entry, pendingStartRemoval);
                 deadLettered++;
             } catch (RuntimeException e) {
                 // Defensiv (Issue #17): jeder unerwartete Laufzeitfehler beim Verarbeiten eines
@@ -364,6 +392,7 @@ public class OfflineGateway {
                         + "Dead-Letter-Datei verschoben.", entry.idempotencyKey(), entry.type(), e);
                 compensateGhostExecutionIfNeeded(entry, resolvedStartKeys);
                 this.journal.moveToDeadLetter(entry, deadLetterReason(entry, e));
+                removePairedStartIfPending(entry, pendingStartRemoval);
                 deadLettered++;
             }
         }
@@ -373,6 +402,33 @@ public class OfflineGateway {
         // Ein noch offener, lokal weiter laufender START (ohne Terminierung) bleibt bewusst im
         // Journal - dann ist noch nicht alles erledigt.
         return !this.journal.hasPendingEntries();
+    }
+
+    /**
+     * Entfernt den gepaarten {@code START} eines Terminators aus dem Journal, sobald dieser
+     * Terminator selbst das Journal verlaesst - egal ob erfolgreich nachgemeldet oder (fachlich)
+     * dead-lettered (Issue #80). Ohne diesen zweiten Schritt im Dead-Letter-Pfad bliebe ein in
+     * DIESEM Lauf frisch angelegter START dauerhaft im Journal liegen, obwohl seine Terminierung
+     * bereits (als Poison-Entry) entschieden ist - {@code hasPendingEntries()} wuerde dann nie
+     * mehr leer.
+     *
+     * @param terminator          der FINISH/ABORT-Eintrag, der soeben das Journal verlassen hat
+     * @param pendingStartRemoval die in DIESEM Lauf erfolgreich nachgemeldeten, noch nicht
+     *                            entfernten STARTs (Schluessel = deren eigener idempotencyKey)
+     */
+    private void removePairedStartIfPending(OfflineJournalEntry terminator,
+            Map<String, OfflineJournalEntry> pendingStartRemoval) {
+        boolean isTerminator = OfflineJournalEntry.TYPE_FINISH.equals(terminator.type())
+                || OfflineJournalEntry.TYPE_ABORT.equals(terminator.type());
+        if (!isTerminator || terminator.startIdempotencyKey() == null) {
+            // Stufe-A-Terminator (echte executionId, kein in diesem Lauf gelernter START) oder
+            // gar kein Terminator - nichts zu tun.
+            return;
+        }
+        OfflineJournalEntry pairedStart = pendingStartRemoval.remove(terminator.startIdempotencyKey());
+        if (pairedStart != null) {
+            this.journal.removeEntry(pairedStart.idempotencyKey());
+        }
     }
 
     private static String deadLetterReason(OfflineJournalEntry entry, Exception e) {

@@ -523,7 +523,12 @@ bestehende REST-API v1):
     Gerät/Programm, ein unbekannter Eintragstyp) wandert in eine Dead-Letter-Datei, statt den
     Replay dauerhaft zu blockieren. Erfolgreich übertragene Einträge werden einzeln per
     `removeEntry` entfernt; die Paar-Reihenfolge bleibt gewahrt (ein `START` wird erst nachgemeldet,
-    wenn seine Terminierung vorliegt). Die Nachmeldung eines offline gebuchten Starts läuft über
+    wenn seine Terminierung vorliegt). **Paar-Atomizität über Lauf-Grenzen hinweg** (Issue #80):
+    ein erfolgreich nachgemeldeter `START` wird NICHT sofort entfernt, sondern erst zusammen mit
+    seiner Terminierung – egal ob diese erfolgreich nachgemeldet wird oder dead-lettert. Bricht der
+    Lauf davor per Kommunikationsfehler ab, bleibt der `START` unverändert im Journal (die nur
+    lauflokal gelernte Backend-Id ginge sonst verloren); der nächste Lauf meldet ihn erneut nach
+    (der Replay-Endpunkt ist idempotent). Die Nachmeldung eines offline gebuchten Starts läuft über
     `ApiClient#replayCreateExecution` (`replay=true`); Doppelverarbeitung schützt der
     `Idempotency-Key` (siehe [ADR 0016](../architecture/0016-offline-replay-haertung.md)).
 - **Stufe A** (`executions/ExecutionFinisher#executeAction`): der Live-`finish`/`abort`-Aufruf

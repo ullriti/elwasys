@@ -284,14 +284,41 @@ public class ExecutionManager implements ICloseListener {
     }
 
     /**
+     * Registriert einen Listener in einer der drei Listener-Listen, sofern er dort noch nicht
+     * eingetragen ist. Zentraler Helfer für die sechs Register-/Unregister-Methoden unten (#81)
+     * - schließt die Copy-Paste-Fehlerklasse (eine "stop"-Methode, die versehentlich "add" statt
+     * "remove" aufruft) strukturell aus, statt sie sechsfach zu wiederholen. Betraf VOR diesem
+     * Fix nicht nur {@code stopListenToExecutionStartedEvent}, sondern ebenso
+     * {@code stopListenToExecutionErrorEvent} - beide Listener-Lecks sind mit diesem Helfer
+     * erledigt.
+     *
+     * @param listeners Die Listener-Liste, in die eingetragen werden soll
+     * @param l         Der einzutragende Listener
+     */
+    private static <T> void register(List<T> listeners, T l) {
+        if (!listeners.contains(l)) {
+            listeners.add(l);
+        }
+    }
+
+    /**
+     * Entfernt einen Listener aus einer der drei Listener-Listen. Gegenstück zu {@link
+     * #register(List, Object)}.
+     *
+     * @param listeners Die Listener-Liste, aus der entfernt werden soll
+     * @param l         Der zu entfernende Listener
+     */
+    private static <T> void unregister(List<T> listeners, T l) {
+        listeners.remove(l);
+    }
+
+    /**
      * Registriert einen Listener zum Ereignis der Fertigstellung einer Ausführung
      *
      * @param l Der Listener, der bei einer fertiggestellten Programmausführung benachrichtigt werden soll
      */
     public void listenToExecutionFinishedEvent(IExecutionFinishedListener l) {
-        if (!this.finishListeners.contains(l)) {
-            this.finishListeners.add(l);
-        }
+        register(this.finishListeners, l);
     }
 
     /**
@@ -300,9 +327,7 @@ public class ExecutionManager implements ICloseListener {
      * @param l Der Listener, der bei einer fertiggestellten Programmausführung benachrichtigt werden sollte
      */
     public void stopListenToExecutionFinishedEvent(IExecutionFinishedListener l) {
-        if (this.finishListeners.contains(l)) {
-            this.finishListeners.remove(l);
-        }
+        unregister(this.finishListeners, l);
     }
 
     /**
@@ -311,9 +336,7 @@ public class ExecutionManager implements ICloseListener {
      * @param l Der Listener, der bei einer gestarteten Programmausführung benachrichtigt werden soll
      */
     public void listenToExecutionStartedEvent(IExecutionStartedListener l) {
-        if (!this.startListeners.contains(l)) {
-            this.startListeners.add(l);
-        }
+        register(this.startListeners, l);
     }
 
     /**
@@ -322,9 +345,7 @@ public class ExecutionManager implements ICloseListener {
      * @param l Der Listener, der bei einer gestarteten Programmausführung benachrichtigt werden sollte
      */
     public void stopListenToExecutionStartedEvent(IExecutionStartedListener l) {
-        if (this.startListeners.contains(l)) {
-            this.startListeners.add(l);
-        }
+        unregister(this.startListeners, l);
     }
 
     /**
@@ -333,9 +354,7 @@ public class ExecutionManager implements ICloseListener {
      * @param l Der Listener, der bei einer fehlgeschlagenen Programmausführung benachrichtigt werden soll
      */
     public void listenToExecutionErrorEvent(IExecutionErrorListener l) {
-        if (!this.errorListeners.contains(l)) {
-            this.errorListeners.add(l);
-        }
+        register(this.errorListeners, l);
     }
 
     /**
@@ -344,9 +363,7 @@ public class ExecutionManager implements ICloseListener {
      * @param l Der Listener, der bei einer fehlgeschlagenen Programmausführung benachrichtigt werden sollte
      */
     public void stopListenToExecutionErrorEvent(IExecutionErrorListener l) {
-        if (this.errorListeners.contains(l)) {
-            this.errorListeners.add(l);
-        }
+        unregister(this.errorListeners, l);
     }
 
     @Override

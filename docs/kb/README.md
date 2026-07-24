@@ -118,9 +118,18 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   H3 Fall-Through `DeviceListEntry`, H4 kein verdrahteter Alarmkanal, H5 kein geprobter
   Restore-Weg, H6 Cutover-Preflight kennt V11 nicht, H7 `ELWASYS_PORTAL_BASE_URL` fehlt
   in Compose/Helm) plus Regressionstest-Pflichten (deCONZ-Reconnect, Replay-Abbruch).
-- **Nächster Schritt:** Arbeitspakete **FR-1** (Terminal-Code-Fixes H1–H3 + Tests) und
-  **FR-2** (Betrieb H4–H7) aus der [SYNTHESE.md](../reviews/final/SYNTHESE.md) umsetzen,
-  dann Generalprobe (Spec 0001) und **Live-Gang** (Cutover nach
+  **FR-1 (Terminal-Code-Fixes H1–H3, #80/#81/#82) ist behoben**: `OfflineGateway#replay`
+  entfernt einen erfolgreich nachgemeldeten `START` erst zusammen mit seinem Terminator
+  (Paar-Atomizität über Lauf-Grenzen, #80); `ExecutionManager`s sechs Register-/
+  Unregister-Listener-Methoden laufen jetzt über zwei generische Helfer (behebt den
+  Listener-Leak in `stopListenToExecutionStartedEvent` UND, zusätzlich beim Fix entdeckt,
+  denselben Copy-Paste-Fehler in `stopListenToExecutionErrorEvent`, #81);
+  `DeviceListEntry#refresh` nutzt einen Arrow-`switch` (schließt den Fall-Through
+  `DISABLED`→`UNREGISTERED` strukturell aus, #82). Je ein gegen den Vor-Fix-Stand
+  verifizierter Regressionstest.
+- **Nächster Schritt:** **FR-2** (Betrieb H4–H7) aus der
+  [SYNTHESE.md](../reviews/final/SYNTHESE.md) umsetzen, dann Generalprobe (Spec 0001)
+  und **Live-Gang** (Cutover nach
   [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md)). FR-4/FR-5
   (Qualitäts-Refactors, Doku-Hygiene) nach dem Feldeinsatz. Neue Vorhaben vorab als Spec
   in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.
