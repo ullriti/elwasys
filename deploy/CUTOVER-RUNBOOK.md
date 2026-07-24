@@ -384,9 +384,13 @@ zeitnah abrechnen/bereinigen.
 ## Geprobt vs. nur dokumentiert (Ehrlichkeit)
 
 - **In der Sandbox real ausgeführt (DB-/Backend-Seite):**
-  - `deploy/cutover/verify-cutover-migration.sh` – Bestandskopie → migriert, **21/21 Asserts
-    PASS** (Flyway BASELINE@1 + V2..V10, Datenerhalt, Schema-Härtung; Backend-Jar gegen die
-    Alt-Weg-DB `/actuator/health/liveness` UP).
+  - `deploy/cutover/verify-cutover-migration.sh` – Bestandskopie → migriert, Asserts PASS
+    (Flyway BASELINE@1 + V2..V\<neueste>, Datenerhalt, Schema-Härtung; Backend-Jar gegen die
+    Alt-Weg-DB `/actuator/health/liveness` UP). Die erwartete Flyway-Historie wird seit H6/#85
+    aus dem Migrationsordner **abgeleitet** (nicht mehr handgepflegt bis V10) – ein CI-Selftest
+    (`verify-cutover-migration-selftest.sh`) hält sie mit den Migrationen in Sync. Vor dem
+    Feldeinsatz das Skript einmal real gegen eine Bestandskopie laufen lassen und den konkreten
+    PASS-Stand hier festhalten.
   - Das **Rollout-Gate** `deploy/smoke/post-deploy-smoke.sh` gegen einen im **Produktionsmodus**
     per `java -jar` gestarteten Server (derselbe Artefakt-Typ, den compose/Helm ausrollen; nur
     die Startmethode unterscheidet sich) – Health UP + schlanke Playwright-Teilmenge grün

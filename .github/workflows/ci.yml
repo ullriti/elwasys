@@ -239,3 +239,26 @@ jobs:
 
       - name: Run auto-update selftest (offline dry-run)
         run: bash deploy/terminal/auto-update-selftest.sh
+
+  # ---------------------------------------------------------------------------
+  # Cutover-/Betriebs-Skripte – Offline-Gates (kein PostgreSQL/Docker nötig). Der
+  # Cutover-Selftest (H6/#85) hält die aus dem Migrationsordner ABGELEITETE Flyway-Historie-
+  # Erwartung von verify-cutover-migration.sh mit dem Migrationsordner in Sync (verhindert das
+  # stille Veralten, das V11 sichtbar machte). Dazu bash -n als billiger Syntax-Gate. Weitere
+  # Betriebs-Selbsttests (Alerting-Poll H4, Restore H5) kommen als eigene Schritte hinzu.
+  # ---------------------------------------------------------------------------
+  cutover-scripts:
+    name: Cutover & ops scripts (offline selftest)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax check cutover & ops shell scripts
+        run: |
+          set -euo pipefail
+          bash -n deploy/cutover/verify-cutover-migration.sh
+          bash -n deploy/cutover/verify-cutover-migration-selftest.sh
+          bash -n deploy/cutover/verify-rollback.sh
+
+      - name: Flyway-history derivation selftest (H6/#85)
+        run: bash deploy/cutover/verify-cutover-migration-selftest.sh
