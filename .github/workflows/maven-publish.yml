@@ -44,7 +44,9 @@ jobs:
       # GHCR image, and the chart's imageTag guard (templates/_helpers.tpl) fails the render.
       # Lift it to the release tag here so a chart shipped from a real release references the
       # image this same workflow pushes below. (versions:set above only touches the POMs.)
-      run: sed -i -E "s/^appVersion: \"0.0.0-local-development\"/appVersion: \"${{ github.event.release.tag_name }}\"/" deploy/helm/elwasys-backend/Chart.yaml
+      # Block scalar so the colons in the sed expression stay valid YAML.
+      run: |
+        sed -i -E 's/^appVersion: "0.0.0-local-development"/appVersion: "${{ github.event.release.tag_name }}"/' deploy/helm/elwasys-backend/Chart.yaml
 
     - name: Build Raspi-Client (Terminal-fat-jar)
       # Reactor build from the root so the (now re-versioned) parent POM is
