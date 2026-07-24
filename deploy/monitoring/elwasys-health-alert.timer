@@ -4,11 +4,11 @@
 Description=elwasys Betriebs-Health-Alerting alle 5 Minuten
 
 [Timer]
-# Kurz nach dem Boot einmal, danach alle 5 Minuten (Poll-Intervall = Alarm-Latenz).
+# Kurz nach dem Boot einmal, danach alle 5 Minuten (Poll-Intervall = Alarm-Latenz). OnBootSec
+# triggert nach jedem Boot ohnehin neu; ein separates Persistent=/Catch-up gibt es hier bewusst
+# nicht (Persistent= wirkt nur auf OnCalendar=-Timer, nicht auf diese monotonen Trigger).
 OnBootSec=2min
 OnUnitActiveSec=5min
-# Verpasste Läufe (Host war aus) nach dem Boot nachholen.
-Persistent=true
 
 [Install]
 WantedBy=timers.target

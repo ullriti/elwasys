@@ -83,10 +83,28 @@ run() {
 }
 
 echo "== elwasys DB-Backup -> ${OUT_FILE} =="
-run "Zielverzeichnis sicherstellen" "mkdir -p $(printf '%q' "${OUT_DIR}")"
-run "Dump ziehen + komprimieren" "${DUMP_CMD} | gzip > $(printf '%q' "${OUT_FILE}")"
-run "Retention: Dumps älter als ${KEEP_DAYS} Tage entfernen" \
-    "find $(printf '%q' "${OUT_DIR}") -name 'elwasys-*.sql.gz' -mtime +$(printf '%q' "${KEEP_DAYS}") -delete"
+if ! run "Zielverzeichnis sicherstellen" "mkdir -p $(printf '%q' "${OUT_DIR}")"; then
+    echo "FEHLER: Zielverzeichnis '${OUT_DIR}' nicht anlegbar - Abbruch." >&2
+    exit 1
+fi
+
+# Der Dump MUSS erfolgreich sein, BEVOR die Retention alte Backups löscht - sonst schriebe ein
+# fehlgeschlagener Dump (falsche Zugangsdaten, Container weg, DB down) eine leere/kaputte Datei
+# als vermeintliches Backup, und die anschließende Retention würde über die Zeit die letzten
+# GUTEN Dumps wegräumen (genau das H5-Fehlerbild "ein Backup, das man nicht hat"). set -e ist
+# hier bewusst aus (dry-run/Hook-Zweige), daher der explizite Exit-Code-Check; pipefail (oben)
+# macht die Pipe non-zero, wenn pg_dump scheitert (nicht nur gzip).
+if ! run "Dump ziehen + komprimieren" "${DUMP_CMD} | gzip > $(printf '%q' "${OUT_FILE}")"; then
+    echo "FEHLER: Dump fehlgeschlagen - entferne die unvollständige Datei und lasse die Retention" >&2
+    echo "        BEWUSST aus (kein Löschen alter, guter Backups nach einem Fehlversuch)." >&2
+    [[ "${DRY_RUN}" == "1" ]] || rm -f "${OUT_FILE}"
+    exit 1
+fi
+
+if ! run "Retention: Dumps älter als ${KEEP_DAYS} Tage entfernen" \
+    "find $(printf '%q' "${OUT_DIR}") -name 'elwasys-*.sql.gz' -mtime +$(printf '%q' "${KEEP_DAYS}") -delete"; then
+    echo "WARNUNG: Retention fehlgeschlagen - das aktuelle Backup ist aber geschrieben." >&2
+fi
 
 echo
 if [[ "${DRY_RUN}" == "1" ]]; then

@@ -109,6 +109,16 @@ run() {
     eval "${cmd}"
 }
 
+# Wie run(), bricht aber bei Fehlschlag den Restore ab (set -e ist bewusst aus). So läuft der
+# Ablauf nicht nach einer fehlgeschlagenen Rollen-/DB-Anlage oder einem gescheiterten Einspielen
+# weiter und druckt am Ende trotzdem die Erfolgs-Meldung.
+run_or_die() {
+    if ! run "$1" "$2"; then
+        echo "FEHLER: Schritt fehlgeschlagen: $1 - Restore abgebrochen." >&2
+        exit 1
+    fi
+}
+
 echo "=============================================================="
 echo " elwasys DB-Restore"
 echo "   Backup:     ${DUMP}"
@@ -126,22 +136,25 @@ if [[ "${DRY_RUN}" != "1" && "${ASSUME_YES}" != "1" ]]; then
 fi
 
 # 1) Owner-Rolle sicherstellen (idempotent).
-run "Owner-Rolle '${OWNER_ROLE}' sicherstellen" \
+run_or_die "Owner-Rolle '${OWNER_ROLE}' sicherstellen" \
     "${PSQL_BASE} -d postgres -c \"DO \\\$\\\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${OWNER_ROLE}') THEN CREATE ROLE ${OWNER_ROLE} LOGIN; END IF; END \\\$\\\$;\""
 
 # 2) Leere Ziel-DB anlegen.
 if [[ "${CREATE_DB}" == "1" ]]; then
-    run "Leere Ziel-DB '${TARGET_DB}' anlegen (Owner ${OWNER_ROLE})" \
+    run_or_die "Leere Ziel-DB '${TARGET_DB}' anlegen (Owner ${OWNER_ROLE})" \
         "createdb -h $(printf '%q' "${PGHOST}") -p $(printf '%q' "${PGPORT}") -U $(printf '%q' "${SUPERUSER}") -O $(printf '%q' "${OWNER_ROLE}") $(printf '%q' "${TARGET_DB}")"
 fi
 
-# 3) Dump einspielen.
-run "Backup einspielen (${DUMP} -> ${TARGET_DB})" \
+# 3) Dump einspielen (psql läuft mit ON_ERROR_STOP=1 -> scheitert laut; run_or_die bricht ab,
+#    damit die Erfolgs-Meldung unten NUR nach einem tatsächlich geglückten Einspielen erscheint).
+run_or_die "Backup einspielen (${DUMP} -> ${TARGET_DB})" \
     "${READ_CMD} | ${PSQL_BASE} -d $(printf '%q' "${TARGET_DB}")"
 
-# 4) Stichproben-Verifikation.
+# 4) Stichproben-Verifikation (informativ - eine fehlende Tabelle soll den bereits erfolgten
+#    Restore nicht als Fehlschlag darstellen, nur warnen).
 run "Stichprobe: Zeilenzahlen der Kern-/Ledger-Tabellen" \
-    "${PSQL_BASE} -d $(printf '%q' "${TARGET_DB}") -c \"SELECT 'users' AS tabelle, count(*) FROM users UNION ALL SELECT 'executions', count(*) FROM executions UNION ALL SELECT 'credit_accounting', count(*) FROM credit_accounting;\""
+    "${PSQL_BASE} -d $(printf '%q' "${TARGET_DB}") -c \"SELECT 'users' AS tabelle, count(*) FROM users UNION ALL SELECT 'executions', count(*) FROM executions UNION ALL SELECT 'credit_accounting', count(*) FROM credit_accounting;\"" \
+    || echo "WARNUNG: Stichprobe fehlgeschlagen - Restore lief durch, aber die Zeilenzahlen konnten nicht ermittelt werden (Tabellen prüfen)." >&2
 
 echo
 echo "--------------------------------------------------------------"

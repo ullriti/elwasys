@@ -89,6 +89,39 @@ echo "== backup: --docker-container schaltet auf docker exec um =="
 out="$(BACKUP_DATE=2026-07-24 bash "${BACKUP}" --docker-container elwasys-postgres --dry-run 2>&1)"
 contains "docker exec statt direktem pg_dump" "${out}" "docker exec"
 
+# --- Regressionstests für die Review-Findings (fehlschlagende Ausführung, kein --dry-run) -----
+# Ausführungs-Hook: protokolliert jedes Kommando und scheitert gezielt bei einem Muster ($FAIL_ON).
+cat > "${WORK}/runhook.sh" <<'EOF'
+#!/bin/bash
+echo "$1" >> "${RUN_LOG}"
+case "$1" in
+  *"${FAIL_ON}"*) exit 1 ;;
+esac
+exit 0
+EOF
+chmod +x "${WORK}/runhook.sh"
+
+echo "== backup: fehlgeschlagener Dump bricht VOR der Retention ab (Review-Finding #1) =="
+RUN_LOG="${WORK}/backup-run.log"; : > "${RUN_LOG}"
+rc=0
+env RUN_LOG="${RUN_LOG}" FAIL_ON="pg_dump" BACKUP_RUN_CMD="bash ${WORK}/runhook.sh" BACKUP_DATE=2026-07-24 \
+    bash "${BACKUP}" --out-dir "${WORK}/backups2" >/dev/null 2>&1 || rc=$?
+runlog="$(cat "${RUN_LOG}")"
+check "Exit != 0 bei fehlgeschlagenem Dump" "1" "${rc}"
+contains "der Dump-Schritt wurde versucht" "${runlog}" "pg_dump"
+not_contains "die Retention (find -delete) lief NICHT nach dem Fehlschlag" "${runlog}" "find "
+
+echo "== restore: fehlgeschlagenes createdb bricht VOR dem Einspielen ab (Review-Finding #2) =="
+RUN_LOG="${WORK}/restore-run.log"; : > "${RUN_LOG}"
+rc=0
+out="$(env RUN_LOG="${RUN_LOG}" FAIL_ON="createdb" RESTORE_RUN_CMD="bash ${WORK}/runhook.sh" \
+    bash "${RESTORE}" --dump "${GZDUMP}" --yes 2>&1)" || rc=$?
+runlog="$(cat "${RUN_LOG}")"
+check "Exit != 0 bei fehlgeschlagenem createdb" "1" "${rc}"
+contains "createdb wurde versucht" "${runlog}" "createdb"
+not_contains "das Einspielen (gunzip|psql) lief NICHT nach dem createdb-Fehlschlag" "${runlog}" "gunzip -c"
+not_contains "keine Erfolgs-Meldung nach Abbruch" "${out}" "Restore abgeschlossen. Nächste Schritte"
+
 echo
 if [[ "${FAIL}" == "0" ]]; then
     echo "ALLE SELBSTTEST-CHECKS PASS."
