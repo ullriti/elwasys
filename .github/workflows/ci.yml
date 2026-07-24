@@ -260,6 +260,11 @@ jobs:
           bash -n deploy/cutover/verify-cutover-migration.sh
           bash -n deploy/cutover/verify-cutover-migration-selftest.sh
           bash -n deploy/cutover/verify-rollback.sh
+          bash -n deploy/monitoring/elwasys-health-alert.sh
+          bash -n deploy/monitoring/elwasys-health-alert-selftest.sh
 
       - name: Flyway-history derivation selftest (H6/#85)
         run: bash deploy/cutover/verify-cutover-migration-selftest.sh
+
+      - name: Health-alert poll selftest (H4/#83)
+        run: bash deploy/monitoring/elwasys-health-alert-selftest.sh

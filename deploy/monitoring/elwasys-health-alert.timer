@@ -1,0 +1,14 @@
+# systemd-Timer für das elwasys-Betriebs-Alerting (Issue #83/H4). Triggert den gleichnamigen
+# .service alle 5 Minuten. Aktivieren: systemctl enable --now elwasys-health-alert.timer
+[Unit]
+Description=elwasys Betriebs-Health-Alerting alle 5 Minuten
+
+[Timer]
+# Kurz nach dem Boot einmal, danach alle 5 Minuten (Poll-Intervall = Alarm-Latenz).
+OnBootSec=2min
+OnUnitActiveSec=5min
+# Verpasste Läufe (Host war aus) nach dem Boot nachholen.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

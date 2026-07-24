@@ -61,6 +61,12 @@ Hintergrund/Roadmap: [docs/kb/05-migration-plan.md](../kb/05-migration-plan.md),
       und darf nie direkt im Klartext aus dem Netz veröffentlicht werden. Eine Klartext-Ausnahme
       gibt es **nicht** als Default; falls überhaupt, nur als ausdrücklich begründete
       Sonderentscheidung des Auftraggebers.
+- [ ] **Alarmkanal einrichten (Issue #83/H4, Pflicht-Gate).** Das betriebliche Alerting muss
+      VOR dem Feldeinsatz verdrahtet sein: `deploy/monitoring/elwasys-health-alert.sh` +
+      systemd-Timer/Cron (Pushover/Mail) einrichten – Schritte in
+      [`deploy/monitoring/README.md`](monitoring/README.md). Die **Alarm-Probe** (Fehler
+      provozieren → Alarm kommt an) gehört in die Generalprobe (Spec 0001). Ohne verdrahteten
+      Alarm gilt die Installation als nicht feldbereit.
 - [ ] **Portal-Basis-URL für Passwort-Reset-Mails (Issue #86/H7, Pflichtprüfpunkt).** Der
       Passwort-Reset ist per Default AN; die Reset-Mail baut ihre Links aus
       `ELWASYS_PORTAL_BASE_URL`. **Compose:** die Variable in `.env` auf die öffentliche
@@ -340,13 +346,22 @@ Das Backend liefert (Pre-Launch AP6, Issue #32) zwei betriebliche Health-Indicat
 - **Offene abgelaufene Executions** – Ausführungen, deren `maxDuration` überschritten ist und
   die noch nicht abgerechnet/geschlossen wurden (siehe 7c).
 
+**Verdrahteter Alarmkanal (Pflicht vor dem Feldeinsatz, Issue #83/H4):** Das Pollen ist **nicht
+mehr nur empfohlen, sondern mitgeliefert** – `deploy/monitoring/` enthält ein Poll-Skript
+(`elwasys-health-alert.sh`) plus systemd-Timer/Cron, das `/actuator/health/operational` pollt
+und bei `status != UP` **oder Nichterreichbarkeit** (Backend/DB down) per **Pushover/Mail**
+alarmiert; es deckt zusätzlich **Zertifikats-Ablauf** und **Plattenplatz** ab (#89). Einrichtung
+und die **Alarm-Probe** (bewusst einen Fehler provozieren → Alarm kommt an) siehe
+[`deploy/monitoring/README.md`](monitoring/README.md). **Ohne eingerichteten Alarmkanal gilt die
+Installation als nicht feldbereit.**
+
 **Trennung Orchestrierung vs. Alerting (wichtig):**
 
-- **Alerting:** die dedizierte Gruppe **`/actuator/health/operational`** regelmäßig pollen
-  (Monitoring/Uptime-Check) und auf `status != UP` (HTTP `503`) alarmieren – sie bündelt genau
-  die beiden obigen Indicators. Das Root-`/actuator/health` aggregiert dieselben (plus DB usw.)
-  und ist als Gesamt-Statusseite ebenfalls nutzbar. Aufschlüsselnde Details (z. B. betroffene
-  Standortnamen) sind nur **angemeldet** sichtbar (`show-details: when-authorized`).
+- **Alerting:** die dedizierte Gruppe **`/actuator/health/operational`** (das o.g. Skript pollt
+  genau sie) auf `status != UP` (HTTP `503`) – sie bündelt genau die beiden obigen Indicators.
+  Das Root-`/actuator/health` aggregiert dieselben (plus DB usw.) und ist als Gesamt-Statusseite
+  ebenfalls nutzbar. Aufschlüsselnde Details (z. B. betroffene Standortnamen) sind nur
+  **angemeldet** sichtbar (`show-details: when-authorized`).
 - **Orchestrierung/Gates:** Liveness/Readiness-Proben (Kubernetes-Probes, Compose-Healthcheck,
   `post-deploy-smoke.sh`) nutzen bewusst **`/actuator/health/liveness`** bzw. `/readiness` –
   diese enthalten **nur** den Prozess-Status und **nicht** die betrieblichen Indicators. Sonst
