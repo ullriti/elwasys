@@ -384,86 +384,80 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
         this.deviceName.set(this.device.getName());
 
         switch (this.state) {
-            case FREE:
+            case FREE -> {
+                resetStatusStyleClasses();
                 UiUtilities.setStyleClass(this.deviceListEntry, "status-free", true);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-disabled", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-door-opened", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-occupied", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-unregistered", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-error", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "locked", false);
                 this.deviceListEntry.setDisable(false);
                 this.doorOpenButton.setDisable(false);
                 this.selectButton.setDisable(true);
                 this.statusText.set("frei");
-                break;
-            case FREE_AVAILABLE:
+            }
+            case FREE_AVAILABLE -> {
+                resetStatusStyleClasses();
                 UiUtilities.setStyleClass(this.deviceListEntry, "status-free", true);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-disabled", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-door-opened", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-occupied", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-unregistered", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-error", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "locked", false);
                 this.deviceListEntry.setDisable(false);
                 this.doorOpenButton.setDisable(false);
                 this.selectButton.setDisable(false);
                 this.statusText.set("frei");
-                break;
-            case DOOR_OPENED:
+            }
+            case DOOR_OPENED -> {
                 UiUtilities.setStyleClass(this.deviceListEntry, "status-free", false);
                 UiUtilities.setStyleClass(this.deviceListEntry, "status-door-opened", true);
                 this.selectButton.setDisable(true);
                 this.statusText.set("Tür freigegeben");
-                break;
-            case FREE_BLOCKED:
+            }
+            case FREE_BLOCKED -> {
+                resetStatusStyleClasses();
                 UiUtilities.setStyleClass(this.deviceListEntry, "status-free", true);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-disabled", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-door-opened", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-occupied", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-unregistered", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-error", false);
                 UiUtilities.setStyleClass(this.deviceListEntry, "locked", true);
                 this.deviceListEntry.setDisable(true);
                 this.selectButton.setDisable(true);
                 this.statusText.set("nicht verfügbar");
-                break;
-            case OCCUPIED:
+            }
+            case OCCUPIED -> {
                 UiUtilities.setStyleClass(this.deviceListEntry, "status-free", false);
                 UiUtilities.setStyleClass(this.deviceListEntry, "status-occupied", true);
                 this.lastUserName.set(this.runningExecution.getUser().getName());
                 this.statusText.set("belegt");
                 this.endDate.set(endDateFormatter.format(this.runningExecution.getEndDate()));
-                break;
-            case ERROR:
+            }
+            case ERROR -> {
                 UiUtilities.setStyleClass(this.deviceListEntry, "status-occupied", false);
                 UiUtilities.setStyleClass(this.deviceListEntry, "status-free", false);
                 UiUtilities.setStyleClass(this.deviceListEntry, "status-door-opened", false);
                 UiUtilities.setStyleClass(this.deviceListEntry, "status-error", true);
                 this.statusText.set("FEHLER");
                 this.errorRetryButton.setDisable(errorRetryAction == null);
-                break;
-            case DISABLED:
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-free", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-occupied", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-door-opened", false);
+            }
+            case DISABLED -> {
+                resetStatusStyleClasses();
                 UiUtilities.setStyleClass(this.deviceListEntry, "status-disabled", true);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-unregistered", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-error", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "locked", false);
                 this.deviceListEntry.setDisable(true);
                 this.statusText.set("deaktiviert");
-            case UNREGISTERED:
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-free", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-occupied", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-door-opened", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-disabled", false);
+            }
+            case UNREGISTERED -> {
+                resetStatusStyleClasses();
                 UiUtilities.setStyleClass(this.deviceListEntry, "status-unregistered", true);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-error", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "locked", false);
                 this.deviceListEntry.setDisable(false);
                 this.statusText.set("Keine Steckdose");
+            }
         }
+    }
+
+    /**
+     * Setzt alle Status-Style-Klassen der Gerätekachel zurück. Zentralisiert die zuvor in
+     * FREE/FREE_AVAILABLE/FREE_BLOCKED/DISABLED/UNREGISTERED wiederholte Reset-Boilerplate
+     * (#82) - jeder dieser Zustände bestimmt den kompletten Klassensatz neu, anders als
+     * DOOR_OPENED/ERROR, die nur einzelne Klassen gezielt umschalten.
+     */
+    private void resetStatusStyleClasses() {
+        UiUtilities.setStyleClass(this.deviceListEntry, "status-free", false);
+        UiUtilities.setStyleClass(this.deviceListEntry, "status-disabled", false);
+        UiUtilities.setStyleClass(this.deviceListEntry, "status-door-opened", false);
+        UiUtilities.setStyleClass(this.deviceListEntry, "status-occupied", false);
+        UiUtilities.setStyleClass(this.deviceListEntry, "status-unregistered", false);
+        UiUtilities.setStyleClass(this.deviceListEntry, "status-error", false);
+        UiUtilities.setStyleClass(this.deviceListEntry, "locked", false);
     }
 
     /**
