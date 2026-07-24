@@ -197,8 +197,9 @@ nur **vor Ort / mit echter Hardware** prüfbar:
    Staging-Umgebung durchspielen, inkl. Rollback-Zweig; Zeiten notieren.
 2. **Migrations-Dry-Run mit Produktivdaten-Kopie:** Abgleich danach (Guthaben-Summen je
    Nutzer, Nutzer-/Geräte-/Preislisten-Zahlen alt vs. neu).
-3. **Backup-Restore-Probe:** Backup in leere DB zurückspielen, Backend dagegen starten,
-   Stichproben. Ein ungetesteter Restore ist kein Backup.
+3. **Backup-Restore-Probe:** Backup in leere DB zurückspielen (Schritt-für-Schritt-Weg +
+   Skript: `deploy/backup/restore-db.sh`, Runbook Kap. 7a), Backend dagegen starten,
+   Stichproben; RPO/RTO festhalten. Ein ungetesteter Restore ist kein Backup.
 4. **Ausfall-Drills (live):** Backend stoppen während laufender Wäsche (Offline-Replay in
    echt), Netzwerk trennen, DB stoppen, Terminal-Stromausfall mitten im Programm,
    Terminal-Neustart – erwartetes Verhalten je Fall vorher notieren.

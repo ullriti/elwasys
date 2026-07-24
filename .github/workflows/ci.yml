@@ -262,9 +262,15 @@ jobs:
           bash -n deploy/cutover/verify-rollback.sh
           bash -n deploy/monitoring/elwasys-health-alert.sh
           bash -n deploy/monitoring/elwasys-health-alert-selftest.sh
+          bash -n deploy/backup/backup-db.sh
+          bash -n deploy/backup/restore-db.sh
+          bash -n deploy/backup/restore-db-selftest.sh
 
       - name: Flyway-history derivation selftest (H6/#85)
         run: bash deploy/cutover/verify-cutover-migration-selftest.sh
 
       - name: Health-alert poll selftest (H4/#83)
         run: bash deploy/monitoring/elwasys-health-alert-selftest.sh
+
+      - name: Backup/restore dry-run selftest (H5/#84)
+        run: bash deploy/backup/restore-db-selftest.sh
