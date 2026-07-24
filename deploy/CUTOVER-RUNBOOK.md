@@ -61,6 +61,14 @@ Hintergrund/Roadmap: [docs/kb/05-migration-plan.md](../kb/05-migration-plan.md),
       und darf nie direkt im Klartext aus dem Netz veröffentlicht werden. Eine Klartext-Ausnahme
       gibt es **nicht** als Default; falls überhaupt, nur als ausdrücklich begründete
       Sonderentscheidung des Auftraggebers.
+- [ ] **Portal-Basis-URL für Passwort-Reset-Mails (Issue #86/H7, Pflichtprüfpunkt).** Der
+      Passwort-Reset ist per Default AN; die Reset-Mail baut ihre Links aus
+      `ELWASYS_PORTAL_BASE_URL`. **Compose:** die Variable in `.env` auf die öffentliche
+      Portal-URL setzen (`https://…`) – der `:?`-Guard in `docker-compose.yml` bricht sonst mit
+      klarer Meldung ab. **Helm:** `passwordReset.baseUrl` setzen (`--set passwordReset.baseUrl=
+      https://<portal-host>`) – der `required`-Guard bricht sonst ab. Ohne Wert verlinken
+      Produktions-Reset-Mails auf `http://localhost:8080` (tote Links). In der Generalprobe wird
+      ein realer Reset-Link ohnehin geprüft (Spec 0001).
 - [ ] **Zeitzonen-Gleichheit (Issue #31, Pflichtprüfpunkt).** Terminal- und Backend-Zeitzone
       MÜSSEN übereinstimmen (Auftraggeber-Vorgabe: `Europe/Berlin`). Andernfalls fällt jede
       nachgemeldete Terminal-Meldung in den Ersetzungszweig von `ClientTimestampPolicy` und der

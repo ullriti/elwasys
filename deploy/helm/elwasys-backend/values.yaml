@@ -196,6 +196,18 @@ pushover:
 auth:
   rehashOnLogin: false
 
+# Passwort-Reset per Email (Issue #86/H7, siehe application.yml elwasys.password-reset). Der
+# Reset ist per Default AN; die Reset-Mail baut ihre Links aus baseUrl. Bewusst KEIN Default für
+# baseUrl (analog secret.password): ist der Reset aktiv, MUSS baseUrl gesetzt werden - sonst
+# bricht das Rendern per required-Guard ab (siehe templates/configmap.yaml), statt still auf den
+# Backend-Default http://localhost:8080 zurückzufallen und Produktions-Reset-Mails mit toten
+# localhost-Links zu erzeugen. baseUrl = öffentliche, TLS-terminierte Portal-URL (Ingress-Host),
+# z.B. https://elwasys.example.com. Wer den Reset nicht nutzt: enabled=false, dann ist baseUrl
+# nicht nötig.
+passwordReset:
+  enabled: true
+  baseUrl: ""
+
 # Zeitzone des Backends (Issue #31). MUSS mit der Terminal-Zeitzone übereinstimmen: bei einer
 # Zonendifferenz fällt jede nachgemeldete Terminal-Meldung in den Ersetzungszweig von
 # ClientTimestampPolicy und der DYNAMIC-Preis rechnet über die DST-Umstellungsnacht falsch.

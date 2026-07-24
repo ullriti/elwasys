@@ -211,10 +211,10 @@ jobs:
         uses: azure/setup-helm@v4
 
       - name: helm lint
-        run: helm lint deploy/helm/elwasys-backend --set secret.password=ci-dummy-not-deployed
+        run: helm lint deploy/helm/elwasys-backend --set secret.password=ci-dummy-not-deployed --set passwordReset.baseUrl=https://ci.example.invalid
 
       - name: helm template (render smoke)
-        run: helm template elwasys-ci deploy/helm/elwasys-backend --set secret.password=ci-dummy-not-deployed > /dev/null
+        run: helm template elwasys-ci deploy/helm/elwasys-backend --set secret.password=ci-dummy-not-deployed --set passwordReset.baseUrl=https://ci.example.invalid > /dev/null
 
   # ---------------------------------------------------------------------------
   # Terminal-Update-Skripte – Trockentests des Auto-Update-Pfads (Issue #34/#62/#63). Der

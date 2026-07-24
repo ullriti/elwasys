@@ -89,6 +89,16 @@ services:
 
       ELWASYS_AUTH_REHASH_ON_LOGIN: ${ELWASYS_AUTH_REHASH_ON_LOGIN:-false}
 
+      # Basis-URL des Portals für die Passwort-Reset-Mail (Issue #86/H7). Der Passwort-Reset ist
+      # per Default AN (application.yml elwasys.password-reset.enabled) und baut seine Links aus
+      # dieser URL. Wird sie NICHT durchgereicht, fällt das Backend still auf den Code-Default
+      # http://localhost:8080 zurück - Produktions-Reset-Mails enthielten dann tote localhost-
+      # Links. Bewusst ein ":?"-Guard (kein Default) statt eines leeren Werts: ein fehlender Wert
+      # bricht "docker compose up" mit klarer Meldung ab, statt still kaputte Links zu erzeugen
+      # (ein leerer Wert wäre hier sogar schlechter als der Code-Default - er überschriebe ihn mit
+      # Leerstring). Für den Wert siehe .env.example. Analog zum POSTGRES_PASSWORD-Guard oben.
+      ELWASYS_PORTAL_BASE_URL: ${ELWASYS_PORTAL_BASE_URL:?ELWASYS_PORTAL_BASE_URL muss in .env gesetzt sein (öffentliche Portal-Basis-URL für Passwort-Reset-Mails, z.B. https://elwasys.example.com) - siehe .env.example}
+
       # Zeitzone (Issue #31): muss mit der Terminal-Zeitzone übereinstimmen (Europe/Berlin),
       # sonst fällt jede nachgemeldete Terminal-Meldung in den Ersetzungszweig von
       # ClientTimestampPolicy und DYNAMIC-Preis rechnet über die DST-Nacht falsch. Das
