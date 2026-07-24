@@ -293,6 +293,23 @@ mark_update_failed() {
     fi
 }
 
+# NTP-Sync-Status best effort pruefen (Issue #89): der Raspberry Pi hat KEINE RTC - eine
+# driftende Systemuhr korrumpiert lokale Zeitstempel (ClientTimestampPolicy/Replay-Haertung #67)
+# und DYNAMIC-Preise STILL. Der Watchdog laeuft ohnehin periodisch per Cron und ist damit der
+# natuerliche Ort fuer einen wiederkehrenden Uhr-Check. Nur WARNEN (kein Abbruch, kein Einfluss
+# auf den Update-Fluss): ein Betreiber, der die Watchdog-Logs beobachtet (bzw. sie ans Alerting
+# haengt), sieht eine nicht mehr synchronisierte Uhr. timedatectl fehlt in manchen Umgebungen
+# (z.B. den Trocken-Tests) - dann still ueberspringen. Nur auf ein explizites "no" warnen (ein
+# leerer/unbekannter Wert erzeugt keinen Fehlalarm).
+check_time_sync() {
+    command -v timedatectl >/dev/null 2>&1 || return 0
+    local synced
+    synced="$(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo '')"
+    if [[ "${synced}" == "no" ]]; then
+        alert "WARNUNG: Systemuhr ist NICHT NTP-synchronisiert (timedatectl NTPSynchronized=no). Der Pi hat keine RTC - eine driftende Uhr korrumpiert Replay-Zeitstempel und DYNAMIC-Preise. NTP/Netzwerk pruefen (systemctl status systemd-timesyncd)."
+    fi
+}
+
 # ==============================================================================
 # Vorbereitung
 # ==============================================================================
@@ -307,6 +324,9 @@ if ! mkdir "${LOCK_DIR}" 2>/dev/null; then
     exit 0
 fi
 trap cleanup_lock EXIT
+
+# Uhr-Sync-Status pruefen (Issue #89) - best effort, warnt nur, blockiert nie.
+check_time_sync
 
 # ==============================================================================
 # Aktuelle Version aus dem latest-Symlink

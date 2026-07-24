@@ -128,6 +128,40 @@ function configure_sudoers() {
 
 
 # # # # # # #
+function configure_time_sync() {
+    # NTP-Zeitsync sicherstellen (Issue #89). Der Raspberry Pi hat KEINE RTC: bootet er ohne
+    # Netz, ist die Uhr falsch, bis NTP synchronisiert. Eine driftende Uhr korrumpiert lokale
+    # Zeitstempel STILL (ClientTimestampPolicy/Replay-Härtung #67) und den DYNAMIC-Preis - nur
+    # die Zeitzone zu prüfen (wie bisher) reicht nicht. Daher systemd-timesyncd aktivieren und
+    # den Sync-Status verifizieren.
+    log_state Ensuring NTP time synchronization is enabled...
+    sudo timedatectl set-ntp true 2>/dev/null || true
+    sudo systemctl enable --now systemd-timesyncd 2>/dev/null || true
+
+    # Kurz auf den ersten Sync warten (nach frischem Boot ohne RTC kann das einen Moment dauern).
+    # Kein harter Abbruch: ein noch nicht erreichter Sync soll die Installation nicht verhindern,
+    # aber deutlich gewarnt werden - vor dem Produktivgang zu prüfen.
+    local synced="no"
+    local i
+    for i in $(seq 1 15); do
+        if [ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" = "yes" ]; then
+            synced="yes"; break
+        fi
+        sleep 2
+    done
+    if [ "$synced" = "yes" ]; then
+        log_success "System clock is NTP-synchronized."
+    else
+        echo
+        echo "WARNUNG: Die Systemuhr ist noch NICHT NTP-synchronisiert (timedatectl NTPSynchronized=no)." >&2
+        echo "         Der Pi hat keine RTC - eine falsche Uhr korrumpiert Replay-Zeitstempel und" >&2
+        echo "         DYNAMIC-Preise. Vor dem Produktivgang Netzwerk/Internetzugang und" >&2
+        echo "         'timedatectl' prüfen (der Watchdog warnt fortlaufend, falls der Sync ausfällt)." >&2
+    fi
+}
+
+
+# # # # # # #
 function setup_firewall() {
     log_state Installing Firewall...
 
@@ -403,6 +437,8 @@ DECONZ_PASSWORD=$(generate_password)
 
 log_state Starting Installation...
 install_dependencies
+
+configure_time_sync
 
 setup_firewall
 
