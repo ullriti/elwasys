@@ -127,10 +127,24 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   `DeviceListEntry#refresh` nutzt einen Arrow-`switch` (schließt den Fall-Through
   `DISABLED`→`UNREGISTERED` strukturell aus, #82). Je ein gegen den Vor-Fix-Stand
   verifizierter Regressionstest.
-- **Nächster Schritt:** **FR-2** (Betrieb H4–H7) aus der
-  [SYNTHESE.md](../reviews/final/SYNTHESE.md) umsetzen, dann Generalprobe (Spec 0001)
-  und **Live-Gang** (Cutover nach
-  [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md)). FR-4/FR-5
+  **FR-2 (Betrieb H4–H7 + #89-devops, #83–#86/#89) ist behoben**: der Alarmkanal ist jetzt
+  **mitgeliefert und verdrahtet** (`deploy/monitoring/` pollt `/actuator/health/operational`
+  – Nichterreichbarkeit zählt als Alarm –, plus Cert-Ablauf und Plattenplatz, Zustellung per
+  Pushover/Mail, systemd-Timer/Cron; H4/#83); der **Restore** ist Schritt-für-Schritt
+  ausgearbeitet und geskriptet (`deploy/backup/restore-db.sh`/`backup-db.sh`, RPO/RTO,
+  Backup-Scope inkl. Secrets/Terminal-Properties/SD-Journal; H5/#84); der Cutover-Preflight
+  `verify-cutover-migration.sh` leitet die erwartete Flyway-Historie aus dem Migrationsordner
+  ab (kennt damit V11 und künftige Migrationen; H6/#85); `ELWASYS_PORTAL_BASE_URL` wird in
+  Compose und Helm mit Guard durchgereicht (H7/#86). Dazu die Betriebs-Mittelfunde (#89):
+  Compose zieht das GHCR-Release-Image (lokaler Build als Overlay), Helm-Image-Tag-Guard +
+  `appVersion`-Bump im Release, NTP am Terminal (`setup.sh` + Watchdog). Drei neue **Offline-
+  Selbsttests** (Alerting, Restore-Dry-Run, Flyway-Historie-Ableitung) hängen im neuen
+  CI-Job `cutover-scripts`. Der echte Restore-/Alarm-/Cutover-Lauf bleibt bewusst ein
+  Generalprobe-Schritt. **Offen als cross-component-Folge-AP (#89):** Dead-Letter-/Geister-
+  Fehler des Terminals ans Backend melden + in einen Health-Indicator heben („mittel/zeitnah").
+- **Nächster Schritt:** FR-3 (Tests: deCONZ-Reconnect, DYNAMIC-E2E, Determinismus) und der
+  offene #89-Dead-Letter-Sichtbarkeits-Anteil, dann Generalprobe (Spec 0001) und **Live-Gang**
+  (Cutover nach [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md)). FR-4/FR-5
   (Qualitäts-Refactors, Doku-Hygiene) nach dem Feldeinsatz. Neue Vorhaben vorab als Spec
   in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.
   Die Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).

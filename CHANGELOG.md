@@ -12,7 +12,21 @@ im [Worklog](docs/worklog/README.md).
 
 ## [Unreleased]
 
+### Added
+- Betriebs-Alerting mitgeliefert (finale Review H4, #83): `deploy/monitoring/` pollt
+  `/actuator/health/operational` (Nichterreichbarkeit = Alarm) plus Zertifikats-Ablauf und
+  Plattenplatz und meldet per Pushover/Mail; systemd-Timer/Cron + Offline-Selbsttest.
+- Restore ausgearbeitet und geskriptet (finale Review H5, #84): `deploy/backup/restore-db.sh`
+  und `backup-db.sh` mit RPO/RTO, Backup-Scope (Secrets/Terminal-Properties/SD-Journal) und
+  Offline-Dry-Run-Selbsttest.
+
 ### Fixed
+- Cutover-Preflight (finale Review H6, #85): `verify-cutover-migration.sh` leitet die erwartete
+  Flyway-Historie aus dem Migrationsordner ab (bisher hart bis V10 – V11 hätte den realen Lauf
+  scheitern lassen); ein CI-Selbsttest hält Skript und Migrationen in Sync.
+- Passwort-Reset-Links in Produktion (finale Review H7, #86): `ELWASYS_PORTAL_BASE_URL` wird in
+  Compose und Helm durchgereicht (mit Guard bei fehlendem Wert), statt still auf
+  `http://localhost:8080` zu verlinken.
 - Offline-Replay-Paar-Atomizität über Lauf-Grenzen hinweg (finale Review H1, #80): ein
   erfolgreich nachgemeldeter `START` wird nicht mehr sofort aus dem Journal entfernt, sondern
   erst zusammen mit seinem Terminator – bricht der Lauf per Kommunikationsfehler dazwischen ab,
@@ -25,6 +39,10 @@ im [Worklog](docs/worklog/README.md).
   waren wieder bedienbar, statt gesperrt zu bleiben.
 
 ### Changed
+- Deployment-Parität & Betrieb (finale Review #89): Compose zieht per Default das
+  GHCR-Release-Image (`ELWASYS_BACKEND_IMAGE`; lokaler Build als `docker-compose.build.yml`),
+  Helm bricht bei nicht gesetztem Image-Tag ab und der Release-Workflow hebt `Chart.yaml`
+  `appVersion`; das Terminal richtet NTP-Sync ein und der Watchdog überwacht ihn.
 - Offline-Replay-Härtung II (Code-Review-Follow-ups zu Epic #66, ADR 0021): Der privilegierte
   Replay-Pfad (#67) verlangt jetzt einen plausiblen Original-Zeitstempel und lehnt einen
   fehlenden oder in der Zukunft liegenden Zeitstempel ab (`422 invalid-replay-timestamp`); ein
