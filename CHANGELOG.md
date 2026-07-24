@@ -12,6 +12,18 @@ im [Worklog](docs/worklog/README.md).
 
 ## [Unreleased]
 
+### Fixed
+- Offline-Replay-Paar-Atomizität über Lauf-Grenzen hinweg (finale Review H1, #80): ein
+  erfolgreich nachgemeldeter `START` wird nicht mehr sofort aus dem Journal entfernt, sondern
+  erst zusammen mit seinem Terminator – bricht der Lauf per Kommunikationsfehler dazwischen ab,
+  bleibt der `START` erhalten statt im Folgelauf als Waise dead-lettert zu werden.
+- Listener-Leak im Terminal (finale Review H2, #81): `stopListenToExecutionStartedEvent` und
+  `stopListenToExecutionErrorEvent` riefen versehentlich `add` statt `remove` auf; abgemeldete
+  Listener blieben registriert und wurden bei jedem weiteren Ereignis erneut benachrichtigt.
+- Fall-Through in der Gerätekachel-Darstellung (finale Review H3, #82): der `DISABLED`-Zweig
+  fiel ohne `break` in `UNREGISTERED` durch – deaktivierte Geräte zeigten „Keine Steckdose" und
+  waren wieder bedienbar, statt gesperrt zu bleiben.
+
 ### Changed
 - Offline-Replay-Härtung II (Code-Review-Follow-ups zu Epic #66, ADR 0021): Der privilegierte
   Replay-Pfad (#67) verlangt jetzt einen plausiblen Original-Zeitstempel und lehnt einen
