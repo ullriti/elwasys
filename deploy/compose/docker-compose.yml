@@ -2,12 +2,13 @@
 # Technologie-Entscheidung "Deployment Backend: Container-Image; Betrieb per docker-compose
 # ... oder Kubernetes"). Betriebsanleitung: docs/kb/04-build-and-run.md, Abschnitt "Deployment".
 #
-# Enthält: Backend-Container (aus backend/Dockerfile gebaut) + eine mitgelieferte PostgreSQL-
-# 16-Instanz für Neuinstallationen.
+# Enthält: Backend-Container (Standard: GHCR-Release-Image gezogen, siehe backend-Service +
+# docker-compose.build.yml für einen lokalen Build) + eine mitgelieferte PostgreSQL-16-Instanz
+# für Neuinstallationen.
 #
 # Zwei Betriebsvarianten (Issue #64):
-#   1. Neuinstallation (mitgelieferte DB): "docker compose up -d --build" startet beide
-#      Services (backend + postgres).
+#   1. Neuinstallation (mitgelieferte DB): "docker compose up -d" startet beide Services
+#      (backend + postgres) - das Backend-Image wird aus GHCR gezogen (Issue #89).
 #   2. Anbindung an eine Bestands-DB: den "postgres"-Service NICHT starten, ELWASYS_DB_URL auf
 #      die externe DB zeigen (siehe .env.example). WICHTIG: der Backend-Service hat unten ein
 #      "depends_on: postgres", d.h. ein blosses "docker compose up backend" würde den
@@ -15,11 +16,14 @@
 #      "--no-deps" verwenden:
 #        docker compose up -d --no-deps backend
 #
-# Nutzung (Neuinstallation):
+# Nutzung (Neuinstallation, GHCR-Release-Image):
 #   cd deploy/compose
 #   cp .env.example .env   # Platzhalter durch echte Werte ersetzen (siehe .env.example)
-#   docker compose up -d --build
+#   docker compose up -d   # zieht ELWASYS_BACKEND_IMAGE (Default ghcr.io/ullriti/elwasys-backend:latest)
 #   curl http://127.0.0.1:8080/actuator/health/liveness   # Prozess-Health (Root-/health = Alerting, AP6 #32)
+#
+# Lokaler Build aus dem Arbeitsbaum (statt GHCR-Image, Issue #89): das Build-Overlay zuladen:
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 #
 # TLS ist Pflicht für den externen Zugriff (Issue #35): dieses Compose-File terminiert selbst
 # kein TLS und bindet den Backend-Port deshalb bewusst NUR an 127.0.0.1 (siehe "ports:" beim
@@ -27,7 +31,8 @@
 # direkt aus dem Netz im Klartext. Für einen eigenständigen TLS-Terminierungspunkt siehe das
 # optionale Overlay docker-compose.proxy.yml (Caddy, automatisches Let's-Encrypt-TLS) - es
 # erreicht das Backend über das Compose-interne Netz (nicht über den veröffentlichten Port):
-#   docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d --build
+#   docker compose -f docker-compose.yml -f docker-compose.proxy.yml up -d
+# (Für einen lokalen Backend-Build zusätzlich "-f docker-compose.build.yml --build" anhängen.)
 
 services:
   postgres:
@@ -61,12 +66,14 @@ services:
     restart: unless-stopped
 
   backend:
-    build:
-      # Kontext = Repo-Wurzel (zwei Ebenen über diesem Verzeichnis), siehe Begründung im
-      # Kopf-Kommentar von backend/Dockerfile (Root-Reactor/Parent-POM-Fallstrick).
-      context: ../..
-      dockerfile: backend/Dockerfile
-    image: elwasys-backend:local
+    # Standard: das im Release nach GHCR gepushte Image ZIEHEN (Issue #89), NICHT lokal bauen -
+    # so ist "was in Produktion läuft" an ein Release-Tag/Digest gebunden statt an den
+    # Git-Checkout des Docker-Hosts (Parität zum Helm-Weg, der dieselbe GHCR-Quelle referenziert).
+    # ELWASYS_BACKEND_IMAGE in .env möglichst auf ein konkretes Release-Tag oder @sha256:-Digest
+    # pinnen statt auf :latest (siehe .env.example, „Release einfrieren"). Für einen bewussten
+    # lokalen Build aus dem Arbeitsbaum das Overlay docker-compose.build.yml zusätzlich laden:
+    #   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+    image: ${ELWASYS_BACKEND_IMAGE:-ghcr.io/ullriti/elwasys-backend:latest}
     environment:
       # Standard: gegen den mitgelieferten "postgres"-Service oben. Für die Variante
       # "Bestands-DB" hier stattdessen auf die externe DB zeigen (siehe .env.example) und den

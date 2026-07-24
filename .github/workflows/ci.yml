@@ -198,8 +198,9 @@ jobs:
   # ---------------------------------------------------------------------------
   # Helm-Chart – billiger Render-/Lint-Gate (Issue #64): fängt kaputte Templates/Values früh
   # ab, ohne ein echtes Cluster. "helm lint" prüft Chart-Struktur/Values, "helm template"
-  # rendert alle Manifeste einmal durch (inkl. des required-Guards auf secret.password aus
-  # templates/secret.yaml - daher hier ein Dummy-Passwort, das nie deployt wird).
+  # rendert alle Manifeste einmal durch (inkl. der Guards: secret.password aus
+  # templates/secret.yaml, passwordReset.baseUrl aus configmap.yaml (Issue #86/H7) und der
+  # imageTag-Guard aus _helpers.tpl (Issue #89) - daher hier Dummy-Werte, die nie deployt werden).
   # ---------------------------------------------------------------------------
   helm:
     name: Helm chart (lint + template)
@@ -211,10 +212,10 @@ jobs:
         uses: azure/setup-helm@v4
 
       - name: helm lint
-        run: helm lint deploy/helm/elwasys-backend --set secret.password=ci-dummy-not-deployed --set passwordReset.baseUrl=https://ci.example.invalid
+        run: helm lint deploy/helm/elwasys-backend --set secret.password=ci-dummy-not-deployed --set passwordReset.baseUrl=https://ci.example.invalid --set image.tag=ci-not-deployed
 
       - name: helm template (render smoke)
-        run: helm template elwasys-ci deploy/helm/elwasys-backend --set secret.password=ci-dummy-not-deployed --set passwordReset.baseUrl=https://ci.example.invalid > /dev/null
+        run: helm template elwasys-ci deploy/helm/elwasys-backend --set secret.password=ci-dummy-not-deployed --set passwordReset.baseUrl=https://ci.example.invalid --set image.tag=ci-not-deployed > /dev/null
 
   # ---------------------------------------------------------------------------
   # Terminal-Update-Skripte – Trockentests des Auto-Update-Pfads (Issue #34/#62/#63). Der

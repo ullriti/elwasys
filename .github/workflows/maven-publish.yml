@@ -38,6 +38,14 @@ jobs:
       # so it still needs this simple substitution.
       run: sed -i -E "s/0.0.0-local-development/${{ github.event.release.tag_name }}/g" Client-Raspi/src/main/org/kabieror/elwasys/common/Utilities.java
 
+    - name: Apply version number to Helm Chart appVersion (Issue #89)
+      # The Helm chart's appVersion is the default image tag (values.yaml image.tag falls back
+      # to it). Left at the 0.0.0-local-development sentinel it would point at a non-existent
+      # GHCR image, and the chart's imageTag guard (templates/_helpers.tpl) fails the render.
+      # Lift it to the release tag here so a chart shipped from a real release references the
+      # image this same workflow pushes below. (versions:set above only touches the POMs.)
+      run: sed -i -E "s/^appVersion: \"0.0.0-local-development\"/appVersion: \"${{ github.event.release.tag_name }}\"/" deploy/helm/elwasys-backend/Chart.yaml
+
     - name: Build Raspi-Client (Terminal-fat-jar)
       # Reactor build from the root so the (now re-versioned) parent POM is
       # also installed into the local repo — a per-module "mvn install" inside
