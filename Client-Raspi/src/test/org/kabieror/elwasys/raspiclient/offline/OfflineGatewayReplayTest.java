@@ -64,6 +64,42 @@ class OfflineGatewayReplayTest {
     }
 
     @Test
+    void aStartAndItsFinishStayPairedAcrossACommunicationFailureBetweenThem(@TempDir Path dir) {
+        // Issue #80 (H1): ohne den Fix wird ein erfolgreich nachgemeldeter START sofort aus dem
+        // Journal entfernt, BEVOR sein Terminator nachgemeldet ist. Reisst die Verbindung genau
+        // dazwischen ab (Kommunikationsfehler beim FINISH), fehlt der START im naechsten Lauf -
+        // die im laufenden Prozess gelernte Backend-Id ist verloren, das FINISH findet keinen
+        // aufloesbaren Start mehr und wird faelschlich dead-lettert, obwohl die Ausfuehrung
+        // serverseitig nie beendet wurde (Execution bleibt "laufend", keine Abrechnung).
+        OfflineJournal journal = new OfflineJournal(dir.resolve("offline-journal.jsonl"));
+        journal.appendStart("s1", TS, 1, 10, 100);
+        journal.appendFinish(false, "f1", TS.plusHours(1), 1, null, "s1", new BigDecimal("2.00"));
+        RecordingApiClient api = new RecordingApiClient();
+        api.startReplayResultId = 42;
+        api.failFinishWithCommunicationFailureOnce = true;
+        OfflineGateway gateway = newGateway(dir, api, journal);
+
+        // 1. Lauf: START gelingt, FINISH scheitert an einem (einmaligen) Kommunikationsfehler.
+        boolean done = gateway.replay();
+        assertFalse(done, "a communication failure while replaying the FINISH stops the run");
+        assertEquals(1, api.startReplays, "the START was replayed in this run");
+        assertEquals(1, api.finishes, "the FINISH was attempted and failed with a communication failure");
+        assertTrue(journal.hasPendingEntries(), "both the START and its FINISH must stay in the journal");
+        assertEquals(2, journal.readAll().size(),
+                "the START must NOT be removed individually before its FINISH also left the journal");
+
+        // 2. Lauf: der START wird erneut nachgemeldet (Replay-Endpunkt ist idempotent, liefert
+        // dieselbe Id), das FINISH gelingt diesmal und referenziert die neu gelernte Id.
+        done = gateway.replay();
+        assertTrue(done, "the second run drains the journal");
+        assertEquals(2, api.startReplays, "the START is replayed again in the second run (idempotent)");
+        assertEquals(2, api.finishes, "the FINISH is retried in the second run");
+        assertEquals(42, api.lastFinishExecutionId, "the FINISH must still use the id learned from the START replay");
+        assertEquals(0, api.aborts, "no ghost-execution compensation - this is not a dead-letter case");
+        assertFalse(journal.hasPendingEntries(), "a fully replayed journal is empty");
+    }
+
+    @Test
     void aPoisonEntryIsMovedToDeadLetterAndValidEntriesStillReplay(@TempDir Path dir) throws IOException {
         // Ein dauerhaft fachlich abgelehnter START (z. B. gelöschtes Gerät -> 404) darf nicht das
         // ganze Journal verklemmen: er wird zur Dead-Letter, sein zugehöriges FINISH kann mangels
@@ -247,6 +283,7 @@ class OfflineGatewayReplayTest {
         String lastAbortKey;
         ApiException failStartReplayWith;
         ApiException failFinishWith;
+        boolean failFinishWithCommunicationFailureOnce;
         RuntimeException failAbortWithRuntime;
         Runnable onFinish;
 
@@ -275,6 +312,12 @@ class OfflineGatewayReplayTest {
         public ExecutionDto finishExecution(int id, LocalDateTime clientTimestamp, String idempotencyKey)
                 throws ApiException {
             this.finishes++;
+            if (this.failFinishWithCommunicationFailureOnce) {
+                // Nur EINMAL: simuliert eine abreissende Verbindung genau zwischen dem
+                // erfolgreichen START-Replay und der Nachmeldung seines Terminators (Issue #80).
+                this.failFinishWithCommunicationFailureOnce = false;
+                throw new ApiException("simulierter Kommunikationsfehler beim FINISH");
+            }
             if (this.failFinishWith != null) {
                 throw this.failFinishWith;
             }
