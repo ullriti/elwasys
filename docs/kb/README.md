@@ -140,10 +140,19 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   `appVersion`-Bump im Release, NTP am Terminal (`setup.sh` + Watchdog). Drei neue **Offline-
   Selbsttests** (Alerting, Restore-Dry-Run, Flyway-Historie-Ableitung) hängen im neuen
   CI-Job `cutover-scripts`. Der echte Restore-/Alarm-/Cutover-Lauf bleibt bewusst ein
-  Generalprobe-Schritt. **Offen als cross-component-Folge-AP (#89):** Dead-Letter-/Geister-
-  Fehler des Terminals ans Backend melden + in einen Health-Indicator heben („mittel/zeitnah").
-- **Nächster Schritt:** FR-3 (Tests: deCONZ-Reconnect, DYNAMIC-E2E, Determinismus) und der
-  offene #89-Dead-Letter-Sichtbarkeits-Anteil, dann Generalprobe (Spec 0001) und **Live-Gang**
+  Generalprobe-Schritt.
+  Auf Auftraggeber-Entscheidung (2026-07-26) kamen zwei Punkte hinzu: der **externe
+  Uptime-Monitor ist Pflicht-Stufe 2** neben dem lokalen Poll-Skript (fällt der Host ganz aus,
+  schweigt der lokale Poller – Endpoint-Check oder Dead-Man's-Switch, Alarm-Probe für beide
+  Stufen), und die **Dead-Letter-Sichtbarkeit (#89) ist umgesetzt** statt vertagt
+  ([ADR 0022](../architecture/0022-dead-letter-sichtbarkeit.md)): das Terminal meldet
+  Dead-Letter- und fehlgeschlagene Geister-Kompensationen über den bestehenden
+  Wartungs-WebSocket (`OFFLINE_INCIDENT`, persistente Outbox mit Quittung), das Backend
+  persistiert sie (Migration `V12`) und hält über den `OfflineIncidentHealthIndicator` den
+  Betriebsalarm, bis ein Admin den Vorfall in der neuen Portal-Ansicht **Offline-Vorfälle**
+  quittiert (Vorfälle bleiben als Beleg erhalten, kein Purge).
+- **Nächster Schritt:** FR-3 (Tests: deCONZ-Reconnect, DYNAMIC-E2E, Determinismus),
+  dann Generalprobe (Spec 0001) und **Live-Gang**
   (Cutover nach [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md)). FR-4/FR-5
   (Qualitäts-Refactors, Doku-Hygiene) nach dem Feldeinsatz. Neue Vorhaben vorab als Spec
   in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.

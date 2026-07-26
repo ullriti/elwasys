@@ -13,6 +13,9 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Added
+- Offline-Vorfälle der Terminals im Portal sichtbar und quittierbar (finale Review R5, #89): neue
+  Admin-Ansicht „Offline-Vorfälle" mit Schadensbetrag; die Quittierung (mit Bestätigung) beendet
+  den Betriebsalarm, der Vorfall bleibt als Beleg. Das Dashboard weist auf offene Vorfälle hin.
 - Betriebs-Alerting mitgeliefert (finale Review H4, #83): `deploy/monitoring/` pollt
   `/actuator/health/operational` (Nichterreichbarkeit = Alarm) plus Zertifikats-Ablauf und
   Plattenplatz und meldet per Pushover/Mail; systemd-Timer/Cron + Offline-Selbsttest.

@@ -255,7 +255,7 @@ Die maßgebliche Portal-E2E-Suite läuft gegen das ins Backend eingebettete Vaad
 - **`backend/e2e/tests/helpers.ts`**: gemeinsame Lokatoren-Helfer (Login, Navigation,
   ComboBox-Auswahl, Grid-Zeilen-Zugriff, Dialog-Handling).
 - **Spec-Dateien**: `login.spec.ts`, `admin.spec.ts`, `admin-crud.spec.ts`, `dashboard.spec.ts`,
-  `user-portal.spec.ts`.
+  `offline-incidents.spec.ts`, `user-portal.spec.ts`.
 
 ### Vaadin-Flow-Selektoren (Selektor-Strategie)
 
@@ -286,6 +286,11 @@ Die maßgebliche Portal-E2E-Suite läuft gegen das ins Backend eingebettete Vaad
   adressiert sie über ihre Quellcode-Reihenfolge (`actionButtons()`-Methode der jeweiligen View).
 - **Aktiver Navigationspunkt**: Vaadin markiert das gerade ausgewählte `vaadin-side-nav-item` mit
   dem Attribut **`[current]`** (nicht `[active]`).
+- **Notification in Position `MIDDLE` ist modal** (Issue #89): sie blockiert bis zu ihrem Ablauf
+  JEDE Eingabe – auch einen `{ force: true }`-Klick, der dann still ins Leere geht (Symptom:
+  „Clicking the checkbox did not change its state"). Nach einer Aktion, die eine solche
+  Erfolgsmeldung zeigt, erst `await expect(meldung).toBeHidden()` abwarten (deterministisch,
+  kein `waitForTimeout`) und dann weiterklicken – siehe `offline-incidents.spec.ts` (P27).
 
 ### Portal-Design zur Laufzeit (kein kompiliertes Theme)
 
@@ -297,10 +302,10 @@ Frontend-Bundle-Build und damit den Vaadin-Lizenzcheck erzwingen, der in dieser 
 abbricht (siehe docs/kb/05-migration-plan.md). Für die E2E-Suite ist das rein kosmetisch: nur
 Farben/Rahmen, keine Texte/Struktur/Selektoren.
 
-### Testfall-Übersicht (P1–P26)
+### Testfall-Übersicht (P1–P28)
 
-`backend/e2e/tests/` enthält **23 `test()`** (login 2 / admin 3 / admin-crud 12 / dashboard 1 /
-user-portal 5); P15/P18 teilen sich ein `test()`.
+`backend/e2e/tests/` enthält **25 `test()`** (login 2 / admin 3 / admin-crud 12 / dashboard 1 /
+offline-incidents 2 / user-portal 5); P15/P18 teilen sich ein `test()`.
 
 | ID | Datei | Testgegenstand |
 |----|-------|----------------|
@@ -328,6 +333,8 @@ user-portal 5); P15/P18 teilen sich ein `test()`.
 | P24 | admin-crud.spec.ts (~Z. 147) | Auszahlung > Guthaben blockiert (#50) |
 | P25 | admin-crud.spec.ts (~Z. 194) | Benutzer löschen → verschwindet aus Liste (#50) |
 | P26 | user-portal.spec.ts (~Z. 57) | Öffentlicher Reset-Link lehnt ungültigen Key ab (#50) |
+| P27 | offline-incidents.spec.ts | Offline-Vorfall sichtbar (Art/Nutzer/Betrag) → quittieren (mit Bestätigung) → weg aus der offenen Liste, als „Quittiert" belegt (#89) |
+| P28 | offline-incidents.spec.ts | Quittierte Vorfälle bleiben über den Umschalter einsehbar; Dashboard-Hinweis verlinkt in die Vorfallsliste (#89) |
 
 ### Kommandos
 
@@ -376,9 +383,9 @@ Am Code gezählt:
   `TerminalMaintenanceRealClientE2ETest` (5 `@Test`, per `backend/pom.xml`-Exclude, eigener
   Harness) läuft nicht in der Standard-Suite → diese umfasst rund **260** Tests
   (`backend/run-backend-tests.sh`).
-- **Portal-E2E (Playwright)**: **23 `test()`** in `backend/e2e/tests/` (login 2 / admin 3 /
-  admin-crud 12 / dashboard 1 / user-portal 5) zzgl. **4** READ-ONLY-Smoke-`test()` in
-  `tests-smoke/`.
+- **Portal-E2E (Playwright)**: **25 `test()`** in `backend/e2e/tests/` (login 2 / admin 3 /
+  admin-crud 12 / dashboard 1 / offline-incidents 2 / user-portal 5) zzgl. **4**
+  READ-ONLY-Smoke-`test()` in `tests-smoke/`.
 - **Client (TestFX/JUnit)**: **71 `@Test`** in 28 Testklassen (40 Testdateien inkl.
   Simulatoren/Helfer).
 

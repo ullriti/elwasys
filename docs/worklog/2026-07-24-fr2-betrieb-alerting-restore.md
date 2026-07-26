@@ -55,17 +55,35 @@ Artefakt schließt (nicht nur als Runbook-Empfehlung).
   brechen bei fehlendem Wert laut ab – konsistent mit dem bestehenden `POSTGRES_PASSWORD`-/
   `secret.password`-Muster.
 
+## Nachtrag (Auftraggeber-Entscheidung, 2026-07-26)
+
+Der ursprüngliche Zuschnitt dieses AP ließ zwei Punkte bewusst offen; der Auftraggeber hat beide
+anders entschieden – umgesetzt und hier nachgetragen:
+
+- **Externer Uptime-Monitor ist PFLICHT, nicht Ergänzung** (H4/#83). Das lokale Poll-Skript hat
+  eine bauartbedingte blinde Stelle: fällt der ganze Host aus, läuft auch der Poller nicht mehr –
+  ausgerechnet im schwersten Fehlerfall käme kein Alarm. `deploy/monitoring/README.md` beschreibt
+  daher jetzt **zwei Pflicht-Stufen** (lokales Skript + externer Monitor, wahlweise
+  Endpoint-Check oder Dead-Man's-Switch per healthchecks.io-Ping), und die Alarm-Probe muss für
+  **beide** Wege durchlaufen.
+- **#89 Dead-Letter-Sichtbarkeit doch in diesem AP** (statt als Folge-AP): siehe
+  [ADR 0022](../architecture/0022-dead-letter-sichtbarkeit.md). Ein Dead-Letter ist eine verlorene
+  Offline-Buchung (Geld) und stand bisher nur im lokalen Pi-Log. Jetzt: das Terminal meldet
+  Vorfälle über den bestehenden Wartungs-WebSocket (`OFFLINE_INCIDENT`, persistente Outbox mit
+  Quittung – ein Vorfall entsteht typischerweise genau dann, wenn die Verbindung weg ist),
+  das Backend persistiert sie (Migration V12) und hält über einen Health-Indicator den
+  Betriebsalarm, bis ein Admin den Vorfall im Portal **quittiert**. Damit schließt sich der Kreis
+  vom stillen Log-Eintrag bis zum Menschen.
+
 ## Offen / nächster Schritt
 
-- **#89 Dead-Letter-Sichtbarkeit bewusst NICHT in diesem AP** (bleibt offen): Dead-Letter-/
-  Geister-Fehler des Terminals ans Backend melden + in einen Health-Indicator heben ist eine
-  **cross-component**-Änderung (Terminal + Backend + Protokoll) mit eigenem Testbedarf und in der
-  Review als „mittel/zeitnah" (nicht „vor Feldeinsatz") eingestuft – gehört in ein eigenes,
-  fokussiertes AP (analog zum in FR-1 ausgegliederten FHEM-Log-Bug). Der reine Log-basierte
-  Zustand ist bis dahin über das H4-Alerting zumindest indirekt (offene abgelaufene Executions)
-  teilabgedeckt.
-- Danach: FR-3 (Tests: deCONZ-Reconnect, DYNAMIC-E2E, Determinismus) und die Generalprobe nach
-  Spec 0001 (echter Restore-/Alarm-/Cutover-Lauf).
+- FR-3 (Tests: deCONZ-Reconnect, DYNAMIC-E2E, Determinismus) und die Generalprobe nach
+  Spec 0001 (echter Restore-/Alarm-/Cutover-Lauf, jetzt inkl. Alarm-Probe für beide Stufen).
+- **Testinfrastruktur-Schwachpunkt (neu entdeckt, eigenes Issue wert):** `run-ui-tests.sh` pollt
+  als Readiness-Gate das aggregierte `/actuator/health`. Hinterlässt ein vorheriger E2E-Lauf einen
+  Standort mit Geräten in der geteilten Test-DB, steht dieses Health dauerhaft auf 503 und der
+  nächste Lauf startet nie – obwohl mit den Tests nichts verkehrt ist. Sinnvoller wäre
+  `/actuator/health/readiness` (reiner Prozess-Status) als Gate.
 
 ## Referenzen
 
