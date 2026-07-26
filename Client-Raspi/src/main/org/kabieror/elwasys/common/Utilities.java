@@ -8,9 +8,6 @@ import org.apache.commons.lang3.RandomStringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Iterator;
 
 /**
@@ -29,20 +26,6 @@ public class Utilities {
 
     public Utilities(ConfigurationManager config) {
         this.config = config;
-    }
-
-    /**
-     * Erzeugt einen SHA-1-Hash einer gegebenen Zeichenkette.
-     *
-     * @param s
-     * @return
-     * @throws NoSuchAlgorithmException
-     */
-    public static String sha1(String s) throws NoSuchAlgorithmException {
-        final MessageDigest md = MessageDigest.getInstance("SHA-1");
-        // HexFormat (seit Java 17) statt String-Konkatenation in der Schleife (#91) - liefert
-        // exakt dasselbe Format: kleingeschrieben, zwei Zeichen je Byte, fuehrende Null erhalten.
-        return HexFormat.of().formatHex(md.digest(s.getBytes()));
     }
 
     /**

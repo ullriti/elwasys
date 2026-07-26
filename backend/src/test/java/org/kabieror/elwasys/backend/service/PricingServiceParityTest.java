@@ -53,29 +53,30 @@ class PricingServiceParityTest {
         }
         // Schutz gegen ein stillschweigend leeres Ergebnis (z.B. verschobene Fixture-Datei):
         // ein Test, der nichts prüft, sähe sonst wie ein grüner Lauf aus.
-        assertTrue(tests.size() >= 10, "Die Paritäts-Fixture sollte alle Fälle liefern");
+        assertTrue(tests.size() >= 18, "Die Paritäts-Fixture sollte alle Fälle liefern");
         return tests;
     }
 
     private void assertCase(String line) {
         String[] c = line.split(";");
-        int durationSeconds = Integer.parseInt(c[5]);
 
-        ProgramEntity program = new ProgramEntity("Parität", ProgramType.valueOf(c[0]), durationSeconds);
+        ProgramEntity program = new ProgramEntity("Parität", ProgramType.valueOf(c[0]), Integer.parseInt(c[5]));
         program.setFlagfall(new BigDecimal(c[1]));
         program.setRate(new BigDecimal(c[2]));
         program.setTimeUnit(TimeUnitType.valueOf(c[3]));
         program.setFreeDurationSeconds(Integer.parseInt(c[4]));
 
-        DiscountType discountType = DiscountType.valueOf(c[6]);
-        // NONE steht in der Fixture zugleich für "kein Benutzer" - im Backend ist das der
-        // null-Benutzer (siehe PricingService#getPrice), im Terminal die fehlende Gruppe.
-        UserEntity user = discountType == DiscountType.NONE ? null
-                : new UserEntity("Parität", "paritaet",
-                        new UserGroupEntity("Parität", discountType, Double.parseDouble(c[7])));
+        // groupPresent unterscheidet "kein Benutzer" (hier: null) von "Benutzer mit rabattfreier
+        // Gruppe" - zwei Wege zu demselben Preis, die beide Implementierungen verschieden
+        // ausdrücken (Backend über den else-Zweig, Terminal über eine Vorab-Prüfung).
+        UserEntity user = "yes".equals(c[9])
+                ? new UserEntity("Parität", "paritaet",
+                        new UserGroupEntity("Parität", DiscountType.valueOf(c[7]), Double.parseDouble(c[8])))
+                : null;
 
-        BigDecimal actual = this.pricingService.getPrice(program, Duration.ofSeconds(durationSeconds), user);
+        BigDecimal actual = this.pricingService.getPrice(program,
+                Duration.ofSeconds(Long.parseLong(c[6])), user);
 
-        assertEquals(0, new BigDecimal(c[8]).compareTo(actual), "Erwartet " + c[8] + ", berechnet " + actual);
+        assertEquals(0, new BigDecimal(c[10]).compareTo(actual), "Erwartet " + c[10] + ", berechnet " + actual);
     }
 }

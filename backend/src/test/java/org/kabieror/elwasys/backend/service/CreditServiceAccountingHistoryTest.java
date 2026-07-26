@@ -134,6 +134,36 @@ class CreditServiceAccountingHistoryTest extends AbstractBackendIT {
     }
 
     @Test
+    void bookingsWithTheSameTimestampKeepTheOrderOfTheirIds() {
+        // Regressionstest zum eigentlichen Grund für "ORDER BY date DESC, id DESC" (#88): der
+        // Buchungszeitpunkt kommt aus LocalDateTime.now() und kann für zwei Buchungen identisch
+        // sein (gleiche Zeitauflösung). Ohne den id-Tiebreak ist die Reihenfolge dann undefiniert
+        // und die Historie kann zwischen zwei Abrufen springen. Die Tests mit weit
+        // auseinanderliegenden Zeitstempeln fangen genau das NICHT - sie wären auch ohne den
+        // Tiebreak grün.
+        UserEntity user = newUser();
+        LocalDateTime sameInstant = LocalDateTime.of(2022, 3, 3, 12, 0, 0);
+        CreditAccountingEntryEntity first = bookedAt(user, "5.00", "erste Buchung", sameInstant);
+        CreditAccountingEntryEntity second = bookedAt(user, "6.00", "zweite Buchung", sameInstant);
+
+        assertThat(this.creditService.getAccountingEntries(user))
+                .extracting(CreditAccountingEntryEntity::getId)
+                .as("bei identischem Zeitpunkt entscheidet die Id: zuletzt gebucht zuerst")
+                .containsExactly(second.getId(), first.getId());
+    }
+
+    @Test
+    void lastInpaymentWithTheSameTimestampIsTheOneBookedLast() {
+        UserEntity user = newUser();
+        LocalDateTime sameInstant = LocalDateTime.of(2022, 3, 3, 12, 0, 0);
+        bookedAt(user, "5.00", "erste Einzahlung", sameInstant);
+        CreditAccountingEntryEntity second = bookedAt(user, "6.00", "zweite Einzahlung", sameInstant);
+
+        assertThat(this.creditService.getLastInpayment(user)).get()
+                .extracting(CreditAccountingEntryEntity::getId).isEqualTo(second.getId());
+    }
+
+    @Test
     void getLastInpaymentOrdersByBookingDateNotByInsertionOrder() {
         UserEntity user = newUser();
         CreditAccountingEntryEntity younger = bookedAt(user, "10.00", "spätere Einzahlung",

@@ -14,7 +14,6 @@ import javafx.scene.layout.Pane;
 import javafx.scene.layout.VBox;
 import org.kabieror.elwasys.common.FormatUtilities;
 import org.kabieror.elwasys.common.ProgramType;
-import org.kabieror.elwasys.raspiclient.api.ApiException;
 import org.kabieror.elwasys.raspiclient.model.ClientDevice;
 import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 import org.kabieror.elwasys.raspiclient.model.ClientUser;
@@ -40,6 +39,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.ResourceBundle;
@@ -727,6 +727,15 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
                             List.of("status-disabled"), true, null, null, "deaktiviert"),
                     DeviceListEntryState.UNREGISTERED, new EntryAppearance(true, List.of(),
                             List.of("status-unregistered"), false, null, null, "Keine Steckdose")));
+
+    static {
+        // Ein künftiger Zustand ohne Tabellenzeile soll beim Laden der Klasse auffallen und nicht
+        // erst als NPE mitten im Neuzeichnen der Kachel auf dem FX-Thread. Genau dieser Bereich
+        // war mit #82 schon einmal still falsch.
+        if (!APPEARANCES.keySet().containsAll(EnumSet.allOf(DeviceListEntryState.class))) {
+            throw new IllegalStateException("Zustandstabelle unvollständig: " + APPEARANCES.keySet());
+        }
+    }
 
     /**
      * Die möglichen Zustände des Eintrages

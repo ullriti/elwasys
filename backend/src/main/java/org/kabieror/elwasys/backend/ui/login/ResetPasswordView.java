@@ -118,6 +118,4 @@ public class ResetPasswordView extends VerticalLayout implements BeforeEnterObse
         Notifications.showSuccess("Passwort wurde erfolgreich geändert.");
         UI.getCurrent().navigate("login");
     }
-
-
 }

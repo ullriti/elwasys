@@ -50,9 +50,17 @@ UI-Größen; `DeviceListEntry` beschreibt die Kachel-Darstellung als Zustandstab
 Fall-Through #82 verdeckte — und beendet den Steckdosen-Suchlauf-Executor beim Terminieren.
 Dazu der echte Log-Bug in `ui/small` (`catch (FhemException e1)` loggte den `ActionEvent` der
 äußeren Lambda), Währungsformatierung über `FormatUtilities`, `Vector`→`CopyOnWriteArrayList`,
-`printStackTrace`→Logger, `HexFormat` in `Utilities.sha1`, eigener Monitor statt autoboxter
+`printStackTrace`→Logger, toter `Utilities.sha1` entfernt, eigener Monitor statt autoboxter
 `Integer`-Konstante, Default statt `NumberFormatException` bei `fhem.port`, Tippfehler in
 Bezeichnern.
+
+**Nicht ganz verhaltensneutral, deshalb ausdrücklich benannt:** die Umstellung von `ui/small` auf
+`FormatUtilities` ersetzt die Standard-Locale der JVM durch fest deutsche Währungsschreibweise.
+Auf einem Pi-Image mit `LANG=C` sah der Bestätigungsdialog des kleinen Displays dadurch vorher
+anders aus als das mittlere Display, das `FormatUtilities` längst nutzte – die Vereinheitlichung
+ist gewollt. Damit die Anzeige nicht weiter vom Image abhängt, setzt der Startbefehl in
+`setup.sh` jetzt `-Duser.language=de -Duser.country=DE`; `FormatUtilities` erzeugt seinen
+Formatter außerdem je Aufruf statt einen geteilten, nicht threadsicheren Formatter zu halten.
 
 ### Code-Qualität Portal (#92)
 `AbstractAdminListView<T>` trägt Kopfzeile, Grid, Aktionsspalte, Lösch-Bestätigung samt
@@ -82,12 +90,36 @@ TODO-Javadoc und englische Rest-Kommentare im Alt-fhem-Code bereinigt; Testzahle
   der Toolbar eng über Ladeindikator und Broadcaster-Zustand verzahnt; der Nutzen (~65 Zeilen)
   rechtfertigt das Risiko am Ende des Pakets nicht. Ebenfalls in #92 vermerkt.
 
+## Nachtrag: zweites Review-Gate über den gesamten Branch
+
+Der `code-reviewer` fand über den kompletten Branch-Diff nichts Blockierendes, aber zwei
+Testlücken, die beide echt waren:
+
+- **Der Tiebreak-Fix hatte keinen wirksamen Test.** `findByUser_IdOrderByDateDescIdDesc`
+  entstand, damit zwei Buchungen mit **identischem** Zeitstempel eine feste Reihenfolge haben -
+  die neuen Tests arbeiteten aber mit weit auseinanderliegenden Zeitstempeln und wären auch ohne
+  den Tiebreak grün gewesen. Jetzt gibt es zwei Fälle mit demselben Zeitpunkt; gegen den
+  Vor-Fix-Stand verifiziert (Historie kommt dort in umgekehrter Reihenfolge zurück).
+- **Die Paritäts-Fixture ließ genau die zwei Stellen aus, an denen die Implementierungen
+  strukturell verschieden sind:** es gab keinen Fall mit `abgerechnete Dauer < Maximaldauer`
+  und keinen mit „Gruppe vorhanden, aber rabattfrei" (das Backend fängt das über den
+  `else`-Zweig seiner Rabattkette ab, das Terminal über eine eigene Vorab-Prüfung). Die Fixture
+  hat dafür zwei zusätzliche Spalten (`billedDurationSeconds`, `groupPresent`) und fünf neue
+  Fälle bekommen: 18 statt 13.
+
+Weiter behoben: Vollständigkeits-Guard für die Zustandstabelle der Gerätekachel (ein künftiger
+Zustand ohne Tabellenzeile fällt beim Klassenladen auf statt als NPE im FX-Thread), `try/finally`
+im Steckdosen-Suchlauf (eine gescheiterte Registrierung ließ die Kachel sonst im
+„suche gerade"-Zustand hängen), entdoppelte `showFailure`-Überladung, toter `Utilities.sha1`
+entfernt, `.vaadin-node-tasks.lock` in `.gitignore`.
+
 ## Tests
 
-- Backend-JUnit: **287/287** grün (`backend/run-backend-tests.sh`).
-- Client-Suite: **88/88** grün (`Client-Raspi/run-ui-tests.sh`), inkl. der zwei neuen/umgebauten
-  Testklassen.
-- Portal-E2E (Playwright, `backend/e2e`): grün, inkl. des neuen P12b.
+- Backend-JUnit: **315/315** grün (`backend/run-backend-tests.sh`; 287 vor diesem AP).
+- Client-Suite: **106/106** grün (`Client-Raspi/run-ui-tests.sh`; 88 vor diesem AP, dazu die 18
+  Paritätsfälle).
+- Portal-E2E (Playwright, `backend/e2e`): **27/27** grün, inkl. P12b und der Prüfung der
+  ausgelagerten Fernwartungs-Kopfzeile.
 
 ## Offen / nächster Schritt
 

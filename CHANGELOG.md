@@ -61,6 +61,10 @@ im [Worklog](docs/worklog/README.md).
   erst zusammen mit seinem Terminator aus dem Journal entfernt.
 - Listener-Leak im Terminal (#81): `stopListenToExecutionStartedEvent`/`…ErrorEvent` riefen
   `add` statt `remove` auf – abgemeldete Listener blieben registriert.
+- Geldbeträge am kleinen Terminal-Display hingen an der Locale des Pi-Images (#91): sie laufen
+  jetzt wie am mittleren Display über `FormatUtilities` (deutsche Schreibweise), und der
+  Startbefehl setzt die JVM-Locale passend dazu - auf einem Image mit `LANG=C` stand dort vorher
+  eine andere Währungsschreibweise als im übrigen Terminal.
 - Verlorener Stacktrace bei FHEM-Fehlern am kleinen Terminal-Display (#91): der
   `catch`-Block loggte das UI-Ereignis statt der Ausnahme - die Ferndiagnose sah den Fehler nicht.
 - Fall-Through in der Gerätekachel (#82): deaktivierte Geräte zeigten „Keine Steckdose" und waren

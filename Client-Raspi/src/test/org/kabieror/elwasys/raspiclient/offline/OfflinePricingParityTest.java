@@ -50,7 +50,7 @@ class OfflinePricingParityTest {
         }
         // Schutz gegen ein stillschweigend leeres Ergebnis (z.B. verschobene Fixture-Datei):
         // ein Test, der nichts prüft, sähe sonst wie ein grüner Lauf aus.
-        assertTrue(tests.size() >= 10, "Die Paritäts-Fixture sollte alle Fälle liefern");
+        assertTrue(tests.size() >= 18, "Die Paritäts-Fixture sollte alle Fälle liefern");
         return tests;
     }
 
@@ -59,13 +59,15 @@ class OfflinePricingParityTest {
         SnapshotProgramDto program = new SnapshotProgramDto(1, "Parität", ProgramType.valueOf(c[0]),
                 Integer.parseInt(c[5]), Integer.parseInt(c[4]), new BigDecimal(c[1]), new BigDecimal(c[2]),
                 ChronoUnit.valueOf(c[3]), false, 0, true, List.of());
-        DiscountType discountType = DiscountType.valueOf(c[6]);
-        SnapshotUserGroupDto group = discountType == DiscountType.NONE ? null
-                : new SnapshotUserGroupDto(1, "Parität", discountType, Double.parseDouble(c[7]));
+        // groupPresent unterscheidet "gar keine Gruppe" von "Gruppe ohne Rabatt" - zwei Wege zu
+        // demselben Preis, die beide Implementierungen verschieden ausdrücken.
+        SnapshotUserGroupDto group = "yes".equals(c[9])
+                ? new SnapshotUserGroupDto(1, "Parität", DiscountType.valueOf(c[7]), Double.parseDouble(c[8]))
+                : null;
 
-        BigDecimal actual = OfflinePricing.price(program, Duration.ofSeconds(Long.parseLong(c[5])), group);
+        BigDecimal actual = OfflinePricing.price(program, Duration.ofSeconds(Long.parseLong(c[6])), group);
 
-        assertEquals(0, new BigDecimal(c[8]).compareTo(actual),
-                "Erwartet " + c[8] + ", berechnet " + actual);
+        assertEquals(0, new BigDecimal(c[10]).compareTo(actual),
+                "Erwartet " + c[10] + ", berechnet " + actual);
     }
 }

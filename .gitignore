@@ -58,6 +58,8 @@ backend/pnpm-lock.yaml
 backend/types.d.ts
 backend/vite.generated.ts
 backend/tsconfig.json
+# Sperrdatei der Vaadin-Node-Tasks (entsteht beim Produktionsmodus-Build)
+backend/.vaadin-node-tasks.lock
 
 # Terminal readiness marker (Phase 6 AP5): runtime artifact written by
 # TerminalReadinessMarker when the client reaches SELECT_DEVICE. On a device it

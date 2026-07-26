@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
 /**
  * Der Suchlauf nach einer neuen Steckdose für eine Gerätekachel ("Suche nach Steckdose",
@@ -23,7 +24,7 @@ class DeviceRegistrationScan {
 
     private final Logger logger = LoggerFactory.getLogger(DeviceRegistrationScan.class);
 
-    private final ExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private final ExecutorService scheduler = Executors.newSingleThreadExecutor();
 
     /**
      * Startet einen Suchlauf für das gegebene Gerät.
@@ -36,13 +37,19 @@ class DeviceRegistrationScan {
      *                            zeichnen).
      */
     void start(IDeviceRegistrationService registrationService, ClientDevice device,
-               java.util.function.Consumer<Boolean> onScanStateChanged, Runnable onFinished) {
+               Consumer<Boolean> onScanStateChanged, Runnable onFinished) {
         this.scheduler.submit(() -> {
             this.logger.info("Scanning for new actor for device {}", device.getId());
             onScanStateChanged.accept(true);
-            registrationService.registerDevice(device).join();
-            onScanStateChanged.accept(false);
-            onFinished.run();
+            try {
+                registrationService.registerDevice(device).join();
+            } finally {
+                // Auch wenn das Pairing mit einer Ausnahme endet, muss die Hervorhebung der
+                // Schaltfläche zurückgenommen werden - sonst bliebe die Kachel dauerhaft im
+                // "suche gerade"-Zustand hängen.
+                onScanStateChanged.accept(false);
+                onFinished.run();
+            }
         });
     }
 

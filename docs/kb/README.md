@@ -173,7 +173,7 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   Online-Abrechnung fällt damit als roter Test auf statt beim Nutzer (#91). Das
   `code-reviewer`-Gate lief über den gesamten Branch; seine Befunde (fehlende Tests für die
   Fehlermeldung des Dialog-Gerüsts und für die Fernwartungs-Kopfzeile, Detailtext vor dem
-  Login) sind behoben. Suiten: Backend 305/305 + 3 neue, Client 88/88 + 1, Portal-E2E 27/27.
+  Login) sind behoben. Suiten: **Backend 315/315, Client 106/106, Portal-E2E 27/27** (vor diesem Arbeitspaket: 287 / 88 / 26).
 - **Nächster Schritt:** **Generalprobe nach [Spec 0001](../specs/0001-finale-review.md)**
   (Cutover-Probelauf, Migrations-Dry-Run mit Produktivdaten-Kopie, Backup-Restore-Probe,
   Ausfall-Drills, Alarm-Probe beider Stufen, Soak-Test, Vor-Ort-Kalibrierung), dann Pilotphase

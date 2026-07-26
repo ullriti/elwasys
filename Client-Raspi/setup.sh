@@ -405,7 +405,11 @@ while true; do
     # braucht). Anwendungs-Logs laufen ohnehin separat rollierend ueber
     # logback.xml; diese Dateien fangen nur, was direkt auf STDOUT/STDERR
     # landet (z.B. JVM-Absturz vor Logging-Init).
-    java -Djavafx.platform=gtk -Dlogback.configurationFile=$ELWA_ROOT/logback.xml \
+    # Locale fest auf de_DE: Geldbetraege und Zeitangaben am Terminal sollen nicht davon
+    # abhaengen, mit welchem LANG das Pi-Image gerade gebootet ist (die Anzeige formatiert
+    # ueber FormatUtilities bewusst deutsch - so passen JVM-Default und Anzeige zusammen).
+    java -Djavafx.platform=gtk -Duser.language=de -Duser.country=DE \
+            -Dlogback.configurationFile=$ELWA_ROOT/logback.xml \
             -jar raspi-client.latest.jar -verbose >> log/stdout 2>> log/errout
 
     # JVM hat sich beendet (Crash oder gezielt von aussen fuer Update/Watchdog).

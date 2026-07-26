@@ -91,10 +91,7 @@ public abstract class AbstractFormDialog extends Dialog {
      * gibt.
      */
     protected void showFailure(String message, RuntimeException cause) {
-        // Logger je konkreter Dialogklasse (nicht der Basisklasse), damit im Log steht, WO der
-        // Fehler auftrat; Log-Text englisch wie im übrigen Backend.
-        LoggerFactory.getLogger(getClass()).error("Dialog action failed: {}", message, cause);
-        Notifications.showError(failureText(message, cause.getMessage()));
+        showFailure(message, cause, true);
     }
 
     /**
@@ -104,6 +101,8 @@ public abstract class AbstractFormDialog extends Dialog {
      * Datenbank-Constraints (finale Review R3c, Issue #92).
      */
     protected void showFailure(String message, RuntimeException cause, boolean withDetail) {
+        // Logger je konkreter Dialogklasse (nicht der Basisklasse), damit im Log steht, WO der
+        // Fehler auftrat; Log-Text englisch wie im übrigen Backend.
         LoggerFactory.getLogger(getClass()).error("Dialog action failed: {}", message, cause);
         Notifications.showError(withDetail ? failureText(message, cause.getMessage())
                 : failureText(message, null));
