@@ -1,6 +1,7 @@
 package org.kabieror.elwasys.backend.ws;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.kabieror.elwasys.backend.service.TerminalOfflineIncidentService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -42,16 +43,20 @@ public class TerminalWebSocketConfig implements WebSocketConfigurer {
 
     private final TerminalMaintenanceService maintenanceService;
 
+    private final TerminalOfflineIncidentService incidentService;
+
     public TerminalWebSocketConfig(TerminalConnectionRegistry connectionRegistry, ObjectMapper objectMapper,
-            TerminalMaintenanceService maintenanceService) {
+            TerminalMaintenanceService maintenanceService, TerminalOfflineIncidentService incidentService) {
         this.connectionRegistry = connectionRegistry;
         this.objectMapper = objectMapper;
         this.maintenanceService = maintenanceService;
+        this.incidentService = incidentService;
     }
 
     @Bean
     public WebSocketHandler terminalWebSocketHandler() {
-        return new TerminalWebSocketHandler(this.connectionRegistry, this.objectMapper, this.maintenanceService);
+        return new TerminalWebSocketHandler(this.connectionRegistry, this.objectMapper, this.maintenanceService,
+                this.incidentService);
     }
 
     @Override

@@ -2,8 +2,12 @@ package org.kabieror.elwasys.backend.ws;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.Map;
+import org.kabieror.elwasys.backend.service.TerminalOfflineIncidentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.socket.CloseStatus;
@@ -35,11 +39,14 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
 
     private final TerminalMaintenanceService maintenanceService;
 
+    private final TerminalOfflineIncidentService incidentService;
+
     public TerminalWebSocketHandler(TerminalConnectionRegistry connectionRegistry, ObjectMapper objectMapper,
-            TerminalMaintenanceService maintenanceService) {
+            TerminalMaintenanceService maintenanceService, TerminalOfflineIncidentService incidentService) {
         this.connectionRegistry = connectionRegistry;
         this.objectMapper = objectMapper;
         this.maintenanceService = maintenanceService;
+        this.incidentService = incidentService;
     }
 
     @Override
@@ -77,6 +84,7 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
             // (Terminal -> Backend) nie gleichzeitig für dieselbe Anfrage auf.
             case LOG_RESPONSE, RESTART_RESPONSE, STATUS_RESPONSE ->
                     this.maintenanceService.completeIfPending(locationId(session), incoming);
+            case OFFLINE_INCIDENT -> handleOfflineIncident(session, incoming);
             default -> send(session, TerminalWsMessage.inReplyTo(incoming, TerminalWsMessageType.ERROR,
                     Map.of("reason", "not-implemented",
                             "detail", "Message type " + incoming.type() + " is not implemented in Phase 2 (AP4).")));
@@ -99,6 +107,85 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
                         .map(Instant::toString).orElse(null),
                 "serverTime", Instant.now().toString());
         send(session, TerminalWsMessage.inReplyTo(incoming, TerminalWsMessageType.STATUS_RESPONSE, status));
+    }
+
+    /**
+     * Nimmt eine unaufgeforderte Vorfalls-Meldung des Terminals entgegen (Issue #89, siehe
+     * {@link TerminalWsMessageType#OFFLINE_INCIDENT}) und bestätigt sie.
+     *
+     * <p>Der Standort kommt aus der Session (beim Handshake per Token geprüft), NICHT aus der
+     * Payload - ein Terminal kann so keine Vorfälle für einen fremden Standort melden (dasselbe
+     * Prinzip wie bei der Fernwartungs-Standortprüfung, Issue #26).
+     *
+     * <p>Eine fehlerhafte Meldung wird mit {@code ERROR} beantwortet statt die Verbindung zu
+     * belasten; das Terminal behandelt beide Antworten gleich (es kann den Vorfall ohnehin nicht
+     * "besser" melden) - die Zustellung ist bewusst best-effort, der lokale Log-Eintrag am
+     * Terminal bleibt als Rückfallebene bestehen.
+     */
+    private void handleOfflineIncident(WebSocketSession session, TerminalWsMessage incoming) throws Exception {
+        Map<String, Object> payload = incoming.payload() == null ? Map.of() : incoming.payload();
+        String incidentKey = asString(payload.get("incidentKey"));
+        String kind = asString(payload.get("kind"));
+        String reason = asString(payload.get("reason"));
+        if (incidentKey == null || kind == null) {
+            send(session, TerminalWsMessage.inReplyTo(incoming, TerminalWsMessageType.ERROR,
+                    Map.of("reason", "invalid-incident", "detail", "incidentKey and kind are required.")));
+            return;
+        }
+        try {
+            this.incidentService.report(locationId(session), incidentKey, kind, asString(payload.get("entryType")),
+                    asString(payload.get("idempotencyKey")), asInteger(payload.get("userId")),
+                    asDecimal(payload.get("chargedPrice")), reason == null ? "(kein Grund gemeldet)" : reason,
+                    asDateTime(payload.get("occurredAt")));
+            send(session, TerminalWsMessage.inReplyTo(incoming, TerminalWsMessageType.OFFLINE_INCIDENT_ACK,
+                    Map.of("incidentKey", incidentKey)));
+        } catch (RuntimeException e) {
+            LOG.warn("Could not record an offline incident reported by location {}.", locationId(session), e);
+            send(session, TerminalWsMessage.inReplyTo(incoming, TerminalWsMessageType.ERROR,
+                    Map.of("reason", "incident-not-recorded", "detail", String.valueOf(e.getMessage()))));
+        }
+    }
+
+    private static String asString(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private static Integer asInteger(Object value) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        String text = asString(value);
+        try {
+            return text == null ? null : Integer.valueOf(text);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static BigDecimal asDecimal(Object value) {
+        String text = asString(value);
+        try {
+            return text == null ? null : new BigDecimal(text);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Der Zeitstempel stammt von der Terminal-Uhr und ist rein informativ - ein unlesbarer Wert
+     * darf die Meldung nicht verwerfen (der Vorfall selbst ist die Information).
+     */
+    private static LocalDateTime asDateTime(Object value) {
+        String text = asString(value);
+        try {
+            return text == null ? null : LocalDateTime.parse(text);
+        } catch (DateTimeParseException e) {
+            return null;
+        }
     }
 
     @Override
