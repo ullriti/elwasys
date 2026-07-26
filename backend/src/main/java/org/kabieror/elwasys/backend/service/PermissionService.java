@@ -1,7 +1,6 @@
 package org.kabieror.elwasys.backend.service;
 
 import java.util.List;
-import java.util.stream.Collectors;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
@@ -49,8 +48,7 @@ public class PermissionService {
      * enabled-Filter).
      */
     public List<ProgramEntity> getAvailablePrograms(DeviceEntity device, UserEntity user) {
-        return device.getPrograms().stream().filter(p -> p.getValidUserGroups().contains(user.getGroup()))
-                .collect(Collectors.toList());
+        return device.getPrograms().stream().filter(p -> p.getValidUserGroups().contains(user.getGroup())).toList();
     }
 
     /**

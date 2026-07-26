@@ -2,7 +2,6 @@ package org.kabieror.elwasys.backend.service;
 
 import java.math.BigDecimal;
 import java.time.Duration;
-import java.time.temporal.UnsupportedTemporalTypeException;
 import org.kabieror.elwasys.backend.domain.DiscountType;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
@@ -29,9 +28,7 @@ public class PricingService {
      *                 dessen Gruppe {@code DiscountType.None} hat und daher ebenfalls keinen
      *                 Rabatt anwendet - siehe Klassenkommentar von
      *                 {@code User.getAnonymous()} im Alt-Code)
-     * @return der Preis, oder {@code null}, wenn der Programmtyp unbekannt ist (kann in der
-     *         Praxis nicht vorkommen, da {@link ProgramEntity#getType()} niemals
-     *         {@code null} ist bei einem aus der DB geladenen Programm)
+     * @return der Preis (niemals {@code null} - siehe Kommentar zur Switch-Expression unten)
      */
     public BigDecimal getPrice(ProgramEntity program, Duration duration, UserEntity user) {
         Duration freeDuration = Duration.ofSeconds(program.getFreeDurationSeconds());
@@ -39,20 +36,14 @@ public class PricingService {
             return BigDecimal.ZERO;
         }
 
-        BigDecimal price;
-        switch (program.getType()) {
-            case DYNAMIC:
-                price = getDynamicPrice(program, duration);
-                break;
-            case FIXED:
-                price = program.getFlagfall();
-                break;
-            default:
-                price = null;
-        }
-        if (price == null) {
-            return null;
-        }
+        // Switch-Expression über das (nie null-wertige) Enum: der frühere default-Zweig lieferte
+        // null, das der Aufrufer defensiv abfangen musste. Fachlich unverändert - beide
+        // Programmtypen sind abgedeckt, ein neuer Typ fällt beim Kompilieren auf statt still zu
+        // einem null-Preis zu werden.
+        BigDecimal price = switch (program.getType()) {
+            case DYNAMIC -> getDynamicPrice(program, duration);
+            case FIXED -> program.getFlagfall();
+        };
 
         UserGroupEntity group = user == null ? null : user.getGroup();
         if (group == null) {
@@ -82,21 +73,11 @@ public class PricingService {
      * von 1 statt 1.5 ergibt.
      */
     private BigDecimal getDynamicPrice(ProgramEntity program, Duration duration) {
-        final BigDecimal factor;
-        switch (program.getTimeUnit()) {
-            case SECONDS:
-                factor = new BigDecimal(duration.getSeconds());
-                break;
-            case MINUTES:
-                factor = new BigDecimal(duration.getSeconds() / 60);
-                break;
-            case HOURS:
-                factor = new BigDecimal(duration.getSeconds() / 3600);
-                break;
-            default:
-                throw new UnsupportedTemporalTypeException(
-                        "The temporal unit " + program.getTimeUnit() + " is not supported.");
-        }
+        BigDecimal factor = switch (program.getTimeUnit()) {
+            case SECONDS -> new BigDecimal(duration.getSeconds());
+            case MINUTES -> new BigDecimal(duration.getSeconds() / 60);
+            case HOURS -> new BigDecimal(duration.getSeconds() / 3600);
+        };
         return program.getFlagfall().add(program.getRate().multiply(factor));
     }
 }

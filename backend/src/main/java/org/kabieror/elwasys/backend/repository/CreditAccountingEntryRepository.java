@@ -12,8 +12,16 @@ public interface CreditAccountingEntryRepository extends JpaRepository<CreditAcc
 
     /**
      * Entspricht {@code DataManager#getAccountingEntries}.
+     *
+     * <p>Zweites Sortierkriterium {@code id DESC} (Issue #88): bei zwei Buchungen mit
+     * IDENTISCHEM Zeitstempel (in der Praxis erreichbar, weil {@code date} beim Buchen aus
+     * {@code LocalDateTime.now()} stammt und mehrere Buchungen in dieselbe Zeitauflösung
+     * fallen können) war die Reihenfolge sonst undefiniert - die Buchungshistorie konnte
+     * zwischen zwei Abrufen springen. Die Id ist eine aufsteigende Sequenz, {@code id DESC}
+     * setzt daher exakt die fachlich gemeinte "zuletzt gebucht zuerst"-Reihenfolge fort. Für
+     * unterschiedliche Zeitstempel ändert sich nichts.
      */
-    List<CreditAccountingEntryEntity> findByUser_IdOrderByDateDesc(Integer userId);
+    List<CreditAccountingEntryEntity> findByUser_IdOrderByDateDescIdDesc(Integer userId);
 
     /**
      * Entspricht der Summenbildung in {@code User#loadCredit}
@@ -39,8 +47,9 @@ public interface CreditAccountingEntryRepository extends JpaRepository<CreditAcc
 
     /**
      * Entspricht {@code DataManager#getLastInpayment}: letzte positive Buchung
-     * ({@code amount > 0}) eines Benutzers.
+     * ({@code amount > 0}) eines Benutzers. Zweites Sortierkriterium {@code id DESC} aus
+     * demselben Grund wie bei {@link #findByUser_IdOrderByDateDescIdDesc} (Issue #88).
      */
-    Optional<CreditAccountingEntryEntity> findFirstByUser_IdAndAmountGreaterThanOrderByDateDesc(Integer userId,
+    Optional<CreditAccountingEntryEntity> findFirstByUser_IdAndAmountGreaterThanOrderByDateDescIdDesc(Integer userId,
             BigDecimal amountThreshold);
 }

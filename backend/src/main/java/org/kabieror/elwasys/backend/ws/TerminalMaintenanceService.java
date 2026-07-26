@@ -10,9 +10,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -56,9 +58,16 @@ public class TerminalMaintenanceService {
 
     private final ObjectMapper objectMapper;
 
-    private final Map<String, CompletableFuture<TerminalWsMessage>> pendingRequests = new ConcurrentHashMap<>();
+    /**
+     * Eine offene, noch unbeantwortete Fernwartungs-Anfrage: das wartende Future und der
+     * Ziel-Standort, gegen den die Antwort validiert wird (Issue #26). Bewusst EIN Eintrag je
+     * Korrelations-Id statt zweier paralleler Maps (Issue #90) - so kann das Aufräumen nicht
+     * mehr auseinanderlaufen.
+     */
+    private record PendingRequest(CompletableFuture<TerminalWsMessage> future, Integer locationId) {
+    }
 
-    private final Map<String, Integer> pendingRequestLocations = new ConcurrentHashMap<>();
+    private final Map<String, PendingRequest> pendingRequests = new ConcurrentHashMap<>();
 
     private final ScheduledExecutorService timeoutExecutor = Executors.newSingleThreadScheduledExecutor(runnable -> {
         Thread thread = new Thread(runnable, "terminal-maintenance-timeout");
@@ -142,7 +151,7 @@ public class TerminalMaintenanceService {
      *
      * <p><b>Standort-Validierung (Issue #26, Pre-Launch AP4):</b> beim Absenden der Anfrage
      * wurde der Ziel-Standort unter der Korrelations-Id vermerkt
-     * ({@link #pendingRequestLocations}). Eine Antwort erfüllt das wartende Future nur, wenn
+     * ({@link PendingRequest#locationId()}). Eine Antwort erfüllt das wartende Future nur, wenn
      * ihr Absender-Standort ({@code senderLocationId}, aus der authentifizierten WebSocket-
      * Session) mit diesem Ziel-Standort übereinstimmt. So kann ein (kompromittiertes oder
      * fehlerhaftes) Terminal eines FREMDEN Standorts eine Anfrage an einen anderen Standort
@@ -156,20 +165,18 @@ public class TerminalMaintenanceService {
         if (message.id() == null) {
             return;
         }
-        Integer expectedLocationId = this.pendingRequestLocations.get(message.id());
-        if (expectedLocationId == null) {
+        PendingRequest pending = this.pendingRequests.get(message.id());
+        if (pending == null) {
             // Keine offene Anfrage (mehr) unter dieser Id - nichts zu tun.
             return;
         }
-        if (!expectedLocationId.equals(senderLocationId)) {
+        if (!pending.locationId().equals(senderLocationId)) {
             LOG.warn("Ignoring maintenance reply for correlation id {} from location {} - expected location {}.",
-                    message.id(), senderLocationId, expectedLocationId);
+                    message.id(), senderLocationId, pending.locationId());
             return;
         }
-        CompletableFuture<TerminalWsMessage> future = this.pendingRequests.remove(message.id());
-        this.pendingRequestLocations.remove(message.id());
-        if (future != null) {
-            future.complete(message);
+        if (this.pendingRequests.remove(message.id(), pending)) {
+            pending.future().complete(message);
         }
     }
 
@@ -181,42 +188,37 @@ public class TerminalMaintenanceService {
 
         TerminalWsMessage request = TerminalWsMessage.of(type, payload);
         CompletableFuture<TerminalWsMessage> future = new CompletableFuture<>();
-        this.pendingRequests.put(request.id(), future);
-        this.pendingRequestLocations.put(request.id(), locationId);
+        this.pendingRequests.put(request.id(), new PendingRequest(future, locationId));
 
         try {
             boolean sent = this.connectionRegistry.send(locationId,
                     new TextMessage(this.objectMapper.writeValueAsString(request)));
             if (!sent) {
                 this.pendingRequests.remove(request.id());
-                this.pendingRequestLocations.remove(request.id());
                 throw new TerminalNotConnectedException(locationId);
             }
         } catch (IOException e) {
             this.pendingRequests.remove(request.id());
-            this.pendingRequestLocations.remove(request.id());
             throw new TerminalNotConnectedException(locationId);
         }
 
         this.timeoutExecutor.schedule(() -> {
-            CompletableFuture<TerminalWsMessage> timedOut = this.pendingRequests.remove(request.id());
-            this.pendingRequestLocations.remove(request.id());
+            PendingRequest timedOut = this.pendingRequests.remove(request.id());
             if (timedOut != null) {
-                timedOut.completeExceptionally(new TerminalRequestTimeoutException(locationId));
+                timedOut.future().completeExceptionally(new TerminalRequestTimeoutException(locationId));
             }
         }, REQUEST_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
 
         try {
             return future.get(REQUEST_TIMEOUT.toMillis() + 1000, TimeUnit.MILLISECONDS);
-        } catch (java.util.concurrent.ExecutionException e) {
+        } catch (ExecutionException e) {
             if (e.getCause() instanceof RuntimeException runtimeException) {
                 throw runtimeException;
             }
             throw new TerminalRequestTimeoutException(locationId);
-        } catch (InterruptedException | java.util.concurrent.TimeoutException e) {
+        } catch (InterruptedException | TimeoutException e) {
             Thread.currentThread().interrupt();
             this.pendingRequests.remove(request.id());
-            this.pendingRequestLocations.remove(request.id());
             throw new TerminalRequestTimeoutException(locationId);
         }
     }

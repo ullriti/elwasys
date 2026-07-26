@@ -1,20 +1,12 @@
 package org.kabieror.elwasys.backend.api;
 
 import jakarta.validation.Valid;
-import java.math.BigDecimal;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import org.kabieror.elwasys.backend.api.dto.ExecutionDto;
 import org.kabieror.elwasys.backend.api.dto.ExecutionEndRequest;
 import org.kabieror.elwasys.backend.api.dto.ExecutionStartRequest;
-import org.kabieror.elwasys.backend.api.exception.DeviceNotUsableException;
-import org.kabieror.elwasys.backend.api.exception.DeviceOccupiedException;
 import org.kabieror.elwasys.backend.api.exception.ExecutionAlreadyFinishedException;
-import org.kabieror.elwasys.backend.api.exception.InsufficientCreditException;
-import org.kabieror.elwasys.backend.api.exception.LocationNotAllowedException;
-import org.kabieror.elwasys.backend.api.exception.ProgramNotAvailableException;
 import org.kabieror.elwasys.backend.api.exception.ProgramNotFoundException;
-import org.kabieror.elwasys.backend.api.exception.UserBlockedException;
 import org.kabieror.elwasys.backend.api.exception.UserNotFoundException;
 import org.kabieror.elwasys.backend.api.idempotency.IdempotencyService;
 import org.kabieror.elwasys.backend.api.idempotency.IdempotentResult;
@@ -28,11 +20,10 @@ import org.kabieror.elwasys.backend.notification.ExecutionNotificationEvent;
 import org.kabieror.elwasys.backend.offline.ClientTimestampPolicy;
 import org.kabieror.elwasys.backend.repository.ProgramRepository;
 import org.kabieror.elwasys.backend.repository.UserRepository;
-import org.kabieror.elwasys.backend.service.AdvisoryLockService;
 import org.kabieror.elwasys.backend.service.CreditService;
 import org.kabieror.elwasys.backend.service.ExecutionService;
-import org.kabieror.elwasys.backend.service.PermissionService;
-import org.kabieror.elwasys.backend.service.PricingService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -105,13 +96,14 @@ import org.springframework.web.bind.annotation.RestController;
  * {@link IdempotencyService}) - das gesamte Terminal-Journal dauerhaft verklemmen. Eine
  * Nachmeldung ist ein Fakt, keine Anfrage; die Auftraggeber-Festlegung (siehe
  * docs/kb/05-migration-plan.md und ADR 0010) lässt beim Replay ausdrücklich auch negative
- * Salden zu. Live-Buchungen (ohne Replay-Flag) durchlaufen die Wächter unverändert.
+ * Salden zu. Live-Buchungen (ohne Replay-Flag) durchlaufen die Wächter unverändert (sie liegen
+ * seit Issue #90 in {@link ExecutionStartGuard}, unverändert in Inhalt und Reihenfolge).
  */
 @RestController
 @RequestMapping("/api/v1/executions")
 public class ExecutionController {
 
-    private final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(getClass());
+    private static final Logger LOG = LoggerFactory.getLogger(ExecutionController.class);
 
     private static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 
@@ -119,13 +111,9 @@ public class ExecutionController {
 
     private final UserRepository userRepository;
 
-    private final PermissionService permissionService;
-
-    private final PricingService pricingService;
-
-    private final CreditService creditService;
-
     private final ExecutionService executionService;
+
+    private final ExecutionStartGuard executionStartGuard;
 
     private final TerminalScopeGuard scopeGuard;
 
@@ -133,25 +121,19 @@ public class ExecutionController {
 
     private final ClientTimestampPolicy clientTimestampPolicy;
 
-    private final AdvisoryLockService advisoryLockService;
-
     private final ApplicationEventPublisher eventPublisher;
 
     public ExecutionController(ProgramRepository programRepository, UserRepository userRepository,
-            PermissionService permissionService, PricingService pricingService, CreditService creditService,
-            ExecutionService executionService, TerminalScopeGuard scopeGuard, IdempotencyService idempotencyService,
-            ClientTimestampPolicy clientTimestampPolicy, AdvisoryLockService advisoryLockService,
-            ApplicationEventPublisher eventPublisher) {
+            ExecutionService executionService, ExecutionStartGuard executionStartGuard,
+            TerminalScopeGuard scopeGuard, IdempotencyService idempotencyService,
+            ClientTimestampPolicy clientTimestampPolicy, ApplicationEventPublisher eventPublisher) {
         this.programRepository = programRepository;
         this.userRepository = userRepository;
-        this.permissionService = permissionService;
-        this.pricingService = pricingService;
-        this.creditService = creditService;
         this.executionService = executionService;
+        this.executionStartGuard = executionStartGuard;
         this.scopeGuard = scopeGuard;
         this.idempotencyService = idempotencyService;
         this.clientTimestampPolicy = clientTimestampPolicy;
-        this.advisoryLockService = advisoryLockService;
         this.eventPublisher = eventPublisher;
     }
 
@@ -184,39 +166,11 @@ public class ExecutionController {
                     // Snapshot-Stand gilt, negativ gewordene Salden werden normal verbucht.
                     UserEntity user;
                     if (!replay) {
-                        // Issue #20: Belegungs- und Guthabenentscheidung serialisieren, damit
-                        // zwei parallele Starts nicht beide ein freies Gerät bzw. ausreichendes
-                        // Guthaben sehen und doppelt belegen/reservieren. Reihenfolge bewusst
-                        // erst Gerät (Advisory-Lock), dann Nutzer (Zeilensperre) - konsistent zu
-                        // den übrigen Geldpfaden, um Deadlocks auszuschließen.
-                        this.advisoryLockService.lockDevice(device.getId());
-                        // Nutzer FRISCH und pessimistisch GESPERRT laden (nicht vorab per
-                        // findById): so entscheiden die Wächter (isBlocked/Rechte) und der
-                        // Guthabencheck auf dem Stand NACH Lock-Erwerb, nicht auf einem davor
-                        // gelesenen Snapshot.
-                        user = this.userRepository.findWithLockById(request.userId()).orElseThrow(
-                                () -> new UserNotFoundException(request.userId()));
-                        if (user.isBlocked()) {
-                            throw new UserBlockedException(user.getId());
-                        }
-                        if (!this.permissionService.isUserAllowedAtLocation(user, device.getLocation())) {
-                            throw new LocationNotAllowedException(user.getId(), device.getLocation().getName());
-                        }
-                        if (!this.permissionService.isDeviceUsableByUser(device, user)) {
-                            throw new DeviceNotUsableException(device.getId(), user.getId());
-                        }
-                        if (!this.permissionService.isProgramAvailableForDeviceAndUser(device, program, user)) {
-                            throw new ProgramNotAvailableException(program.getId(), device.getId(), user.getId());
-                        }
-                        if (this.executionService.getRunningExecution(device).isPresent()) {
-                            throw new DeviceOccupiedException(device.getId());
-                        }
-                        BigDecimal maxPrice = this.pricingService.getPrice(program,
-                                Duration.ofSeconds(program.getMaxDurationSeconds()), user);
-                        if (!this.creditService.canAfford(user, maxPrice)) {
-                            throw new InsufficientCreditException(user.getId(), maxPrice,
-                                    this.creditService.getCredit(user));
-                        }
+                        // Die fachlichen Wächter (Sperrung/Standort/Nutzbarkeit/Belegung/
+                        // Guthaben) samt Sperrreihenfolge stecken in ExecutionStartGuard
+                        // (Issue #90) - sie sind dort isoliert testbar, dieser Endpunkt behält
+                        // nur die HTTP-/Idempotenz-Orchestrierung.
+                        user = this.executionStartGuard.lockAndValidate(device, program, request.userId());
                     } else {
                         // Replay: keine fachlichen Wächter, kein Lock nötig (die Nachmeldung ist
                         // ein Fakt) - der Nutzer wird nur zum Anlegen der Ausführung benötigt.
@@ -232,7 +186,7 @@ public class ExecutionController {
                                 device.getLocation());
                         user = this.userRepository.findById(request.userId()).orElseThrow(
                                 () -> new UserNotFoundException(request.userId()));
-                        this.logger.info(
+                        LOG.info(
                                 "Privilegierte Offline-Nachbuchung (Replay) angenommen: Nutzer {}, Gerät {} ('{}'), "
                                         + "Programm {}, Original-Zeitstempel {}, Standort '{}' - fachliche Wächter "
                                         + "übersprungen (Issue #16), Audit (Issue #67).", user.getId(), device.getId(),

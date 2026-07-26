@@ -34,10 +34,7 @@ import org.kabieror.elwasys.backend.offline.ClientTimestampPolicy;
 import org.kabieror.elwasys.backend.offline.OfflineProperties;
 import org.kabieror.elwasys.backend.repository.TerminalIdempotencyKeyRepository;
 import org.kabieror.elwasys.backend.service.AdvisoryLockService;
-import org.kabieror.elwasys.backend.service.CreditService;
 import org.kabieror.elwasys.backend.service.ExecutionService;
-import org.kabieror.elwasys.backend.service.PermissionService;
-import org.kabieror.elwasys.backend.service.PricingService;
 import org.springframework.context.ApplicationEventPublisher;
 
 /**
@@ -93,10 +90,11 @@ class ExecutionControllerNotificationTest {
         IdempotencyService idempotencyService = new IdempotencyService(fakeRepository, objectMapper,
                 advisoryLockService);
 
-        this.controller = new ExecutionController(null, null, mock(PermissionService.class),
-                mock(PricingService.class), mock(CreditService.class), this.executionService, scopeGuard,
-                idempotencyService, new ClientTimestampPolicy(new OfflineProperties()), advisoryLockService,
-                this.eventPublisher);
+        // Diese Klasse prüft ausschließlich den finish/abort-Pfad - die Start-Wächter
+        // (ExecutionStartGuard, Issue #90) sind hier nicht beteiligt und daher gemockt.
+        this.controller = new ExecutionController(null, null, this.executionService,
+                mock(ExecutionStartGuard.class), scopeGuard, idempotencyService,
+                new ClientTimestampPolicy(new OfflineProperties()), this.eventPublisher);
 
         LocationEntity location = new LocationEntity("Waschkeller");
         DeviceEntity device = new DeviceEntity("Waschmaschine 1", 0, location);

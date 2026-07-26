@@ -260,10 +260,13 @@ public class CreditService {
      * sowie des Buchungsteils von {@code Portal/.../views/UsersDashboardView} (Testfall P15,
      * Phase 3 AP3, siehe docs/kb/05-migration-plan.md). Liest nur - Buchungen werden hier wie
      * überall in diesem Service niemals verändert.
+     *
+     * <p>Bei gleichem Zeitstempel entscheidet die Buchungs-Id (Issue #88) - siehe
+     * {@link CreditAccountingEntryRepository#findByUser_IdOrderByDateDescIdDesc}.
      */
     @Transactional(readOnly = true)
     public List<CreditAccountingEntryEntity> getAccountingEntries(UserEntity user) {
-        return this.creditAccountingEntryRepository.findByUser_IdOrderByDateDesc(user.getId());
+        return this.creditAccountingEntryRepository.findByUser_IdOrderByDateDescIdDesc(user.getId());
     }
 
     /**
@@ -273,7 +276,7 @@ public class CreditService {
      */
     @Transactional(readOnly = true)
     public Optional<CreditAccountingEntryEntity> getLastInpayment(UserEntity user) {
-        return this.creditAccountingEntryRepository.findFirstByUser_IdAndAmountGreaterThanOrderByDateDesc(
+        return this.creditAccountingEntryRepository.findFirstByUser_IdAndAmountGreaterThanOrderByDateDescIdDesc(
                 user.getId(), BigDecimal.ZERO);
     }
 }

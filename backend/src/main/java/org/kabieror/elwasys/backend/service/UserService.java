@@ -1,6 +1,7 @@
 package org.kabieror.elwasys.backend.service;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
@@ -159,8 +160,9 @@ public class UserService {
             return;
         }
         // 1:1 wie beim Speichern (UserEntity#setUsername) wird der Name klein geschrieben -
-        // damit vergleicht der Guard denselben Wert, der später persistiert wird.
-        String normalized = username.toLowerCase();
+        // damit vergleicht der Guard denselben Wert, der später persistiert wird (inklusive
+        // Locale.ROOT, damit die Normalisierung nicht von der JVM-Standard-Locale abhängt).
+        String normalized = username.toLowerCase(Locale.ROOT);
         if (userBeingEdited != null && normalized.equalsIgnoreCase(userBeingEdited.getUsername())) {
             // Der eigene, unveraenderte Name des bearbeiteten Benutzers ist kein Konflikt.
             return;

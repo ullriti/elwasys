@@ -76,7 +76,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class NotificationService {
 
-    private final Logger logger = LoggerFactory.getLogger(getClass());
+    private static final Logger LOG = LoggerFactory.getLogger(NotificationService.class);
 
     private final NotificationsProperties properties;
 
@@ -148,7 +148,7 @@ public class NotificationService {
 
     private void dispatch(UserEntity user, String title, String shortMessage, String longMessage) {
         if (!this.properties.isEnabled()) {
-            this.logger.debug("Benachrichtigungsdienst deaktiviert (elwasys.notifications.enabled=false) - "
+            LOG.debug("Benachrichtigungsdienst deaktiviert (elwasys.notifications.enabled=false) - "
                     + "Ereignis fuer Benutzer '{}' wird ignoriert.", user.getUsername());
             return;
         }
@@ -156,7 +156,7 @@ public class NotificationService {
         if (user.isEmailNotification()) {
             sendEmail(user, title, longMessage);
         } else {
-            this.logger.debug("Benutzer '{}' moechte keine Email-Benachrichtigung.", user.getUsername());
+            LOG.debug("Benutzer '{}' moechte keine Email-Benachrichtigung.", user.getUsername());
         }
 
         String pushoverUserKey = user.getPushoverUserKey();
@@ -174,16 +174,25 @@ public class NotificationService {
      */
     private void sendEmail(UserEntity user, String subject, String content) {
         try {
-            SimpleMailMessage message = new SimpleMailMessage();
-            message.setTo(user.getEmail());
-            message.setSubject(subject);
-            message.setText(content);
-            message.setFrom(this.properties.getSmtp().getSenderAddress());
-            this.mailSender.send(message);
-            this.logger.debug("Sent notification to {}", user.getEmail());
+            this.mailSender.send(buildMessage(user, subject, content));
+            LOG.debug("Sent notification to {}", user.getEmail());
         } catch (Exception e) {
-            this.logger.error("Could not send the notification mail.", e);
+            LOG.error("Could not send the notification mail.", e);
         }
+    }
+
+    /**
+     * Gemeinsamer Nachrichtenaufbau von {@link #sendEmail} und {@link #sendEmailOrThrow} -
+     * beide Wege bauen dieselbe Nachricht und unterscheiden sich ausschließlich in der
+     * Fehlerbehandlungs-Strategie (schlucken vs. weiterwerfen, siehe dortige Javadocs).
+     */
+    private SimpleMailMessage buildMessage(UserEntity user, String subject, String content) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(user.getEmail());
+        message.setSubject(subject);
+        message.setText(content);
+        message.setFrom(this.properties.getSmtp().getSenderAddress());
+        return message;
     }
 
     /**
@@ -194,9 +203,9 @@ public class NotificationService {
     private void sendPushover(String userKey, String title, String message) {
         try {
             PushoverClient.Result result = this.pushoverClient.sendMessage(userKey, title, message);
-            this.logger.debug("Sent push notification. Status: {}", result.pushoverStatus());
+            LOG.debug("Sent push notification. Status: {}", result.pushoverStatus());
         } catch (Exception e) {
-            this.logger.error("Could not send push notification.", e);
+            LOG.error("Could not send push notification.", e);
         }
     }
 
@@ -214,7 +223,7 @@ public class NotificationService {
      */
     public void sendPasswordResetEmail(UserEntity user, String resetUrl) {
         if (!this.passwordResetProperties.isEnabled()) {
-            this.logger.debug("Passwort-Reset-Mailversand deaktiviert (elwasys.password-reset.enabled=false) - "
+            LOG.debug("Passwort-Reset-Mailversand deaktiviert (elwasys.password-reset.enabled=false) - "
                     + "Reset-Anfrage fuer Benutzer '{}' wird ignoriert.", user.getUsername());
             return;
         }
@@ -231,7 +240,7 @@ public class NotificationService {
      */
     public void sendNewPasswordEmail(UserEntity user, String newPassword) {
         if (!this.passwordResetProperties.isEnabled()) {
-            this.logger.debug("Passwort-Reset-Mailversand deaktiviert (elwasys.password-reset.enabled=false) - "
+            LOG.debug("Passwort-Reset-Mailversand deaktiviert (elwasys.password-reset.enabled=false) - "
                     + "Admin-Passwort-Reset fuer Benutzer '{}' wird ignoriert.", user.getUsername());
             return;
         }
@@ -248,12 +257,7 @@ public class NotificationService {
      * damit der aufrufende Dialog (analog zum Alt-Code) einen Fehler anzeigen kann.
      */
     private void sendEmailOrThrow(UserEntity user, String subject, String content) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(user.getEmail());
-        message.setSubject(subject);
-        message.setText(content);
-        message.setFrom(this.properties.getSmtp().getSenderAddress());
-        this.mailSender.send(message);
-        this.logger.debug("Sent password reset/new-password mail to {}", user.getEmail());
+        this.mailSender.send(buildMessage(user, subject, content));
+        LOG.debug("Sent password reset/new-password mail to {}", user.getEmail());
     }
 }

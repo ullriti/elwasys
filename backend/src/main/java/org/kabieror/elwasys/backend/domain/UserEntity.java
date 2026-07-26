@@ -11,6 +11,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Locale;
 
 /**
  * Entspricht der Tabelle {@code users} (siehe docs/kb/02-data-model.md) sowie
@@ -101,7 +102,7 @@ public class UserEntity {
 
     public UserEntity(String name, String username, UserGroupEntity group) {
         this.name = name;
-        this.username = username == null ? null : username.toLowerCase();
+        this.username = username == null ? null : username.toLowerCase(Locale.ROOT);
         this.group = group;
     }
 
@@ -122,7 +123,10 @@ public class UserEntity {
     }
 
     public void setUsername(String username) {
-        this.username = username == null ? null : username.toLowerCase();
+        // Locale.ROOT wie an allen sicherheitsnahen Vergleichsstellen (Login-Abgleich,
+        // Passwort-Reset): der Benutzername ist ein case-insensitiver Schlüssel und darf nicht
+        // von der JVM-Standard-Locale abhängen (Türkisch-I).
+        this.username = username == null ? null : username.toLowerCase(Locale.ROOT);
     }
 
     public String getEmail() {
