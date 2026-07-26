@@ -151,10 +151,26 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   persistiert sie (Migration `V12`) und hält über den `OfflineIncidentHealthIndicator` den
   Betriebsalarm, bis ein Admin den Vorfall in der neuen Portal-Ansicht **Offline-Vorfälle**
   quittiert (Vorfälle bleiben als Beleg erhalten, kein Purge).
-- **Nächster Schritt:** FR-3 (Tests: deCONZ-Reconnect, DYNAMIC-E2E, Determinismus),
-  dann Generalprobe (Spec 0001) und **Live-Gang**
-  (Cutover nach [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md)). FR-4/FR-5
-  (Qualitäts-Refactors, Doku-Hygiene) nach dem Feldeinsatz. Neue Vorhaben vorab als Spec
+  **FR-3/FR-4/FR-5 (#87/#88/#90–#93) sind behoben** und schließen Epic #94 ab: der
+  **deCONZ-WS-Reconnect hat jetzt seinen Regressionstest** (Simulator kappt die Verbindung
+  serverseitig ohne Portverlust; geprüft werden Wiederverbinden UND genau ein Handshake,
+  also der CAS-Guard gegen Doppel-Reconnect, T1/#87); Portal-E2E deckt die **DYNAMIC**-
+  Programmanlage ab und zwei Testklassen warten auf Bedingungen statt auf Millisekunden-
+  Fristen (#88); die Aufräum-Refactors sind erledigt – Backend `SnapshotService`/
+  `ExecutionStartGuard`/entdoppelte Gruppen-Zuordnung (#90), Terminal `TerminalDataService`/
+  `CardLoginOutcome`/Gerätekachel als Zustandstabelle plus ein echter Log-Bug in `ui/small`
+  (#91), Portal `AbstractAdminListView` für die fünf Admin-Listen und gemeinsame
+  `Notifications` (#92) –, dazu die Doku-/Repo-Hygiene (#93: Worklog-Index, gekürztes
+  CHANGELOG mit Details im Migrationsplan-Änderungslog, tote Links/Dateien/Kommentare,
+  zwei geschlossene „Offene Fragen"). Bewusst offen in #92: Binder-Umbau der Dialoge und
+  Auslagerung der Dashboard-Fernwartungs-Toolbar. Suiten: Backend 287/287, Client 88/88,
+  Portal-E2E grün.
+- **Nächster Schritt:** **Generalprobe nach [Spec 0001](../specs/0001-finale-review.md)**
+  (Cutover-Probelauf, Migrations-Dry-Run mit Produktivdaten-Kopie, Backup-Restore-Probe,
+  Ausfall-Drills, Alarm-Probe beider Stufen, Soak-Test, Vor-Ort-Kalibrierung), dann Pilotphase
+  und **Live-Gang** (Cutover nach
+  [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md)). Unabhängig davon offen:
+  Issue #97 (Readiness-Gates des Testharness scheiterten still). Neue Vorhaben vorab als Spec
   in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.
   Die Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).
 - **Details:** siehe den jeweils letzten Eintrag im [Worklog](../worklog/README.md).

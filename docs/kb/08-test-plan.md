@@ -137,17 +137,21 @@ Status/Log/Restart-Roundtrips gehen über den echten, ausgehenden Terminal-WebSo
 ## Umfang (Inventar)
 
 Am Code gezählt:
-- **Client** (TestFX/JUnit): **71 `@Test`** in 28 Testklassen (40 Testdateien) – C1–C16, die
+- **Client** (TestFX/JUnit): **88 `@Test`** in 34 Testklassen (46 Testdateien) – C1–C16, die
   C15-Offline-Nachfolger sowie infrastrukturfreie Unit-Tests (Offline-Replay, Uhren-Plausibilität,
-  API-Fehlerbilder, Kartenmaskierung).
-- **Portal-E2E** (Playwright): **25 `test()`** in `backend/e2e/tests/` (login 2 / admin 3 /
-  admin-crud 12 / dashboard 1 / offline-incidents 2 / user-portal 5) zzgl. **4**
+  API-Fehlerbilder, Kartenmaskierung, deCONZ-WS-Reconnect).
+- **Portal-E2E** (Playwright): **27 `test()`** in `backend/e2e/tests/` (login 2 / admin 3 /
+  admin-crud 13 / dashboard 1 / offline-incidents 3 / user-portal 5) zzgl. **4**
   READ-ONLY-Smoke-`test()` in `tests-smoke/`.
 
 Backend-JUnit-Zahlen (nur als Querverweis): 06-ui-tests.md „Test-Inventar".
 
 ## Historie
 
+- **2026-07-26** — FR-3/FR-5 (#87/#88/#93): Umfang neu am Code gezählt (Client 88 `@Test`,
+  Portal-E2E 27 `test()` + 4 Smoke). Neu: Regressionstest deCONZ-WS-Reconnect (#87),
+  DYNAMIC-Programmanlage im Portal (#88); `InactivitySchedulerTest` und
+  `CreditServiceAccountingHistoryTest` warten jetzt auf Bedingungen statt auf knappe Fristen.
 - **2026-07-26** — Issue #89: Portal-Fälle P27/P28 (Offline-Vorfälle sichten und quittieren)
   ergänzt; Portal-E2E damit 25 `test()`.
 

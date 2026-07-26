@@ -26,6 +26,13 @@ im [Worklog](docs/worklog/README.md).
   (Worklog/Specs/ADRs) und `.claude/`-Commands/-Agenten.
 
 ### Changed
+- Aufräum-Refactorings aus der finalen Review (FR-4, #90/#91/#92), ohne Verhaltensänderung:
+  Backend (`SnapshotService`, `ExecutionStartGuard`, entdoppelte Gruppen-Zuordnung), Terminal
+  (`TerminalDataService`, `CardLoginOutcome`, Gerätekachel als Zustandstabelle) und Portal
+  (`AbstractAdminListView` für die fünf Admin-Listen, gemeinsame `Notifications`).
+- Doku- und Repo-Hygiene (FR-5, #93): CHANGELOG auf die eigene Kurzform gebracht (Details im
+  Änderungslog des Migrationsplans), Worklog-Index vervollständigt, tote Links/Dateien/
+  Kommentare entfernt, zwei erledigte „Offene Fragen" geschlossen.
 - Deployment-Parität & Betrieb (#89): Compose zieht per Default das GHCR-Release-Image, Helm
   bricht ohne Image-Tag ab, das Terminal richtet NTP-Sync ein (Watchdog überwacht ihn).
 - Offline-Replay-Härtung II (#67/#69, ADR 0021): Der Replay-Pfad verlangt einen plausiblen
@@ -50,6 +57,8 @@ im [Worklog](docs/worklog/README.md).
   erst zusammen mit seinem Terminator aus dem Journal entfernt.
 - Listener-Leak im Terminal (#81): `stopListenToExecutionStartedEvent`/`…ErrorEvent` riefen
   `add` statt `remove` auf – abgemeldete Listener blieben registriert.
+- Verlorener Stacktrace bei FHEM-Fehlern am kleinen Terminal-Display (#91): der
+  `catch`-Block loggte das UI-Ereignis statt der Ausnahme - die Ferndiagnose sah den Fehler nicht.
 - Fall-Through in der Gerätekachel (#82): deaktivierte Geräte zeigten „Keine Steckdose" und waren
   wieder bedienbar, statt gesperrt zu bleiben.
 - Geister-Execution beim Offline-Replay (#68, ADR 0021): eine serverseitig „laufende" Execution
@@ -80,6 +89,10 @@ im [Worklog](docs/worklog/README.md).
   Fernwartungs-Antworten.
 
 ### Tests
+- Testlücken der finalen Review geschlossen (FR-3, #87/#88): Regressionstest für den
+  deCONZ-WebSocket-Reconnect (Programm-Ende-Erkennung), Portal-E2E für dynamische Programme;
+  `InactivitySchedulerTest`/`CreditServiceAccountingHistoryTest` warten auf Bedingungen statt
+  auf knappe Fristen.
 - Testabdeckung/-determinismus (AP5, #40/#50): Route-Zugriffsschutz per Classpath-Scan, neue
   E2E-Tests (Auszahlung, Benutzer-Löschung, Passwort-Reset-Link), nichtdeterministische
   Wartezeiten entfernt.
