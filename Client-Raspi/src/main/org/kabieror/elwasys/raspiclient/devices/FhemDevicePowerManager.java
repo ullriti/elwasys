@@ -132,19 +132,17 @@ public class FhemDevicePowerManager implements IDevicePowerManager, ICloseListen
             String setCommand = "set " + device.getFhemSwitchName() + " " + newState.name().toLowerCase();
             this.telnetFhem.sendCommand(setCommand);
 
-            // Check response from server. If it is empty, the command has been
-            // executed.
+            // Antwort des Servers prüfen: eine leere Antwort heißt, der Befehl wurde ausgeführt.
             final String res = this.telnetFhem
                     .waitForResponse(this.minimumTimeout.multipliedBy(2).getNano(), TimeUnit.NANOSECONDS);
             if (res != null && !res.isEmpty()) {
                 throw new IOException("Konnte die Stromversorgung des Geräts " + device.getName() +
                         " nicht setzen. Antwort des FHEM-Servers: '" + res + "'");
             } else {
-                // Ensure that the action has been successful
+                // Sicherstellen, dass der Befehl tatsächlich gewirkt hat
                 DevicePowerState actualState = DevicePowerState.UNKNOWN;
                 for (int i = 0; i < this.checkStatusRetryCount; i++) {
-                    // Repeat checking the state for a fixed count of repetitions
-                    // before throwing an exception
+                    // Den Zustand eine feste Anzahl Male nachprüfen, bevor abgebrochen wird
                     try {
                         Thread.sleep(this.checkStatusDelay);
                     } catch (final InterruptedException e1) {
@@ -152,7 +150,7 @@ public class FhemDevicePowerManager implements IDevicePowerManager, ICloseListen
                         throw new IOException("Unterbrechung während dem prüfen des neuen Zustands.", e1);
                     }
 
-                    // Check the state
+                    // Zustand abfragen
                     actualState = this.getState(device);
                     if (actualState == newState) {
                         break;
@@ -161,10 +159,10 @@ public class FhemDevicePowerManager implements IDevicePowerManager, ICloseListen
                         // Server hat den Befehl nicht empfangen. Wiederhole ihn.
                         this.telnetFhem.sendCommand(setCommand);
                     }
-                    // If the state is not the intended one, continue checking.
+                    // Noch nicht der gewünschte Zustand - weiter nachprüfen.
                 }
                 if (actualState != newState) {
-                    // If the state is not the intended one, throw an exception.
+                    // Endgültig nicht der gewünschte Zustand - mit Fehler abbrechen.
                     String stateString;
                     try {
                         stateString = this.getRawState(device);
@@ -253,9 +251,13 @@ public class FhemDevicePowerManager implements IDevicePowerManager, ICloseListen
         try {
             Thread.sleep(1000);
         } catch (final InterruptedException e) {
-            e.printStackTrace();
+            // Ueber den Logger statt printStackTrace, damit der Abbruch in der per Fernwartung
+            // abrufbaren Logdatei sichtbar ist (#91). Das Interrupt-Flag wird bewusst NICHT
+            // wiederhergestellt: der anschliessende Verbindungstest (sendCommand/waitForResponse)
+            // wuerde sonst sofort abbrechen - das waere eine Verhaltensaenderung.
+            this.logger.warn("Interrupted while waiting for the fhem connection to settle.", e);
         }
-        // Check connection
+        // Verbindung prüfen
         try {
             this.telnetFhem.sendCommand("version");
             final LocalDateTime startWait = LocalDateTime.now();

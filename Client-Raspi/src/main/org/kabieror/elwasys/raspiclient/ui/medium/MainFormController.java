@@ -4,7 +4,6 @@ import javafx.application.Platform;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.fxml.FXML;
-import org.kabieror.elwasys.common.Utilities;
 import org.kabieror.elwasys.raspiclient.api.ApiException;
 import org.kabieror.elwasys.raspiclient.application.ActionContainer;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
@@ -14,6 +13,7 @@ import org.kabieror.elwasys.raspiclient.model.ClientDevice;
 import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 import org.kabieror.elwasys.raspiclient.model.ClientUser;
 import org.kabieror.elwasys.raspiclient.ui.AbstractMainFormController;
+import org.kabieror.elwasys.raspiclient.ui.CardLoginOutcome;
 import org.kabieror.elwasys.raspiclient.ui.MainFormState;
 import org.kabieror.elwasys.raspiclient.ui.medium.controller.*;
 import org.kabieror.elwasys.raspiclient.ui.medium.state.ErrorState;
@@ -245,9 +245,26 @@ public class MainFormController extends AbstractMainFormController implements IM
      * @param detail Details
      */
     private void displayError(String title, String detail, ActionContainer backAction) {
+        // Einziger Fall ohne gotoStateBeforeError() vor der Zurück-Aktion: der Aufrufer setzt den
+        // Zustand selbst zurück.
+        this.showErrorState(title, detail, backAction != null ? () -> backAction.getAction().run() : null, null);
+    }
+
+    /**
+     * Gemeinsamer Kern der drei {@code displayError}-Überladungen (#91): baut den
+     * {@link ErrorState} auf und wechselt in den Fehlerzustand. Die Überladungen unterscheiden
+     * sich nur noch darin, wie Zurück- und Wiederholen-Aktion verdrahtet werden - der zuvor
+     * dreifach duplizierte Meldungsaufbau liegt hier.
+     *
+     * @param title       Titel
+     * @param detail      Details
+     * @param backAction  Die Zurück-Aktion, oder {@code null}, wenn es keine geben soll.
+     * @param retryAction Die Wiederholen-Aktion, oder {@code null}, wenn es keine geben soll.
+     */
+    private void showErrorState(String title, String detail, Runnable backAction, Runnable retryAction) {
         this.errorState =
                 new ErrorState(title, detail + "\nBitte Log-Datei prüfen, um mehr über diesen Fehler zu erfahren.",
-                        backAction != null ? () -> backAction.getAction().run() : null, null);
+                        backAction, retryAction);
         Platform.runLater(() -> this.stateManager.gotoState(MainFormState.ERROR));
     }
 
@@ -260,28 +277,29 @@ public class MainFormController extends AbstractMainFormController implements IM
      * @param retryAction Die wiederholbare Aktion
      */
     public void displayError(String title, String detail, ActionContainer backAction, ActionContainer retryAction) {
-        this.errorState =
-                new ErrorState(title, detail + "\nBitte Log-Datei prüfen, um mehr über diesen Fehler zu erfahren.",
-                        backAction != null ? () -> {
-                            this.stateManager.gotoStateBeforeError();
-                            backAction.getAction().run();
-                        } : null, retryAction != null ? () -> {
-                    this.stateManager.gotoStateBeforeError();
-                    retryAction.getAction().run();
-                } : null);
-        Platform.runLater(() -> this.stateManager.gotoState(MainFormState.ERROR));
+        this.showErrorState(title, detail, this.afterLeavingError(backAction), this.afterLeavingError(retryAction));
     }
 
     @Override
     public void displayError(String title, String detail, ActionContainer retryAction, boolean backOptionEnabled) {
-        this.errorState =
-                new ErrorState(title, detail + "\nBitte Log-Datei prüfen, um mehr über diesen Fehler zu erfahren.",
-                        backOptionEnabled ? this.stateManager::gotoStateBeforeError : null,
-                        retryAction != null ? () -> {
-                            this.stateManager.gotoStateBeforeError();
-                            retryAction.getAction().run();
-                        } : null);
-        Platform.runLater(() -> this.stateManager.gotoState(MainFormState.ERROR));
+        this.showErrorState(title, detail,
+                backOptionEnabled ? this.stateManager::gotoStateBeforeError : null,
+                this.afterLeavingError(retryAction));
+    }
+
+    /**
+     * Verpackt eine Aktion so, dass vor ihrer Ausführung erst der Zustand vor dem Fehler
+     * wiederhergestellt wird. {@code null} bleibt {@code null} (= Schaltfläche wird nicht
+     * angeboten).
+     */
+    private Runnable afterLeavingError(ActionContainer action) {
+        if (action == null) {
+            return null;
+        }
+        return () -> {
+            this.stateManager.gotoStateBeforeError();
+            action.getAction().run();
+        };
     }
 
     /**
@@ -311,7 +329,7 @@ public class MainFormController extends AbstractMainFormController implements IM
      * Aktualisiert den Zustand der Toolbar.
      */
     public void updateToolbar() {
-        this.stateManager.upateToolbarState();
+        this.stateManager.updateToolbarState();
     }
 
     /**
@@ -401,33 +419,28 @@ public class MainFormController extends AbstractMainFormController implements IM
                         this.endWait();
                     });
                 } catch (final ApiException e1) {
-                    if (e1.is(404, "card-not-found")) {
-                        // Karten-Id maskiert loggen (Issue #56): WARN landet im INFO-Log, das
-                        // per Fernwartung (LOG_REQUEST) abrufbar ist.
-                        this.logger.warn("There is no user associated to card "
-                                + Utilities.maskCardId(e.getCardId()) + ".");
-                        Platform.runLater(() -> {
+                    // Klassifikation + maskiertes Logging liegen in CardLoginOutcome (#91,
+                    // Issue #56) - gemeinsam mit ui/small. Die UI-Reaktion bleibt hier
+                    // größenspezifisch (Toolbar-Markierung statt Zustandswechsel).
+                    final CardLoginOutcome outcome = CardLoginOutcome.of(e1);
+                    outcome.log(this.logger, e.getCardId(), e1);
+                    switch (outcome) {
+                        case CARD_NOT_FOUND -> Platform.runLater(() -> {
                             this.registeredUser.set(null);
                             this.toolbarPaneController.visualizeUnknownId();
                             this.endWait();
                         });
-                    } else if (e1.is(403, "user-blocked")) {
-                        this.logger.info("Blocked user tried to log in.");
-                        Platform.runLater(() -> {
+                        case USER_BLOCKED -> Platform.runLater(() -> {
                             this.registeredUser.set(null);
                             this.toolbarPaneController.visualizeBlockedUser();
                             this.endWait();
                         });
-                    } else if (e1.is(403, "location-not-allowed")) {
-                        this.logger.info("User is not allowed to use this location.");
-                        Platform.runLater(() -> {
+                        case LOCATION_NOT_ALLOWED -> Platform.runLater(() -> {
                             this.registeredUser.set(null);
                             this.toolbarPaneController.visualizeLocationNotAllowed();
                             this.endWait();
                         });
-                    } else {
-                        this.logger.error("Communication error while looking up user.", e1);
-                        Platform.runLater(() -> {
+                        case COMMUNICATION_ERROR -> Platform.runLater(() -> {
                             this.displayError("Kommunikationsfehler", e1.getLocalizedMessage(), actionContainer, true);
                             this.endWait();
                         });

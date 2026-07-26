@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.Iterator;
 
 /**
@@ -38,14 +39,10 @@ public class Utilities {
      * @throws NoSuchAlgorithmException
      */
     public static String sha1(String s) throws NoSuchAlgorithmException {
-        MessageDigest md = null;
-        md = MessageDigest.getInstance("SHA-1");
-        final byte[] b = md.digest(s.getBytes());
-        String result = "";
-        for (int i = 0; i < b.length; i++) {
-            result += Integer.toString((b[i] & 0xff) + 0x100, 16).substring(1);
-        }
-        return result;
+        final MessageDigest md = MessageDigest.getInstance("SHA-1");
+        // HexFormat (seit Java 17) statt String-Konkatenation in der Schleife (#91) - liefert
+        // exakt dasselbe Format: kleingeschrieben, zwei Zeichen je Byte, fuehrende Null erhalten.
+        return HexFormat.of().formatHex(md.digest(s.getBytes()));
     }
 
     /**

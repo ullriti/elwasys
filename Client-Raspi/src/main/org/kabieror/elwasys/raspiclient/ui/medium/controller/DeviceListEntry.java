@@ -39,9 +39,10 @@ import java.net.URL;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
 import java.util.ResourceBundle;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -55,7 +56,12 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
 
     private static final DateTimeFormatter endDateFormatter =
             DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT);
-    private final Integer LOCK = 0;
+    /**
+     * Monitor für alle Zustands-/Anzeige-Mutationen dieser Kachel. Bewusst ein eigenes
+     * Object statt der früheren autoboxten {@code Integer}-Konstante: deren Wert stammt aus
+     * dem JVM-weiten Integer-Cache und wäre damit als Monitor mit fremdem Code geteilt (#91).
+     */
+    private final Object lock = new Object();
     private final Logger logger = LoggerFactory.getLogger(DeviceListEntry.class);
 
     /**
@@ -141,7 +147,10 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
         this.applyUserStyle(newValue);
     };
 
-    private ScheduledExecutorService deviceRegistrationScheduler = Executors.newSingleThreadScheduledExecutor();
+    /**
+     * Der Steckdosen-Suchlauf dieser Kachel (#91, siehe {@link DeviceRegistrationScan}).
+     */
+    private final DeviceRegistrationScan registrationScan = new DeviceRegistrationScan();
 
     private IDeviceRegistrationService registrationService;
 
@@ -204,7 +213,7 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
 
     @Override
     public void onTerminate() {
-        synchronized (LOCK) {
+        synchronized (this.lock) {
             this.logger.debug(String.format("Terminating view of device '%1s'", this.device.getName()));
             ElwaManager.instance.getExecutionManager().stopListenToExecutionStartedEvent(this);
             ElwaManager.instance.getExecutionManager().stopListenToExecutionFinishedEvent(this);
@@ -214,6 +223,9 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
             if (this.updateFuture != null && !this.updateFuture.isDone()) {
                 this.updateFuture.cancel(true);
             }
+            // Den Executor des Steckdosen-Suchlaufs mit beenden (#91) - er blieb bisher je
+            // Kachel und je Restart als Thread zurück.
+            this.registrationScan.stop();
         }
     }
 
@@ -257,7 +269,7 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
         }
 
         Platform.runLater(() -> {
-            synchronized (LOCK) {
+            synchronized (this.lock) {
                 this.runningExecution = e;
 
                 if (e.getProgram().getType() == ProgramType.OPEN_DOOR) {
@@ -291,7 +303,7 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
         }
 
         Platform.runLater(() -> {
-            synchronized (LOCK) {
+            synchronized (this.lock) {
                 if (this.errorRetryFuture != null) {
                     this.errorRetryFuture.cancel();
                     this.errorRetryFuture = null;
@@ -335,29 +347,39 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
                     actionThread.start();
                 });
             });
-            // Erneuten Versuch planen
-            this.errorRetryFuture = this.mainFormController.getInactivityScheduler().scheduleJob(() -> {
-                Platform.runLater(() -> {
-                    synchronized (LOCK) {
-                        if (this.mainFormController.getMainFormState() != MainFormState.SELECT_DEVICE ||
-                                this.mainFormController.isWaiting()) {
-                            this.logger.debug("Retrying to finish execution is paused while not in normal state.");
-                            return;
-                        }
-                    }
-                    this.logger.info("Automatically retrying to finish failed execution now.");
-                    this.onErrorRetry(null);
-                });
-            }, 30, TimeUnit.SECONDS, -1);
-            this.errorRetryFuture.setName("DeviceListEntry." + this.device.getName() + ".RetryErrorJob");
+            this.scheduleAutomaticFinishRetry();
         }
+    }
+
+    /**
+     * Plant den zyklischen, automatischen Wiederholversuch für einen fehlgeschlagenen
+     * Programm-Abschluss (alle 30s Inaktivität, unbegrenzt oft). Aus
+     * {@link #onExecutionFailed(ClientExecution, Exception)} herausgelöst (#91), Verhalten
+     * unverändert: der Versuch pausiert, solange das Hauptfenster nicht in der Geräteauswahl
+     * ist oder auf eine andere Aktion wartet.
+     */
+    private void scheduleAutomaticFinishRetry() {
+        this.errorRetryFuture = this.mainFormController.getInactivityScheduler().scheduleJob(() -> {
+            Platform.runLater(() -> {
+                synchronized (this.lock) {
+                    if (this.mainFormController.getMainFormState() != MainFormState.SELECT_DEVICE ||
+                            this.mainFormController.isWaiting()) {
+                        this.logger.debug("Retrying to finish execution is paused while not in normal state.");
+                        return;
+                    }
+                }
+                this.logger.info("Automatically retrying to finish failed execution now.");
+                this.onErrorRetry(null);
+            });
+        }, 30, TimeUnit.SECONDS, -1);
+        this.errorRetryFuture.setName("DeviceListEntry." + this.device.getName() + ".RetryErrorJob");
     }
 
     /**
      * Aktualisiert die Anzeige dieses Gerätes
      */
     void refresh() {
-        synchronized (LOCK) {
+        synchronized (this.lock) {
             this.refresh(false);
         }
     }
@@ -383,65 +405,45 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
 
         this.deviceName.set(this.device.getName());
 
+        this.applyAppearance(APPEARANCES.get(this.state));
+
+        // Zustandsspezifische Angaben, die aus Laufzeitdaten stammen und darum nicht Teil der
+        // statischen Tabelle sein können.
         switch (this.state) {
-            case FREE -> {
-                resetStatusStyleClasses();
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-free", true);
-                this.deviceListEntry.setDisable(false);
-                this.doorOpenButton.setDisable(false);
-                this.selectButton.setDisable(true);
-                this.statusText.set("frei");
-            }
-            case FREE_AVAILABLE -> {
-                resetStatusStyleClasses();
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-free", true);
-                this.deviceListEntry.setDisable(false);
-                this.doorOpenButton.setDisable(false);
-                this.selectButton.setDisable(false);
-                this.statusText.set("frei");
-            }
-            case DOOR_OPENED -> {
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-free", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-door-opened", true);
-                this.selectButton.setDisable(true);
-                this.statusText.set("Tür freigegeben");
-            }
-            case FREE_BLOCKED -> {
-                resetStatusStyleClasses();
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-free", true);
-                UiUtilities.setStyleClass(this.deviceListEntry, "locked", true);
-                this.deviceListEntry.setDisable(true);
-                this.selectButton.setDisable(true);
-                this.statusText.set("nicht verfügbar");
-            }
             case OCCUPIED -> {
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-free", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-occupied", true);
                 this.lastUserName.set(this.runningExecution.getUser().getName());
-                this.statusText.set("belegt");
                 this.endDate.set(endDateFormatter.format(this.runningExecution.getEndDate()));
             }
-            case ERROR -> {
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-occupied", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-free", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-door-opened", false);
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-error", true);
-                this.statusText.set("FEHLER");
-                this.errorRetryButton.setDisable(errorRetryAction == null);
-            }
-            case DISABLED -> {
-                resetStatusStyleClasses();
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-disabled", true);
-                this.deviceListEntry.setDisable(true);
-                this.statusText.set("deaktiviert");
-            }
-            case UNREGISTERED -> {
-                resetStatusStyleClasses();
-                UiUtilities.setStyleClass(this.deviceListEntry, "status-unregistered", true);
-                this.deviceListEntry.setDisable(false);
-                this.statusText.set("Keine Steckdose");
+            case ERROR -> this.errorRetryButton.setDisable(this.errorRetryAction == null);
+            default -> {
+                // Alle übrigen Zustände sind vollständig über die Tabelle beschrieben.
             }
         }
+    }
+
+    /**
+     * Wendet eine Zeile der Zustandstabelle auf die Kachel an.
+     */
+    private void applyAppearance(EntryAppearance appearance) {
+        if (appearance.resetAllStyleClasses()) {
+            this.resetStatusStyleClasses();
+        }
+        for (String styleClass : appearance.stylesOff()) {
+            UiUtilities.setStyleClass(this.deviceListEntry, styleClass, false);
+        }
+        for (String styleClass : appearance.stylesOn()) {
+            UiUtilities.setStyleClass(this.deviceListEntry, styleClass, true);
+        }
+        if (appearance.entryDisabled() != null) {
+            this.deviceListEntry.setDisable(appearance.entryDisabled());
+        }
+        if (appearance.doorOpenButtonDisabled() != null) {
+            this.doorOpenButton.setDisable(appearance.doorOpenButtonDisabled());
+        }
+        if (appearance.selectButtonDisabled() != null) {
+            this.selectButton.setDisable(appearance.selectButtonDisabled());
+        }
+        this.statusText.set(appearance.statusText());
     }
 
     /**
@@ -468,7 +470,7 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
      * @param errorRetryAction Die Aktion, die die fehlgeschlagene Aktion wiederholt
      */
     private void displayError(String message, Exception exception, Runnable errorRetryAction) {
-        synchronized (LOCK) {
+        synchronized (this.lock) {
             this.errorRetryAction = errorRetryAction;
             this.currentException = exception;
             this.errorText.set(message);
@@ -508,7 +510,7 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
      * Wird nach einem Klick des Benutzers auf die Schaltfläche "Tür freigeben" aufgerufen.
      */
     public void onOpenDoor(MouseEvent mouseEvent) {
-        synchronized (LOCK) {
+        synchronized (this.lock) {
             // Aktiviere Doppelklick-Schutz
             this.doorOpenButton.setDisable(true);
             this.openDoorTriggered = true;
@@ -548,7 +550,7 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
      * Versucht erneut, die fehlgeschlagene Programmausführung zu beenden
      */
     public void onErrorRetry(MouseEvent mouseEvent) {
-        synchronized (LOCK) {
+        synchronized (this.lock) {
             if (this.errorRetryAction != null) {
                 this.errorRetryAction.run();
             }
@@ -587,30 +589,26 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
     }
 
     public void onRegister(MouseEvent event) {
-        deviceRegistrationScheduler.submit(() -> {
-            logger.info("Scanning for new actor for device " + device.getId());
-            UiUtilities.setStyleClass(registerButton, "active", true);
-            ElwaManager.instance.getDeviceRegistrationService()
-                    .registerDevice(this.device)
-                    .join();
-            UiUtilities.setStyleClass(registerButton, "active", false);
-            refresh(true);
-        });
+        this.registrationScan.start(ElwaManager.instance.getDeviceRegistrationService(), this.device,
+                active -> UiUtilities.setStyleClass(this.registerButton, "active", active),
+                () -> this.refresh(true));
     }
 
     public void setDevice(ClientDevice device) {
         this.device = device;
     }
 
+    // Property-Accessoren für die FXML-Bindings ${controller.…} in DeviceListEntry.fxml.
+    // Sie bleiben bewusst hier (statt in einem eigenen Modell-Objekt): JavaFX' BeanAdapter löst
+    // ${controller.x} genau über getX()/xProperty() AM CONTROLLER auf. Die sieben ungenutzten
+    // Setter sind entfallen (#91) - die Werte werden ausschließlich intern über die Properties
+    // gesetzt.
+
     /**
      * Property: deviceName
      */
     public String getDeviceName() {
         return deviceName.get();
-    }
-
-    public void setDeviceName(String deviceName) {
-        this.deviceName.set(deviceName);
     }
 
     public StringProperty deviceNameProperty() {
@@ -622,10 +620,6 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
      */
     public String getStatusText() {
         return statusText.get();
-    }
-
-    public void setStatusText(String statusText) {
-        this.statusText.set(statusText);
     }
 
     public StringProperty statusTextProperty() {
@@ -640,10 +634,6 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
         return lastUserName.get();
     }
 
-    public void setLastUserName(String lastUserName) {
-        this.lastUserName.set(lastUserName);
-    }
-
     public StringProperty lastUserNameProperty() {
         return lastUserName;
     }
@@ -654,10 +644,6 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
      */
     public String getRemainingTime() {
         return remainingTime.get();
-    }
-
-    public void setRemainingTime(String remainingTime) {
-        this.remainingTime.set(remainingTime);
     }
 
     public StringProperty remainingTimeProperty() {
@@ -672,10 +658,6 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
         return endDate.get();
     }
 
-    public void setEndDate(String endDate) {
-        this.endDate.set(endDate);
-    }
-
     public StringProperty endDateProperty() {
         return endDate;
     }
@@ -685,10 +667,6 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
      */
     public String getErrorText() {
         return errorText.get();
-    }
-
-    public void setErrorText(String errorText) {
-        this.errorText.set(errorText);
     }
 
     public StringProperty errorTextProperty() {
@@ -702,13 +680,53 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
         return disabledText.get();
     }
 
-    public void setDisabledText(String disabledText) {
-        this.disabledText.set(disabledText);
-    }
-
     public StringProperty disabledTextProperty() {
         return disabledText;
     }
+
+    /**
+     * Das Aussehen der Kachel in einem Zustand - eine Zeile der Zustandstabelle
+     * {@link #APPEARANCES}. {@code null} bei den drei {@code Boolean}-Feldern heißt
+     * "unverändert lassen" (der Zustand macht zu dieser Schaltfläche/Kachel keine Aussage).
+     *
+     * @param resetAllStyleClasses   Ob zuerst der komplette Klassensatz zurückgesetzt wird (#82).
+     * @param stylesOff              Gezielt zu entfernende Style-Klassen (vor {@code stylesOn}).
+     * @param stylesOn               Zu setzende Style-Klassen.
+     * @param entryDisabled          Ob die gesamte Kachel gesperrt wird.
+     * @param doorOpenButtonDisabled Ob "Tür freigeben" gesperrt wird.
+     * @param selectButtonDisabled   Ob "Gerät buchen" gesperrt wird.
+     * @param statusText             Der anzuzeigende Statustext.
+     */
+    private record EntryAppearance(boolean resetAllStyleClasses, List<String> stylesOff, List<String> stylesOn,
+                                   Boolean entryDisabled, Boolean doorOpenButtonDisabled,
+                                   Boolean selectButtonDisabled, String statusText) {
+    }
+
+    /**
+     * Die Darstellung je Zustand als Tabelle statt als Anweisungsfolge je {@code switch}-Zweig
+     * (#91). Damit ist auf einen Blick vergleichbar, welcher Zustand welche Style-Klassen und
+     * Sperren setzt - genau die Eigenschaft, deren Fehlen den Fall-Through-Fehler #82 (DISABLED
+     * fiel in UNREGISTERED durch) so lange unentdeckt ließ.
+     */
+    private static final Map<DeviceListEntryState, EntryAppearance> APPEARANCES =
+            new EnumMap<>(Map.of(
+                    DeviceListEntryState.FREE, new EntryAppearance(true, List.of(), List.of("status-free"),
+                            false, false, true, "frei"),
+                    DeviceListEntryState.FREE_AVAILABLE, new EntryAppearance(true, List.of(), List.of("status-free"),
+                            false, false, false, "frei"),
+                    DeviceListEntryState.FREE_BLOCKED, new EntryAppearance(true, List.of(),
+                            List.of("status-free", "locked"), true, null, true, "nicht verfügbar"),
+                    DeviceListEntryState.DOOR_OPENED, new EntryAppearance(false, List.of("status-free"),
+                            List.of("status-door-opened"), null, null, true, "Tür freigegeben"),
+                    DeviceListEntryState.OCCUPIED, new EntryAppearance(false, List.of("status-free"),
+                            List.of("status-occupied"), null, null, null, "belegt"),
+                    DeviceListEntryState.ERROR, new EntryAppearance(false,
+                            List.of("status-occupied", "status-free", "status-door-opened"),
+                            List.of("status-error"), null, null, null, "FEHLER"),
+                    DeviceListEntryState.DISABLED, new EntryAppearance(true, List.of(),
+                            List.of("status-disabled"), true, null, null, "deaktiviert"),
+                    DeviceListEntryState.UNREGISTERED, new EntryAppearance(true, List.of(),
+                            List.of("status-unregistered"), false, null, null, "Keine Steckdose")));
 
     /**
      * Die möglichen Zustände des Eintrages

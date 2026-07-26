@@ -64,7 +64,7 @@ public enum MainFormState {
     /**
      * Bestätigungsseite, Karte erkannt, Beutzer hat zu wenig Guthaben
      */
-    CONFIRMATION_CREDIT_INSUFFICENT,
+    CONFIRMATION_CREDIT_INSUFFICIENT,
 
     /**
      * Bestätigungsseite, Karte erkannt, Benutzer ist gesperrt

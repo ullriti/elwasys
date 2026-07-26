@@ -4,7 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
-import java.util.Vector;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -20,7 +20,7 @@ class InactivityJob implements Runnable {
     private final int limit;
     private final Runnable job;
     boolean shutdown = false;
-    private List<IInactivityJobDoneListener> finnishedListener = new Vector<>();
+    private final List<IInactivityJobDoneListener> finishedListeners = new CopyOnWriteArrayList<>();
     private int counter = 0;
 
     /**
@@ -93,13 +93,13 @@ class InactivityJob implements Runnable {
                 // Setzte Zeit bis zur nächsten Ausführung zurück, nachdem Aktivität festgestellt wurde.
             }
         }
-        for (IInactivityJobDoneListener l : this.finnishedListener) {
+        for (IInactivityJobDoneListener l : this.finishedListeners) {
             l.onInactivityJobDone(this.future);
         }
     }
 
-    public void listenToFinnishedEvent(IInactivityJobDoneListener l) {
-        this.finnishedListener.add(l);
+    public void listenToFinishedEvent(IInactivityJobDoneListener l) {
+        this.finishedListeners.add(l);
     }
 
     public String getName() {

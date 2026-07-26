@@ -1,8 +1,7 @@
 package org.kabieror.elwasys.common;
 
 /**
- * Diese Ausnahme wird geworfen, wenn angeforderte Daten nicht in der Datenbank
- * gefunden werden k�nnen
+ * Diese Ausnahme wird geworfen, wenn angeforderte Daten nicht gefunden werden können
  * 
  * @author Oliver Kabierschke
  *

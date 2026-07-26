@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.time.Duration;
 import java.util.List;
-import java.util.Vector;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Diese Klasse sorgt dafür, dass die Hintergrundbeleuchtung des Displays nach
@@ -29,7 +29,7 @@ public class BacklightManager implements ICloseListener {
     /**
      * The listeners to inform when the light is switched on.
      */
-    private final List<LightOnEventListener> lightOnEventListeners = new Vector<>();
+    private final List<LightOnEventListener> lightOnEventListeners = new CopyOnWriteArrayList<>();
     /**
      * Zeit bis zum Abdunkeln des Displays
      */

@@ -55,7 +55,7 @@ public class InactivityScheduler implements IInactivityJobDoneListener {
     public InactivityFuture scheduleJob(Runnable job, int rate, TimeUnit timeUnit, int executionLimit) {
         InactivityFuture future = new InactivityFuture();
         InactivityJob iJob = new InactivityJob(future, rate, timeUnit, executionLimit, job);
-        iJob.listenToFinnishedEvent(this);
+        iJob.listenToFinishedEvent(this);
         this.runningJobs.put(future, iJob);
         Thread thread = new Thread(iJob);
         thread.setName("InactivityJob");
