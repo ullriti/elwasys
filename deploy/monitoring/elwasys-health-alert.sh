@@ -13,7 +13,9 @@
 #
 # Abgedeckte Signale:
 #   1. Betriebs-Health   /actuator/health/operational != HTTP 200 ODER nicht erreichbar
-#                        (Backend down, DB down, Terminal-WS fehlt, abgelaufene Execution).
+#                        (Backend down, DB down, Terminal-WS fehlt, abgelaufene Execution,
+#                        offener Offline-Vorfall - letzterer endet erst mit der Quittierung
+#                        im Portal, siehe Issue #89).
 #   2. Zertifikats-Ablauf  (#89) TLS-Zert des öffentlichen Endpoints läuft in < N Tagen ab
 #                        (Selbstverwaltungs-Pfad ohne Auto-Erneuerung → Totalausfall-Risiko).
 #   3. Plattenplatz      (#89) Füllstand einer Partition über Schwellwert (langsames Volllaufen
@@ -196,7 +198,7 @@ if [[ "${code}" == "200" ]]; then
 else
     reason="HTTP ${code}"
     [[ "${code}" == "000" ]] && reason="nicht erreichbar (Backend/DB down?)"
-    process_check "health" "FAIL" "Betriebs-Health FEHLERHAFT: ${reason} an ${ELWASYS_ALERT_HEALTH_URL}. Mögliche Ursachen: Backend/DB down, Terminal-WS getrennt, offene abgelaufene Execution. Details (angemeldet): /actuator/health."
+    process_check "health" "FAIL" "Betriebs-Health FEHLERHAFT: ${reason} an ${ELWASYS_ALERT_HEALTH_URL}. Mögliche Ursachen: Backend/DB down, Terminal-WS getrennt, offene abgelaufene Execution, offener Offline-Vorfall (verlorene Buchung/Geister-Ausführung - im Portal unter 'Offline-Vorfälle' sichten und quittieren, das beendet den Alarm). Details (angemeldet): /actuator/health."
     log "health: FAIL (${reason})"
     FAIL_TOTAL=$((FAIL_TOTAL + 1))
 fi

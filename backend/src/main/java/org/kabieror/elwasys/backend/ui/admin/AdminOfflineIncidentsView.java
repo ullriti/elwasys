@@ -164,8 +164,14 @@ public class AdminOfflineIncidentsView extends VerticalLayout {
         }
         Button btnAcknowledge = new Button("Quittieren", e -> confirmAcknowledge(incident));
         btnAcknowledge.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_PRIMARY);
-        // Issue #49: Doppelklick-Schutz wie auf den geldbewegenden Knöpfen im Portal.
-        btnAcknowledge.setDisableOnClick(true);
+        // BEWUSST OHNE setDisableOnClick (anders als die direkt handelnden Geldknöpfe aus Issue
+        // #49, siehe ExpiredExecutionsDialog): dieser Knopf HANDELT nicht selbst, er öffnet nur
+        // den Bestätigungsdialog. setDisableOnClick deaktiviert serverseitig beim Klick und
+        // reaktiviert nie von allein - bricht der Admin die Bestätigung mit "Nein" ab, wäre der
+        // Knopf bis zum Neuladen der Seite tot. Da die Quittierung der EINZIGE Weg ist, den
+        // Betriebsalarm zu beenden, wäre das ein echter Sackgassen-Zustand. Gegen Doppelklick
+        // schützt bereits der modale Dialog, und die Quittierung selbst ist idempotent
+        // (siehe TerminalOfflineIncidentEntity#acknowledge).
         return btnAcknowledge;
     }
 

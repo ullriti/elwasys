@@ -7,6 +7,10 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +55,28 @@ public class OfflineIncidentOutbox implements OfflineIncidentReporter {
     private final Gson gson;
     private final Object lock = new Object();
 
+    /**
+     * Eigener Zustell-Thread. Das Senden über die WebSocket-Session ist ein BLOCKIERENDER
+     * Vorgang: bei einer halb offenen Verbindung meldet {@code isOpen()} weiterhin {@code true}
+     * und der Sendeversuch läuft erst in den Container-Timeout (Größenordnung Sekunden bis
+     * Minuten). Liefe die Zustellung auf dem aufrufenden Thread, würde sie
+     * <ul>
+     *   <li>den <b>Replay-Thread</b> (den Geldpfad!) für die Dauer dieser Timeouts anhalten,
+     *       obwohl die Meldung nur Diagnose ist, und</li>
+     *   <li>beim Verbindungsaufbau den <b>WebSocket-Thread</b> blockieren, sodass dieser keine
+     *       PINGs mehr beantwortet - das Backend würde die Verbindung als tot abräumen, der
+     *       Client neu verbinden und erneut zustellen wollen (Reconnect-Schleife genau in der
+     *       Störung, in der die Meldung ankommen soll).</li>
+     * </ul>
+     * Daher: ein einzelner Daemon-Thread (Reihenfolge bleibt erhalten, kein Thread-Ansturm), der
+     * die Anwendung am Beenden nicht hindert.
+     */
+    private final ExecutorService deliveryExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "offline-incident-delivery");
+        t.setDaemon(true);
+        return t;
+    });
+
     /** Zustellweg, von außen verdrahtet (der WebSocket-Client) - {@code null} = kein Kanal. */
     private volatile Sender sender;
 
@@ -73,30 +99,59 @@ public class OfflineIncidentOutbox implements OfflineIncidentReporter {
 
     @Override
     public void report(OfflineIncident incident) {
-        if (append(incident)) {
-            flush();
-        } else {
-            // Nicht persistiert (Outbox voll bzw. Datentraeger defekt) - dann wenigstens EINMAL
-            // direkt zustellen; ohne Outbox-Eintrag gibt es spaeter keine Wiederholung mehr.
-            deliver(incident);
+        boolean persisted = append(incident);
+        // Nur DIESE eine Meldung zustellen, nicht die ganze Outbox: das Nachreichen des Rests
+        // haengt ohnehin am Verbindungsaufbau (siehe flush()). Ein flush() je Vorfall waere
+        // quadratisch (n Vorfaelle -> n(n+1)/2 Sendevorgaenge) und haette bei jeder Stoerung
+        // genau dann am meisten Arbeit erzeugt, wenn am wenigsten funktioniert. Ist die Meldung
+        // NICHT persistiert (Outbox voll bzw. Datentraeger defekt), ist dieser eine Versuch die
+        // einzige Chance - danach gibt es keine Wiederholung mehr.
+        deliverAsync(incident);
+        if (!persisted) {
+            this.logger.warn("Vorfallsmeldung '{}' konnte nicht persistiert werden - sie wird nur einmalig "
+                    + "zugestellt versucht.", incident.incidentKey());
         }
     }
 
     /**
      * Stellt alle noch unquittierten Meldungen (erneut) zu - aufzurufen, sobald die Verbindung
      * zum Backend steht. Entfernt nichts: das passiert erst mit der Quittung des Backends in
-     * {@link #acknowledge(String)}.
+     * {@link #acknowledge(String)}. Läuft asynchron auf dem Zustell-Thread (siehe
+     * {@link #deliveryExecutor}), damit der Aufrufer - insbesondere der WebSocket-Thread beim
+     * Verbindungsaufbau - nicht an blockierenden Sendevorgängen hängen bleibt.
      */
     public void flush() {
         if (this.sender == null) {
             return;
         }
-        for (OfflineIncident incident : readAll()) {
-            if (!deliver(incident)) {
-                // Die Leitung ist offenbar (wieder) weg - die restlichen Meldungen bleiben liegen
-                // und werden beim naechsten Verbindungsaufbau erneut versucht.
-                return;
+        submit(() -> {
+            for (OfflineIncident incident : readAll()) {
+                if (!deliver(incident)) {
+                    // Die Leitung ist offenbar (wieder) weg - die restlichen Meldungen bleiben
+                    // liegen und werden beim naechsten Verbindungsaufbau erneut versucht.
+                    return;
+                }
             }
+        });
+    }
+
+    /** Stellt eine einzelne Meldung asynchron zu (siehe {@link #deliveryExecutor}). */
+    private void deliverAsync(OfflineIncident incident) {
+        submit(() -> deliver(incident));
+    }
+
+    /**
+     * Übergibt eine Aufgabe an den Zustell-Thread - strikt fail-safe: der Aufrufer ist mittelbar
+     * der Journal-Replay (Geldpfad), dem darf hier nichts entgegenschlagen. Ein bereits
+     * heruntergefahrener Executor (Anwendungsende) wirft {@link RejectedExecutionException} und
+     * wird bewusst nur protokolliert.
+     */
+    private void submit(Runnable task) {
+        try {
+            this.deliveryExecutor.execute(task);
+        } catch (RejectedExecutionException e) {
+            this.logger.warn("Vorfalls-Zustellung nicht mehr moeglich (Zustell-Thread beendet) - die Meldung bleibt "
+                    + "in der Outbox und geht beim naechsten Start erneut raus.", e);
         }
     }
 
@@ -226,6 +281,36 @@ public class OfflineIncidentOutbox implements OfflineIncidentReporter {
         } catch (RuntimeException e) {
             this.logger.warn("Konnte die Vorfallsmeldung '{}' nicht an das Backend senden - sie bleibt in der Outbox "
                     + "und wird beim naechsten Verbindungsaufbau erneut versucht.", incident.incidentKey(), e);
+            return false;
+        }
+    }
+
+    /**
+     * Beendet den Zustell-Thread (Anwendungsende). Die Outbox-DATEI bleibt unangetastet - noch
+     * nicht quittierte Meldungen gehen beim nächsten Start erneut raus.
+     */
+    public void shutdown() {
+        this.deliveryExecutor.shutdownNow();
+    }
+
+    /**
+     * Wartet, bis der Zustell-Thread seine Warteschlange abgearbeitet hat - ausschließlich für
+     * Tests (die Zustellung ist im Betrieb bewusst asynchron, siehe {@link #deliveryExecutor}).
+     *
+     * @return {@code true}, wenn innerhalb der Frist alles abgearbeitet wurde
+     */
+    boolean awaitDeliveries(long timeoutMillis) {
+        try {
+            // Eine leere Aufgabe hinten anstellen und auf sie warten: der Single-Thread-Executor
+            // arbeitet streng der Reihe nach, ihr Abschluss beweist also, dass alle zuvor
+            // eingereihten Zustellungen durch sind.
+            this.deliveryExecutor.submit(() -> {
+            }).get(timeoutMillis, TimeUnit.MILLISECONDS);
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (Exception e) {
             return false;
         }
     }

@@ -86,6 +86,29 @@ test.beforeEach(async ({ page }) => {
 // offener Vorfall existiert - die Fixtures danach also wieder entfernen.
 test.afterAll(() => cleanup());
 
+test('cancelling the confirmation leaves the acknowledge button usable (P27b)', async ({ page }) => {
+  // Regression (Review-Gate FR-2): der Knopf trug zunaechst setDisableOnClick(true). Vaadin
+  // deaktiviert damit serverseitig BEIM KLICK und reaktiviert nie von selbst - nach einem "Nein"
+  // war der Knopf bis zum Neuladen tot. Da die Quittierung der EINZIGE Weg ist, den
+  // Betriebsalarm zu beenden, waere das eine Sackgasse gewesen.
+  await openAdminSection(page, 'admin/offline-incidents');
+
+  const actions = await gridRowActions(page, new RegExp(OPEN_REASON));
+  const acknowledge = actions.getByRole('button', { name: 'Quittieren' });
+  await acknowledge.click();
+  // Bestaetigung ABBRECHEN.
+  await page.getByRole('button', { name: 'Nein', exact: true }).click();
+
+  // Der Vorfall ist unveraendert offen ...
+  const cells = await gridRowCells(page, new RegExp(OPEN_REASON));
+  await expect(cells[7]).toHaveText('Offen');
+  // ... und der Knopf laesst sich erneut betaetigen (das eigentliche Regressionskriterium).
+  await expect(acknowledge).toBeEnabled();
+  await acknowledge.click();
+  await expect(page.getByRole('button', { name: 'Ja', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Nein', exact: true }).click();
+});
+
 test('admin sees an open offline incident and can acknowledge it (P27)', async ({ page }) => {
   await openAdminSection(page, 'admin/offline-incidents');
 

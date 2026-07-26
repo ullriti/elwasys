@@ -79,11 +79,15 @@ anders entschieden – umgesetzt und hier nachgetragen:
 
 - FR-3 (Tests: deCONZ-Reconnect, DYNAMIC-E2E, Determinismus) und die Generalprobe nach
   Spec 0001 (echter Restore-/Alarm-/Cutover-Lauf, jetzt inkl. Alarm-Probe für beide Stufen).
-- **Testinfrastruktur-Schwachpunkt (neu entdeckt, eigenes Issue wert):** `run-ui-tests.sh` pollt
-  als Readiness-Gate das aggregierte `/actuator/health`. Hinterlässt ein vorheriger E2E-Lauf einen
-  Standort mit Geräten in der geteilten Test-DB, steht dieses Health dauerhaft auf 503 und der
-  nächste Lauf startet nie – obwohl mit den Tests nichts verkehrt ist. Sinnvoller wäre
-  `/actuator/health/readiness` (reiner Prozess-Status) als Gate.
+- **Testinfrastruktur-Schwachpunkt (neu entdeckt, [#97](https://github.com/ullriti/elwasys/issues/97)):**
+  beide Test-Harnesse (`start-test-backend.sh`, `backend/e2e/global-setup.ts`) gateten auf das
+  aggregierte `/actuator/health`. Da dort die betrieblichen Indicators hängen und beim Start nie
+  ein Terminal verbunden ist, blockierte jeder Standort-mit-Gerät den Lauf dauerhaft – und der
+  Fehlschlag maskierte sich selbst (Exit-Code 0 ohne einen einzigen ausgeführten Test). Mit dem
+  Offline-Vorfalls-Indicator wäre es noch schärfer geworden: der setzt sich nur durch manuelle
+  Quittierung zurück, ein Rückstand hätte die Suite dauerhaft blockiert. **In diesem AP behoben**
+  (beide Gates auf `/actuator/health/readiness`); der verbleibende Rest – der maskierende
+  Exit-Code – ist in #97 festgehalten.
 
 ## Referenzen
 

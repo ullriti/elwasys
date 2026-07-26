@@ -12,6 +12,7 @@ import org.kabieror.elwasys.backend.repository.TerminalOfflineIncidentRepository
 import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,7 +69,20 @@ public class TerminalOfflineIncidentService {
 
         TerminalOfflineIncidentEntity incident = new TerminalOfflineIncidentEntity(incidentKey, location, kind,
                 entryType, idempotencyKey, user, chargedPrice, reason, occurredAt);
-        TerminalOfflineIncidentEntity saved = this.incidentRepository.save(incident);
+        TerminalOfflineIncidentEntity saved;
+        try {
+            saved = this.incidentRepository.saveAndFlush(incident);
+        } catch (DataIntegrityViolationException e) {
+            // Die Prüfung oben ist ein Read-then-Insert: meldet dasselbe Terminal denselben
+            // Vorfall zweimal dicht hintereinander (Wiederholung nach Reconnect, zwei Sessions),
+            // kann zwischen Lesen und Schreiben ein zweiter Insert liegen - dann greift der
+            // Unique-Index auf incident_key. Das ist der ERWARTETE Ausgang einer Wiederholung und
+            // kein Fehler: den bereits vorhandenen Vorfall zurückgeben, statt dem Terminal einen
+            // Fehler zu quittieren (der es die Meldung endlos wiederholen ließe).
+            LOG.debug("Offline-Vorfall '{}' wurde zeitgleich bereits angelegt - verwende den vorhandenen.",
+                    incidentKey, e);
+            return this.incidentRepository.findByIncidentKey(incidentKey).orElseThrow(() -> e);
+        }
         LOG.error("Offline-Vorfall am Standort '{}' gemeldet ({}): {} - Betrag {}, Eintrag {}/{}. Bitte im Portal "
                         + "sichten und quittieren.", location.getName(), kind, reason, chargedPrice, entryType,
                 idempotencyKey);

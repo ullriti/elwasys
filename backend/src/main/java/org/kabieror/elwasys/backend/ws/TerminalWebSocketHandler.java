@@ -202,8 +202,17 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void send(WebSocketSession session, TerminalWsMessage message) throws Exception {
-        if (session.isOpen()) {
-            session.sendMessage(new TextMessage(this.objectMapper.writeValueAsString(message)));
+        // Über die in der Registry hinterlegte, serialisierungsgeschützte Session senden (siehe
+        // TerminalConnectionRegistry#register): auf dieselbe Verbindung schreiben auch der
+        // Heartbeat-Scheduler und die portal-initiierte Fernwartung. Ohne diesen Umweg gingen
+        // die Antworten hier an der Serialisierung vorbei und könnten mit jenen kollidieren
+        // ("The remote endpoint was in state [TEXT_FULL_WRITING]"). Ist der Standort (noch)
+        // nicht registriert - z.B. eine bereits ersetzte Session -, wird bewusst auf die eigene
+        // Session zurückgefallen, damit eine Antwort eher rausgeht als gar nicht.
+        WebSocketSession target = this.connectionRegistry.guardedSession(locationId(session), session)
+                .orElse(session);
+        if (target.isOpen()) {
+            target.sendMessage(new TextMessage(this.objectMapper.writeValueAsString(message)));
         }
     }
 

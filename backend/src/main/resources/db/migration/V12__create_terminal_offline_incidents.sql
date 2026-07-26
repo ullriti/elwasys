@@ -22,7 +22,13 @@ CREATE TABLE terminal_offline_incidents
 (
     id              BIGSERIAL PRIMARY KEY,
     incident_key    VARCHAR(120) NOT NULL UNIQUE,
-    location_id     INTEGER      NOT NULL REFERENCES locations (id) ON DELETE CASCADE,
+    -- RESTRICT, nicht CASCADE: der Vorfall ist der BELEG über einen tatsächlich eingetretenen
+    -- Geldverlust (siehe Kopf: kein Purge). Mit CASCADE hätte das Löschen eines Standorts den
+    -- Beleg still mitgenommen UND den zugehörigen Betriebsalarm verstummen lassen - und zwar
+    -- genau dann, wenn jemand aufräumt. RESTRICT erzwingt stattdessen, offene wie quittierte
+    -- Vorfälle bewusst zu behandeln, bevor ein Standort verschwindet. (Anders als bei user_id
+    -- unten: der Benutzer ist am Vorfall nur informativ, sein Wegfall entwertet den Beleg nicht.)
+    location_id     INTEGER      NOT NULL REFERENCES locations (id) ON DELETE RESTRICT,
     kind            VARCHAR(40)  NOT NULL,
     entry_type      VARCHAR(20),
     idempotency_key VARCHAR(64),

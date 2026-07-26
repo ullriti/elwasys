@@ -39,7 +39,15 @@ class OfflineIncidentOutboxTest {
         outbox.setSender(offline);
         outbox.report(incident("f1"));
 
-        assertEquals(1, offline.sent.size(), "delivery was attempted right away");
+        // Die Zustellung laeuft bewusst asynchron auf einem eigenen Thread (der Replay-Thread ist
+        // der Geldpfad und darf nie an einem blockierenden Send haengen) - hier auf sie warten,
+        // statt die Zusicherung abzuschwaechen.
+        assertTrue(outbox.awaitDeliveries(5000), "delivery thread finished");
+        // At-least-once: ein zeitgleiches flush() (aus setSender) und die Einzelzustellung aus
+        // report() koennen denselben Vorfall beide greifen. Das ist der zugesicherte Vertrag
+        // (das Backend dedupliziert ueber den incidentKey) - entscheidend ist, DASS zugestellt
+        // wurde, nicht wie oft.
+        assertTrue(offline.sent.size() >= 1, "delivery was attempted right away");
         assertTrue(Files.exists(file), "the undelivered incident is persisted");
 
         // 2. Terminal-Lauf (Neustart): frische Outbox-Instanz auf derselben Datei, Verbindung da.
@@ -47,6 +55,7 @@ class OfflineIncidentOutboxTest {
         OfflineIncidentOutbox afterRestart = new OfflineIncidentOutbox(file);
         assertEquals(1, afterRestart.readAll().size(), "the incident survived the restart");
         afterRestart.setSender(online);
+        assertTrue(afterRestart.awaitDeliveries(5000), "delivery thread finished");
 
         assertEquals(1, online.sent.size(), "the incident is sent again once a connection exists");
         assertEquals("DEAD_LETTER:f1", online.sent.get(0).incidentKey(),
@@ -99,6 +108,7 @@ class OfflineIncidentOutboxTest {
         assertEquals(1, outbox.readAll().size());
         RecordingSender sender = new RecordingSender(true);
         outbox.setSender(sender);
+        assertTrue(outbox.awaitDeliveries(5000), "delivery thread finished");
         assertEquals(1, sender.sent.size(), "wiring the sender flushes what is pending");
     }
 
@@ -132,5 +142,42 @@ class OfflineIncidentOutboxTest {
             this.sent.add(incident);
             return this.connected;
         }
+    }
+
+    @Test
+    void afullOutboxKeepsTheOldestIncidentsAndDropsTheNewest(@TempDir Path dir) {
+        // Ist die Outbox voll, ist die Lage ohnehin dauerhaft gestoert - dann sind die AELTESTEN
+        // Meldungen (die Ursache) wertvoller als immer neue Folgemeldungen. Genau das sichert die
+        // Klasse zu; ohne Test waere es nur ein Kommentar.
+        OfflineIncidentOutbox outbox = new OfflineIncidentOutbox(dir.resolve("offline-incidents.jsonl"));
+        for (int i = 0; i < OfflineIncidentOutbox.MAX_OUTBOX_ENTRIES; i++) {
+            outbox.report(incident("full-" + i));
+        }
+        assertEquals(OfflineIncidentOutbox.MAX_OUTBOX_ENTRIES, outbox.readAll().size(), "outbox is full");
+
+        outbox.report(incident("one-too-many"));
+
+        List<OfflineIncident> stored = outbox.readAll();
+        assertEquals(OfflineIncidentOutbox.MAX_OUTBOX_ENTRIES, stored.size(), "the cap holds");
+        assertEquals("DEAD_LETTER:full-0", stored.get(0).incidentKey(), "the oldest incident is kept");
+        assertTrue(stored.stream().noneMatch(i -> i.incidentKey().contains("one-too-many")),
+                "the newest incident is dropped, not an older one");
+    }
+
+    @Test
+    void aCorruptedLineIsSkippedInsteadOfDiscardingTheWholeOutbox(@TempDir Path dir) throws Exception {
+        // Ein Absturz mitten im Schreiben kann die letzte Zeile beschaedigen (derselbe Fall, den
+        // OfflineJournal adressiert). Die uebrigen Meldungen - also die uebrigen Geldverluste -
+        // muessen lesbar bleiben.
+        Path file = dir.resolve("offline-incidents.jsonl");
+        OfflineIncidentOutbox outbox = new OfflineIncidentOutbox(file);
+        outbox.report(incident("intact"));
+        Files.writeString(file, "{kaputt-abgeschnitten" + System.lineSeparator(),
+                java.nio.file.StandardOpenOption.APPEND);
+
+        List<OfflineIncident> stored = outbox.readAll();
+
+        assertEquals(1, stored.size(), "the intact incident survives a damaged line");
+        assertEquals("DEAD_LETTER:intact", stored.get(0).incidentKey());
     }
 }
