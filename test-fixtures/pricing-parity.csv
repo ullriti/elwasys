@@ -1,0 +1,43 @@
+# Preis-Parität zwischen Backend und Terminal (Issue #91, finale Review R3b).
+#
+# Diese Fälle werden von ZWEI Testklassen gegen ZWEI Implementierungen gefahren:
+#   backend/src/test/.../service/PricingServiceParityTest.java      -> PricingService
+#   Client-Raspi/src/test/.../offline/OfflinePricingParityTest.java -> OfflinePricing
+#
+# OfflinePricing ist eine 1:1-Portierung des PricingService für den Offline-Betrieb am
+# Terminal. Weicht eine Seite ab, rechnet das Terminal offline anders ab als das Backend
+# online - also mit echtem Geld falsch. Diese Datei ist die gemeinsame Wahrheit, an der beide
+# Seiten hängen: wer eine Implementierung ändert, ohne die andere nachzuziehen, bekommt einen
+# roten Test statt einer stillen Divergenz.
+#
+# Spalten:
+# type;flagfall;rate;timeUnit;freeDurationSeconds;durationSeconds;discountType;discountValue;expectedPrice
+#
+# discountType NONE steht zugleich für "kein Benutzer / keine Gruppe" - beide Seiten behandeln
+# das identisch. expectedPrice wird per compareTo verglichen, die Skala ist also unerheblich.
+
+# --- FIXED: Grundgebühr, unabhängig von der Dauer ---
+FIXED;2.50;0.00;SECONDS;0;3600;NONE;0;2.50
+FIXED;2.50;0.00;SECONDS;0;1;NONE;0;2.50
+
+# --- Freizeit: bis EINSCHLIESSLICH freeDuration ist der Lauf kostenlos ---
+FIXED;2.50;0.00;SECONDS;60;60;NONE;0;0
+FIXED;2.50;0.00;SECONDS;60;61;NONE;0;2.50
+
+# --- DYNAMIC: Grundgebühr + Zeitpreis je VOLLER Zeiteinheit ---
+# Die Ganzzahldivision schneidet ab (Alt-Code-Verhalten, bewusst bewahrt): 90 s ergeben bei
+# Zeiteinheit MINUTES den Faktor 1, nicht 1,5.
+DYNAMIC;1.00;0.05;SECONDS;0;100;NONE;0;6.00
+DYNAMIC;1.00;0.50;MINUTES;0;90;NONE;0;1.50
+DYNAMIC;1.00;0.50;MINUTES;0;120;NONE;0;2.00
+DYNAMIC;2.00;1.00;HOURS;0;7199;NONE;0;3.00
+DYNAMIC;2.00;1.00;HOURS;0;7200;NONE;0;4.00
+
+# --- Rabatte ---
+FIXED;2.50;0.00;SECONDS;0;3600;FIX;0.50;2.00
+DYNAMIC;1.00;0.50;MINUTES;0;120;FIX;0.25;1.75
+# FACTOR rechnet mit new BigDecimal(double) statt BigDecimal.valueOf - der binär ungenaue
+# Wert bleibt bewusst erhalten (Verhalten des Alt-Codes). Genau diese Eigenheit muss auf
+# beiden Seiten gleich sein, deshalb steht sie hier als eigener Fall mit exaktem Erwartungswert.
+FIXED;2.00;0.00;SECONDS;0;3600;FACTOR;0.5;1.000
+FIXED;10.00;0.00;SECONDS;0;3600;FACTOR;0.1;8.999999999999999944488848768742172978818416595458984375000

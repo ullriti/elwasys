@@ -134,6 +134,17 @@ Status/Log/Restart-Roundtrips gehen über den echten, ausgehenden Terminal-WebSo
 - **Reihenfolge-Unabhängigkeit**: stabile IDs, Registrierungs-Reset und frische Datenbanken für
   alle datenverändernden Tests.
 
+## Modulübergreifende Preis-Parität
+
+`OfflinePricing` (Terminal) ist eine 1:1-Portierung von `PricingService` (Backend) – sie muss
+es bleiben, sonst rechnet ein Terminal offline anders ab als das Backend online. Da die beiden
+Module einander bewusst nicht kennen, hängen beide Seiten an einer gemeinsamen Fixture:
+**`test-fixtures/pricing-parity.csv`** in der Repo-Wurzel, gelesen von
+`PricingServiceParityTest` (Backend) und `OfflinePricingParityTest` (Terminal). Wer eine
+Implementierung ändert, ohne die andere nachzuziehen, bekommt einen roten Test statt einer
+stillen Divergenz. Neue Preisregeln gehören als Zeile in die Fixture, nicht in nur einen der
+beiden Tests.
+
 ## Umfang (Inventar)
 
 Am Code gezählt:
