@@ -197,13 +197,16 @@ nur **vor Ort / mit echter Hardware** prüfbar:
    Staging-Umgebung durchspielen, inkl. Rollback-Zweig; Zeiten notieren.
 2. **Migrations-Dry-Run mit Produktivdaten-Kopie:** Abgleich danach (Guthaben-Summen je
    Nutzer, Nutzer-/Geräte-/Preislisten-Zahlen alt vs. neu).
-3. **Backup-Restore-Probe:** Backup in leere DB zurückspielen, Backend dagegen starten,
-   Stichproben. Ein ungetesteter Restore ist kein Backup.
+3. **Backup-Restore-Probe:** Backup in leere DB zurückspielen (Schritt-für-Schritt-Weg +
+   Skript: `deploy/backup/restore-db.sh`, Runbook Kap. 7a), Backend dagegen starten,
+   Stichproben; RPO/RTO festhalten. Ein ungetesteter Restore ist kein Backup.
 4. **Ausfall-Drills (live):** Backend stoppen während laufender Wäsche (Offline-Replay in
    echt), Netzwerk trennen, DB stoppen, Terminal-Stromausfall mitten im Programm,
    Terminal-Neustart – erwartetes Verhalten je Fall vorher notieren.
 5. **Alarm-Probe:** einen Health-Indicator absichtlich auslösen und prüfen, dass der Alarm
-   einen Menschen erreicht (nicht nur den 503-Status).
+   einen Menschen erreicht (nicht nur den 503-Status). Der verdrahtete Kanal liegt in
+   `deploy/monitoring/` (Poll-Skript + systemd-Timer/Cron, Pushover/Mail) – Probe-Schritte in
+   dessen README.
 6. **Soak-Test:** Backend + ein Terminal mehrere Tage durchlaufen lassen; Speicher,
    WS-Reconnects, Log-Wachstum, Purge-Job beobachten.
 7. **Benachrichtigungen real:** E-Mail-Zustellbarkeit (SPF/DKIM, Spam-Ordner) und Push auf

@@ -1,0 +1,19 @@
+# systemd-Service für das elwasys-Betriebs-Alerting (Issue #83/H4). Oneshot, vom Timer
+# getriggert (siehe elwasys-health-alert.timer). Installation: siehe deploy/monitoring/README.md.
+[Unit]
+Description=elwasys Betriebs-Health-Alerting (Poll + Pushover/Mail)
+# Erst nach dem Netzwerk (der Poll braucht Backend/Internet).
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Pfade ggf. an die Installation anpassen (siehe README). Die .env enthält Zugangsdaten und
+# liegt bewusst NICHT im Repo (Rechte 600).
+EnvironmentFile=/etc/elwasys/elwasys-health-alert.env
+ExecStart=/opt/elwasys/monitoring/elwasys-health-alert.sh
+# Als unprivilegierter Dienst - der Poll braucht keine Root-Rechte (nur curl/openssl/df).
+DynamicUser=yes
+# StateDirectory legt /var/lib/elwasys-health-alert an und übergibt es dem DynamicUser (passt
+# zum Default ELWASYS_ALERT_STATE_DIR).
+StateDirectory=elwasys-health-alert

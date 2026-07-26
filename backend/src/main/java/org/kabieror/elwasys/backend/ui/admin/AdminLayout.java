@@ -19,7 +19,9 @@ import org.kabieror.elwasys.backend.ui.component.UserMenuBar;
  * (im Alt-Portal nur über einen Dialog auf dem Dashboard erreichbar, siehe
  * {@code Portal/.../components/LocationWindow}) - eine bewusste, laut Auftraggeber
  * ausdrücklich erwünschte UX-Verbesserung (siehe docs/kb/05-migration-plan.md, "Entscheidungen",
- * Gestaltungsrahmen Portal-Neubau), keine Funktionsänderung. Inhalte der referenzierten
+ * Gestaltungsrahmen Portal-Neubau), keine Funktionsänderung. "Offline-Vorfälle" kam mit Issue #89
+ * hinzu (im Alt-Portal gab es diese Meldungen überhaupt nicht, sie standen nur im Pi-Log).
+ * Inhalte der referenzierten
  * Views sind in diesem Arbeitspaket Platzhalter (siehe docs/kb/05-migration-plan.md
  * Phase-3-Roadmap: AP2/AP3 füllen sie mit den eigentlichen Stammdaten-/CRUD-Ansichten).
  *
@@ -46,6 +48,11 @@ public class AdminLayout extends AppLayout {
         nav.addItem(new SideNavItem("Programme", AdminProgramsView.class, VaadinIcon.COG.create()));
         nav.addItem(new SideNavItem("Geräte", AdminDevicesView.class, VaadinIcon.CUBES.create()));
         nav.addItem(new SideNavItem("Standorte", AdminLocationsView.class, VaadinIcon.MAP_MARKER.create()));
+        // Issue #89: eigener Menüpunkt für die vom Terminal gemeldeten Offline-Vorfälle - die
+        // Quittierung dort ist der einzige Weg, den Betriebsalarm zu beenden (siehe
+        // AdminOfflineIncidentsView), also muss sie ohne Umweg auffindbar sein.
+        nav.addItem(new SideNavItem("Offline-Vorfälle", AdminOfflineIncidentsView.class,
+                VaadinIcon.WARNING.create()));
 
         addToDrawer(nav);
     }

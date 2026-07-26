@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.kabieror.elwasys.backend.ui.admin.AdminDashboardView;
 import org.kabieror.elwasys.backend.ui.admin.AdminDevicesView;
 import org.kabieror.elwasys.backend.ui.admin.AdminLocationsView;
+import org.kabieror.elwasys.backend.ui.admin.AdminOfflineIncidentsView;
 import org.kabieror.elwasys.backend.ui.admin.AdminProgramsView;
 import org.kabieror.elwasys.backend.ui.admin.AdminUserGroupsView;
 import org.kabieror.elwasys.backend.ui.admin.AdminUsersView;
@@ -72,7 +73,7 @@ class RouteAccessAnnotationsTest {
     void allAdminViewsRequireTheAdminRole() {
         for (Class<?> adminView : new Class<?>[] {AdminDashboardView.class, AdminUsersView.class,
                 AdminUserGroupsView.class, AdminProgramsView.class, AdminDevicesView.class,
-                AdminLocationsView.class}) {
+                AdminLocationsView.class, AdminOfflineIncidentsView.class}) {
             RolesAllowed rolesAllowed = adminView.getAnnotation(RolesAllowed.class);
             assertThat(rolesAllowed).as("%s muss @RolesAllowed tragen", adminView.getSimpleName()).isNotNull();
             assertThat(rolesAllowed.value()).as("%s muss auf die Admin-Rolle beschränkt sein",

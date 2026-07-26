@@ -19,7 +19,7 @@ Container gewünscht):
 
   kubectl run elwasys-token-cli --rm -it --restart=Never \
     --namespace {{ .Release.Namespace }} \
-    --image="{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}" \
+    --image="{{ .Values.image.repository }}:{{ include "elwasys-backend.imageTag" . }}" \
     --env="ELWASYS_DB_URL={{ include "elwasys-backend.jdbcUrl" . }}" \
     --env="ELWASYS_DB_USER=<Benutzer aus dem DB-Secret>" \
     --env="ELWASYS_DB_PASSWORD=<Passwort aus dem DB-Secret>" \

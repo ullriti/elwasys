@@ -7,6 +7,8 @@ import org.kabieror.elwasys.common.Utilities;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
 import org.kabieror.elwasys.raspiclient.application.ICloseListener;
 import org.kabieror.elwasys.raspiclient.model.ClientExecution;
+import org.kabieror.elwasys.raspiclient.offline.OfflineIncident;
+import org.kabieror.elwasys.raspiclient.offline.OfflineIncidentOutbox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.socket.CloseStatus;
@@ -75,6 +77,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *         "fire-and-forget") bestätigt dieser Client den Empfang zuerst mit
  *         {@code RESTART_RESPONSE}, bevor der Neustart ausgeführt wird (siehe
  *         {@code TerminalWsMessageType} im Backend für die Begründung).</li>
+ *     <li>{@code OFFLINE_INCIDENT} (terminal-initiiert, unaufgefordert, Issue #89): Meldung eines
+ *         Dead-Letter-/Geister-Execution-Vorfalls aus der Offline-Robustheit. Zustellweg der
+ *         persistenten {@link OfflineIncidentOutbox} - die Meldung wird beim Verbindungsaufbau
+ *         nachgereicht und erst nach {@code OFFLINE_INCIDENT_ACK} aus der Outbox entfernt.</li>
  * </ul>
  * <p>
  * Die Verbindung überlebt einen vom Portal ausgelösten Neustart bewusst ({@link #onClose}
@@ -91,6 +97,7 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
     private final URI wsUri;
     private final String token;
     private final String clientUid;
+    private final OfflineIncidentOutbox incidentOutbox;
     private final Gson gson = new GsonBuilder().create();
 
     private final WebSocketClient client = new StandardWebSocketClient();
@@ -99,16 +106,24 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
         t.setDaemon(true);
         return t;
     });
+    /**
+     * Serialisiert alle Sendevorgänge: seit Issue #89 sendet nicht mehr nur der WebSocket-Thread
+     * (Antworten auf Anfragen des Backends), sondern auch der Replay-Thread (Vorfallsmeldungen
+     * aus der Outbox). Eine {@code WebSocketSession} verträgt keine parallelen Schreibvorgänge.
+     */
+    private final Object sendLock = new Object();
     private final AtomicBoolean isReconnectRunning = new AtomicBoolean(false);
     private final AtomicBoolean stopped = new AtomicBoolean(false);
     private volatile WebSocketSession session;
     private int reconnectDelaySeconds = INITIAL_RECONNECT_DELAY_SECONDS;
 
-    public TerminalWebSocketClient(ElwaManager manager, String backendUrl, String token, String clientUid) {
+    public TerminalWebSocketClient(ElwaManager manager, String backendUrl, String token, String clientUid,
+            OfflineIncidentOutbox incidentOutbox) {
         this.manager = manager;
         this.wsUri = toWsUri(backendUrl);
         this.token = token;
         this.clientUid = clientUid;
+        this.incidentOutbox = incidentOutbox;
     }
 
     private static URI toWsUri(String backendUrl) {
@@ -124,6 +139,10 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
      */
     public void start() {
         this.stopped.set(false);
+        // Diese Verbindung ist der Zustellweg der Vorfalls-Outbox (Issue #89) - die Outbox selbst
+        // kennt weder WebSocket noch Protokoll. Erst hier (nicht im Konstruktor) verdrahtet, damit
+        // kein halb konstruiertes "this" veroeffentlicht wird.
+        this.incidentOutbox.setSender(this::sendIncident);
         openConnection();
     }
 
@@ -186,6 +205,10 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
         this.session = session;
         this.reconnectDelaySeconds = INITIAL_RECONNECT_DELAY_SECONDS;
         sendHello(session);
+        // Ein Offline-Vorfall entsteht typischerweise waehrend einer Stoerung, also genau dann,
+        // wenn diese Verbindung weg ist - darum jetzt (wieder verbunden) alles Ausstehende
+        // nachreichen (Issue #89). Doppelmeldungen sind dank incidentKey unschaedlich.
+        this.incidentOutbox.flush();
     }
 
     @Override
@@ -227,6 +250,7 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
                     send(session, TerminalWsMessage.inReplyTo(incoming, TerminalWsMessageType.LOG_RESPONSE,
                             buildLogPayload()));
             case RESTART_REQUEST -> handleRestartRequest(session, incoming);
+            case OFFLINE_INCIDENT_ACK -> handleOfflineIncidentAck(incoming);
             case ERROR -> this.logger.warn("Backend reported a protocol error: {}", incoming.getPayload());
             default ->
                     this.logger.debug("Ignoring unhandled message type {} from the backend.", incoming.getType());
@@ -277,10 +301,62 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
         this.manager.restart();
     }
 
+    /**
+     * Zustellweg der Vorfalls-Outbox (Issue #89): sendet eine Meldung als unaufgeforderte
+     * {@code OFFLINE_INCIDENT}-Nachricht. Steht die Verbindung gerade nicht, wird {@code false}
+     * gemeldet - die Meldung bleibt dann in der Outbox und wird beim naechsten
+     * Verbindungsaufbau erneut versucht (siehe {@link #afterConnectionEstablished}).
+     *
+     * <p>Der Standort wird bewusst NICHT mitgeschickt: das Backend leitet ihn aus der per Token
+     * authentifizierten Session ab, sodass ein Terminal keine Vorfälle für einen fremden Standort
+     * melden kann.
+     */
+    private boolean sendIncident(OfflineIncident incident) {
+        WebSocketSession currentSession = this.session;
+        if (currentSession == null || !currentSession.isOpen()) {
+            return false;
+        }
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("incidentKey", incident.incidentKey());
+        payload.put("kind", incident.kind());
+        payload.put("entryType", incident.entryType());
+        payload.put("idempotencyKey", incident.idempotencyKey());
+        payload.put("userId", incident.userId());
+        // Betrag und Zeitstempel als String: so kommen sie ohne Genauigkeitsverlust bzw. ohne
+        // Zeitzonen-Interpretation beim Backend an (dort BigDecimal/LocalDateTime).
+        payload.put("chargedPrice", incident.chargedPrice() == null ? null : incident.chargedPrice().toPlainString());
+        payload.put("reason", incident.reason());
+        payload.put("occurredAt", incident.occurredAt() == null ? null : incident.occurredAt().toString());
+        try {
+            synchronized (this.sendLock) {
+                currentSession.sendMessage(
+                        new TextMessage(this.gson.toJson(TerminalWsMessage.of(TerminalWsMessageType.OFFLINE_INCIDENT,
+                                payload))));
+            }
+            return true;
+        } catch (final Exception e) {
+            this.logger.warn("Failed to report an offline incident on the backend WebSocket connection.", e);
+            return false;
+        }
+    }
+
+    /**
+     * Nimmt die Quittung des Backends entgegen und entfernt die Meldung damit aus der Outbox -
+     * erst jetzt gilt der Vorfall als übermittelt (Issue #89).
+     */
+    private void handleOfflineIncidentAck(TerminalWsMessage incoming) {
+        Object incidentKey = incoming.getPayload() == null ? null : incoming.getPayload().get("incidentKey");
+        if (incidentKey != null) {
+            this.incidentOutbox.acknowledge(String.valueOf(incidentKey));
+        }
+    }
+
     private void send(WebSocketSession session, TerminalWsMessage message) {
         try {
-            if (session.isOpen()) {
-                session.sendMessage(new TextMessage(this.gson.toJson(message)));
+            synchronized (this.sendLock) {
+                if (session.isOpen()) {
+                    session.sendMessage(new TextMessage(this.gson.toJson(message)));
+                }
             }
         } catch (final Exception e) {
             this.logger.warn("Failed to send a message on the backend WebSocket connection.", e);

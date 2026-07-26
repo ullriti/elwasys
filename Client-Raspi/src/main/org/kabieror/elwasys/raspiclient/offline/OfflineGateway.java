@@ -59,10 +59,26 @@ public class OfflineGateway {
     private final OfflineSnapshotStore snapshotStore;
     private final OfflineJournal journal;
 
+    /**
+     * Melde-Weg für Dead-Letter-/Geister-Execution-Vorfälle (Issue #89) - bewusst von außen
+     * verdrahtbar statt fest an den WebSocket-Client/{@code ElwaManager} gekoppelt (siehe
+     * {@link OfflineIncidentReporter}). Ohne Verdrahtung bleibt es beim bisherigen Verhalten
+     * (nur lokales Log).
+     */
+    private volatile OfflineIncidentReporter incidentReporter = OfflineIncidentReporter.NOOP;
+
     public OfflineGateway(ApiClient apiClient, OfflineSnapshotStore snapshotStore, OfflineJournal journal) {
         this.apiClient = apiClient;
         this.snapshotStore = snapshotStore;
         this.journal = journal;
+    }
+
+    /**
+     * Verdrahtet den Melde-Weg für Vorfälle (Issue #89), siehe {@code application.ElwaManager
+     * #initiate}. {@code null} setzt auf "nicht melden" zurück.
+     */
+    public void setIncidentReporter(OfflineIncidentReporter incidentReporter) {
+        this.incidentReporter = incidentReporter == null ? OfflineIncidentReporter.NOOP : incidentReporter;
     }
 
     // --- Offline-Entscheidungslogik (Konzeptskizze Punkt 2) ---------------------------------
@@ -381,7 +397,9 @@ public class OfflineGateway {
                                 + "die Dead-Letter-Datei verschoben; der Replay faehrt mit den restlichen Eintraegen "
                                 + "fort.", entry.idempotencyKey(), entry.type(), e.getHttpStatus(), e.getTypeSlug(), e);
                 compensateGhostExecutionIfNeeded(entry, resolvedStartKeys);
-                this.journal.moveToDeadLetter(entry, deadLetterReason(entry, e));
+                String reason = deadLetterReason(entry, e);
+                reportIncident(OfflineIncident.KIND_DEAD_LETTER, entry, reason);
+                this.journal.moveToDeadLetter(entry, reason);
                 removePairedStartIfPending(entry, pendingStartRemoval);
                 deadLettered++;
             } catch (RuntimeException e) {
@@ -391,7 +409,9 @@ public class OfflineGateway {
                 this.logger.error("Offline-Journal-Eintrag '{}' ({}) konnte nicht verarbeitet werden - wird in die "
                         + "Dead-Letter-Datei verschoben.", entry.idempotencyKey(), entry.type(), e);
                 compensateGhostExecutionIfNeeded(entry, resolvedStartKeys);
-                this.journal.moveToDeadLetter(entry, deadLetterReason(entry, e));
+                String reason = deadLetterReason(entry, e);
+                reportIncident(OfflineIncident.KIND_DEAD_LETTER, entry, reason);
+                this.journal.moveToDeadLetter(entry, reason);
                 removePairedStartIfPending(entry, pendingStartRemoval);
                 deadLettered++;
             }
@@ -490,6 +510,26 @@ public class OfflineGateway {
             // Execution faellt spaetestens ueber isExpired heraus.
             this.logger.error("Kompensierender Abort der Geister-Execution {} fehlgeschlagen - die Execution faellt "
                     + "erst ueber den Ablauf ihrer Maximaldauer (isExpired) heraus.", ghostExecutionId, ex);
+            // Erst JETZT ein meldenswerter Vorfall (Issue #89): ein GELUNGENER Kompensations-Abort
+            // hat die Geister-Execution ja gerade aufgeraeumt und braucht niemanden zu alarmieren.
+            reportIncident(OfflineIncident.KIND_GHOST_EXECUTION, entry,
+                    "Kompensierender Abort der Geister-Execution " + ghostExecutionId + " fehlgeschlagen: "
+                            + ex.getMessage());
+        }
+    }
+
+    /**
+     * Meldet einen Vorfall über den verdrahteten {@link OfflineIncidentReporter} (Issue #89) -
+     * strikt fail-safe: der Replay ist der Geld-Pfad, die Meldung nur Diagnose. Ein Fehler im
+     * Melde-Weg darf ihn deshalb weder abbrechen noch den Journal-Fortschritt aufhalten; die
+     * {@code logger.error}-Zeilen an den Vorfallsstellen bleiben ohnehin als Rückfallebene.
+     */
+    private void reportIncident(String kind, OfflineJournalEntry entry, String reason) {
+        try {
+            this.incidentReporter.report(OfflineIncident.of(kind, entry, reason));
+        } catch (RuntimeException e) {
+            this.logger.warn("Konnte den Vorfall ({}) zum Journal-Eintrag '{}' nicht melden - er bleibt nur lokal "
+                    + "protokolliert.", kind, entry.idempotencyKey(), e);
         }
     }
 

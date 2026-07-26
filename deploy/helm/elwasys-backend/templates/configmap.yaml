@@ -19,3 +19,12 @@ data:
   ELWASYS_SMTP_AUTH: {{ .Values.smtp.auth | quote }}
   ELWASYS_SMTP_USE_SSL: {{ .Values.smtp.useSsl | quote }}
   ELWASYS_AUTH_REHASH_ON_LOGIN: {{ .Values.auth.rehashOnLogin | quote }}
+  # Passwort-Reset (Issue #86/H7): die Portal-Basis-URL für die Reset-Mail-Links durchreichen.
+  # Guard (analog secret.password): ist der Reset aktiv, MUSS passwordReset.baseUrl gesetzt sein -
+  # "required" bricht "helm install/template" mit klarer Meldung ab, statt still den
+  # Backend-Default http://localhost:8080 durchzulassen (tote localhost-Links in Produktions-
+  # Reset-Mails). Ist der Reset deaktiviert, wird nur das Flag gesetzt und keine URL erzwungen.
+  ELWASYS_PASSWORD_RESET_ENABLED: {{ .Values.passwordReset.enabled | quote }}
+  {{- if .Values.passwordReset.enabled }}
+  ELWASYS_PORTAL_BASE_URL: {{ required "passwordReset.baseUrl muss gesetzt sein (--set passwordReset.baseUrl=https://<portal-host>), wenn passwordReset.enabled=true - sonst verlinken die Reset-Mails auf http://localhost:8080. Siehe values.yaml." .Values.passwordReset.baseUrl | quote }}
+  {{- end }}

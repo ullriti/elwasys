@@ -56,7 +56,17 @@ start_test_backend() {
   echo "[start-test-backend] waiting for the backend to become healthy"
   local ready=0
   for _ in $(seq 1 60); do
-    if curl -fsS "http://localhost:${TEST_BACKEND_PORT}/actuator/health" 2>/dev/null | grep -q '"status":"UP"'; then
+    # Bewusst die READINESS-Gruppe (nur Prozess-Status), NICHT das Root-/actuator/health: seit
+    # AP6 (#32) aggregieren dort die betrieblichen Health-Indicators (Standort ohne verbundenes
+    # Terminal, offene abgelaufene Executions, offene Offline-Vorfaelle). Beim Start ist noch
+    # KEIN Terminal verbunden - hat irgendein Standort ein Geraet, steht das Root-Health also
+    # dauerhaft auf 503 (OUT_OF_SERVICE) und dieses Gate lief in seinen Timeout, obwohl das
+    # Backend laengst gesund war. Das traf jeden Lauf, dessen Test-DB Bestandsdaten enthielt
+    # (z.B. Rueckstaende eines frueheren E2E-Laufs) - der Fehler sah wie ein kaputtes Backend
+    # aus, war aber nur die falsche Health-Gruppe. Dieselbe Trennung gilt projektweit fuer alle
+    # Orchestrierungs-/Gate-Checks (siehe application.yml, Compose-Healthcheck, Helm-Probes).
+    if curl -fsS "http://localhost:${TEST_BACKEND_PORT}/actuator/health/readiness" 2>/dev/null \
+        | grep -q '"status":"UP"'; then
       ready=1
       break
     fi

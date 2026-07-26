@@ -101,8 +101,10 @@ Offline-Modus statt in `ERROR`, siehe docs/kb/03-modules.md „Offline-Robusthei
 | P24 | P2 | Auszahlung blockiert bei Guthaben-Überschreitung (#50) | Auszahlung > Guthaben abgewiesen · `admin-crud.spec.ts` (~Z. 147) |
 | P25 | P2 | Benutzer löschen (#50) | Benutzer verschwindet aus Liste · `admin-crud.spec.ts` (~Z. 194) |
 | P26 | P3 | Öffentlicher Reset-Link lehnt ungültigen Key ab (#50) | Reset-Seite rendert, ungültiger Key abgewiesen · `user-portal.spec.ts` (~Z. 57) |
+| P27 | P2 | Offline-Vorfall quittieren (#89) | Vorfall mit Art/Nutzer/Betrag sichtbar; Quittierung (mit Bestätigung) nimmt ihn aus der offenen Liste und markiert ihn als „Quittiert" · `offline-incidents.spec.ts` |
+| P28 | P3 | Quittierte Vorfälle bleiben Beleg (#89) | Umschalter zeigt quittierte Vorfälle; Dashboard-Hinweis verlinkt in die Vorfallsliste · `offline-incidents.spec.ts` |
 
-P1–P20 und P23–P26 laufen in der Playwright-Suite `backend/e2e/tests/` (P15/P18 teilen sich ein
+P1–P20 und P23–P28 laufen in der Playwright-Suite `backend/e2e/tests/` (P15/P18 teilen sich ein
 `test()`). P14 nutzt einen eigenen „Standorte"-Menüpunkt statt des früheren Dashboard-Dialogs,
 P16 prüft (wegen Argon2id) nur den erneuten Login mit neuem Passwort – fachliche Verortung:
 docs/kb/05-migration-plan.md „Entscheidungen".
@@ -138,13 +140,16 @@ Am Code gezählt:
 - **Client** (TestFX/JUnit): **71 `@Test`** in 28 Testklassen (40 Testdateien) – C1–C16, die
   C15-Offline-Nachfolger sowie infrastrukturfreie Unit-Tests (Offline-Replay, Uhren-Plausibilität,
   API-Fehlerbilder, Kartenmaskierung).
-- **Portal-E2E** (Playwright): **23 `test()`** in `backend/e2e/tests/` (login 2 / admin 3 /
-  admin-crud 12 / dashboard 1 / user-portal 5) zzgl. **4** READ-ONLY-Smoke-`test()` in
-  `tests-smoke/`.
+- **Portal-E2E** (Playwright): **25 `test()`** in `backend/e2e/tests/` (login 2 / admin 3 /
+  admin-crud 12 / dashboard 1 / offline-incidents 2 / user-portal 5) zzgl. **4**
+  READ-ONLY-Smoke-`test()` in `tests-smoke/`.
 
 Backend-JUnit-Zahlen (nur als Querverweis): 06-ui-tests.md „Test-Inventar".
 
 ## Historie
+
+- **2026-07-26** — Issue #89: Portal-Fälle P27/P28 (Offline-Vorfälle sichten und quittieren)
+  ergänzt; Portal-E2E damit 25 `test()`.
 
 - **2026-07-23** — Umfang code-verifiziert (Client 71 `@Test`, Portal-E2E 23 `test()` + 4 Smoke);
   Pre-Launch AP1–AP6 bauten die Suiten aus (u. a. #22/#50-Portal-Fälle P23–P26)

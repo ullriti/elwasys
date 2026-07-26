@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 
 /**
  * Verbindungsregistry für die ausgehenden Terminal-WebSocket-Verbindungen (AP4, siehe
@@ -35,6 +36,21 @@ public class TerminalConnectionRegistry {
 
     private static final Logger LOG = LoggerFactory.getLogger(TerminalConnectionRegistry.class);
 
+    /**
+     * Obergrenze, wie lange ein Sendevorgang auf einen langsamen/nicht lesenden Client warten
+     * darf, bevor dessen Session geschlossen wird (siehe
+     * {@link ConcurrentWebSocketSessionDecorator}). Bewusst knapp: die Nachrichten hier sind
+     * klein (Heartbeat, Fernwartung, Vorfalls-Quittungen), ein Terminal, das sie 10 s lang nicht
+     * abnimmt, ist praktisch weg - dann ist Abräumen besser als einen Server-Thread zu binden.
+     */
+    private static final int SEND_TIME_LIMIT_MS = 10_000;
+
+    /**
+     * Puffergrenze je Verbindung. Reicht für einen Schwall Vorfalls-Quittungen unmittelbar nach
+     * einem Reconnect (die Outbox eines Terminals fasst 100 Meldungen) samt Heartbeat.
+     */
+    private static final int SEND_BUFFER_SIZE_BYTES = 512 * 1024;
+
     private static final class Connection {
         private final WebSocketSession session;
         private final Instant connectedSince;
@@ -50,7 +66,18 @@ public class TerminalConnectionRegistry {
     private final Map<Integer, Connection> connectionsByLocationId = new ConcurrentHashMap<>();
 
     public void register(Integer locationId, WebSocketSession session) {
-        Connection previous = this.connectionsByLocationId.put(locationId, new Connection(session));
+        // Session in einen ConcurrentWebSocketSessionDecorator wickeln und AUSSCHLIESSLICH diese
+        // Instanz weiterreichen: auf dieselbe Verbindung schreiben inzwischen drei Threads - der
+        // WebSocket-Thread (Antworten/ACKs), der Portal-/Vaadin-Thread (Fernwartungsanfragen über
+        // send()) und der Heartbeat-Scheduler (PING). Eine WebSocketSession vertraegt KEINE
+        // parallelen Schreibvorgaenge; eine Kollision quittiert Tomcat mit
+        // "IllegalStateException: The remote endpoint was in state [TEXT_FULL_WRITING]" - dann
+        // ginge z.B. die Quittung eines Offline-Vorfalls verloren und sein Alarm bliebe haengen.
+        // Der Decorator serialisiert die Sendevorgaenge und puffert sie; ein Client, der nicht
+        // liest, laeuft in die Limits, statt den sendenden Thread dauerhaft zu blockieren.
+        WebSocketSession guarded = new ConcurrentWebSocketSessionDecorator(session, SEND_TIME_LIMIT_MS,
+                SEND_BUFFER_SIZE_BYTES);
+        Connection previous = this.connectionsByLocationId.put(locationId, new Connection(guarded));
         if (previous != null && previous.session.isOpen() && !previous.session.getId().equals(session.getId())) {
             LOG.info("Location {} reconnected - closing previous session {}.", locationId, previous.session.getId());
             closeQuietly(previous.session, CloseStatus.NORMAL.withReason("Replaced by a newer connection"));
@@ -96,6 +123,23 @@ public class TerminalConnectionRegistry {
         }
         connection.session.sendMessage(message);
         return true;
+    }
+
+    /**
+     * Die serialisierungsgeschützte Session eines Standorts (siehe {@link #register}) - für den
+     * {@link TerminalWebSocketHandler}, der seine Antworten sonst auf der ROHEN, ungeschützten
+     * Session verschicken würde und damit an der Serialisierung vorbeischriebe.
+     *
+     * @return leer, wenn der Standort nicht (mehr) verbunden ist oder eine ANDERE Session
+     *         registriert ist (z.B. nach einem Reconnect) - der Aufrufer nutzt dann seine eigene
+     *         Session, damit eine Antwort im Zweifel eher rausgeht als gar nicht
+     */
+    Optional<WebSocketSession> guardedSession(Integer locationId, WebSocketSession session) {
+        Connection connection = this.connectionsByLocationId.get(locationId);
+        if (connection == null || !connection.session.getId().equals(session.getId())) {
+            return Optional.empty();
+        }
+        return Optional.of(connection.session);
     }
 
     public Optional<Instant> connectedSince(Integer locationId) {

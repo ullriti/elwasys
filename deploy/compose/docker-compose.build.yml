@@ -1,0 +1,22 @@
+# Optionales Build-Overlay (Issue #89): baut das Backend-Image LOKAL aus dem Arbeitsbaum,
+# statt das GHCR-Release-Image zu ziehen (das der Standard docker-compose.yml im Regelfall
+# tut). Für Entwicklung/Tests oder einen bewussten Lokalbau ohne Release. Der Produktivpfad
+# bleibt bewusst das gezogene, an ein Release-Tag/Digest gebundene GHCR-Image (Parität zum
+# Helm-Weg) - dieses Overlay ist die ausdrückliche Ausnahme.
+#
+# Nutzung (zusätzlich zum Basis-Stack):
+#   cd deploy/compose
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+#
+# "image:" hier überschreibt das aus docker-compose.yml gezogene ELWASYS_BACKEND_IMAGE mit einem
+# festen lokalen Namen (elwasys-backend:local) als Build-Ziel - ein in .env gesetztes
+# ELWASYS_BACKEND_IMAGE ist beim Lokalbau also irrelevant.
+
+services:
+  backend:
+    build:
+      # Kontext = Repo-Wurzel (zwei Ebenen über diesem Verzeichnis), siehe Begründung im
+      # Kopf-Kommentar von backend/Dockerfile (Root-Reactor/Parent-POM-Fallstrick).
+      context: ../..
+      dockerfile: backend/Dockerfile
+    image: elwasys-backend:local

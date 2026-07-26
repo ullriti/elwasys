@@ -28,6 +28,7 @@ import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 import org.kabieror.elwasys.raspiclient.model.ClientProgram;
 import org.kabieror.elwasys.raspiclient.model.ClientUser;
 import org.kabieror.elwasys.raspiclient.offline.OfflineGateway;
+import org.kabieror.elwasys.raspiclient.offline.OfflineIncidentOutbox;
 import org.kabieror.elwasys.raspiclient.offline.OfflineJournal;
 import org.kabieror.elwasys.raspiclient.offline.OfflineSnapshotStore;
 import org.kabieror.elwasys.raspiclient.ui.AbstractMainFormController;
@@ -105,6 +106,13 @@ public class ElwaManager {
     private OfflineJournal offlineJournal;
     private OfflineGateway offlineGateway;
     private ScheduledExecutorService offlineScheduler;
+
+    /**
+     * Persistente Outbox für Dead-Letter-/Geister-Execution-Vorfälle (Issue #89) - wie der
+     * {@link TerminalWebSocketClient} nur EINMAL angelegt, weil sie dessen Zustellweg nutzt und
+     * dieser einen {@link #restart()} bewusst überlebt.
+     */
+    private OfflineIncidentOutbox offlineIncidentOutbox;
 
     /**
      * Der Manager für die Konfiguration
@@ -196,6 +204,13 @@ public class ElwaManager {
             this.offlineSnapshotStore = new OfflineSnapshotStore(workDir.resolve("offline-snapshot.json"));
             this.offlineJournal = new OfflineJournal(workDir.resolve("offline-journal.jsonl"));
             this.offlineGateway = new OfflineGateway(this.apiClient, this.offlineSnapshotStore, this.offlineJournal);
+            // Vorfalls-Meldung (Issue #89): ein Dead-Letter ist eine verlorene Offline-Buchung
+            // (Geld) und darf nicht nur im lokalen Pi-Log stehen. Die Outbox haelt die Meldung
+            // persistent, bis das Backend sie ueber die WS-Verbindung quittiert hat.
+            if (this.offlineIncidentOutbox == null) {
+                this.offlineIncidentOutbox = new OfflineIncidentOutbox(workDir.resolve("offline-incidents.jsonl"));
+            }
+            this.offlineGateway.setIncidentReporter(this.offlineIncidentOutbox);
 
             // Ausgehende Fernwartungs-Verbindung (Phase 4 AP5, siehe docs/kb/05-migration-plan.md
             // "Arbeitspakete Phase 4", AP5): ersetzt die ehemalige, Direkt-DB-basierte
@@ -212,7 +227,7 @@ public class ElwaManager {
             if (this.terminalWebSocketClient == null) {
                 this.terminalWebSocketClient = new TerminalWebSocketClient(this,
                         this.configurationManager.getBackendUrl(), this.configurationManager.getBackendToken(),
-                        this.configurationManager.getUid());
+                        this.configurationManager.getUid(), this.offlineIncidentOutbox);
                 this.terminalWebSocketClient.start();
             }
             // Nach dem closeListeners.clear() oben stets (wieder) am Close-Event anmelden, damit

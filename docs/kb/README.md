@@ -127,10 +127,33 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   `DeviceListEntry#refresh` nutzt einen Arrow-`switch` (schließt den Fall-Through
   `DISABLED`→`UNREGISTERED` strukturell aus, #82). Je ein gegen den Vor-Fix-Stand
   verifizierter Regressionstest.
-- **Nächster Schritt:** **FR-2** (Betrieb H4–H7) aus der
-  [SYNTHESE.md](../reviews/final/SYNTHESE.md) umsetzen, dann Generalprobe (Spec 0001)
-  und **Live-Gang** (Cutover nach
-  [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md)). FR-4/FR-5
+  **FR-2 (Betrieb H4–H7 + #89-devops, #83–#86/#89) ist behoben**: der Alarmkanal ist jetzt
+  **mitgeliefert und verdrahtet** (`deploy/monitoring/` pollt `/actuator/health/operational`
+  – Nichterreichbarkeit zählt als Alarm –, plus Cert-Ablauf und Plattenplatz, Zustellung per
+  Pushover/Mail, systemd-Timer/Cron; H4/#83); der **Restore** ist Schritt-für-Schritt
+  ausgearbeitet und geskriptet (`deploy/backup/restore-db.sh`/`backup-db.sh`, RPO/RTO,
+  Backup-Scope inkl. Secrets/Terminal-Properties/SD-Journal; H5/#84); der Cutover-Preflight
+  `verify-cutover-migration.sh` leitet die erwartete Flyway-Historie aus dem Migrationsordner
+  ab (kennt damit V11 und künftige Migrationen; H6/#85); `ELWASYS_PORTAL_BASE_URL` wird in
+  Compose und Helm mit Guard durchgereicht (H7/#86). Dazu die Betriebs-Mittelfunde (#89):
+  Compose zieht das GHCR-Release-Image (lokaler Build als Overlay), Helm-Image-Tag-Guard +
+  `appVersion`-Bump im Release, NTP am Terminal (`setup.sh` + Watchdog). Drei neue **Offline-
+  Selbsttests** (Alerting, Restore-Dry-Run, Flyway-Historie-Ableitung) hängen im neuen
+  CI-Job `cutover-scripts`. Der echte Restore-/Alarm-/Cutover-Lauf bleibt bewusst ein
+  Generalprobe-Schritt.
+  Auf Auftraggeber-Entscheidung (2026-07-26) kamen zwei Punkte hinzu: der **externe
+  Uptime-Monitor ist Pflicht-Stufe 2** neben dem lokalen Poll-Skript (fällt der Host ganz aus,
+  schweigt der lokale Poller – Endpoint-Check oder Dead-Man's-Switch, Alarm-Probe für beide
+  Stufen), und die **Dead-Letter-Sichtbarkeit (#89) ist umgesetzt** statt vertagt
+  ([ADR 0022](../architecture/0022-dead-letter-sichtbarkeit.md)): das Terminal meldet
+  Dead-Letter- und fehlgeschlagene Geister-Kompensationen über den bestehenden
+  Wartungs-WebSocket (`OFFLINE_INCIDENT`, persistente Outbox mit Quittung), das Backend
+  persistiert sie (Migration `V12`) und hält über den `OfflineIncidentHealthIndicator` den
+  Betriebsalarm, bis ein Admin den Vorfall in der neuen Portal-Ansicht **Offline-Vorfälle**
+  quittiert (Vorfälle bleiben als Beleg erhalten, kein Purge).
+- **Nächster Schritt:** FR-3 (Tests: deCONZ-Reconnect, DYNAMIC-E2E, Determinismus),
+  dann Generalprobe (Spec 0001) und **Live-Gang**
+  (Cutover nach [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md)). FR-4/FR-5
   (Qualitäts-Refactors, Doku-Hygiene) nach dem Feldeinsatz. Neue Vorhaben vorab als Spec
   in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.
   Die Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).

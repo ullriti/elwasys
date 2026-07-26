@@ -8,16 +8,12 @@ import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
-import java.math.BigDecimal;
-import java.text.NumberFormat;
-import java.time.format.DateTimeFormatter;
-import java.time.format.FormatStyle;
 import java.util.List;
-import java.util.Locale;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.service.ExecutionService;
 import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
+import org.kabieror.elwasys.backend.ui.component.PortalFormats;
 
 /**
  * Dialog "Verfallene Ausführungsaufträge" (Phase 3 AP4, siehe docs/kb/05-migration-plan.md) -
@@ -33,9 +29,6 @@ import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
  * abrechnen" als Sammelaktion.
  */
 public class ExpiredExecutionsDialog extends Dialog {
-
-    private static final DateTimeFormatter DATE_TIME_FORMAT = DateTimeFormatter.ofLocalizedDateTime(
-            FormatStyle.SHORT).withLocale(Locale.GERMANY);
 
     private final ExecutionService executionService;
     private final UserEntity user;
@@ -66,12 +59,12 @@ public class ExpiredExecutionsDialog extends Dialog {
 
         this.grid.setHeight("22em");
         this.grid.setWidthFull();
-        this.grid.addColumn(e -> e.getStart() == null ? "-" : e.getStart().format(DATE_TIME_FORMAT))
-                .setHeader("Startdatum");
+        this.grid.addColumn(e -> PortalFormats.dateTime(e.getStart())).setHeader("Startdatum");
         this.grid.addColumn(e -> e.getDevice().getName() + " (" + e.getDevice().getLocation().getName() + ")")
                 .setHeader("Gerät");
         this.grid.addColumn(e -> e.getProgram().getName()).setHeader("Programm");
-        this.grid.addColumn(e -> formatCurrency(this.executionService.getPrice(e))).setHeader("Fälliger Betrag");
+        this.grid.addColumn(e -> PortalFormats.currency(this.executionService.getPrice(e)))
+                .setHeader("Fälliger Betrag");
         this.grid.addComponentColumn(this::rowButtons).setHeader("").setFlexGrow(0).setWidth("170px");
 
         add(explanation, new HorizontalLayout(btnFinishAll), this.grid);
@@ -126,9 +119,5 @@ public class ExpiredExecutionsDialog extends Dialog {
         // ExpiredExecutionsWindow: die Tabelle bleibt nach dem letzten "Löschen"/"Abrechnen"
         // einfach leer, der Administrator schließt selbst).
         this.grid.setItems(this.executionService.getExpiredExecutions(this.user));
-    }
-
-    private static String formatCurrency(BigDecimal amount) {
-        return NumberFormat.getCurrencyInstance(Locale.GERMANY).format(amount);
     }
 }

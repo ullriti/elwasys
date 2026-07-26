@@ -40,7 +40,15 @@ async function globalSetup() {
   let healthy = false;
   for (let i = 0; i < 120; i++) {
     try {
-      const res = await ctx.get(`${baseURL}/actuator/health`);
+      // Bewusst die READINESS-Gruppe (nur Prozess-Status), NICHT das aggregierte
+      // /actuator/health: dort haengen die betrieblichen Indicators (Standort ohne verbundenes
+      // Terminal, offene abgelaufene Executions, offene Offline-Vorfaelle). Beim Start ist kein
+      // Terminal verbunden, und ein offener Offline-Vorfall setzt sich ueberhaupt nur durch eine
+      // MANUELLE Quittierung im Portal zurueck - ein Rueckstand in der geteilten Test-DB haette
+      // dieses Gate also dauerhaft blockiert (die Suite waere nie gestartet und haette sich damit
+      // auch nicht mehr selbst aufraeumen koennen). Dieselbe Trennung gilt projektweit fuer alle
+      // Orchestrierungs-/Gate-Checks (siehe application.yml, Compose, Helm, start-test-backend.sh).
+      const res = await ctx.get(`${baseURL}/actuator/health/readiness`);
       if (res.ok()) {
         healthy = true;
         break;

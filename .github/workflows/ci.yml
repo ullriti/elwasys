@@ -198,8 +198,9 @@ jobs:
   # ---------------------------------------------------------------------------
   # Helm-Chart – billiger Render-/Lint-Gate (Issue #64): fängt kaputte Templates/Values früh
   # ab, ohne ein echtes Cluster. "helm lint" prüft Chart-Struktur/Values, "helm template"
-  # rendert alle Manifeste einmal durch (inkl. des required-Guards auf secret.password aus
-  # templates/secret.yaml - daher hier ein Dummy-Passwort, das nie deployt wird).
+  # rendert alle Manifeste einmal durch (inkl. der Guards: secret.password aus
+  # templates/secret.yaml, passwordReset.baseUrl aus configmap.yaml (Issue #86/H7) und der
+  # imageTag-Guard aus _helpers.tpl (Issue #89) - daher hier Dummy-Werte, die nie deployt werden).
   # ---------------------------------------------------------------------------
   helm:
     name: Helm chart (lint + template)
@@ -211,10 +212,10 @@ jobs:
         uses: azure/setup-helm@v4
 
       - name: helm lint
-        run: helm lint deploy/helm/elwasys-backend --set secret.password=ci-dummy-not-deployed
+        run: helm lint deploy/helm/elwasys-backend --set secret.password=ci-dummy-not-deployed --set passwordReset.baseUrl=https://ci.example.invalid --set image.tag=ci-not-deployed
 
       - name: helm template (render smoke)
-        run: helm template elwasys-ci deploy/helm/elwasys-backend --set secret.password=ci-dummy-not-deployed > /dev/null
+        run: helm template elwasys-ci deploy/helm/elwasys-backend --set secret.password=ci-dummy-not-deployed --set passwordReset.baseUrl=https://ci.example.invalid --set image.tag=ci-not-deployed > /dev/null
 
   # ---------------------------------------------------------------------------
   # Terminal-Update-Skripte – Trockentests des Auto-Update-Pfads (Issue #34/#62/#63). Der
@@ -239,3 +240,37 @@ jobs:
 
       - name: Run auto-update selftest (offline dry-run)
         run: bash deploy/terminal/auto-update-selftest.sh
+
+  # ---------------------------------------------------------------------------
+  # Cutover-/Betriebs-Skripte – Offline-Gates (kein PostgreSQL/Docker nötig). Der
+  # Cutover-Selftest (H6/#85) hält die aus dem Migrationsordner ABGELEITETE Flyway-Historie-
+  # Erwartung von verify-cutover-migration.sh mit dem Migrationsordner in Sync (verhindert das
+  # stille Veralten, das V11 sichtbar machte). Dazu bash -n als billiger Syntax-Gate. Weitere
+  # Betriebs-Selbsttests (Alerting-Poll H4, Restore H5) kommen als eigene Schritte hinzu.
+  # ---------------------------------------------------------------------------
+  cutover-scripts:
+    name: Cutover & ops scripts (offline selftest)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax check cutover & ops shell scripts
+        run: |
+          set -euo pipefail
+          bash -n deploy/cutover/verify-cutover-migration.sh
+          bash -n deploy/cutover/verify-cutover-migration-selftest.sh
+          bash -n deploy/cutover/verify-rollback.sh
+          bash -n deploy/monitoring/elwasys-health-alert.sh
+          bash -n deploy/monitoring/elwasys-health-alert-selftest.sh
+          bash -n deploy/backup/backup-db.sh
+          bash -n deploy/backup/restore-db.sh
+          bash -n deploy/backup/restore-db-selftest.sh
+
+      - name: Flyway-history derivation selftest (H6/#85)
+        run: bash deploy/cutover/verify-cutover-migration-selftest.sh
+
+      - name: Health-alert poll selftest (H4/#83)
+        run: bash deploy/monitoring/elwasys-health-alert-selftest.sh
+
+      - name: Backup/restore dry-run selftest (H5/#84)
+        run: bash deploy/backup/restore-db-selftest.sh

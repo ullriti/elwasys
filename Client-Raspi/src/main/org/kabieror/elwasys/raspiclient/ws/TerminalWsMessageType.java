@@ -28,6 +28,13 @@ public enum TerminalWsMessageType {
     RESTART_REQUEST,
     /** Terminal -&gt; Server: Bestätigung von {@link #RESTART_REQUEST}. */
     RESTART_RESPONSE,
+    /**
+     * Terminal -&gt; Server (unaufgefordert, Issue #89): Meldung eines Offline-Vorfalls
+     * (Dead-Letter/Geister-Execution), siehe {@code offline.OfflineIncidentOutbox}.
+     */
+    OFFLINE_INCIDENT,
+    /** Server -&gt; Terminal: Quittung von {@link #OFFLINE_INCIDENT}, Payload {@code {"incidentKey": "..."}}. */
+    OFFLINE_INCIDENT_ACK,
     /** Beide Richtungen: Protokoll-/Verarbeitungsfehler. */
     ERROR
 }

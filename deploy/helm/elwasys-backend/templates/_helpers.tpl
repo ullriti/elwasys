@@ -59,6 +59,22 @@ zusammengesetzt (siehe values.yaml "database:"-Kommentar).
 {{- end -}}
 
 {{/*
+Effektiver Image-Tag mit Guard (Issue #89): image.tag hat Vorrang, sonst Chart.appVersion.
+Steht der so ermittelte Tag auf dem Entwicklungs-Sentinel "0.0.0-local-development" (der
+Default in Chart.yaml, den der Release-Workflow auf die Release-Version hebt), existiert KEIN
+solches Image in GHCR - ein "helm install" ohne "--set image.tag=<release>" würde also ein
+nicht existierendes Image ziehen. "fail" bricht das Rendern dann mit klarer Meldung ab, statt
+still einen kaputten Deploy zu erzeugen.
+*/}}
+{{- define "elwasys-backend.imageTag" -}}
+{{- $tag := .Values.image.tag | default .Chart.AppVersion -}}
+{{- if eq $tag "0.0.0-local-development" -}}
+{{- fail "image.tag ist nicht gesetzt und Chart.appVersion steht auf dem Entwicklungs-Sentinel 0.0.0-local-development (kein in GHCR existierendes Image). Setze image.tag (--set image.tag=<release>, ideal ein @sha256:-Digest) oder nutze einen Chart-Stand aus einem echten Release - dort hebt der Release-Workflow appVersion mit. Siehe deploy/helm/elwasys-backend/values.yaml image.tag." -}}
+{{- end -}}
+{{- $tag -}}
+{{- end -}}
+
+{{/*
 Name des DB-Secrets: existingSecret hat Vorrang vor dem selbst erzeugten Secret (siehe
 templates/secret.yaml).
 */}}

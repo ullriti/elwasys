@@ -16,8 +16,6 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.shared.Registration;
 import jakarta.annotation.security.RolesAllowed;
-import java.text.NumberFormat;
-import java.util.Locale;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.ProgramType;
 import org.kabieror.elwasys.backend.events.ProgramChangedEvent;
@@ -26,6 +24,7 @@ import org.kabieror.elwasys.backend.service.ProgramService;
 import org.kabieror.elwasys.backend.service.UserGroupService;
 import org.kabieror.elwasys.backend.ui.admin.dialog.ProgramFormDialog;
 import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
+import org.kabieror.elwasys.backend.ui.component.PortalFormats;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
 /**
@@ -105,7 +104,6 @@ public class AdminProgramsView extends VerticalLayout {
     }
 
     private String formatPrice(ProgramEntity program) {
-        NumberFormat currency = NumberFormat.getCurrencyInstance(Locale.GERMANY);
         if (program.getType() == ProgramType.DYNAMIC) {
             String unit = switch (program.getTimeUnit()) {
                 case HOURS -> "h";
@@ -113,10 +111,10 @@ public class AdminProgramsView extends VerticalLayout {
                 case SECONDS -> "s";
                 case null -> "?";
             };
-            return currency.format(program.getFlagfall()) + " + " + currency.format(program.getRate()) + " / "
-                    + unit;
+            return PortalFormats.currency(program.getFlagfall()) + " + " + PortalFormats.currency(
+                    program.getRate()) + " / " + unit;
         }
-        return currency.format(program.getFlagfall());
+        return PortalFormats.currency(program.getFlagfall());
     }
 
     private HorizontalLayout actionButtons(ProgramEntity program) {

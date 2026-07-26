@@ -17,9 +17,7 @@ import com.vaadin.flow.shared.Registration;
 import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 import java.math.BigDecimal;
-import java.text.NumberFormat;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import org.kabieror.elwasys.backend.auth.ElwasysUserPrincipal;
 import org.kabieror.elwasys.backend.domain.UserEntity;
@@ -36,6 +34,7 @@ import org.kabieror.elwasys.backend.ui.admin.dialog.CreditTopUpDialog;
 import org.kabieror.elwasys.backend.ui.admin.dialog.ExpiredExecutionsDialog;
 import org.kabieror.elwasys.backend.ui.admin.dialog.UserFormDialog;
 import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
+import org.kabieror.elwasys.backend.ui.component.PortalFormats;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
 /**
@@ -162,7 +161,7 @@ public class AdminUsersView extends VerticalLayout {
     private String formatCredit(UserEntity user) {
         // Issue #30: aus der in loadData() gebündelt geladenen Map statt einer Abfrage pro Zeile.
         BigDecimal credit = this.creditByUserId.getOrDefault(user.getId(), BigDecimal.ZERO);
-        return NumberFormat.getCurrencyInstance(Locale.GERMANY).format(credit);
+        return PortalFormats.currency(credit);
     }
 
     private Span statusBadge(UserEntity user) {

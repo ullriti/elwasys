@@ -13,8 +13,6 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.shared.Registration;
 import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
-import java.math.BigDecimal;
-import java.text.NumberFormat;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 import java.util.Locale;
@@ -27,6 +25,7 @@ import org.kabieror.elwasys.backend.events.DomainEvent;
 import org.kabieror.elwasys.backend.events.ExecutionChangedEvent;
 import org.kabieror.elwasys.backend.service.CreditService;
 import org.kabieror.elwasys.backend.service.UserService;
+import org.kabieror.elwasys.backend.ui.component.PortalFormats;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
 /**
@@ -57,8 +56,6 @@ public class UserDashboardView extends VerticalLayout {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
             .withLocale(Locale.GERMANY);
-    private static final DateTimeFormatter DATE_TIME_FORMAT = DateTimeFormatter.ofLocalizedDateTime(
-            FormatStyle.SHORT).withLocale(Locale.GERMANY);
 
     private final CreditService creditService;
     private final UiBroadcaster broadcaster;
@@ -97,9 +94,10 @@ public class UserDashboardView extends VerticalLayout {
         add(topPanels);
 
         add(new H3("Buchungen"));
-        this.grid.addColumn(e -> e.getDate().format(DATE_TIME_FORMAT)).setHeader("Datum").setFlexGrow(0)
+        this.grid.addColumn(e -> PortalFormats.dateTime(e.getDate())).setHeader("Datum").setFlexGrow(0)
                 .setWidth("12em");
-        this.grid.addColumn(e -> formatCurrency(e.getAmount())).setHeader("Betrag").setFlexGrow(0).setWidth("8em");
+        this.grid.addColumn(e -> PortalFormats.currency(e.getAmount())).setHeader("Betrag").setFlexGrow(0)
+                .setWidth("8em");
         this.grid.addColumn(CreditAccountingEntryEntity::getDescription).setHeader("Buchungstext");
         this.grid.setSizeFull();
         add(this.grid);
@@ -146,7 +144,7 @@ public class UserDashboardView extends VerticalLayout {
      * Klassen-Javadoc).
      */
     private void refresh() {
-        this.creditValueLabel.setText(formatCurrency(this.creditService.getCredit(this.user)));
+        this.creditValueLabel.setText(PortalFormats.currency(this.creditService.getCredit(this.user)));
         this.lastInpaymentValueLabel.setText(
                 this.creditService.getLastInpayment(this.user).map(e -> e.getDate().format(DATE_FORMAT)).orElse("-"));
         this.grid.setItems(this.creditService.getAccountingEntries(this.user));
@@ -162,9 +160,5 @@ public class UserDashboardView extends VerticalLayout {
         captionLabel.addClassName("dashboard-spark-caption");
         tile.add(valueLabel, captionLabel);
         return tile;
-    }
-
-    private static String formatCurrency(BigDecimal amount) {
-        return NumberFormat.getCurrencyInstance(Locale.GERMANY).format(amount);
     }
 }

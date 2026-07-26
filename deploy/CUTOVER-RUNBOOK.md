@@ -61,6 +61,24 @@ Hintergrund/Roadmap: [docs/kb/05-migration-plan.md](../kb/05-migration-plan.md),
       und darf nie direkt im Klartext aus dem Netz veröffentlicht werden. Eine Klartext-Ausnahme
       gibt es **nicht** als Default; falls überhaupt, nur als ausdrücklich begründete
       Sonderentscheidung des Auftraggebers.
+- [ ] **Alarmkanal einrichten – ZWEISTUFIG (Issue #83/H4, Pflicht-Gate).** Das betriebliche
+      Alerting muss VOR dem Feldeinsatz verdrahtet sein, und zwar **beide** Stufen:
+      **(1)** lokal `deploy/monitoring/elwasys-health-alert.sh` + systemd-Timer/Cron
+      (Pushover/Mail) – meldet die betrieblichen Fehlerbilder mit Details; **(2)** ein
+      **externer** Uptime-Monitor (healthchecks.io/Uptime Kuma) auf `/operational` bzw. als
+      Dead-Man's-Switch – deckt den **Host-Totalausfall** ab, bei dem das lokale Skript
+      selbst nicht mehr läuft. Schritte in
+      [`deploy/monitoring/README.md`](monitoring/README.md). Die **Alarm-Probe für beide
+      Stufen** gehört in die Generalprobe (Spec 0001). Ohne beide Stufen gilt die
+      Installation als nicht feldbereit.
+- [ ] **Portal-Basis-URL für Passwort-Reset-Mails (Issue #86/H7, Pflichtprüfpunkt).** Der
+      Passwort-Reset ist per Default AN; die Reset-Mail baut ihre Links aus
+      `ELWASYS_PORTAL_BASE_URL`. **Compose:** die Variable in `.env` auf die öffentliche
+      Portal-URL setzen (`https://…`) – der `:?`-Guard in `docker-compose.yml` bricht sonst mit
+      klarer Meldung ab. **Helm:** `passwordReset.baseUrl` setzen (`--set passwordReset.baseUrl=
+      https://<portal-host>`) – der `required`-Guard bricht sonst ab. Ohne Wert verlinken
+      Produktions-Reset-Mails auf `http://localhost:8080` (tote Links). In der Generalprobe wird
+      ein realer Reset-Link ohnehin geprüft (Spec 0001).
 - [ ] **Zeitzonen-Gleichheit (Issue #31, Pflichtprüfpunkt).** Terminal- und Backend-Zeitzone
       MÜSSEN übereinstimmen (Auftraggeber-Vorgabe: `Europe/Berlin`). Andernfalls fällt jede
       nachgemeldete Terminal-Meldung in den Ersetzungszweig von `ClientTimestampPolicy` und der
@@ -305,22 +323,45 @@ laufen muss, damit die Installation dauerhaft gesund bleibt (Issues #32, #60).
 Kein einmaliges Backup ersetzt einen laufenden Backup-Zyklus. Additiv/nicht-destruktiv heißt
 nicht „unverlierbar" – Platten-, Bedien- oder Hardwarefehler bleiben möglich.
 
-- **Compose-Stack (mitgelieferte oder externe DB):** einen `pg_dump`-Cron auf dem
-  Docker-Host einrichten (kein zusätzlicher Container nötig – das ist im Repo-Stil die
-  einfachste, betriebssichere Variante gegenüber einem Backup-Sidecar):
+- **Compose-Stack (mitgelieferte oder externe DB):** ein `pg_dump`-Cron auf dem Docker-Host –
+  jetzt als mitgeliefertes Skript [`deploy/backup/backup-db.sh`](backup/backup-db.sh) (die
+  geskriptete Form des früheren Einzeilers; kein Backup-Sidecar nötig):
   ```cron
-  # /etc/cron.d/elwasys-db-backup  – täglich 03:15, komprimierter Dump in ein Backup-Verzeichnis
-  15 3 * * * root docker exec elwasys-postgres pg_dump -U elwasys elwasys | gzip > /var/backups/elwasys/elwasys-$(date +\%F).sql.gz
-  # Retention: Dumps älter als 30 Tage entfernen
-  30 3 * * * root find /var/backups/elwasys -name 'elwasys-*.sql.gz' -mtime +30 -delete
+  # /etc/cron.d/elwasys-db-backup  – täglich 03:15, komprimierter Dump + Retention (30 Tage)
+  15 3 * * * root /opt/elwasys/backup/backup-db.sh --docker-container elwasys-postgres --out-dir /var/backups/elwasys >> /var/log/elwasys-backup.log 2>&1
   ```
-  (Container-/DB-/User-Namen anpassen; bei externer Bestands-DB `pg_dump` direkt gegen deren
-  Host statt `docker exec` laufen lassen. Das Backup-Verzeichnis selbst außerhalb des Hosts
-  spiegeln/sichern.) **Restore regelmäßig proben** – ein nie getestetes Backup ist keins.
+  (Bei externer Bestands-DB `--host/--dbname/--user` statt `--docker-container`. Das
+  Backup-Verzeichnis **offsite/offhost spiegeln** – siehe unten.)
 - **Kubernetes/Helm:** Dieser Chart bringt bewusst **keine** DB mit (siehe `values.yaml`
   „database:"). Das DB-Backup ist Sache des DB-Betreibers/Operators (z. B. CloudNativePG,
   ein `CronJob` mit `pg_dump`, oder Snapshots des Storage-Providers) – als betrieblichen
-  Pflichtpunkt einplanen, mit derselben Retention/Restore-Probe wie oben.
+  Pflichtpunkt einplanen, mit derselben Retention/Restore-Probe wie unten.
+
+**Restore (Issue #84/H5) – Schritt für Schritt und geprobt.** Ein nie getesteter Restore ist
+kein Backup. Der Wiederherstellungsfall ist jetzt ausgeschrieben und geskriptet:
+[`deploy/backup/restore-db.sh`](backup/restore-db.sh) (+
+[`deploy/backup/README.md`](backup/README.md)).
+
+```bash
+# Szenario "der Server ist weg": neuer Host, frisches PostgreSQL, jüngstes Offsite-Backup.
+# IMMER zuerst der Trockenlauf (zeigt den Plan, ändert nichts):
+sudo -u postgres /opt/elwasys/backup/restore-db.sh --dump /var/backups/elwasys/elwasys-<datum>.sql.gz --dry-run
+# Dann echt (legt Owner-Rolle + leere Ziel-DB an, spielt den Dump ein, Stichprobe):
+sudo -u postgres /opt/elwasys/backup/restore-db.sh --dump /var/backups/elwasys/elwasys-<datum>.sql.gz
+# Danach das Backend gegen die Ziel-DB starten; Flyway VALIDIERT die im Dump enthaltene
+# Historie (kein erneutes Migrieren). /actuator/health/liveness -> UP, Admin-Login-Stichprobe.
+```
+
+- **RPO/RTO:** RPO = Alter des jüngsten Backups (bei täglichem Cron ~24 h). RTO = Dauer des
+  Restores – bei der **Restore-Probe** (Generalprobe, Spec 0001 Punkt 3) einmal real messen und
+  hier festhalten.
+- **Backup-Scope (nicht nur die DB!):** separat, verschlüsselt und offsite sichern:
+  Backend-Secrets (`deploy/compose/.env` bzw. Helm-Values), je Terminal die
+  `elwasys.properties` (inkl. `backend.token`). Bewusstes Nicht-Backup: das
+  Offline-Journal auf der Terminal-SD-Karte (unreplizierte Offline-Buchungen = Geld) – als
+  Betriebsrisiko benannt. Das Backup-Verzeichnis **offsite/offhost** spiegeln (`rclone`/`scp`),
+  sonst vernichtet Blitz/Diebstahl Host **und** Backup gemeinsam. Details:
+  [`deploy/backup/README.md`](backup/README.md).
 
 ### 7b. Alerting über die Health-Indicators
 
@@ -332,13 +373,28 @@ Das Backend liefert (Pre-Launch AP6, Issue #32) zwei betriebliche Health-Indicat
 - **Offene abgelaufene Executions** – Ausführungen, deren `maxDuration` überschritten ist und
   die noch nicht abgerechnet/geschlossen wurden (siehe 7c).
 
+**Verdrahteter Alarmkanal, zweistufig (Pflicht vor dem Feldeinsatz, Issue #83/H4):** Das Pollen
+ist **nicht mehr nur empfohlen, sondern mitgeliefert**:
+
+1. **Lokal:** `deploy/monitoring/elwasys-health-alert.sh` + systemd-Timer/Cron pollt
+   `/actuator/health/operational` und alarmiert bei `status != UP` **oder Nichterreichbarkeit**
+   (Backend/DB down) per **Pushover/Mail**; deckt zusätzlich **Zertifikats-Ablauf** und
+   **Plattenplatz** ab (#89).
+2. **Extern (Pflicht, nicht optional):** ein Uptime-Monitor (healthchecks.io/Uptime Kuma) prüft
+   von außen bzw. als Dead-Man's-Switch. Er schließt die blinde Stelle von Stufe 1: **fällt der
+   Host komplett aus, schweigt das lokale Skript** – genau im schwersten Fehlerfall.
+
+Einrichtung und die **Alarm-Probe für beide Stufen** siehe
+[`deploy/monitoring/README.md`](monitoring/README.md). **Ohne beide Stufen gilt die Installation
+als nicht feldbereit.**
+
 **Trennung Orchestrierung vs. Alerting (wichtig):**
 
-- **Alerting:** die dedizierte Gruppe **`/actuator/health/operational`** regelmäßig pollen
-  (Monitoring/Uptime-Check) und auf `status != UP` (HTTP `503`) alarmieren – sie bündelt genau
-  die beiden obigen Indicators. Das Root-`/actuator/health` aggregiert dieselben (plus DB usw.)
-  und ist als Gesamt-Statusseite ebenfalls nutzbar. Aufschlüsselnde Details (z. B. betroffene
-  Standortnamen) sind nur **angemeldet** sichtbar (`show-details: when-authorized`).
+- **Alerting:** die dedizierte Gruppe **`/actuator/health/operational`** (das o.g. Skript pollt
+  genau sie) auf `status != UP` (HTTP `503`) – sie bündelt genau die beiden obigen Indicators.
+  Das Root-`/actuator/health` aggregiert dieselben (plus DB usw.) und ist als Gesamt-Statusseite
+  ebenfalls nutzbar. Aufschlüsselnde Details (z. B. betroffene Standortnamen) sind nur
+  **angemeldet** sichtbar (`show-details: when-authorized`).
 - **Orchestrierung/Gates:** Liveness/Readiness-Proben (Kubernetes-Probes, Compose-Healthcheck,
   `post-deploy-smoke.sh`) nutzen bewusst **`/actuator/health/liveness`** bzw. `/readiness` –
   diese enthalten **nur** den Prozess-Status und **nicht** die betrieblichen Indicators. Sonst
@@ -384,9 +440,13 @@ zeitnah abrechnen/bereinigen.
 ## Geprobt vs. nur dokumentiert (Ehrlichkeit)
 
 - **In der Sandbox real ausgeführt (DB-/Backend-Seite):**
-  - `deploy/cutover/verify-cutover-migration.sh` – Bestandskopie → migriert, **21/21 Asserts
-    PASS** (Flyway BASELINE@1 + V2..V10, Datenerhalt, Schema-Härtung; Backend-Jar gegen die
-    Alt-Weg-DB `/actuator/health/liveness` UP).
+  - `deploy/cutover/verify-cutover-migration.sh` – Bestandskopie → migriert, Asserts PASS
+    (Flyway BASELINE@1 + V2..V\<neueste>, Datenerhalt, Schema-Härtung; Backend-Jar gegen die
+    Alt-Weg-DB `/actuator/health/liveness` UP). Die erwartete Flyway-Historie wird seit H6/#85
+    aus dem Migrationsordner **abgeleitet** (nicht mehr handgepflegt bis V10) – ein CI-Selftest
+    (`verify-cutover-migration-selftest.sh`) hält sie mit den Migrationen in Sync. Vor dem
+    Feldeinsatz das Skript einmal real gegen eine Bestandskopie laufen lassen und den konkreten
+    PASS-Stand hier festhalten.
   - Das **Rollout-Gate** `deploy/smoke/post-deploy-smoke.sh` gegen einen im **Produktionsmodus**
     per `java -jar` gestarteten Server (derselbe Artefakt-Typ, den compose/Helm ausrollen; nur
     die Startmethode unterscheidet sich) – Health UP + schlanke Playwright-Teilmenge grün

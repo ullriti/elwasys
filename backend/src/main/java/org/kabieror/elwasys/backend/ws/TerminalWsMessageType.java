@@ -59,6 +59,22 @@ public enum TerminalWsMessageType {
     RESTART_REQUEST,
     /** Client -&gt; Server (seit Phase 3 AP4, neu): Bestätigung von {@link #RESTART_REQUEST}. */
     RESTART_RESPONSE,
+    /**
+     * Client -&gt; Server (Issue #89): unaufgeforderte Meldung eines Vorfalls im Offline-Pfad
+     * (dead-gelettert Journal-Eintrag = verlorene Buchung, oder eine nicht kompensierte
+     * Geister-Ausführung). Anders als alle bisherigen Client-&gt;Server-Nachrichten ist das
+     * KEINE Antwort auf eine Server-Anfrage, sondern ein Push des Terminals - der Vorfall
+     * entsteht dort und war zuvor nur im lokalen Pi-Log sichtbar.
+     *
+     * <p>Payload (siehe {@code TerminalWebSocketHandler#handleOfflineIncident}):
+     * {@code {"incidentKey": "...", "kind": "DEAD_LETTER|GHOST_EXECUTION", "entryType": "...",
+     * "idempotencyKey": "...", "userId": 1, "chargedPrice": "1.50", "reason": "...",
+     * "occurredAt": "2026-07-24T10:15:00"}}. {@code incidentKey} ist der Idempotenz-Anker:
+     * eine erneut gesendete Meldung (Reconnect/Neustart) erzeugt keinen Doppel-Eintrag.
+     */
+    OFFLINE_INCIDENT,
+    /** Server -&gt; Client (Issue #89): Bestätigung von {@link #OFFLINE_INCIDENT}. */
+    OFFLINE_INCIDENT_ACK,
     /** Server -&gt; Client oder Client -&gt; Server: Protokoll-/Verarbeitungsfehler. */
     ERROR
 }

@@ -14,12 +14,14 @@
 #      Nicht-Admin-Nutzer, Standort, Gerät, Programm, Geräte-Programm-Zuordnung, Ausführung,
 #      Abrechnungsposten) - Beweis für Datenerhalt beim Cutover.
 #   3. Backend-Jar gegen diese Alt-Weg-DB starten (Flyway baselined automatisch auf V1 und
-#      wendet V2..V10 an, siehe application.yml "baseline-on-migrate"), warten bis
+#      wendet V2..V<neueste> an, siehe application.yml "baseline-on-migrate"), warten bis
 #      /actuator/health/liveness UP (Prozess-Health; Root-Health steht ohne Terminal auf 503,
 #      AP6 #32), dann sauber stoppen (trap - kein hängender Prozess, auch bei Fehlschlag).
-#   4. Asserts per psql: Flyway-Historie (BASELINE@1 + V2..V10 je success=true), die vor der
-#      Migration eingefügten Bestandsdaten UNVERÄNDERT, Schema-Härtung wirksam (siehe
-#      einzelne Asserts unten für die vollständige Liste).
+#   4. Asserts per psql: Flyway-Historie (BASELINE@1 + V2..V<neueste> je success=true, die
+#      erwartete Liste wird aus dem Migrationsordner ABGELEITET - siehe derive_expected_history,
+#      damit sie nicht bei neuen Migrationen still veraltet, H6/#85), die vor der Migration
+#      eingefügten Bestandsdaten UNVERÄNDERT, Schema-Härtung wirksam (siehe einzelne Asserts
+#      unten für die vollständige Liste).
 #   5. Aufräumen: Backend-Prozess beenden (trap). Die Test-DB selbst wird NICHT gedroppt -
 #      ein künftiges Rollback-Arbeitspaket (Phase 6 AP2) kann auf ihr aufbauen.
 #
@@ -37,6 +39,40 @@ cd "$(dirname "$0")/../.."   # Repo-Wurzel (deploy/cutover/.. = deploy, ../.. = 
 
 CUTOVER_VERIFY_DB="${CUTOVER_VERIFY_DB:-elwasys_cutover_verify}"
 CUTOVER_VERIFY_PORT="${CUTOVER_VERIFY_PORT:-18090}"
+
+MIGRATION_DIR="backend/src/main/resources/db/migration"
+
+# Leitet die ERWARTETE Flyway-Historie aus dem Migrationsordner ab (H6/#85). Vorher war die
+# Liste handgepflegt (»V2..V10«) und veraltete still, als V11 hinzukam - genau dieses Skript
+# soll aber vor dem Feldeinsatz real laufen. Jetzt gilt: V1 ist die Baseline (BASELINE@1 durch
+# baseline-on-migrate, V1 selbst wird NICHT angewendet), V2..V<neueste> je eine erfolgreich
+# angewendete SQL-Migration. Neue Migrationen ziehen das Gate damit automatisch nach. Nur
+# versionierte Migrationen (V<n>__) zählen; repeatable (R__) haben bewusst keine Historie-Zeile.
+derive_expected_history() {
+  local versions
+  versions="$(ls "${MIGRATION_DIR}"/V*__*.sql 2>/dev/null \
+    | sed -E 's#.*/V([0-9]+)__.*#\1#' | sort -n)"
+  if [[ -z "${versions}" ]]; then
+    echo "FEHLER: keine Flyway-Migrationen (V<n>__*.sql) in ${MIGRATION_DIR} gefunden." >&2
+    return 1
+  fi
+  local v
+  for v in ${versions}; do
+    if [[ "${v}" == "1" ]]; then
+      echo "1|BASELINE|true"
+    else
+      echo "${v}|SQL|true"
+    fi
+  done
+}
+
+# Offline-Selbsttest-Haken (kein PostgreSQL/Maven nötig): gibt nur die abgeleitete Erwartung aus
+# und beendet sich. Der CI-Selftest (siehe verify-cutover-migration-selftest.sh) nutzt das, um
+# Skript ↔ Migrationsordner abzugleichen, ohne den vollen (schweren) Verifikationslauf.
+if [[ "${1:-}" == "--print-expected-history" ]]; then
+  derive_expected_history
+  exit 0
+fi
 
 FAIL_COUNT=0
 assert_eq() {
@@ -116,7 +152,7 @@ echo "  Bestandsdaten eingefügt."
 echo "== 3) Backend-Jar bauen (Produktionsmodus - siehe docs/kb/04-build-and-run.md, laenger laufender Prozess braucht -Pproduction) =="
 mvn -q -B -f pom.xml package -pl backend -Pproduction -DskipTests
 
-echo "== 4) Backend gegen die Alt-Weg-DB starten (Flyway migriert automatisch: BASELINE@1, dann V2..V10) =="
+echo "== 4) Backend gegen die Alt-Weg-DB starten (Flyway migriert automatisch: BASELINE@1, dann V2..V<neueste>) =="
 ELWASYS_DB_URL="jdbc:postgresql://localhost:5432/${CUTOVER_VERIFY_DB}" \
 ELWASYS_DB_USER="postgres" \
 ELWASYS_DB_PASSWORD="postgres" \
@@ -158,18 +194,11 @@ table_exists() {
 }
 
 echo "--- Flyway-Historie ---"
-EXPECTED_HISTORY="1|BASELINE|true
-2|SQL|true
-3|SQL|true
-4|SQL|true
-5|SQL|true
-6|SQL|true
-7|SQL|true
-8|SQL|true
-9|SQL|true
-10|SQL|true"
+# Aus dem Migrationsordner abgeleitet (H6/#85, siehe derive_expected_history oben) statt hart
+# codiert - so bleibt das Gate bei neuen Migrationen automatisch aktuell.
+EXPECTED_HISTORY="$(derive_expected_history)"
 ACTUAL_HISTORY="$(PSQL "SELECT version || '|' || type || '|' || success FROM flyway_schema_history ORDER BY installed_rank;")"
-assert_eq "flyway_schema_history: genau BASELINE@1 gefolgt von V2..V10, alle success=true" \
+assert_eq "flyway_schema_history: genau BASELINE@1 gefolgt von V2..V<neueste>, alle success=true" \
     "${EXPECTED_HISTORY}" "${ACTUAL_HISTORY}"
 
 echo "--- Bestandsdaten unverändert (Datenerhalt) ---"

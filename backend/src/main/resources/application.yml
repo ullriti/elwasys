@@ -71,7 +71,8 @@ management:
       # werden von Spring Boot automatisch eingebunden, sobald sie als Bean vorliegen (siehe
       # org.kabieror.elwasys.backend.health.*): TerminalConnectivityHealthIndicator (aktiver
       # Standort ohne verbundenes Terminal) und ExpiredExecutionsHealthIndicator (offene,
-      # abgelaufene, unabgerechnete Ausführungen). Sie aggregieren in das Root-/actuator/health
+      # abgelaufene, unabgerechnete Ausführungen) und OfflineIncidentHealthIndicator (offene, noch
+      # nicht quittierte Offline-Vorfälle der Terminals). Sie aggregieren in das Root-/actuator/health
       # und ziehen es bei einem betrieblichen Fehlerbild auf OUT_OF_SERVICE (HTTP 503), sind also
       # für ein externes Alerting auswertbar. show-details bleibt when-authorized: der öffentlich
       # erreichbare /actuator/health (siehe SecurityConfig) zeigt unangemeldet nur den
@@ -85,7 +86,7 @@ management:
       # eine offene abgelaufene Execution markiert das Backend also NICHT als "unhealthy" (kein
       # Neustart-/Gate-Flattern, insbesondere beim Cutover, wenn noch keine Terminals verbunden
       # sind). Für Alerting die dedizierte Gruppe /actuator/health/operational pollen (nur die
-      # beiden Indicators) oder das Root-/actuator/health (aggregiert alles).
+      # Indicators) oder das Root-/actuator/health (aggregiert alles).
       show-details: when-authorized
       probes:
         # Aktiviert /actuator/health/liveness und /readiness (sonst nur automatisch unter
@@ -93,10 +94,13 @@ management:
         enabled: true
       group:
         operational:
-          # Dedizierte Alerting-Gruppe (Issue #32): bündelt genau die beiden betrieblichen
+          # Dedizierte Alerting-Gruppe (Issue #32): bündelt genau die betrieblichen
           # Indicators, damit ein Monitoring gezielt darauf pollen und auf status != UP
           # (HTTP 503) alarmieren kann, ohne den Prozess-/Liveness-Status zu vermischen.
-          include: terminalConnectivity,expiredExecutions
+          # offlineIncident (Issue #89) meldet vom Terminal gemeldete, noch nicht quittierte
+          # Offline-Vorfälle (Dead-Letter = verlorene Buchung, nicht kompensierte
+          # Geister-Ausführung) - vorher nur im lokalen Pi-Log sichtbar.
+          include: terminalConnectivity,expiredExecutions,offlineIncident
           show-components: when-authorized
           show-details: when-authorized
   health:

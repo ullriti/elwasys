@@ -15,7 +15,7 @@
 #   4. Idempotenz: rollback-cutover.sh EIN ZWEITES MAL ausführen -> ohne Fehler, zentrale
 #      Asserts erneut PASS.
 #   5. Re-Cutover-Beweis: Backend-Jar erneut gegen dieselbe (jetzt zurückgebaute) DB starten -
-#      Flyway baselined erneut auf V1 und wendet V2..V10 erneut an, genau wie beim allerersten
+#      Flyway baselined erneut auf V1 und wendet V2..V<neueste> erneut an, genau wie beim allerersten
 #      Cutover (siehe verify-cutover-migration.sh). Beweist: die DB ist nach dem Rollback
 #      wieder sauber cutover-fähig, kein "kaputter Zwischenzustand".
 #   6. Aufräumen: Backend-Prozess beenden (trap - läuft auch bei Fehlschlag).
@@ -218,19 +218,13 @@ kill "${BACKEND_PID}" 2>/dev/null || true
 wait "${BACKEND_PID}" 2>/dev/null || true
 BACKEND_PID=""
 
-echo "--- Re-Cutover: Flyway-Historie erneut exakt BASELINE@1 + V2..V10 success ---"
-EXPECTED_HISTORY="1|BASELINE|true
-2|SQL|true
-3|SQL|true
-4|SQL|true
-5|SQL|true
-6|SQL|true
-7|SQL|true
-8|SQL|true
-9|SQL|true
-10|SQL|true"
+echo "--- Re-Cutover: Flyway-Historie erneut exakt BASELINE@1 + V2..V<neueste> success ---"
+# Erwartung aus dem Migrationsordner ableiten (H6/#85) - EINE Quelle, geteilt mit dem Hinweg-
+# Skript über dessen --print-expected-history-Haken, damit beide Verify-Skripte nicht
+# auseinanderlaufen, wenn eine neue Migration hinzukommt.
+EXPECTED_HISTORY="$(deploy/cutover/verify-cutover-migration.sh --print-expected-history)"
 ACTUAL_HISTORY="$(PSQL "SELECT version || '|' || type || '|' || success FROM flyway_schema_history ORDER BY installed_rank;")"
-assert_eq "Re-Cutover: flyway_schema_history erneut genau BASELINE@1 gefolgt von V2..V10, alle success=true" \
+assert_eq "Re-Cutover: flyway_schema_history erneut genau BASELINE@1 gefolgt von V2..V<neueste>, alle success=true" \
     "${EXPECTED_HISTORY}" "${ACTUAL_HISTORY}"
 assert_eq "Re-Cutover: devices.auto_end_power_threshold (neuer Name) wieder da (V8 erneut angewendet)" \
     "t" "$(col_exists devices auto_end_power_threshold)"
