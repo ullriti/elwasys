@@ -1,6 +1,5 @@
 import { test, expect, Page, Locator } from '@playwright/test';
-import { execFileSync } from 'child_process';
-import { loginAsAdmin, openAdminSection } from './helpers';
+import { loginAsAdmin, openAdminSection, runSql } from './helpers';
 
 /**
  * Admin dashboard device status E2E (test plan P20) - fachlicher Nachfolger von
@@ -17,13 +16,9 @@ const OCCUPIED = 'E2E-Dash-Occupied';
 const FREE = 'E2E-Dash-Free';
 const DB_NAME = process.env.E2E_DB_NAME || 'elwasys_backend_e2e';
 
-/** Run a SQL script against the E2E database as the postgres superuser (same pattern as
- * Portal/e2e/tests/dashboard.spec.ts). */
+/** Run a SQL script against the E2E database (see helpers.runSql). */
 function sql(script: string) {
-  execFileSync('sudo', ['-u', 'postgres', 'psql', '-q', '-v', 'ON_ERROR_STOP=1', '-d', DB_NAME], {
-    input: script,
-    stdio: ['pipe', 'ignore', 'inherit'],
-  });
+  runSql(DB_NAME, script);
 }
 
 function seed() {
@@ -89,4 +84,13 @@ test('the dashboard shows device occupancy from the database (P20)', async ({ pa
   // theme, see AdminDashboardView#populateDevicePanel).
   await expect(devicePanel(page, OCCUPIED).locator('span[theme~="badge"]')).toHaveText('Besetzt');
   await expect(devicePanel(page, FREE).locator('span[theme~="badge"]')).toHaveText('Frei');
+
+  // Fernwartungs-Kopfzeile je Standort (LocationMaintenanceHeader, seit Issue #92 eine eigene
+  // Komponente): Standortname, Verbindungsstatus und die zwei Fernwartungs-Aktionen. Ohne
+  // diese Prüfung wäre eine verunglückte Auslagerung (fehlende CSS-Klasse, vertauschte
+  // Kindreihenfolge) grün durchgelaufen.
+  const header = page.locator('.dashboard-location-header').first();
+  await expect(header.locator('h3')).toContainText('Default');
+  await expect(header.getByRole('button', { name: 'Log anzeigen' })).toBeVisible();
+  await expect(header.getByRole('button', { name: 'Neustart' })).toBeVisible();
 });

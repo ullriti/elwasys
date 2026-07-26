@@ -162,9 +162,18 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   (#91), Portal `AbstractAdminListView` für die fünf Admin-Listen und gemeinsame
   `Notifications` (#92) –, dazu die Doku-/Repo-Hygiene (#93: Worklog-Index, gekürztes
   CHANGELOG mit Details im Migrationsplan-Änderungslog, tote Links/Dateien/Kommentare,
-  zwei geschlossene „Offene Fragen"). Bewusst offen in #92: Binder-Umbau der Dialoge und
-  Auslagerung der Dashboard-Fernwartungs-Toolbar. Suiten: Backend 287/287, Client 88/88,
-  Portal-E2E grün.
+  zwei geschlossene „Offene Fragen"). **#92 ist inzwischen vollständig**: die neun
+  Formular-Dialoge teilen sich `AbstractFormDialog` (Kopf-/Fußzeile) und `FormValidation`
+  (Feldprüfungen, mit Unit-Test), die Fernwartungs-Kopfzeile des Dashboards liegt in
+  `LocationMaintenanceHeader`. Ein Umstieg auf Vaadins `Binder` wurde geprüft und **begründet
+  verworfen** (er prüfte beim Tippen statt beim Speichern und bräuchte pro Dialog eine
+  künstliche Formular-Bean – siehe Worklog). Neu ist außerdem die **modulübergreifende
+  Preis-Parität**: `OfflinePricing` (Terminal) und `PricingService` (Backend) prüfen dieselbe
+  Fixture `test-fixtures/pricing-parity.csv`, eine Divergenz zwischen Offline- und
+  Online-Abrechnung fällt damit als roter Test auf statt beim Nutzer (#91). Das
+  `code-reviewer`-Gate lief über den gesamten Branch; seine Befunde (fehlende Tests für die
+  Fehlermeldung des Dialog-Gerüsts und für die Fernwartungs-Kopfzeile, Detailtext vor dem
+  Login) sind behoben. Suiten: Backend 305/305 + 3 neue, Client 88/88 + 1, Portal-E2E 27/27.
 - **Nächster Schritt:** **Generalprobe nach [Spec 0001](../specs/0001-finale-review.md)**
   (Cutover-Probelauf, Migrations-Dry-Run mit Produktivdaten-Kopie, Backup-Restore-Probe,
   Ausfall-Drills, Alarm-Probe beider Stufen, Soak-Test, Vor-Ort-Kalibrierung), dann Pilotphase

@@ -1,21 +1,16 @@
 package org.kabieror.elwasys.backend.ui.admin.dialog;
 
-import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.combobox.MultiSelectComboBox;
-import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.H3;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.NumberField;
 import com.vaadin.flow.component.textfield.TextField;
 import java.time.Duration;
 import java.util.List;
 import java.util.Set;
-import org.kabieror.elwasys.backend.ui.component.Notifications;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
@@ -24,6 +19,8 @@ import org.kabieror.elwasys.backend.service.DeviceService;
 import org.kabieror.elwasys.backend.service.LocationService;
 import org.kabieror.elwasys.backend.service.ProgramService;
 import org.kabieror.elwasys.backend.service.UserGroupService;
+import org.kabieror.elwasys.backend.ui.component.AbstractFormDialog;
+import org.kabieror.elwasys.backend.ui.component.FormValidation;
 
 /**
  * Modaler Dialog zum Anlegen/Bearbeiten eines Geräts - fachlicher Nachfolger von
@@ -40,7 +37,7 @@ import org.kabieror.elwasys.backend.service.UserGroupService;
  * Funktionslücke (siehe docs/kb/05-migration-plan.md, "Entscheidungen", Gestaltungsrahmen
  * Portal-Neubau).
  */
-public class DeviceFormDialog extends Dialog {
+public class DeviceFormDialog extends AbstractFormDialog {
 
     private final DeviceService deviceService;
     private final DeviceEntity deviceToEdit;
@@ -61,13 +58,11 @@ public class DeviceFormDialog extends Dialog {
     public DeviceFormDialog(DeviceService deviceService, LocationService locationService,
             ProgramService programService, UserGroupService userGroupService, DeviceEntity deviceToEdit,
             Runnable onSaved) {
+        super(entityTitle("Gerät", deviceToEdit != null), "45em");
         this.deviceService = deviceService;
         this.deviceToEdit = deviceToEdit;
 
         boolean editMode = deviceToEdit != null;
-        setHeaderTitle(editMode ? "Gerät bearbeiten" : "Gerät erstellen");
-        setModal(true);
-        setWidth("45em");
 
         this.tfName.setRequired(true);
         this.tfName.setWidthFull();
@@ -143,22 +138,22 @@ public class DeviceFormDialog extends Dialog {
             this.cbEnabled.setValue(true);
         }
 
-        Button btnCancel = new Button("Abbrechen", e -> close());
-        Button btnSave = new Button(editMode ? "Speichern" : "Erstellen", e -> save(onSaved));
-        btnSave.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-        getFooter().add(new HorizontalLayout(btnCancel, btnSave));
+        addFooterActions(saveCaption(editMode), () -> save(onSaved));
     }
 
     private void save(Runnable onSaved) {
+        // Bewusst bitweises "&=" statt des kurzschließenden "&&": ALLE Felder sollen geprüft und
+        // markiert werden, nicht nur bis zum ersten Fehler - sonst müsste der Administrator die
+        // Fehler eines Formulars einzeln nacheinander aufdecken.
         boolean valid = true;
-        valid &= requireText(this.tfName, "Bitte Name eingeben.");
-        valid &= requireValue(this.cbPosition, "Bitte Position auswählen.");
-        valid &= requireValue(this.cbLocation, "Bitte Standort auswählen.");
-        valid &= requireText(this.tfFhemName, "Bitte Namen angeben.");
-        valid &= requireText(this.tfFhemSwitchName, "Bitte Namen angeben.");
-        valid &= requireText(this.tfFhemPowerName, "Bitte Namen angeben.");
-        valid &= requireValue(this.nfAutoEndPowerThreshold, "Bitte Schwellwert eingeben.");
-        valid &= requireValue(this.ifAutoEndWaitTime, "Bitte Wartezeit eingeben.");
+        valid &= FormValidation.require(this.tfName, "Bitte Name eingeben.");
+        valid &= FormValidation.require(this.cbPosition, "Bitte Position auswählen.");
+        valid &= FormValidation.require(this.cbLocation, "Bitte Standort auswählen.");
+        valid &= FormValidation.require(this.tfFhemName, "Bitte Namen angeben.");
+        valid &= FormValidation.require(this.tfFhemSwitchName, "Bitte Namen angeben.");
+        valid &= FormValidation.require(this.tfFhemPowerName, "Bitte Namen angeben.");
+        valid &= FormValidation.require(this.nfAutoEndPowerThreshold, "Bitte Schwellwert eingeben.");
+        valid &= FormValidation.require(this.ifAutoEndWaitTime, "Bitte Wartezeit eingeben.");
 
         if (!valid) {
             return;
@@ -181,51 +176,11 @@ public class DeviceFormDialog extends Dialog {
                         this.selPrograms.getValue(), this.selGroups.getValue());
             }
         } catch (RuntimeException e) {
-            Notifications.showError("Das Gerät konnte nicht gespeichert werden. " + e.getMessage());
+            showFailure("Das Gerät konnte nicht gespeichert werden.", e);
             return;
         }
 
         close();
         onSaved.run();
-    }
-
-    private static boolean requireText(TextField field, String message) {
-        if (field.isEmpty()) {
-            field.setInvalid(true);
-            field.setErrorMessage(message);
-            return false;
-        }
-        field.setInvalid(false);
-        return true;
-    }
-
-    private static boolean requireValue(ComboBox<?> field, String message) {
-        if (field.isEmpty()) {
-            field.setInvalid(true);
-            field.setErrorMessage(message);
-            return false;
-        }
-        field.setInvalid(false);
-        return true;
-    }
-
-    private static boolean requireValue(NumberField field, String message) {
-        if (field.isEmpty()) {
-            field.setInvalid(true);
-            field.setErrorMessage(message);
-            return false;
-        }
-        field.setInvalid(false);
-        return true;
-    }
-
-    private static boolean requireValue(IntegerField field, String message) {
-        if (field.isEmpty()) {
-            field.setInvalid(true);
-            field.setErrorMessage(message);
-            return false;
-        }
-        field.setInvalid(false);
-        return true;
     }
 }

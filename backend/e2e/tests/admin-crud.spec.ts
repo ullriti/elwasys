@@ -8,6 +8,7 @@ import {
   gridRowCells,
   rowActionButton,
   confirmDeletion,
+  openEditDialog,
 } from './helpers';
 
 /**
@@ -73,13 +74,7 @@ test('admin can block a user (P7)', async ({ page }) => {
 
   // AdminUsersView#actionButtons order: Bearbeiten(0), Guthaben aufladen(1),
   // Umsätze ansehen(2), Löschen(3).
-  const openEdit = async () => {
-    const editBtn = await rowActionButton(page, name, 0);
-    await editBtn.click();
-    const win = dialog(page);
-    await expect(win.locator('h2[slot="title"]')).toHaveText('Benutzer bearbeiten');
-    return win;
-  };
+  const openEdit = () => openEditDialog(page, name, 0, 'Benutzer bearbeiten');
 
   // Block the user.
   let win = await openEdit();
@@ -279,13 +274,7 @@ test('admin can activate/deactivate a device and it persists (P11)', async ({ pa
   await expectNoDialog(page);
 
   // AdminDevicesView#actionButtons order: Bearbeiten(0), Löschen(1).
-  const openEdit = async () => {
-    const editBtn = await rowActionButton(page, deviceName, 0);
-    await editBtn.click();
-    const dlg = dialog(page);
-    await expect(dlg.locator('h2[slot="title"]')).toHaveText('Gerät bearbeiten');
-    return dlg;
-  };
+  const openEdit = () => openEditDialog(page, deviceName, 0, 'Gerät bearbeiten');
 
   win = await openEdit();
   await expect(win.getByLabel('Aktiviert')).toBeChecked();
@@ -368,13 +357,7 @@ test('admin can open and save a location from the Standorte section (P14)', asyn
   await openAdminSection(page, 'admin/locations');
 
   // AdminLocationsView#actionButtons order: Bearbeiten(0), Löschen(1).
-  const openEdit = async () => {
-    const editBtn = await rowActionButton(page, 'Default', 0);
-    await editBtn.click();
-    const win = dialog(page);
-    await expect(win.locator('h2[slot="title"]')).toHaveText('Standort bearbeiten');
-    return win;
-  };
+  const openEdit = () => openEditDialog(page, 'Default', 0, 'Standort bearbeiten');
 
   let win = await openEdit();
   const nameField = win.getByLabel('Name', { exact: true });

@@ -91,8 +91,15 @@ TODO-Javadoc und englische Rest-Kommentare im Alt-fhem-Code bereinigt; Testzahle
 
 ## Offen / nächster Schritt
 
-- Epic #94 ist damit inhaltlich abgeschlossen; in #92 bleiben die zwei oben begründeten
-  Rest-Aufgaben stehen.
+> **Nachtrag (später am selben Tag):** die zwei oben vertagten #92-Punkte sind inzwischen
+> erledigt – siehe
+> [portal-dialog-geruest-und-fernwartungs-toolbar](2026-07-26-portal-dialog-geruest-und-fernwartungs-toolbar.md).
+> Der Vaadin-`Binder` wurde dabei geprüft und **begründet verworfen** (Prüfzeitpunkt und
+> fehlende Formular-Bean), die Fernwartungs-Kopfzeile liegt in `LocationMaintenanceHeader`.
+> Ebenfalls nachgezogen: die Preis-Parität Terminal ↔ Backend über die gemeinsame Fixture
+> `test-fixtures/pricing-parity.csv` (der letzte „erwägen"-Punkt aus #91).
+
+- Epic #94 ist damit inhaltlich abgeschlossen.
 - Issue #97 (stiller Fehlschlag der Readiness-Gates im Testharness) ist unabhängig und offen.
 - Als Nächstes: Generalprobe nach Spec 0001 (Cutover-Probelauf, Migrations-Dry-Run,
   Restore-Probe, Ausfall-Drills, Soak-Test), dann Pilotphase.

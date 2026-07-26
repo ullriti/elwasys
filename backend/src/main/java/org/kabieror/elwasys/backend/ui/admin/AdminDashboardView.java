@@ -2,15 +2,10 @@ package org.kabieror.elwasys.backend.ui.admin;
 
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.DetachEvent;
-import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H2;
-import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
-import com.vaadin.flow.component.icon.Icon;
-import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.FlexLayout;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
@@ -21,13 +16,11 @@ import com.vaadin.flow.router.RouterLink;
 import com.vaadin.flow.shared.Registration;
 import jakarta.annotation.security.RolesAllowed;
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import org.kabieror.elwasys.backend.ui.component.Notifications;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
-import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.events.DeviceChangedEvent;
 import org.kabieror.elwasys.backend.events.DomainEvent;
 import org.kabieror.elwasys.backend.events.ExecutionChangedEvent;
@@ -38,12 +31,9 @@ import org.kabieror.elwasys.backend.service.DashboardService.LocationStatus;
 import org.kabieror.elwasys.backend.service.DeviceService;
 import org.kabieror.elwasys.backend.service.ExecutionService;
 import org.kabieror.elwasys.backend.service.TerminalOfflineIncidentService;
-import org.kabieror.elwasys.backend.ui.admin.dialog.LogViewerDialog;
 import org.kabieror.elwasys.backend.ui.component.PortalFormats;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 import org.kabieror.elwasys.backend.ws.TerminalMaintenanceService;
-import org.kabieror.elwasys.backend.ws.TerminalNotConnectedException;
-import org.kabieror.elwasys.backend.ws.TerminalRequestTimeoutException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
@@ -73,9 +63,10 @@ import org.springframework.data.domain.Sort;
  * vermittelt über {@link TerminalMaintenanceService} statt des Alt-TCP-Protokolls (siehe
  * docs/kb/05-migration-plan.md, "Entscheidungen": das Alt-TCP-Protokoll wurde NICHT portiert).
  * Statt der Alt-"IP-Adresse" (obsolet, siehe docs/kb/02-data-model.md: {@code client_ip}/
- * {@code -port} entfallen mit der ausgehenden Verbindung) zeigt diese View "Verbunden seit".
- * Seit Phase 4 verbinden sich die Terminals über diesen Kanal; "Nicht verbunden" ist damit der
- * Ausnahme- und nicht mehr der Regelfall (Kommentar auf den Ist-Zustand nachgezogen, #93).
+ * {@code -port} entfallen mit der ausgehenden Verbindung) zeigt sie "Verbunden seit". Seit
+ * Phase 4 verbinden sich die Terminals über diesen Kanal; "Nicht verbunden" ist damit der
+ * Ausnahme- und nicht mehr der Regelfall (Kommentar auf den Ist-Zustand nachgezogen, #93). Sie
+ * liegt seit Issue #92 in einer eigenen Komponente ({@link LocationMaintenanceHeader}).
  *
  * <p><b>Seit Issue #89</b>: über den Standort-Panels ein Hinweisstreifen auf offene
  * Offline-Vorfälle mit Link in {@link AdminOfflineIncidentsView} (siehe
@@ -206,7 +197,7 @@ public class AdminDashboardView extends VerticalLayout {
         VerticalLayout panel = new VerticalLayout();
         panel.addClassName("dashboard-location-panel");
         panel.setPadding(false);
-        panel.add(buildLocationHeader(locationStatus.location()));
+        panel.add(new LocationMaintenanceHeader(locationStatus.location(), this.maintenanceService));
 
         FlexLayout devices = new FlexLayout();
         devices.addClassName("dashboard-device-list");
@@ -217,80 +208,6 @@ public class AdminDashboardView extends VerticalLayout {
         panel.add(devices);
         return panel;
     }
-
-    /**
-     * Kopfzeile eines Standort-Panels: Name, Verbindungsstatus ("Verbunden seit"/"Nicht
-     * verbunden") und die Fernwartungs-Knöpfe - fachlicher Nachfolger von
-     * {@code AdminDashboardLocationPanel#buildToolbar}/{@code #buildStatusInfo}.
-     */
-    private HorizontalLayout buildLocationHeader(LocationEntity location) {
-        HorizontalLayout header = new HorizontalLayout();
-        header.addClassName("dashboard-location-header");
-        header.setWidthFull();
-        header.setAlignItems(FlexComponent.Alignment.CENTER);
-        header.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
-
-        H3 title = new H3(location.getName());
-
-        boolean connected = this.maintenanceService.isConnected(location.getId());
-        Span connectionBadge = new Span(connected ? "Verbunden" : "Nicht verbunden");
-        connectionBadge.getElement().getThemeList().add("badge" + (connected ? " success" : " error"));
-        if (connected) {
-            this.maintenanceService.connectedSince(location.getId())
-                    .ifPresent(since -> connectionBadge.setTitle("Verbunden seit " + since));
-        }
-
-        Button btnLog = new Button("Log anzeigen", new Icon(VaadinIcon.FILE_TEXT),
-                e -> showLog(location));
-        btnLog.addThemeVariants(ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_SMALL);
-
-        Button btnRestart = new Button("Neustart", new Icon(VaadinIcon.POWER_OFF), e -> restart(location));
-        btnRestart.addThemeVariants(ButtonVariant.LUMO_TERTIARY, ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_ERROR);
-
-        HorizontalLayout leftGroup = new HorizontalLayout(title, connectionBadge);
-        leftGroup.setAlignItems(FlexComponent.Alignment.CENTER);
-
-        HorizontalLayout toolbar = new HorizontalLayout(btnLog, btnRestart);
-
-        header.add(leftGroup, toolbar);
-        return header;
-    }
-
-    /**
-     * Fordert den Log-Inhalt des Terminals an ({@link TerminalMaintenanceService#requestLog})
-     * und zeigt ihn in {@link LogViewerDialog} - fachlicher Nachfolger des Log-Knopfs im
-     * Alt-Dashboard. Für ein nicht verbundenes Terminal (aktuell der Regelfall, siehe
-     * Klassen-Javadoc) erscheint dieselbe Fehlermeldung wie im Alt-Code ("Keine Verbindung
-     * zum Client").
-     */
-    private void showLog(LocationEntity location) {
-        try {
-            List<String> lines = this.maintenanceService.requestLog(location.getId());
-            new LogViewerDialog(lines).open();
-        } catch (TerminalNotConnectedException e) {
-            Notifications.showError("Keine Verbindung zum Client");
-        } catch (TerminalRequestTimeoutException e) {
-            Notifications.showError("Der Client hat nicht rechtzeitig geantwortet.");
-        }
-    }
-
-    /**
-     * Fordert einen Neustart des Terminals an
-     * ({@link TerminalMaintenanceService#requestRestart}) - fachlicher Nachfolger des
-     * "Anwendung neu starten"-Menüpunkts im Alt-Dashboard.
-     */
-    private void restart(LocationEntity location) {
-        try {
-            this.maintenanceService.requestRestart(location.getId());
-            Notifications.showSuccess("Der Neustart wurde in Auftrag gegeben.");
-        } catch (TerminalNotConnectedException e) {
-            Notifications.showError("Keine Verbindung zum Standort.");
-        } catch (TerminalRequestTimeoutException e) {
-            Notifications.showError("Der Client hat den Neustart nicht rechtzeitig bestätigt.");
-        }
-    }
-
-
 
     private VerticalLayout buildDevicePanel(DeviceStatus deviceStatus) {
         VerticalLayout devicePanel = new VerticalLayout();
@@ -387,8 +304,7 @@ public class AdminDashboardView extends VerticalLayout {
         if (execution.getStart() == null) {
             return Duration.ZERO;
         }
-        java.time.LocalDateTime end = execution.getStop() != null ? execution.getStop()
-                : java.time.LocalDateTime.now();
+        LocalDateTime end = execution.getStop() != null ? execution.getStop() : LocalDateTime.now();
         return Duration.between(execution.getStart(), end);
     }
 

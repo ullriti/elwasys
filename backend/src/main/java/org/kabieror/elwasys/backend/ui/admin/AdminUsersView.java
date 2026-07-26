@@ -12,6 +12,7 @@ import com.vaadin.flow.router.Route;
 import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.kabieror.elwasys.backend.auth.ElwasysUserPrincipal;
@@ -108,7 +109,7 @@ public class AdminUsersView extends AbstractAdminListView<UserEntity> {
     }
 
     private String formatCardIds(UserEntity user) {
-        String[] cardIds = java.util.Arrays.stream(user.getCardIds()).filter(v -> v != null && !v.isEmpty())
+        String[] cardIds = Arrays.stream(user.getCardIds()).filter(v -> v != null && !v.isEmpty())
                 .toArray(String[]::new);
         if (cardIds.length == 0) {
             return "";

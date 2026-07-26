@@ -1,18 +1,17 @@
 package org.kabieror.elwasys.backend.ui.admin.dialog;
 
 import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.button.ButtonVariant;
-import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
 import com.vaadin.flow.component.textfield.BigDecimalField;
 import com.vaadin.flow.component.textfield.TextField;
 import java.math.BigDecimal;
-import org.kabieror.elwasys.backend.ui.component.Notifications;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.exception.NotEnoughCreditException;
 import org.kabieror.elwasys.backend.service.CreditService;
+import org.kabieror.elwasys.backend.ui.component.AbstractFormDialog;
+import org.kabieror.elwasys.backend.ui.component.FormValidation;
+import org.kabieror.elwasys.backend.ui.component.Notifications;
 
 /**
  * Modaler Dialog zum Verändern des Guthabens eines Benutzers ("Guthaben aufladen") - fachlicher
@@ -31,7 +30,7 @@ import org.kabieror.elwasys.backend.service.CreditService;
  * überschreibt den Buchungstext nur, wenn er noch dem jeweils anderen Standardtext entspricht
  * oder leer ist - 1:1 wie {@code UserCreditWindow}.
  */
-public class CreditTopUpDialog extends Dialog {
+public class CreditTopUpDialog extends AbstractFormDialog {
 
     private static final String INPAYMENT_OPTION = "Einzahlung";
     private static final String PAYOUT_OPTION = "Auszahlung";
@@ -45,15 +44,12 @@ public class CreditTopUpDialog extends Dialog {
 
     public CreditTopUpDialog(CreditService creditService, UserEntity user, String actingAdminName,
             Runnable onSaved) {
+        super("Guthaben von " + user.getName(), "28em");
         this.creditService = creditService;
         this.user = user;
 
         String inpaymentText = "Einzahlung vom Waschportal von " + actingAdminName;
         String payoutText = "Auszahlung vom Waschportal von " + actingAdminName;
-
-        setHeaderTitle("Guthaben von " + user.getName());
-        setModal(true);
-        setWidth("28em");
 
         this.rgAction.setLabel("Aktion");
         this.rgAction.setItems(INPAYMENT_OPTION, PAYOUT_OPTION);
@@ -77,26 +73,17 @@ public class CreditTopUpDialog extends Dialog {
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
         add(form);
 
-        Button btnCancel = new Button("Abbrechen", e -> close());
-        Button btnSave = new Button("Buchen", e -> execute(onSaved));
-        btnSave.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
+        Button btnSave = addFooterActions("Buchen", () -> execute(onSaved));
         // Issue #49: Doppelklick-Schutz auf dem geldbewegenden "Buchen"-Knopf (deaktiviert bis
         // zum Server-Roundtrip, danach automatisch wieder aktiv - blockiert eine Doppelbuchung
         // aus zwei Klicks im selben UIDL-Batch bei langsamem Roundtrip).
         btnSave.setDisableOnClick(true);
-        getFooter().add(new HorizontalLayout(btnCancel, btnSave));
 
-        addOpenedChangeListener(e -> {
-            if (e.isOpened()) {
-                this.bfAmount.focus();
-            }
-        });
+        focusOnOpen(this.bfAmount);
     }
 
     private void execute(Runnable onSaved) {
-        if (this.bfAmount.isEmpty()) {
-            this.bfAmount.setInvalid(true);
-            this.bfAmount.setErrorMessage("Bitte einen Betrag eingeben.");
+        if (!FormValidation.require(this.bfAmount, "Bitte einen Betrag eingeben.")) {
             return;
         }
 
@@ -106,12 +93,9 @@ public class CreditTopUpDialog extends Dialog {
         // "Auszahlung" von -50 bucht +50 mit widersprüchlichem Buchungstext), 0 erzeugte einen
         // leeren Buchungssatz. CreditService#inpayment/#payout prüfen dies zusätzlich
         // server-seitig, hier die unmittelbare Feld-Rückmeldung.
-        if (amount.signum() <= 0) {
-            this.bfAmount.setInvalid(true);
-            this.bfAmount.setErrorMessage("Der Betrag muss größer als 0 sein.");
+        if (!FormValidation.check(amount.signum() > 0, this.bfAmount, "Der Betrag muss größer als 0 sein.")) {
             return;
         }
-        this.bfAmount.setInvalid(false);
 
         boolean payout = PAYOUT_OPTION.equals(this.rgAction.getValue());
         try {

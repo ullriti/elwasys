@@ -1,15 +1,11 @@
 package org.kabieror.elwasys.backend.ui.admin.dialog;
 
 import com.vaadin.flow.component.checkbox.Checkbox;
-import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.ComboBox;
-import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
-import org.kabieror.elwasys.backend.ui.component.Notifications;
+import java.util.Arrays;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
 import org.kabieror.elwasys.backend.exception.DuplicateCardIdException;
@@ -17,6 +13,9 @@ import org.kabieror.elwasys.backend.exception.DuplicateUsernameException;
 import org.kabieror.elwasys.backend.service.PasswordResetService;
 import org.kabieror.elwasys.backend.service.UserGroupService;
 import org.kabieror.elwasys.backend.service.UserService;
+import org.kabieror.elwasys.backend.ui.component.AbstractFormDialog;
+import org.kabieror.elwasys.backend.ui.component.FormValidation;
+import org.kabieror.elwasys.backend.ui.component.Notifications;
 
 /**
  * Modaler Dialog zum Anlegen/Bearbeiten eines Benutzers - fachlicher Nachfolger von
@@ -26,7 +25,7 @@ import org.kabieror.elwasys.backend.service.UserService;
  * ("Sende dem Benutzer per Email ein neues Passwort", Checkbox {@code cbSendPassword}), der in
  * AP2 bewusst ausgespart worden war - siehe {@link PasswordResetService#resetPasswordByAdminAndNotify}.
  */
-public class UserFormDialog extends Dialog {
+public class UserFormDialog extends AbstractFormDialog {
 
     private final UserService userService;
     private final PasswordResetService passwordResetService;
@@ -42,14 +41,12 @@ public class UserFormDialog extends Dialog {
 
     public UserFormDialog(UserService userService, UserGroupService userGroupService,
             PasswordResetService passwordResetService, UserEntity userToEdit, Runnable onSaved) {
+        super(entityTitle("Benutzer", userToEdit != null), "35em");
         this.userService = userService;
         this.passwordResetService = passwordResetService;
         this.userToEdit = userToEdit;
 
         boolean editMode = userToEdit != null;
-        setHeaderTitle(editMode ? "Benutzer bearbeiten" : "Benutzer erstellen");
-        setModal(true);
-        setWidth("35em");
 
         this.tfName.setRequired(true);
         this.tfName.setMaxLength(50);
@@ -92,70 +89,42 @@ public class UserFormDialog extends Dialog {
             this.cbBlocked.setValue(userToEdit.isBlocked());
         }
 
-        Button btnCancel = new Button("Abbrechen", e -> close());
-        Button btnSave = new Button(editMode ? "Speichern" : "Erstellen", e -> save(onSaved));
-        btnSave.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-
-        HorizontalLayout footer = new HorizontalLayout(btnCancel, btnSave);
-        getFooter().add(footer);
+        addFooterActions(saveCaption(editMode), () -> save(onSaved));
     }
 
     private static String[] filterEmpty(String[] values) {
-        return java.util.Arrays.stream(values).filter(v -> v != null && !v.isEmpty()).toArray(String[]::new);
+        return Arrays.stream(values).filter(v -> v != null && !v.isEmpty()).toArray(String[]::new);
     }
 
     private void save(Runnable onSaved) {
-        boolean valid = true;
-
-        if (this.tfName.isEmpty()) {
-            this.tfName.setInvalid(true);
-            this.tfName.setErrorMessage("Bitte Name eingeben.");
-            valid = false;
-        } else {
-            this.tfName.setInvalid(false);
-        }
-
-        if (this.tfUsername.isEmpty()) {
-            this.tfUsername.setInvalid(true);
-            this.tfUsername.setErrorMessage("Bitte Benutzernamen eingeben.");
-            valid = false;
-        } else {
-            this.tfUsername.setInvalid(false);
-        }
+        // Bewusst bitweises "&=" statt des kurzschließenden "&&": ALLE Felder sollen geprüft und
+        // markiert werden, nicht nur bis zum ersten Fehler - sonst müsste der Administrator die
+        // Fehler eines Formulars einzeln nacheinander aufdecken.
+        boolean valid = FormValidation.require(this.tfName, "Bitte Name eingeben.");
+        valid &= FormValidation.require(this.tfUsername, "Bitte Benutzernamen eingeben.");
 
         String email = this.tfEmail.getValue();
         // 1:1 wie UserWindow#save (tfEmail.setRequired(cbSendPassword.getValue())): ist ein
         // neues Passwort per Email zu versenden, wird zwingend eine Adresse benötigt.
         if (this.cbSendPassword.getValue() && (email == null || email.isBlank())) {
-            this.tfEmail.setInvalid(true);
-            this.tfEmail.setErrorMessage("Für das Zusenden eines Passworts wird eine Email-Adresse benötigt.");
-            valid = false;
-        } else if (email != null && !email.isEmpty() && !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
-            this.tfEmail.setInvalid(true);
-            this.tfEmail.setErrorMessage("Das ist keine gültige Email-Adresse");
-            valid = false;
+            valid &= FormValidation.reject(this.tfEmail,
+                    "Für das Zusenden eines Passworts wird eine Email-Adresse benötigt.");
         } else {
-            this.tfEmail.setInvalid(false);
+            // Eine leere Adresse ist erlaubt (das Feld ist optional), eine gefüllte muss passen.
+            valid &= FormValidation.check(email == null || email.isEmpty() || FormValidation.isValidEmail(email),
+                    this.tfEmail, "Das ist keine gültige Email-Adresse");
         }
 
         String[] cardIds = splitCardIds(this.tfCardIds.getValue());
         for (String cardId : cardIds) {
-            if (!cardId.matches("^\\d+$")) {
-                this.tfCardIds.setInvalid(true);
-                this.tfCardIds.setErrorMessage("Die Kartennummer '" + cardId + "' ist ungültig.");
+            if (!FormValidation.check(cardId.matches("^\\d+$"), this.tfCardIds,
+                    "Die Kartennummer '" + cardId + "' ist ungültig.")) {
                 valid = false;
                 break;
             }
-            this.tfCardIds.setInvalid(false);
         }
 
-        if (this.cbUserGroup.isEmpty()) {
-            this.cbUserGroup.setInvalid(true);
-            this.cbUserGroup.setErrorMessage("Bitte Benutzergruppe auswählen");
-            valid = false;
-        } else {
-            this.cbUserGroup.setInvalid(false);
-        }
+        valid &= FormValidation.require(this.cbUserGroup, "Bitte Benutzergruppe auswählen");
 
         if (!valid) {
             return;
@@ -172,15 +141,13 @@ public class UserFormDialog extends Dialog {
                         this.cbUserGroup.getValue());
             }
         } catch (DuplicateUsernameException e) {
-            this.tfUsername.setInvalid(true);
-            this.tfUsername.setErrorMessage(e.getMessage());
+            FormValidation.reject(this.tfUsername, e.getMessage());
             return;
         } catch (DuplicateCardIdException e) {
-            this.tfCardIds.setInvalid(true);
-            this.tfCardIds.setErrorMessage(e.getMessage());
+            FormValidation.reject(this.tfCardIds, e.getMessage());
             return;
         } catch (RuntimeException e) {
-            Notifications.showError("Der Benutzer konnte nicht gespeichert werden. " + e.getMessage());
+            showFailure("Der Benutzer konnte nicht gespeichert werden.", e);
             return;
         }
 
@@ -191,7 +158,7 @@ public class UserFormDialog extends Dialog {
                 this.passwordResetService.resetPasswordByAdminAndNotify(savedUser);
                 Notifications.showSuccess("Passwort wurde versandt");
             } catch (RuntimeException e) {
-                Notifications.showError("Konnte keine Email senden. " + e.getMessage());
+                showFailure("Konnte keine Email senden.", e);
                 // Speichern war bereits erfolgreich - Dialog trotzdem schließen, 1:1 wie im
                 // Alt-Code (UserWindow#save fängt die EmailException NACH dem Speichern ab,
                 // schließt das Fenster aber in jedem Fall).
@@ -207,7 +174,7 @@ public class UserFormDialog extends Dialog {
         if (raw == null || raw.isBlank()) {
             return new String[0];
         }
-        return java.util.Arrays.stream(raw.split("\n+")).map(String::trim).filter(v -> !v.isEmpty())
+        return Arrays.stream(raw.split("\n+")).map(String::trim).filter(v -> !v.isEmpty())
                 .toArray(String[]::new);
     }
 

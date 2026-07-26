@@ -30,6 +30,10 @@ im [Worklog](docs/worklog/README.md).
   Backend (`SnapshotService`, `ExecutionStartGuard`, entdoppelte Gruppen-Zuordnung), Terminal
   (`TerminalDataService`, `CardLoginOutcome`, Gerätekachel als Zustandstabelle) und Portal
   (`AbstractAdminListView` für die fünf Admin-Listen, gemeinsame `Notifications`).
+- Portal-Dialoge auf ein gemeinsames Gerüst gezogen (#92): `AbstractFormDialog` (Kopf-/Fußzeile)
+  und `FormValidation` (Feldprüfungen) statt neun Kopien; Fernwartungs-Kopfzeile des Dashboards
+  als eigene Komponente. Unerwartete Speicherfehler zeigen jetzt eine verständliche Meldung und
+  landen im Server-Log statt als roher Ausnahmetext im Portal.
 - Doku- und Repo-Hygiene (FR-5, #93): CHANGELOG auf die eigene Kurzform gebracht (Details im
   Änderungslog des Migrationsplans), Worklog-Index vervollständigt, tote Links/Dateien/
   Kommentare entfernt, zwei erledigte „Offene Fragen" geschlossen.
@@ -89,6 +93,9 @@ im [Worklog](docs/worklog/README.md).
   Fernwartungs-Antworten.
 
 ### Tests
+- Offline-Preisberechnung des Terminals an das Backend gebunden (#91): beide Seiten prüfen
+  dieselbe Fixture `test-fixtures/pricing-parity.csv` - eine Divergenz zwischen Offline- und
+  Online-Abrechnung fällt jetzt als roter Test auf statt beim Nutzer.
 - Testlücken der finalen Review geschlossen (FR-3, #87/#88): Regressionstest für den
   deCONZ-WebSocket-Reconnect (Programm-Ende-Erkennung), Portal-E2E für dynamische Programme;
   `InactivitySchedulerTest`/`CreditServiceAccountingHistoryTest` warten auf Bedingungen statt

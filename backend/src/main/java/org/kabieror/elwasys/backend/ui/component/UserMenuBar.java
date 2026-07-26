@@ -4,6 +4,7 @@ import com.vaadin.flow.component.menubar.MenuBar;
 import com.vaadin.flow.component.menubar.MenuBarVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.spring.security.AuthenticationContext;
+import java.util.Optional;
 import org.kabieror.elwasys.backend.auth.ElwasysUserPrincipal;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.service.PasswordService;
@@ -47,7 +48,7 @@ public class UserMenuBar extends HorizontalLayout {
         add(menuBar);
     }
 
-    private static java.util.Optional<UserEntity> currentUser(AuthenticationContext authenticationContext,
+    private static Optional<UserEntity> currentUser(AuthenticationContext authenticationContext,
             UserService userService) {
         return authenticationContext.getAuthenticatedUser(ElwasysUserPrincipal.class)
                 .map(ElwasysUserPrincipal::getUserId).flatMap(userService::findById);

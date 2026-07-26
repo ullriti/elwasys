@@ -1,14 +1,11 @@
 package org.kabieror.elwasys.backend.ui.login;
 
-import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.button.ButtonVariant;
-import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.html.Paragraph;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.EmailField;
-import org.kabieror.elwasys.backend.ui.component.Notifications;
 import org.kabieror.elwasys.backend.service.PasswordResetService;
+import org.kabieror.elwasys.backend.ui.component.AbstractFormDialog;
+import org.kabieror.elwasys.backend.ui.component.Notifications;
 
 /**
  * Dialog "Passwort zurücksetzen" (Phase 3 AP4, Testfall P19) - fachlicher Nachfolger von
@@ -20,18 +17,15 @@ import org.kabieror.elwasys.backend.service.PasswordResetService;
  * Mailversand im Test) - die Absende-Logik selbst wird service-seitig getestet
  * ({@code PasswordResetServiceTest}).
  */
-public class PasswordForgotDialog extends Dialog {
+public class PasswordForgotDialog extends AbstractFormDialog {
 
     private final PasswordResetService passwordResetService;
 
     private final EmailField tfEmail = new EmailField("Email");
 
     public PasswordForgotDialog(PasswordResetService passwordResetService) {
+        super("Passwort zurücksetzen", "22em");
         this.passwordResetService = passwordResetService;
-
-        setHeaderTitle("Passwort zurücksetzen");
-        setModal(true);
-        setWidth("22em");
 
         Paragraph explanation = new Paragraph(
                 "Bitte gib hier deine Email-Adresse ein. Falls ein Konto zu dieser Adresse existiert, erhältst du "
@@ -45,16 +39,9 @@ public class PasswordForgotDialog extends Dialog {
         content.setPadding(false);
         add(content);
 
-        Button btnCancel = new Button("Abbrechen", e -> close());
-        Button btnSave = new Button("OK", e -> execute());
-        btnSave.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-        getFooter().add(new HorizontalLayout(btnCancel, btnSave));
+        addFooterActions("OK", this::execute);
 
-        addOpenedChangeListener(e -> {
-            if (e.isOpened()) {
-                this.tfEmail.focus();
-            }
-        });
+        focusOnOpen(this.tfEmail);
     }
 
     private void execute() {
@@ -67,7 +54,8 @@ public class PasswordForgotDialog extends Dialog {
         try {
             this.passwordResetService.requestReset(this.tfEmail.getValue());
         } catch (RuntimeException e) {
-            Notifications.showError("Konnte die Anfrage nicht verarbeiten. " + e.getMessage());
+            // Ohne Detailtext: dieser Dialog steht VOR dem Login (siehe AbstractFormDialog).
+            showFailure("Konnte die Anfrage nicht verarbeiten.", e, false);
             return;
         }
 

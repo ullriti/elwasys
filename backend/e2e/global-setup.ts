@@ -1,5 +1,5 @@
-import { execFileSync } from 'child_process';
 import { request } from '@playwright/test';
+import { runSql } from './tests/helpers';
 
 /**
  * Runs once before any test file, AFTER Playwright's `webServer` has confirmed the backend
@@ -73,10 +73,7 @@ async function globalSetup() {
         FALSE, FALSE, FALSE, (SELECT id FROM user_groups WHERE name = 'Default')
       WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'e2e_pwchange_user');
   `;
-  execFileSync('sudo', ['-u', 'postgres', 'psql', '-q', '-v', 'ON_ERROR_STOP=1', '-d', dbName], {
-    input: sql,
-    stdio: ['pipe', 'inherit', 'inherit'],
-  });
+  runSql(dbName, sql);
   console.log('[global-setup] seeded e2e_portal_user / e2e_pwchange_user');
 }
 
