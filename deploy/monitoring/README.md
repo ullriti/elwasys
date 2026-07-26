@@ -53,23 +53,46 @@ Fehler wird nur alle `ELWASYS_ALERT_RENOTIFY_SECONDS` (Default 6 h) wiederholt.
 ```
 (`ELWASYS_ALERT_STATE_DIR` muss für den Cron-User beschreibbar sein.)
 
-### Alternative: externer Uptime-Monitor
+## Zweite Stufe: externer Uptime-Monitor (ebenfalls PFLICHT)
 
-Statt (oder zusätzlich zu) diesem Skript kann ein externer Dienst (healthchecks.io, Uptime
-Kuma, …) `/actuator/health/operational` von außen pollen (Erwartung HTTP 200, Alarm bei
-503/Timeout). Das deckt zusätzlich den Fall ab, dass der **ganze Host** ausfällt (dann läuft
-auch dieses lokale Skript nicht mehr) – für den ehrenamtlichen Betrieb eine sinnvolle Ergänzung.
+Das lokale Poll-Skript hat eine bauartbedingte blinde Stelle: **fällt der ganze Host aus**
+(Strom, Netz, Plattentod), läuft auch der Poller nicht mehr – und es kommt kein Alarm, gerade
+im schwersten Fehlerfall. Deshalb ist zusätzlich ein **externer Monitor Pflicht**, der von
+außen prüft:
 
-## Alarm-Probe (Generalprobe)
+- Dienst: z. B. [healthchecks.io](https://healthchecks.io) (Dead-Man's-Switch, kostenloser Tarif)
+  oder eine eigene [Uptime-Kuma](https://github.com/louislam/uptime-kuma)-Instanz.
+- **Variante 1 (Endpoint-Check, bevorzugt, wenn das Portal öffentlich erreichbar ist):** den
+  Monitor auf `https://<portal-host>/actuator/health/operational` zeigen lassen –
+  Erwartung HTTP `200`, Alarm bei `503`/Timeout.
+- **Variante 2 (Dead-Man's-Switch, wenn nichts von außen erreichbar ist):** das lokale Skript
+  pingt nach jedem **erfolgreichen** Lauf eine healthchecks.io-URL; bleibt der Ping aus (Host
+  tot), alarmiert der externe Dienst. Dafür im Cron/Timer-Wrapper ergänzen:
+  ```bash
+  /opt/elwasys/monitoring/elwasys-health-alert.sh && curl -fsS -m 10 https://hc-ping.com/<uuid> >/dev/null
+  ```
+
+**Beide Stufen gehören eingerichtet:** das lokale Skript meldet die *betrieblichen* Fehlerbilder
+(Terminal weg, abgelaufene Execution, Zertifikat, Platte) mit Details; der externe Monitor deckt
+den *Totalausfall* ab. Die Alarm-Probe unten muss für **beide** Wege einmal durchlaufen.
+
+## Alarm-Probe (Generalprobe) – für BEIDE Stufen
 
 Vor dem Feldeinsatz **einmal bewusst einen Fehler provozieren** und prüfen, dass der Alarm
-ankommt (Spec 0001, Generalprobe-Punkt „Alarm-Probe"):
+tatsächlich bei einem Menschen ankommt (Spec 0001, Generalprobe-Punkt „Alarm-Probe"):
 
 ```bash
-# Backend kurz stoppen ODER eine falsche URL setzen und einen Lauf erzwingen:
+# Stufe 1 (lokales Skript): Backend kurz stoppen und einen Lauf erzwingen:
 sudo systemctl start elwasys-health-alert.service   # bei gestopptem Backend -> Alarm muss kommen
 # danach Backend wieder starten -> die "behoben"-Meldung muss folgen.
+
+# Stufe 2 (externer Monitor): den Timer stoppen (Dead-Man's-Switch) bzw. den Endpoint
+# blockieren und warten, bis der externe Dienst alarmiert:
+sudo systemctl stop elwasys-health-alert.timer      # Ping bleibt aus -> externer Alarm
+sudo systemctl start elwasys-health-alert.timer     # danach wieder aktivieren (!)
 ```
+
+Beide Proben mit Datum und „Alarm kam an bei <wem/wie>" im Runbook festhalten.
 
 ## Test
 

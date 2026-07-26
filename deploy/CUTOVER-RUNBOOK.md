@@ -61,12 +61,16 @@ Hintergrund/Roadmap: [docs/kb/05-migration-plan.md](../kb/05-migration-plan.md),
       und darf nie direkt im Klartext aus dem Netz veröffentlicht werden. Eine Klartext-Ausnahme
       gibt es **nicht** als Default; falls überhaupt, nur als ausdrücklich begründete
       Sonderentscheidung des Auftraggebers.
-- [ ] **Alarmkanal einrichten (Issue #83/H4, Pflicht-Gate).** Das betriebliche Alerting muss
-      VOR dem Feldeinsatz verdrahtet sein: `deploy/monitoring/elwasys-health-alert.sh` +
-      systemd-Timer/Cron (Pushover/Mail) einrichten – Schritte in
-      [`deploy/monitoring/README.md`](monitoring/README.md). Die **Alarm-Probe** (Fehler
-      provozieren → Alarm kommt an) gehört in die Generalprobe (Spec 0001). Ohne verdrahteten
-      Alarm gilt die Installation als nicht feldbereit.
+- [ ] **Alarmkanal einrichten – ZWEISTUFIG (Issue #83/H4, Pflicht-Gate).** Das betriebliche
+      Alerting muss VOR dem Feldeinsatz verdrahtet sein, und zwar **beide** Stufen:
+      **(1)** lokal `deploy/monitoring/elwasys-health-alert.sh` + systemd-Timer/Cron
+      (Pushover/Mail) – meldet die betrieblichen Fehlerbilder mit Details; **(2)** ein
+      **externer** Uptime-Monitor (healthchecks.io/Uptime Kuma) auf `/operational` bzw. als
+      Dead-Man's-Switch – deckt den **Host-Totalausfall** ab, bei dem das lokale Skript
+      selbst nicht mehr läuft. Schritte in
+      [`deploy/monitoring/README.md`](monitoring/README.md). Die **Alarm-Probe für beide
+      Stufen** gehört in die Generalprobe (Spec 0001). Ohne beide Stufen gilt die
+      Installation als nicht feldbereit.
 - [ ] **Portal-Basis-URL für Passwort-Reset-Mails (Issue #86/H7, Pflichtprüfpunkt).** Der
       Passwort-Reset ist per Default AN; die Reset-Mail baut ihre Links aus
       `ELWASYS_PORTAL_BASE_URL`. **Compose:** die Variable in `.env` auf die öffentliche
@@ -369,14 +373,20 @@ Das Backend liefert (Pre-Launch AP6, Issue #32) zwei betriebliche Health-Indicat
 - **Offene abgelaufene Executions** – Ausführungen, deren `maxDuration` überschritten ist und
   die noch nicht abgerechnet/geschlossen wurden (siehe 7c).
 
-**Verdrahteter Alarmkanal (Pflicht vor dem Feldeinsatz, Issue #83/H4):** Das Pollen ist **nicht
-mehr nur empfohlen, sondern mitgeliefert** – `deploy/monitoring/` enthält ein Poll-Skript
-(`elwasys-health-alert.sh`) plus systemd-Timer/Cron, das `/actuator/health/operational` pollt
-und bei `status != UP` **oder Nichterreichbarkeit** (Backend/DB down) per **Pushover/Mail**
-alarmiert; es deckt zusätzlich **Zertifikats-Ablauf** und **Plattenplatz** ab (#89). Einrichtung
-und die **Alarm-Probe** (bewusst einen Fehler provozieren → Alarm kommt an) siehe
-[`deploy/monitoring/README.md`](monitoring/README.md). **Ohne eingerichteten Alarmkanal gilt die
-Installation als nicht feldbereit.**
+**Verdrahteter Alarmkanal, zweistufig (Pflicht vor dem Feldeinsatz, Issue #83/H4):** Das Pollen
+ist **nicht mehr nur empfohlen, sondern mitgeliefert**:
+
+1. **Lokal:** `deploy/monitoring/elwasys-health-alert.sh` + systemd-Timer/Cron pollt
+   `/actuator/health/operational` und alarmiert bei `status != UP` **oder Nichterreichbarkeit**
+   (Backend/DB down) per **Pushover/Mail**; deckt zusätzlich **Zertifikats-Ablauf** und
+   **Plattenplatz** ab (#89).
+2. **Extern (Pflicht, nicht optional):** ein Uptime-Monitor (healthchecks.io/Uptime Kuma) prüft
+   von außen bzw. als Dead-Man's-Switch. Er schließt die blinde Stelle von Stufe 1: **fällt der
+   Host komplett aus, schweigt das lokale Skript** – genau im schwersten Fehlerfall.
+
+Einrichtung und die **Alarm-Probe für beide Stufen** siehe
+[`deploy/monitoring/README.md`](monitoring/README.md). **Ohne beide Stufen gilt die Installation
+als nicht feldbereit.**
 
 **Trennung Orchestrierung vs. Alerting (wichtig):**
 
