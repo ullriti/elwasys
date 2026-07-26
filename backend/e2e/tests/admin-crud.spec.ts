@@ -327,6 +327,38 @@ test('admin can create a fixed-price program (P12)', async ({ page }) => {
   await expect(page.getByText(programName, { exact: true })).toBeVisible();
 });
 
+test('admin can create a time-based (dynamic) program (P12b)', async ({ page }) => {
+  // Counterpart to P12: the dialog shows a different set of fields for DYNAMIC programs
+  // (Grundgebühr/Zeitpreis/Abr.-Intervall instead of a single Preis, see
+  // ProgramFormDialog#updateTypeDependentVisibility) and its own validation - until now no test
+  // covered that branch at all (finale Review R6, Issue #88).
+  const programName = `E2E-Programm-Dyn-${Date.now()}`;
+
+  await openAdminSection(page, 'admin/programs');
+  await page.getByRole('button', { name: 'Neu' }).click();
+  const win = dialog(page);
+  await expect(win.locator('h2[slot="title"]')).toHaveText('Programm erstellen');
+
+  await win.getByLabel('Name', { exact: true }).fill(programName);
+  await win.getByRole('radio', { name: 'Dynamisch' }).click({ force: true });
+
+  // The fixed-price field gives way to the three time-based ones.
+  await expect(win.getByLabel('Preis', { exact: true })).toBeHidden();
+  await win.getByLabel('Grundgebühr').fill('0.50');
+  await win.getByLabel('Zeitpreis').fill('0.10');
+  await win.getByRole('spinbutton', { name: 'Maximaldauer' }).fill('60');
+
+  await win.getByRole('button', { name: 'Erstellen' }).click();
+  await expectNoDialog(page);
+
+  await expect(page.getByText(programName, { exact: true })).toBeVisible();
+  // The grid renders the type and the composed price (AdminProgramsView#formatPrice):
+  // "<Grundgebühr> + <Zeitpreis> / <Einheit>" - proof the values landed as a DYNAMIC program.
+  const cells = await gridRowCells(page, programName);
+  await expect(cells[1]).toHaveText('Dynamisch');
+  await expect(cells[2]).toContainText('/ s');
+});
+
 test('admin can open and save a location from the Standorte section (P14)', async ({ page }) => {
   // The legacy portal only exposed location editing via a dialog on the dashboard
   // (LocationWindow); the backend Portal gives locations their own "Standorte" section instead
