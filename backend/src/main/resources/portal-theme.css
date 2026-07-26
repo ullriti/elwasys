@@ -223,6 +223,27 @@ vaadin-grid::part(even-row-cell) {
 }
 
 /* ------------------------------------------------------------------ *
+ *  Offline-Vorfälle (Issue #89) - der Hinweisstreifen auf dem Dashboard und der
+ *  Schadensbetrag in der Vorfallsliste. Beide sollen sofort ins Auge fallen: es
+ *  geht um verlorenes Geld, das ein Mensch aktiv zur Kenntnis nehmen muss.
+ * ------------------------------------------------------------------ */
+.dashboard-incident-banner {
+  background-color: #fdecea;
+  border: 1px solid var(--elwa-box-border);
+  border-left: 4px solid var(--lumo-error-color);
+  border-radius: 3px;
+  padding: 0.5rem 0.75rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.admin-offline-incidents-view .incident-amount {
+  color: var(--lumo-error-text-color);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ *
  *  Login-Maske - als Karte mit blauem oberem Rand, auf grauem Hintergrund.
  * ------------------------------------------------------------------ */
 .login-view {

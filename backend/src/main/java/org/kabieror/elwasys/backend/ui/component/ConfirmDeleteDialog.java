@@ -8,6 +8,12 @@ import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
  * u.a. für Benutzer-/Benutzergruppen-Löschung verwendet, siehe Testfall P13). Nutzt Vaadins
  * eingebauten {@link ConfirmDialog} statt eines selbst gebauten modalen Fensters - fachlich
  * identisches Verhalten (Ja/Nein, Aktion läuft erst nach Bestätigung), moderner Baustein.
+ *
+ * <p>Seit Issue #89 ist dies der gemeinsame Ja/Nein-Baustein für ALLE nicht zurücknehmbaren
+ * Aktionen des Portals - neben den Löschpfaden auch die Quittierung eines Offline-Vorfalls
+ * (siehe {@code AdminOfflineIncidentsView}: die bewusste Kenntnisnahme eines Geldverlusts, die
+ * den Betriebsalarm beendet). Der Klassenname stammt aus dem ersten Anwendungsfall; ein
+ * eigener, fast identischer Bestätigungsdialog daneben wäre die schlechtere Alternative.
  */
 public final class ConfirmDeleteDialog {
 

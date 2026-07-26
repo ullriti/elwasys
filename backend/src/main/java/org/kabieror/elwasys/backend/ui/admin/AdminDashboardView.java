@@ -5,6 +5,7 @@ import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.grid.Grid;
+import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
@@ -18,16 +19,12 @@ import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
+import com.vaadin.flow.router.RouterLink;
 import com.vaadin.flow.shared.Registration;
 import jakarta.annotation.security.RolesAllowed;
-import java.math.BigDecimal;
-import java.text.NumberFormat;
 import java.time.Duration;
-import java.time.format.DateTimeFormatter;
-import java.time.format.FormatStyle;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
@@ -41,7 +38,9 @@ import org.kabieror.elwasys.backend.service.DashboardService.DeviceStatus;
 import org.kabieror.elwasys.backend.service.DashboardService.LocationStatus;
 import org.kabieror.elwasys.backend.service.DeviceService;
 import org.kabieror.elwasys.backend.service.ExecutionService;
+import org.kabieror.elwasys.backend.service.TerminalOfflineIncidentService;
 import org.kabieror.elwasys.backend.ui.admin.dialog.LogViewerDialog;
+import org.kabieror.elwasys.backend.ui.component.PortalFormats;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 import org.kabieror.elwasys.backend.ws.TerminalMaintenanceService;
 import org.kabieror.elwasys.backend.ws.TerminalNotConnectedException;
@@ -79,39 +78,48 @@ import org.springframework.data.domain.Sort;
  * Verbindung) zeigt diese View "Verbunden seit". Da sich Alt-Terminals laut Roadmap ERST in
  * Phase 4 über diesen Kanal verbinden, zeigt diese Toolbar in der Praxis i.d.R. "Nicht
  * verbunden" - genau der laut Auftrag geforderte klare Zustand.
+ *
+ * <p><b>Seit Issue #89</b>: über den Standort-Panels ein Hinweisstreifen auf offene
+ * Offline-Vorfälle mit Link in {@link AdminOfflineIncidentsView} (siehe
+ * {@link #refreshIncidentBanner()}) - ohne offene Vorfälle bleibt er unsichtbar.
  */
 @Route(value = "admin", layout = AdminLayout.class)
 @PageTitle("Dashboard - Waschportal")
 @RolesAllowed("ADMIN")
 public class AdminDashboardView extends VerticalLayout {
 
-    private static final DateTimeFormatter DATE_TIME_FORMAT = DateTimeFormatter.ofLocalizedDateTime(
-            FormatStyle.SHORT).withLocale(Locale.GERMANY);
-
     private final DashboardService dashboardService;
     private final DeviceService deviceService;
     private final ExecutionService executionService;
     private final TerminalMaintenanceService maintenanceService;
+    private final TerminalOfflineIncidentService incidentService;
     private final UiBroadcaster broadcaster;
 
     private final VerticalLayout locationsContainer = new VerticalLayout();
     private final Map<Integer, VerticalLayout> devicePanelsByDeviceId = new HashMap<>();
 
+    /** Hinweis auf offene Offline-Vorfälle (Issue #89) - nur sichtbar, wenn es welche gibt. */
+    private final Div incidentBanner = new Div();
+
     private Registration broadcasterRegistration;
 
     public AdminDashboardView(DashboardService dashboardService, DeviceService deviceService,
             ExecutionService executionService, TerminalMaintenanceService maintenanceService,
-            UiBroadcaster broadcaster) {
+            TerminalOfflineIncidentService incidentService, UiBroadcaster broadcaster) {
         this.dashboardService = dashboardService;
         this.deviceService = deviceService;
         this.executionService = executionService;
         this.maintenanceService = maintenanceService;
+        this.incidentService = incidentService;
         this.broadcaster = broadcaster;
 
         setSizeFull();
         addClassName("admin-dashboard-view");
 
-        add(new H2("Dashboard"));
+        this.incidentBanner.addClassName("dashboard-incident-banner");
+        this.incidentBanner.setVisible(false);
+
+        add(new H2("Dashboard"), this.incidentBanner);
 
         this.locationsContainer.setPadding(false);
         add(this.locationsContainer);
@@ -169,11 +177,31 @@ public class AdminDashboardView extends VerticalLayout {
     }
 
     private void loadData() {
+        refreshIncidentBanner();
         this.locationsContainer.removeAll();
         this.devicePanelsByDeviceId.clear();
         for (LocationStatus locationStatus : this.dashboardService.getLocationStatuses()) {
             this.locationsContainer.add(buildLocationPanel(locationStatus));
         }
+    }
+
+    /**
+     * Issue #89: offene Offline-Vorfälle bedeuten verlorenes Geld und halten den Betriebsalarm -
+     * das Dashboard ist die erste Seite nach dem Admin-Login und damit die naheliegende Stelle,
+     * an der ein Administrator davon erfährt. Der Hinweis verlinkt in die Vorfallsliste
+     * ({@link AdminOfflineIncidentsView}), wo quittiert wird; ohne offene Vorfälle bleibt er
+     * unsichtbar, damit das gewohnte Dashboard unverändert aussieht.
+     */
+    private void refreshIncidentBanner() {
+        long openCount = this.incidentService.countOpen();
+        this.incidentBanner.removeAll();
+        this.incidentBanner.setVisible(openCount > 0);
+        if (openCount == 0) {
+            return;
+        }
+        this.incidentBanner.add(new Span(openCount == 1 ? "1 offener Offline-Vorfall - bitte sichten und quittieren: "
+                : openCount + " offene Offline-Vorfälle - bitte sichten und quittieren: "),
+                new RouterLink("Offline-Vorfälle", AdminOfflineIncidentsView.class));
     }
 
     private VerticalLayout buildLocationPanel(LocationStatus locationStatus) {
@@ -337,10 +365,10 @@ public class AdminDashboardView extends VerticalLayout {
         grid.setHeight("14em");
         grid.setWidthFull();
 
-        grid.addColumn(e -> e.getStart() == null ? "-" : e.getStart().format(DATE_TIME_FORMAT)).setHeader("Datum");
+        grid.addColumn(e -> PortalFormats.dateTime(e.getStart())).setHeader("Datum");
         grid.addColumn(e -> e.getUser() == null ? "-" : e.getUser().getName()).setHeader("Benutzer");
         grid.addColumn(e -> formatDuration(elapsedOf(e))).setHeader("Dauer");
-        grid.addColumn(e -> formatCurrency(this.executionService.getPrice(e))).setHeader("Preis");
+        grid.addColumn(e -> PortalFormats.currency(this.executionService.getPrice(e))).setHeader("Preis");
 
         grid.setPartNameGenerator(e -> {
             if (!e.isFinished() && e.getStart() != null) {
@@ -383,9 +411,5 @@ public class AdminDashboardView extends VerticalLayout {
         long minutes = (totalSeconds % 3600) / 60;
         long seconds = totalSeconds % 60;
         return String.format("%02d:%02d:%02d", hours, minutes, seconds);
-    }
-
-    private static String formatCurrency(BigDecimal amount) {
-        return NumberFormat.getCurrencyInstance(Locale.GERMANY).format(amount);
     }
 }

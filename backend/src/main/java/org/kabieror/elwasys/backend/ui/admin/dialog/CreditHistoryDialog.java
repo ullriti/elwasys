@@ -2,13 +2,10 @@ package org.kabieror.elwasys.backend.ui.admin.dialog;
 
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.grid.Grid;
-import java.text.NumberFormat;
-import java.time.format.DateTimeFormatter;
-import java.time.format.FormatStyle;
-import java.util.Locale;
 import org.kabieror.elwasys.backend.domain.CreditAccountingEntryEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.service.CreditService;
+import org.kabieror.elwasys.backend.ui.component.PortalFormats;
 
 /**
  * Modaler, rein lesender Dialog mit der vollständigen Buchungshistorie eines Benutzers
@@ -20,9 +17,6 @@ import org.kabieror.elwasys.backend.service.CreditService;
  */
 public class CreditHistoryDialog extends Dialog {
 
-    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT)
-            .withLocale(Locale.GERMANY);
-
     public CreditHistoryDialog(CreditService creditService, UserEntity user) {
         setHeaderTitle("Umsätze von " + user.getName());
         setModal(true);
@@ -32,15 +26,11 @@ public class CreditHistoryDialog extends Dialog {
 
         Grid<CreditAccountingEntryEntity> grid = new Grid<>();
         grid.setSizeFull();
-        grid.addColumn(e -> e.getDate().format(DATE_FORMAT)).setHeader("Datum").setFlexGrow(0).setWidth("12em");
-        grid.addColumn(this::formatAmount).setHeader("Betrag").setFlexGrow(0).setWidth("8em");
+        grid.addColumn(e -> PortalFormats.dateTime(e.getDate())).setHeader("Datum").setFlexGrow(0).setWidth("12em");
+        grid.addColumn(e -> PortalFormats.currency(e.getAmount())).setHeader("Betrag").setFlexGrow(0).setWidth("8em");
         grid.addColumn(CreditAccountingEntryEntity::getDescription).setHeader("Buchungstext");
         grid.setItems(creditService.getAccountingEntries(user));
 
         add(grid);
-    }
-
-    private String formatAmount(CreditAccountingEntryEntity entry) {
-        return NumberFormat.getCurrencyInstance(Locale.GERMANY).format(entry.getAmount());
     }
 }
