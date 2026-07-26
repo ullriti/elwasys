@@ -39,7 +39,7 @@ Konzept). Claude kennt zwei Ebenen:
 
 | Ort | Zweck |
 |-----|-------|
-| [`docs/kb/`](docs/kb/README.md) | Knowledge Base – zentrale Projektwahrheit + „Current state" |
+| [`docs/kb/`](kb/README.md) | Knowledge Base – zentrale Projektwahrheit + „Current state" |
 | [`docs/worklog/`](worklog/README.md) | Arbeitsjournal, ein Eintrag je Session |
 | [`docs/specs/`](specs/README.md) | Spezifikationen – *was* gebaut wird |
 | [`docs/architecture/`](architecture/) | ADRs – *warum* entschieden wurde |
