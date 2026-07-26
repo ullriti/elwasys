@@ -4,11 +4,10 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.html.Paragraph;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.EmailField;
+import org.kabieror.elwasys.backend.ui.component.Notifications;
 import org.kabieror.elwasys.backend.service.PasswordResetService;
 
 /**
@@ -68,7 +67,7 @@ public class PasswordForgotDialog extends Dialog {
         try {
             this.passwordResetService.requestReset(this.tfEmail.getValue());
         } catch (RuntimeException e) {
-            showError("Konnte die Anfrage nicht verarbeiten. " + e.getMessage());
+            Notifications.showError("Konnte die Anfrage nicht verarbeiten. " + e.getMessage());
             return;
         }
 
@@ -76,16 +75,8 @@ public class PasswordForgotDialog extends Dialog {
         // Neutrale Meldung (Issue #24, ADR 0018): IMMER dieselbe Rückmeldung, unabhängig
         // davon, ob zu der Adresse ein Konto existiert - so verrät der Dialog die
         // Kontenexistenz nicht.
-        showSuccess("Falls ein Konto zu dieser Adresse existiert, wurde eine Email versandt.");
+        Notifications.showSuccess("Falls ein Konto zu dieser Adresse existiert, wurde eine Email versandt.");
     }
 
-    private static void showError(String message) {
-        Notification notification = Notification.show(message, 5000, Notification.Position.MIDDLE);
-        notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
-    }
 
-    private static void showSuccess(String message) {
-        Notification notification = Notification.show(message, 4000, Notification.Position.MIDDLE);
-        notification.addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-    }
 }

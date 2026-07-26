@@ -5,12 +5,11 @@ import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.MultiSelectComboBox;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.TextField;
 import java.util.Set;
+import org.kabieror.elwasys.backend.ui.component.Notifications;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
 import org.kabieror.elwasys.backend.service.LocationService;
@@ -106,10 +105,7 @@ public class LocationFormDialog extends Dialog {
                         this.ifOfflineMaxDuration.getValue());
             }
         } catch (RuntimeException e) {
-            Notification notification = Notification.show(
-                    "Der Standort konnte nicht gespeichert werden. " + e.getMessage(), 5000,
-                    Notification.Position.MIDDLE);
-            notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
+            Notifications.showError("Der Standort konnte nicht gespeichert werden. " + e.getMessage());
             return;
         }
 

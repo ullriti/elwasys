@@ -1,19 +1,14 @@
 package org.kabieror.elwasys.backend.ui.admin;
 
-import com.vaadin.flow.component.AttachEvent;
-import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.grid.Grid;
-import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
-import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
-import com.vaadin.flow.shared.Registration;
 import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 import java.math.BigDecimal;
@@ -33,7 +28,6 @@ import org.kabieror.elwasys.backend.ui.admin.dialog.CreditHistoryDialog;
 import org.kabieror.elwasys.backend.ui.admin.dialog.CreditTopUpDialog;
 import org.kabieror.elwasys.backend.ui.admin.dialog.ExpiredExecutionsDialog;
 import org.kabieror.elwasys.backend.ui.admin.dialog.UserFormDialog;
-import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
 import org.kabieror.elwasys.backend.ui.component.PortalFormats;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
@@ -62,17 +56,14 @@ import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 @Route(value = "admin/users", layout = AdminLayout.class)
 @PageTitle("Benutzer - Waschportal")
 @RolesAllowed("ADMIN")
-public class AdminUsersView extends VerticalLayout {
+public class AdminUsersView extends AbstractAdminListView<UserEntity> {
 
     private final UserService userService;
     private final UserGroupService userGroupService;
     private final CreditService creditService;
     private final ExecutionService executionService;
     private final PasswordResetService passwordResetService;
-    private final UiBroadcaster broadcaster;
     private final String actingAdminName;
-
-    private final Grid<UserEntity> grid = new Grid<>();
 
     /**
      * Guthaben je Benutzer-Id, in {@link #loadData()} gebündelt vorberechnet (Issue #30):
@@ -81,72 +72,39 @@ public class AdminUsersView extends VerticalLayout {
      */
     private Map<Integer, BigDecimal> creditByUserId = Map.of();
 
-    private Registration broadcasterRegistration;
-
     public AdminUsersView(UserService userService, UserGroupService userGroupService, CreditService creditService,
             ExecutionService executionService, PasswordResetService passwordResetService, UiBroadcaster broadcaster,
             AuthenticationContext authenticationContext) {
+        super("Benutzer", "admin-users-view", "Neu", broadcaster);
         this.userService = userService;
         this.userGroupService = userGroupService;
         this.creditService = creditService;
         this.executionService = executionService;
         this.passwordResetService = passwordResetService;
-        this.broadcaster = broadcaster;
         this.actingAdminName = authenticationContext.getAuthenticatedUser(ElwasysUserPrincipal.class)
                 .map(ElwasysUserPrincipal::getName).orElse(authenticationContext.getPrincipalName().orElse(""));
 
-        setSizeFull();
-        addClassName("admin-users-view");
-
-        H2 title = new H2("Benutzer");
-        Button btnNew = new Button("Neu", new Icon(VaadinIcon.PLUS), e -> openCreateDialog());
-        btnNew.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-
-        HorizontalLayout toolbar = new HorizontalLayout(title, btnNew);
-        toolbar.setWidthFull();
-        toolbar.setFlexGrow(1, title);
-        toolbar.setAlignItems(com.vaadin.flow.component.orderedlayout.FlexComponent.Alignment.CENTER);
-
-        configureGrid();
-
-        add(toolbar, this.grid);
-        setFlexGrow(1, this.grid);
-
-        loadData();
+        initGrid();
     }
 
     @Override
-    protected void onAttach(AttachEvent attachEvent) {
-        super.onAttach(attachEvent);
-        this.broadcasterRegistration = this.broadcaster.register(attachEvent.getUI(), event -> {
-            if (event instanceof UserChangedEvent || event instanceof CreditChangedEvent
-                    || event instanceof ExecutionChangedEvent) {
-                loadData();
-            }
-        });
-    }
-
-    @Override
-    protected void onDetach(DetachEvent detachEvent) {
-        if (this.broadcasterRegistration != null) {
-            this.broadcasterRegistration.remove();
-            this.broadcasterRegistration = null;
-        }
-        super.onDetach(detachEvent);
-    }
-
-    private void configureGrid() {
-        this.grid.setSizeFull();
-
-        this.grid.addColumn(UserEntity::getName).setHeader("Name").setSortable(true);
-        this.grid.addColumn(UserEntity::getUsername).setHeader("Username").setSortable(true);
-        this.grid.addColumn(u -> u.getGroup() == null ? "" : u.getGroup().getName()).setHeader("Gruppe")
+    protected void configureColumns(Grid<UserEntity> grid) {
+        grid.addColumn(UserEntity::getName).setHeader("Name").setSortable(true);
+        grid.addColumn(UserEntity::getUsername).setHeader("Username").setSortable(true);
+        grid.addColumn(u -> u.getGroup() == null ? "" : u.getGroup().getName()).setHeader("Gruppe")
                 .setSortable(true);
-        this.grid.addColumn(this::formatCardIds).setHeader("Kartennummer");
-        this.grid.addColumn(this::formatCredit).setHeader("Guthaben");
-        this.grid.addComponentColumn(this::statusBadge).setHeader("Status");
-        this.grid.addComponentColumn(this::expiredExecutionsWarning).setHeader("").setFlexGrow(0).setWidth("50px");
-        this.grid.addComponentColumn(this::actionButtons).setHeader("").setFlexGrow(0).setWidth("190px");
+        grid.addColumn(this::formatCardIds).setHeader("Kartennummer");
+        grid.addColumn(this::formatCredit).setHeader("Guthaben");
+        grid.addComponentColumn(this::statusBadge).setHeader("Status");
+        grid.addComponentColumn(this::expiredExecutionsWarning).setHeader("").setFlexGrow(0).setWidth("50px");
+    }
+
+    @Override
+    protected boolean isRelevantChange(Object event) {
+        // Guthaben- und Ausfuehrungs-Ereignisse aendern die angezeigten Spalten
+        // "Guthaben"/Warndreieck - deshalb laedt die Liste auch bei ihnen neu.
+        return event instanceof UserChangedEvent || event instanceof CreditChangedEvent
+                || event instanceof ExecutionChangedEvent;
     }
 
     private String formatCardIds(UserEntity user) {
@@ -192,10 +150,15 @@ public class AdminUsersView extends VerticalLayout {
         return wrapper;
     }
 
-    private HorizontalLayout actionButtons(UserEntity user) {
-        Button btnEdit = new Button(new Icon(VaadinIcon.EDIT));
-        btnEdit.setTooltipText("Bearbeiten");
-        btnEdit.addClickListener(e -> openEditDialog(user));
+    @Override
+    protected String actionColumnWidth() {
+        // Vier Aktionen statt der zwei der Basisklasse (Bearbeiten/Guthaben/Umsätze/Löschen).
+        return "190px";
+    }
+
+    @Override
+    protected HorizontalLayout actionButtons(UserEntity user) {
+        HorizontalLayout buttons = super.actionButtons(user);
 
         Button btnCredit = new Button(new Icon(VaadinIcon.EURO));
         btnCredit.setTooltipText("Guthaben aufladen");
@@ -205,20 +168,21 @@ public class AdminUsersView extends VerticalLayout {
         btnCreditHistory.setTooltipText("Umsätze ansehen");
         btnCreditHistory.addClickListener(e -> openCreditHistoryDialog(user));
 
-        Button btnDelete = new Button(new Icon(VaadinIcon.TRASH));
-        btnDelete.setTooltipText("Löschen");
-        btnDelete.addThemeVariants(ButtonVariant.LUMO_ERROR, ButtonVariant.LUMO_TERTIARY);
-        btnDelete.addClickListener(e -> confirmDelete(user));
-
-        return new HorizontalLayout(btnEdit, btnCredit, btnCreditHistory, btnDelete);
+        // Reihenfolge 1:1 wie im Alt-Portal: Bearbeiten, Guthaben, Umsätze, Löschen - deshalb
+        // werden die zwei zusätzlichen Knöpfe VOR dem Löschen-Knopf der Basisklasse eingefügt.
+        buttons.addComponentAtIndex(1, btnCredit);
+        buttons.addComponentAtIndex(2, btnCreditHistory);
+        return buttons;
     }
 
-    private void openCreateDialog() {
+    @Override
+    protected void openCreateDialog() {
         new UserFormDialog(this.userService, this.userGroupService, this.passwordResetService, null, this::loadData)
                 .open();
     }
 
-    private void openEditDialog(UserEntity user) {
+    @Override
+    protected void openEditDialog(UserEntity user) {
         new UserFormDialog(this.userService, this.userGroupService, this.passwordResetService, user, this::loadData)
                 .open();
     }
@@ -235,19 +199,34 @@ public class AdminUsersView extends VerticalLayout {
         new CreditHistoryDialog(this.creditService, user).open();
     }
 
-    private void confirmDelete(UserEntity user) {
-        ConfirmDeleteDialog.show("Benutzer löschen",
-                "Möchten Sie diesen Benutzer wirklich löschen? " + user.getName(), () -> {
-                    this.userService.delete(user);
-                    loadData();
-                });
+    @Override
+    protected void delete(UserEntity user) {
+        // Soft-Delete (Issue #39): der Benutzer bleibt als Beleg erhalten, ist aber nicht mehr
+        // aktiv - eine EntityInUseException gibt es hier deshalb nicht.
+        this.userService.delete(user);
     }
 
-    private void loadData() {
-        List<UserEntity> users = this.userService.findAllActive();
+    @Override
+    protected String deleteDialogTitle() {
+        return "Benutzer löschen";
+    }
+
+    @Override
+    protected String deleteDialogQuestion(UserEntity user) {
+        return "Möchten Sie diesen Benutzer wirklich löschen? " + user.getName();
+    }
+
+    @Override
+    protected List<UserEntity> findAll() {
+        return this.userService.findAllActive();
+    }
+
+    @Override
+    protected void loadData() {
+        List<UserEntity> users = findAll();
         // Issue #30: Guthaben aller Benutzer in zwei Abfragen bündeln, statt pro Grid-Zeile
         // (formatCredit) eine eigene Guthabenabfrage auszulösen.
         this.creditByUserId = this.creditService.getCredits(users);
-        this.grid.setItems(users);
+        getGrid().setItems(users);
     }
 }

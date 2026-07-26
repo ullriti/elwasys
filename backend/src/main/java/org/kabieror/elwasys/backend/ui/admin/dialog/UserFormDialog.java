@@ -6,11 +6,10 @@ import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.textfield.TextArea;
 import com.vaadin.flow.component.textfield.TextField;
+import org.kabieror.elwasys.backend.ui.component.Notifications;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
 import org.kabieror.elwasys.backend.exception.DuplicateCardIdException;
@@ -181,7 +180,7 @@ public class UserFormDialog extends Dialog {
             this.tfCardIds.setErrorMessage(e.getMessage());
             return;
         } catch (RuntimeException e) {
-            showError("Der Benutzer konnte nicht gespeichert werden. " + e.getMessage());
+            Notifications.showError("Der Benutzer konnte nicht gespeichert werden. " + e.getMessage());
             return;
         }
 
@@ -190,9 +189,9 @@ public class UserFormDialog extends Dialog {
         if (this.cbSendPassword.getValue()) {
             try {
                 this.passwordResetService.resetPasswordByAdminAndNotify(savedUser);
-                showSuccess("Passwort wurde versandt");
+                Notifications.showSuccess("Passwort wurde versandt");
             } catch (RuntimeException e) {
-                showError("Konnte keine Email senden. " + e.getMessage());
+                Notifications.showError("Konnte keine Email senden. " + e.getMessage());
                 // Speichern war bereits erfolgreich - Dialog trotzdem schließen, 1:1 wie im
                 // Alt-Code (UserWindow#save fängt die EmailException NACH dem Speichern ab,
                 // schließt das Fenster aber in jedem Fall).
@@ -203,10 +202,6 @@ public class UserFormDialog extends Dialog {
         onSaved.run();
     }
 
-    private static void showSuccess(String message) {
-        Notification notification = Notification.show(message, 4000, Notification.Position.MIDDLE);
-        notification.addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-    }
 
     private static String[] splitCardIds(String raw) {
         if (raw == null || raw.isBlank()) {
@@ -220,8 +215,4 @@ public class UserFormDialog extends Dialog {
         return value == null || value.isEmpty() ? null : value;
     }
 
-    private static void showError(String message) {
-        Notification notification = Notification.show(message, 5000, Notification.Position.MIDDLE);
-        notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
-    }
 }

@@ -8,8 +8,6 @@ import com.vaadin.flow.component.combobox.MultiSelectComboBox;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.H3;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
 import com.vaadin.flow.component.textfield.BigDecimalField;
@@ -18,6 +16,7 @@ import com.vaadin.flow.component.textfield.TextField;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.Set;
+import org.kabieror.elwasys.backend.ui.component.Notifications;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.ProgramType;
 import org.kabieror.elwasys.backend.domain.TimeUnitType;
@@ -178,10 +177,7 @@ public class ProgramFormDialog extends Dialog {
                         this.selGroups.getValue());
             }
         } catch (RuntimeException e) {
-            Notification notification = Notification.show(
-                    "Das Programm konnte nicht gespeichert werden. " + e.getMessage(), 5000,
-                    Notification.Position.MIDDLE);
-            notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
+            Notifications.showError("Das Programm konnte nicht gespeichert werden. " + e.getMessage());
             return;
         }
 

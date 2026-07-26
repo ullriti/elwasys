@@ -1,21 +1,10 @@
 package org.kabieror.elwasys.backend.ui.admin;
 
-import com.vaadin.flow.component.AttachEvent;
-import com.vaadin.flow.component.DetachEvent;
-import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.grid.Grid;
-import com.vaadin.flow.component.html.H2;
-import com.vaadin.flow.component.icon.Icon;
-import com.vaadin.flow.component.icon.VaadinIcon;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
-import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
-import com.vaadin.flow.shared.Registration;
 import jakarta.annotation.security.RolesAllowed;
+import java.util.List;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.domain.ProgramType;
 import org.kabieror.elwasys.backend.events.ProgramChangedEvent;
@@ -23,7 +12,6 @@ import org.kabieror.elwasys.backend.exception.EntityInUseException;
 import org.kabieror.elwasys.backend.service.ProgramService;
 import org.kabieror.elwasys.backend.service.UserGroupService;
 import org.kabieror.elwasys.backend.ui.admin.dialog.ProgramFormDialog;
-import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
 import org.kabieror.elwasys.backend.ui.component.PortalFormats;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
@@ -34,73 +22,31 @@ import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
  *
  * <p><b>Seit Phase 3 AP5</b> (siehe docs/kb/05-migration-plan.md, "Live-Updates zwischen Sessions"):
  * die Liste lädt sich über den {@link UiBroadcaster} automatisch neu, wenn irgendeine Session
- * ein Programm anlegt, bearbeitet oder löscht.
+ * ein Programm anlegt, bearbeitet oder löscht. Gerüst und Lösch-Ablauf kommen aus
+ * {@link AbstractAdminListView} (Issue #92).
  */
 @Route(value = "admin/programs", layout = AdminLayout.class)
 @PageTitle("Programme - Waschportal")
 @RolesAllowed("ADMIN")
-public class AdminProgramsView extends VerticalLayout {
+public class AdminProgramsView extends AbstractAdminListView<ProgramEntity> {
 
     private final ProgramService programService;
     private final UserGroupService userGroupService;
-    private final UiBroadcaster broadcaster;
-
-    private final Grid<ProgramEntity> grid = new Grid<>();
-
-    private Registration broadcasterRegistration;
 
     public AdminProgramsView(ProgramService programService, UserGroupService userGroupService,
             UiBroadcaster broadcaster) {
+        super("Programme", "admin-programs-view", "Neu", broadcaster);
         this.programService = programService;
         this.userGroupService = userGroupService;
-        this.broadcaster = broadcaster;
-
-        setSizeFull();
-        addClassName("admin-programs-view");
-
-        H2 title = new H2("Programme");
-        Button btnNew = new Button("Neu", new Icon(VaadinIcon.PLUS), e -> openCreateDialog());
-        btnNew.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-
-        HorizontalLayout toolbar = new HorizontalLayout(title, btnNew);
-        toolbar.setWidthFull();
-        toolbar.setFlexGrow(1, title);
-        toolbar.setAlignItems(com.vaadin.flow.component.orderedlayout.FlexComponent.Alignment.CENTER);
-
-        configureGrid();
-
-        add(toolbar, this.grid);
-        setFlexGrow(1, this.grid);
-
-        loadData();
+        initGrid();
     }
 
     @Override
-    protected void onAttach(AttachEvent attachEvent) {
-        super.onAttach(attachEvent);
-        this.broadcasterRegistration = this.broadcaster.register(attachEvent.getUI(), event -> {
-            if (event instanceof ProgramChangedEvent) {
-                loadData();
-            }
-        });
-    }
-
-    @Override
-    protected void onDetach(DetachEvent detachEvent) {
-        if (this.broadcasterRegistration != null) {
-            this.broadcasterRegistration.remove();
-            this.broadcasterRegistration = null;
-        }
-        super.onDetach(detachEvent);
-    }
-
-    private void configureGrid() {
-        this.grid.setSizeFull();
-        this.grid.addColumn(ProgramEntity::getName).setHeader("Name").setSortable(true);
-        this.grid.addColumn(p -> p.getType() == ProgramType.DYNAMIC ? "Dynamisch" : "Statisch").setHeader("Typ")
+    protected void configureColumns(Grid<ProgramEntity> grid) {
+        grid.addColumn(ProgramEntity::getName).setHeader("Name").setSortable(true);
+        grid.addColumn(p -> p.getType() == ProgramType.DYNAMIC ? "Dynamisch" : "Statisch").setHeader("Typ")
                 .setSortable(true);
-        this.grid.addColumn(this::formatPrice).setHeader("Preis");
-        this.grid.addComponentColumn(this::actionButtons).setHeader("").setFlexGrow(0).setWidth("110px");
+        grid.addColumn(this::formatPrice).setHeader("Preis");
     }
 
     private String formatPrice(ProgramEntity program) {
@@ -117,43 +63,38 @@ public class AdminProgramsView extends VerticalLayout {
         return PortalFormats.currency(program.getFlagfall());
     }
 
-    private HorizontalLayout actionButtons(ProgramEntity program) {
-        Button btnEdit = new Button(new Icon(VaadinIcon.EDIT));
-        btnEdit.setTooltipText("Bearbeiten");
-        btnEdit.addClickListener(e -> openEditDialog(program));
-
-        Button btnDelete = new Button(new Icon(VaadinIcon.TRASH));
-        btnDelete.setTooltipText("Löschen");
-        btnDelete.addThemeVariants(ButtonVariant.LUMO_ERROR, ButtonVariant.LUMO_TERTIARY);
-        btnDelete.addClickListener(e -> confirmDelete(program));
-
-        return new HorizontalLayout(btnEdit, btnDelete);
+    @Override
+    protected List<ProgramEntity> findAll() {
+        return this.programService.findAll();
     }
 
-    private void openCreateDialog() {
+    @Override
+    protected boolean isRelevantChange(Object event) {
+        return event instanceof ProgramChangedEvent;
+    }
+
+    @Override
+    protected void openCreateDialog() {
         new ProgramFormDialog(this.programService, this.userGroupService, null, this::loadData).open();
     }
 
-    private void openEditDialog(ProgramEntity program) {
+    @Override
+    protected void openEditDialog(ProgramEntity program) {
         new ProgramFormDialog(this.programService, this.userGroupService, program, this::loadData).open();
     }
 
-    private void confirmDelete(ProgramEntity program) {
-        ConfirmDeleteDialog.show("Programm löschen",
-                "Möchten Sie dieses Programm wirklich löschen? " + program.getName(), () -> {
-                    try {
-                        this.programService.delete(program);
-                    } catch (EntityInUseException e) {
-                        Notification notification = Notification.show(e.getMessage(), 5000,
-                                Notification.Position.MIDDLE);
-                        notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
-                        return;
-                    }
-                    loadData();
-                });
+    @Override
+    protected void delete(ProgramEntity program) throws EntityInUseException {
+        this.programService.delete(program);
     }
 
-    private void loadData() {
-        this.grid.setItems(this.programService.findAll());
+    @Override
+    protected String deleteDialogTitle() {
+        return "Programm löschen";
+    }
+
+    @Override
+    protected String deleteDialogQuestion(ProgramEntity program) {
+        return "Möchten Sie dieses Programm wirklich löschen? " + program.getName();
     }
 }

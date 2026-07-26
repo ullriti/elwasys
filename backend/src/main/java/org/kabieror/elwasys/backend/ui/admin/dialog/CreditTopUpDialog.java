@@ -4,13 +4,12 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
 import com.vaadin.flow.component.textfield.BigDecimalField;
 import com.vaadin.flow.component.textfield.TextField;
 import java.math.BigDecimal;
+import org.kabieror.elwasys.backend.ui.component.Notifications;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.exception.NotEnoughCreditException;
 import org.kabieror.elwasys.backend.service.CreditService;
@@ -122,7 +121,7 @@ public class CreditTopUpDialog extends Dialog {
                 this.creditService.inpayment(this.user, amount, this.tfText.getValue());
             }
         } catch (NotEnoughCreditException e) {
-            showError("Das Guthaben des Benutzers reicht nicht aus für diese Operation.");
+            Notifications.showError("Das Guthaben des Benutzers reicht nicht aus für diese Operation.");
             return;
         }
 
@@ -130,8 +129,4 @@ public class CreditTopUpDialog extends Dialog {
         onSaved.run();
     }
 
-    private static void showError(String message) {
-        Notification notification = Notification.show(message, 5000, Notification.Position.MIDDLE);
-        notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
-    }
 }

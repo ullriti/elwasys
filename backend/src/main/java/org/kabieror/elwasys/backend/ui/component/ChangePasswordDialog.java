@@ -4,10 +4,9 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.textfield.PasswordField;
+import org.kabieror.elwasys.backend.ui.component.Notifications;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.exception.InvalidCurrentPasswordException;
 import org.kabieror.elwasys.backend.exception.PasswordTooShortException;
@@ -114,11 +113,7 @@ public class ChangePasswordDialog extends Dialog {
 
         close();
         onSaved.run();
-        showSuccess("Passwort wurde erfolgreich geändert.");
+        Notifications.showSuccess("Passwort wurde erfolgreich geändert.");
     }
 
-    private static void showSuccess(String message) {
-        Notification notification = Notification.show(message, 4000, Notification.Position.MIDDLE);
-        notification.addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-    }
 }

@@ -11,8 +11,6 @@ import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.FlexLayout;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
@@ -26,6 +24,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.kabieror.elwasys.backend.ui.component.Notifications;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
@@ -72,12 +71,11 @@ import org.springframework.data.domain.Sort;
  * plus Verbindungsstatus - fachlicher Nachfolger der Wartungsverbindungs-Toolbar des
  * Alt-Dashboards ({@code AdminDashboardLocationPanel#buildToolbar}/{@code #buildStatusInfo}),
  * vermittelt über {@link TerminalMaintenanceService} statt des Alt-TCP-Protokolls (siehe
- * docs/kb/05-migration-plan.md, "Entscheidungen": das Alt-TCP-Protokoll wird NICHT portiert, das
- * Alt-Portal bleibt dafür bis zum Cutover in Betrieb). Statt der Alt-"IP-Adresse" (obsolet,
- * siehe docs/kb/02-data-model.md: {@code client_ip}/{@code -port} entfallen mit der ausgehenden
- * Verbindung) zeigt diese View "Verbunden seit". Da sich Alt-Terminals laut Roadmap ERST in
- * Phase 4 über diesen Kanal verbinden, zeigt diese Toolbar in der Praxis i.d.R. "Nicht
- * verbunden" - genau der laut Auftrag geforderte klare Zustand.
+ * docs/kb/05-migration-plan.md, "Entscheidungen": das Alt-TCP-Protokoll wurde NICHT portiert).
+ * Statt der Alt-"IP-Adresse" (obsolet, siehe docs/kb/02-data-model.md: {@code client_ip}/
+ * {@code -port} entfallen mit der ausgehenden Verbindung) zeigt diese View "Verbunden seit".
+ * Seit Phase 4 verbinden sich die Terminals über diesen Kanal; "Nicht verbunden" ist damit der
+ * Ausnahme- und nicht mehr der Regelfall (Kommentar auf den Ist-Zustand nachgezogen, #93).
  *
  * <p><b>Seit Issue #89</b>: über den Standort-Panels ein Hinweisstreifen auf offene
  * Offline-Vorfälle mit Link in {@link AdminOfflineIncidentsView} (siehe
@@ -270,9 +268,9 @@ public class AdminDashboardView extends VerticalLayout {
             List<String> lines = this.maintenanceService.requestLog(location.getId());
             new LogViewerDialog(lines).open();
         } catch (TerminalNotConnectedException e) {
-            showError("Keine Verbindung zum Client");
+            Notifications.showError("Keine Verbindung zum Client");
         } catch (TerminalRequestTimeoutException e) {
-            showError("Der Client hat nicht rechtzeitig geantwortet.");
+            Notifications.showError("Der Client hat nicht rechtzeitig geantwortet.");
         }
     }
 
@@ -284,23 +282,15 @@ public class AdminDashboardView extends VerticalLayout {
     private void restart(LocationEntity location) {
         try {
             this.maintenanceService.requestRestart(location.getId());
-            showSuccess("Der Neustart wurde in Auftrag gegeben.");
+            Notifications.showSuccess("Der Neustart wurde in Auftrag gegeben.");
         } catch (TerminalNotConnectedException e) {
-            showError("Keine Verbindung zum Standort.");
+            Notifications.showError("Keine Verbindung zum Standort.");
         } catch (TerminalRequestTimeoutException e) {
-            showError("Der Client hat den Neustart nicht rechtzeitig bestätigt.");
+            Notifications.showError("Der Client hat den Neustart nicht rechtzeitig bestätigt.");
         }
     }
 
-    private static void showError(String message) {
-        Notification notification = Notification.show(message, 5000, Notification.Position.MIDDLE);
-        notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
-    }
 
-    private static void showSuccess(String message) {
-        Notification notification = Notification.show(message, 4000, Notification.Position.MIDDLE);
-        notification.addThemeVariants(NotificationVariant.LUMO_SUCCESS);
-    }
 
     private VerticalLayout buildDevicePanel(DeviceStatus deviceStatus) {
         VerticalLayout devicePanel = new VerticalLayout();
