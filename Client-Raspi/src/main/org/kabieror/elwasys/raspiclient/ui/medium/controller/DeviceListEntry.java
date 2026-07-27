@@ -55,7 +55,8 @@ public class DeviceListEntry implements Initializable, IViewController, IExecuti
         IExecutionFinishedListener, IExecutionErrorListener {
 
     private static final DateTimeFormatter endDateFormatter =
-            DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT);
+            DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
+                    .withLocale(FormatUtilities.DISPLAY_LOCALE);
     /**
      * Monitor für alle Zustands-/Anzeige-Mutationen dieser Kachel. Bewusst ein eigenes
      * Object statt der früheren autoboxten {@code Integer}-Konstante: deren Wert stammt aus

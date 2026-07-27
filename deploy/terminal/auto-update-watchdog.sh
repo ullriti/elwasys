@@ -470,6 +470,19 @@ elif (( update_rc == 3 )); then
     ln -sfn "${current_jar}" "${LATEST_LINK}"
     mark_update_failed "${target_version}"
     exit 2
+elif (( update_rc == 4 )); then
+    # Exit 4 (Issue #101): Das Geraet faehrt noch den Altbestand-Startbefehl ohne
+    # Supervisor-Schleife. update.sh hat korrekt ausgerollt und die run.sh erneuert, den
+    # Kill aber bewusst unterlassen - er wuerde das Terminal dunkel zuruecklassen.
+    #
+    # Bewusst WEDER Rollback NOCH mark_update_failed: das Ziel-Jar ist richtig verlinkt und
+    # laeuft, sobald ein Mensch die Session einmalig neu startet. Ein Rollback wuerde die
+    # korrekte Zielversion wieder abhaengen, eine Fehlermarkierung sie dauerhaft sperren -
+    # beides waere falsch, weil hier nichts kaputt ist, sondern nur ein manueller Schritt
+    # aussteht. Der Alarm wiederholt sich bei jedem Cron-Lauf, bis das erledigt ist; genau
+    # das soll er, denn ohne den Schritt bleibt jedes kuenftige Update haengen.
+    alert "AKTION NOETIG: ${target_version} ist auf diesem Terminal ausgerollt (${LATEST_LINK} -> raspi-client-${target_version}.jar) und die Supervisor-run.sh wurde erneuert, aber das Geraet laeuft noch mit dem Altbestand-Startbefehl OHNE Schleife. Einmalig die Session neu starten (z.B. 'sudo systemctl restart lightdm' oder 'sudo reboot'); danach laufen Updates wieder unbeaufsichtigt. KEIN Rollback, KEIN java-Kill."
+    exit 2
 else
     # B1-Fix: ein Fehlschlag von update.sh ist NICHT automatisch ein fehlgeschlagenes
     # Deploy - update.sh kann auch VOR jedem Symlink-Wechsel scheitern (Download/Netz/

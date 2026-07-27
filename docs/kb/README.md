@@ -241,3 +241,29 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   [05-migration-plan.md](05-migration-plan.md).
 - **Wissen gehört ins Repo, nicht in den lokalen User-Speicher** (`~/.claude/`,
   `#`-Memory) – siehe [`../worklog/README.md`](../worklog/README.md).
+- **Terminal-Startbefehl & Cutover-Bereitschaft (seit 2026-07-27):** Vor der Umstellung fiel
+  bei der Issue-Triage ein Blocker auf, der in keinem Issue stand: das Cutover-Runbook schickt
+  Bestandsgeräte über `update.sh`, dessen Neustart (`sudo killall java`) aber die
+  Supervisor-Schleife in `run.sh` voraussetzt. Die Feldgeräte fahren noch den **Einmalstart**
+  aus dem ursprünglichen `setup.sh` (vor Phase 6 AP3) – dort hätte der Kill das Terminal
+  dunkel zurückgelassen, samt Auto-Rollback des Watchdogs. Behoben (#101): Der `run.sh`-Generator
+  liegt jetzt als gemeinsame Quelle in [`deploy/terminal/run-sh.lib.sh`](../../deploy/terminal/run-sh.lib.sh),
+  die sich `Client-Raspi/setup.sh` und `deploy/terminal/update.sh` teilen – eine Änderung am
+  Startbefehl wirkt damit auf beiden Wegen. Die erzeugte Datei trägt eine **Vertragsversion**
+  (Markerzeile); `update.sh` erneuert sie bei Bedarf (Temp-Datei + Rename, weil bash einen
+  Offset auf das Inode der laufenden Datei hält) und sichert die alte Fassung. Findet es eine
+  `run.sh` **ohne** Schleife, unterlässt es den Neustart bewusst und endet mit **Exit 4** plus
+  Anleitung; der Marker `.run-sh-pending-restart` hält den Zustand fest, bis die neue `run.sh`
+  ihn beim Start selbst löscht – die einzige verlässliche Quittung, dass der *laufende Prozess*
+  (nicht nur die Datei) aktuell ist. Truststore-Flags eines Altbestand-Geräts wandern mit
+  (private CA ↔ https-Pflicht aus #35). Der Watchdog wertet Exit 4 weder als Rollback- noch als
+  Fehlschlag-Fall, alarmiert aber bis zur Erledigung. Ergänzend liefert jedes Release die
+  Betriebsskripte als Asset `elwasys-terminal-scripts-<version>.tar.gz` (+ `.sha256`, mit
+  `VERSION`-Stempel) – vorher enthielt es nur das Jar, und die Skripte auf dem Gerät drifteten
+  unkontrolliert. Selbst-Update der Skripte bewusst nicht. Ebenfalls erledigt: die Anzeige-Locale
+  ist über `FormatUtilities.DISPLAY_LOCALE` vollständig festgenagelt (#100 – der Preis in der
+  Programmliste des kleinen Displays und zwei Datumsstellen zogen noch die JVM-Locale). Der
+  Terminal-Selftest deckt die neuen Fälle ab (`auto-update-selftest.sh`, 24/24).
+  **Offen vor dem Feldeinsatz bleibt die Generalprobe (#104)** – zwölf Punkte, die Hardware,
+  Produktivdaten und Anwesenheit vor Ort brauchen; der Exit-4-Weg ist nur offline trocken
+  getestet. Details: [Worklog](../worklog/2026-07-27-cutover-blocker-terminal-startbefehl.md).

@@ -57,6 +57,15 @@ import java.util.ResourceBundle;
  */
 public class ConfirmationViewController implements Initializable, IViewController {
 
+    /**
+     * Spaetestes Programmende. An die Anzeige-Locale gebunden statt an die JVM-Standard-Locale
+     * (Issue #100) - der Betrag direkt daneben ist es laengst, beides gehoert in dieselbe
+     * Schreibweise. {@link DateTimeFormatter} ist threadsicher, deshalb hier statisch.
+     */
+    private static final DateTimeFormatter LATEST_END_FORMATTER =
+            DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.MEDIUM)
+                    .withLocale(FormatUtilities.DISPLAY_LOCALE);
+
     private Logger logger = LoggerFactory.getLogger(ConfirmationViewController.class);
 
     private MainFormController mfc;
@@ -311,7 +320,7 @@ public class ConfirmationViewController implements Initializable, IViewControlle
         UiUtilities.setStyleClass(this.confirmationPane, "credit-insufficient",
                 !this.mfc.getRegisteredUser().canAfford(maxPrice));
 
-        this.latestEnd.set(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.MEDIUM)
+        this.latestEnd.set(LATEST_END_FORMATTER
                 .format(LocalDateTime.now().plus(this.selectedProgram.getMaxDuration())));
 
         if (this.mfc.getRegisteredUser().getEmail() == null || this.mfc.getRegisteredUser().getEmail().isEmpty()) {

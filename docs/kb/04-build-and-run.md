@@ -269,6 +269,14 @@ Symlink `raspi-client.latest.jar` → aktuell, `raspi-client.previous.jar` → v
 (Rollback-Ziel). Neustart über den Supervisor-Vertrag (java beenden → Loop startet das neu
 verlinkte Jar).
 
+Seit #101 erneuert `update.sh` auch den Supervisor `run.sh` selbst: er trägt keinen lokalen
+Zustand, sondern den Startbefehl der JVM, und wird aus der gemeinsamen Quelle
+`deploy/terminal/run-sh.lib.sh` erzeugt – derselben, die `setup.sh` nutzt. Findet es dort noch
+den **Einmalstart** aus dem ursprünglichen `setup.sh` (kein `while`-Loop), unterbleibt der
+Neustart bewusst: `killall java` ließe das Terminal dunkel zurück, weil niemand relauncht.
+Stattdessen Exit 4 mit Anleitung und der Marker `.run-sh-pending-restart`, den erst die neu
+angelaufene `run.sh` selbst wegräumt.
+
 **Auto-Update mit Rollback (`deploy/terminal/auto-update-watchdog.sh`)**: bewusst schlanke
 Shell-/Cron-Variante (kein systemd). Für periodischen Cron-Aufruf als Terminal-User gedacht
 (Beispiel `*/30 * * * *`, siehe Runbook). Ein Lauf: aktuelle Version aus
@@ -302,6 +310,11 @@ Backend-Betrieb übernimmt Flyway die Baseline beim ersten Start automatisch.
   „Bekannte Build-Risiken" unten), UFW-Firewall, deCONZ, lädt das neueste Release-JAR,
   schreibt `elwasys.properties`/`logback.xml`/`run.sh`, richtet Autostart über
   `~/.xsession` ein und fragt interaktiv Backend-URL + Standort-Token ab.
+  Den Supervisor-`run.sh` erzeugt es seit #101 nicht mehr selbst, sondern über
+  `deploy/terminal/run-sh.lib.sh`. Bei diesem One-Liner gibt es kein Nachbarverzeichnis
+  (`bash <(curl …)` lässt `BASH_SOURCE` auf `/dev/fd/*` zeigen), deshalb lädt `setup.sh`
+  die Bibliothek in dem Fall aus demselben Repo/Ref nach (`ELWA_SETUP_REF`, Default
+  `master`); aus einem Checkout heraus nimmt es die lokale Datei.
 - **Backend**: Container-Image (`backend/Dockerfile`), Betrieb per docker-compose oder
   Kubernetes/Helm – siehe unten.
 
@@ -525,6 +538,12 @@ Was ein Lauf veröffentlicht:
   Bezugsweg, den `setup.sh`/`update.sh` erwarten. Ein Schritt verifiziert vor der
   Veröffentlichung, dass die Manifest-Version des gebauten Jars der Release-Version
   entspricht.
+- **Terminal-Betriebsskripte**: `elwasys-terminal-scripts-<version>.tar.gz` + `.sha256`
+  (`update.sh`, `auto-update-watchdog.sh`, `upgrade-jre.sh`, `run-sh.lib.sh`, README und ein
+  `VERSION`-Stempel, reproduzierbar gepackt). Vorher lag nur das Jar im Release und die
+  Skripte mussten aus einem Repo-Checkout kopiert werden – damit driftete der Skript-Stand
+  auf dem Gerät unkontrolliert von dem, was er ausrollt. Die Skripte aktualisieren sich
+  bewusst nicht selbst.
 - **Backend**: Container-Image nach GHCR (`ghcr.io/<owner>/elwasys-backend`) mit Tag-Leiter,
   `org.opencontainers.image.*`-Labels (Version, Commit, Quelle, Zeitpunkt), **SBOM** und
   **Provenance**-Attestation. Anmeldung über den eingebauten `GITHUB_TOKEN`

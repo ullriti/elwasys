@@ -196,13 +196,14 @@ ist der Rückweg am einfachsten, weil die Terminals noch am Alt-Stand hängen).
 Terminals **in Chargen** umstellen (z. B. eine Waschküche / ein Standort nach dem anderen),
 damit ein Problem nie alle Geräte gleichzeitig trifft. **Pro Charge:**
 
-0. **Update-/Watchdog-Skripte aufs Gerät kopieren (Issue #64).** Die Skripte
-   `upgrade-jre.sh`, `update.sh`, `auto-update-watchdog.sh` liegen im Repo unter
-   `deploy/terminal/` – für den Feldbetrieb einmalig aufs Gerät kopieren (z. B. nach
-   `/opt/elwasys/bin/`, ausführbar machen) und den Watchdog-Cron auf diesen Pfad einrichten
-   (siehe `deploy/terminal/README.md`, „Cron-Einrichtung"). Die enge sudoers-Regel für
-   `killall java` legt `setup.sh` an; auf Bestandsgeräten ohne diese Regel einmalig nachtragen
-   (Issue #63, siehe README).
+0. **Betriebsskripte aufs Gerät bringen (Issue #64, #101).** Das Release liefert sie als
+   Asset `elwasys-terminal-scripts-<tag>.tar.gz` (+ `.sha256`) – herunterladen, Prüfsumme
+   verifizieren, nach `/opt/elwasys/bin/` auspacken, ausführbar machen und den Watchdog-Cron
+   auf diesen Pfad einrichten (Kommandos: `deploy/terminal/README.md`, „Woher die Skripte
+   aufs Gerät kommen" + „Cron-Einrichtung"). **Alle vier Dateien gehören zusammen** –
+   `upgrade-jre.sh`, `update.sh`, `auto-update-watchdog.sh` und `run-sh.lib.sh`; `update.sh`
+   bricht ohne die Bibliothek ab. Die enge sudoers-Regel für `killall java` legt `setup.sh`
+   an; auf Bestandsgeräten ohne diese Regel einmalig nachtragen (Issue #63, siehe README).
 1. **JRE-21 ZUERST** (Bestandsgeräte tragen nur Java 17; ein Sprachlevel-21-Jar bricht sonst
    mit `UnsupportedClassVersionError` ab):
    ```bash
@@ -221,10 +222,27 @@ damit ein Problem nie alle Geräte gleichzeitig trifft. **Pro Charge:**
      ```
    - **Neu/frisch aufzusetzendes Gerät:** das interaktive `Client-Raspi/setup.sh` (installiert
      Java 21, schreibt Konfig + Supervisor-`run.sh` + X-Autologin).
-3. **Start verifizieren:** das Terminal erreicht den bedienbereiten Zustand `SELECT_DEVICE`
+3. **Altbestand: einmaliger Session-Neustart (Issue #101).** Geräte, die noch die
+   **ursprüngliche** `run.sh` fahren (Einmalstart ohne Supervisor-Schleife – der Stand vor
+   Phase 6 AP3, also praktisch jedes Gerät aus dem Altbetrieb), erkennt `update.sh` selbst:
+   es rollt das Jar aus, erneuert `run.sh`, **unterlässt aber den Neustart** und endet mit
+   **Exit 4** samt Anleitung. Das ist kein Fehler, sondern der Schutz davor, das Terminal
+   dunkel zurückzulassen – ohne Schleife startet nach `killall java` niemand neu. Dann
+   einmalig:
+   ```bash
+   sudo systemctl restart lightdm     # bzw. das Display-Manager-Unit des Geräts
+   ```
+   Ab dann läuft der Supervisor und jedes weitere Update wieder unbeaufsichtigt.
+   **Vorher prüfen:** trägt die alte `run.sh` `-Djavax.net.ssl.trustStore…`, nutzt das Gerät
+   eine private CA. `update.sh` übernimmt die Flags in die neue `run.sh`; ist der
+   TLS-Terminierungspunkt aus den Voraussetzungen dagegen auf ein öffentlich vertrauenswürdiges
+   Zertifikat umgestellt, kann der Truststore veraltet sein – dann als Erstes den
+   `backend.url`-Aufruf am Gerät testen, bevor die Charge weiterläuft.
+4. **Start verifizieren:** das Terminal erreicht den bedienbereiten Zustand `SELECT_DEVICE`
    (Readiness-Marker `${ELWA_ROOT}/.terminal-ready` bekommt frischen `mtime`); der
-   Bedienfluss ist unverändert.
-4. Erst dann die **nächste Charge**.
+   Bedienfluss ist unverändert. Der Marker `${ELWA_ROOT}/.run-sh-pending-restart` darf
+   **nicht mehr liegen** – solange er da ist, läuft noch der alte Startbefehl.
+5. Erst dann die **nächste Charge**.
 
 Künftige Updates übernimmt der [`auto-update-watchdog.sh`](terminal/auto-update-watchdog.sh)
 (Cron, GitHub-`latest` bzw. `.update-target`) mit **Auto-Rollback** bei fehlgeschlagenem Start
@@ -307,7 +325,7 @@ Plattform, DB über Backup/Reverse-DDL, Terminals einzeln über das vorherige Ja
 | 2 | **3a Gate** `post-deploy-smoke.sh` | Health UP **+** Playwright-Smoke grün | Plattform-Rollback / Backup-Restore / `rollback-cutover.sh` |
 | 3 | **3b** Standort-Tokens (`02`) + Admin-Passwort (`03`); optional `04` review | Token(s) erzeugt, Portal-Login möglich | — (rein additiv) |
 | 4 | **3c** Portal/Backend beobachten (definierte Zeit) | Health/Logs stabil, Admin-Login/Sektionen ok | Backend-Rollback (Terminals noch alt) |
-| 5 | **3d** Terminals Charge für Charge: JRE-21 → Konfig/Jar → `SELECT_DEVICE` | Readiness-Marker frisch, bedienbar | `update.sh --jar <prev>` / Watchdog-Rollback |
+| 5 | **3d** Terminals Charge für Charge: Skript-Bundle → JRE-21 → Konfig/Jar → (bei Exit 4: Session-Neustart) → `SELECT_DEVICE` | Readiness-Marker frisch, `.run-sh-pending-restart` weg, bedienbar | `update.sh --jar <prev>` / Watchdog-Rollback |
 | 6 | **3e** `ELWASYS_NOTIFICATIONS_ENABLED=true` (SMTP/Pushover-Konfig steht) | Testvorgang → genau eine Mail/Push | Flag `false`, Redeploy |
 | 7 | **Post-Cutover:** Testwaschgang, Nutzerkomm. „fertig", Monitoring, Neu-Backup | echter Waschgang ok | — |
 

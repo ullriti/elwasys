@@ -232,6 +232,40 @@ jobs:
           printf '%s  %s\n' "${hash}" "${asset}" > "${asset}.sha256"
           cat "${asset}.sha256"
 
+      - name: Terminal-Skripte paketieren
+        # Bis Issue #101 lieferte das Release nur das Jar; die Betriebsskripte
+        # (update.sh, Watchdog, JRE-Upgrade, run-sh.lib.sh) mussten von Hand aus einem
+        # Repo-Checkout aufs Geraet kopiert werden. Damit driftete das, was ein Terminal
+        # AUSFUEHRT, unkontrolliert von dem, was es AUSROLLT - und seit update.sh die
+        # gemeinsame run-sh.lib.sh braucht, ist eine unvollstaendige Kopie ein harter
+        # Fehler statt einer stillen Alterung. Deshalb wandern die Skripte als
+        # versioniertes, pruefsummen-gesichertes Asset mit ins Release.
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          asset="elwasys-terminal-scripts-${VERSION}.tar.gz"
+          stage="$(mktemp -d)/elwasys-terminal-scripts"
+          mkdir -p "${stage}"
+          cp deploy/terminal/update.sh \
+             deploy/terminal/auto-update-watchdog.sh \
+             deploy/terminal/upgrade-jre.sh \
+             deploy/terminal/run-sh.lib.sh \
+             deploy/terminal/README.md \
+             "${stage}/"
+          # Versionsstempel: verraet auf dem Geraet, welcher Stand der Skripte laeuft
+          # (`cat /opt/elwasys/bin/VERSION`) - ohne ihn ist genau das nicht feststellbar.
+          printf '%s\n' "${VERSION}" > "${stage}/VERSION"
+          chmod +x "${stage}"/*.sh
+          # Reproduzierbar packen: feste Sortierung/Besitzer, damit zwei Builds desselben
+          # Stands dieselbe Pruefsumme ergeben.
+          tar --sort=name --owner=0 --group=0 --numeric-owner \
+              --mtime="@${SOURCE_DATE_EPOCH:-0}" \
+              -czf "${asset}" -C "$(dirname "${stage}")" elwasys-terminal-scripts
+          hash="$(sha256sum "${asset}" | awk '{print $1}')"
+          printf '%s  %s\n' "${hash}" "${asset}" > "${asset}.sha256"
+          cat "${asset}.sha256"
+
       # -----------------------------------------------------------------------
       # Backend-Container-Image
       # -----------------------------------------------------------------------
@@ -349,6 +383,8 @@ jobs:
           files: |
             raspi-client-${{ steps.ver.outputs.version }}.jar
             raspi-client-${{ steps.ver.outputs.version }}.jar.sha256
+            elwasys-terminal-scripts-${{ steps.ver.outputs.version }}.tar.gz
+            elwasys-terminal-scripts-${{ steps.ver.outputs.version }}.tar.gz.sha256
 
       - name: Zusammenfassung
         env:
@@ -366,6 +402,7 @@ jobs:
             echo "| Backend-Image | \`${IMAGE}:${VERSION}\` |"
             echo "| Helm-Chart | \`oci://${IMAGE%/*}/charts/elwasys-backend\` Version \`${VERSION}\` |"
             echo "| Terminal-Jar | Release-Asset \`raspi-client-${VERSION}.jar\` (+ \`.sha256\`) |"
+            echo "| Terminal-Skripte | Release-Asset \`elwasys-terminal-scripts-${VERSION}.tar.gz\` (+ \`.sha256\`) |"
             echo ""
             echo "Image-Tags:"
             echo ""

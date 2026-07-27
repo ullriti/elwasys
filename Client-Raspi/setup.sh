@@ -4,6 +4,35 @@ set -e
 # Kanonisches GitHub-Repo (Issue #64) - an EINER Stelle definiert, per Env überschreibbar.
 ELWA_GITHUB_REPO="${ELWA_GITHUB_REPO:-ullriti/elwasys}"
 
+# Ref, aus dem die run.sh-Bibliothek nachgeladen wird, falls sie nicht lokal liegt (s.u.).
+ELWA_SETUP_REF="${ELWA_SETUP_REF:-master}"
+
+# Gemeinsame Quelle des Supervisor-run.sh (Issue #101). Dieselbe Datei nutzt
+# deploy/terminal/update.sh, damit ein Bestandsgeraet beim Update denselben
+# Startbefehl bekommt wie ein frisch aufgesetztes Terminal. Pfad VOR dem ersten
+# `cd` aufloesen (install_elwasys wechselt nach $ELWA_ROOT).
+#
+# Zwei Bezugswege, weil setup.sh auf zwei Arten gestartet wird:
+#   - aus einem Repo-Checkout  -> die Datei liegt daneben unter deploy/terminal/
+#   - als One-Liner ueber curl -> `bash <(curl ...)` laesst BASH_SOURCE auf /dev/fd/*
+#     zeigen, es gibt also kein Nachbarverzeichnis. Dann wird sie aus demselben Repo/Ref
+#     nachgeladen. Vertrauensniveau ist identisch zu dem des gerade gepipten setup.sh.
+SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || echo "")"
+ELWA_RUN_SH_LIB="${ELWA_RUN_SH_LIB:-${SETUP_DIR}/../deploy/terminal/run-sh.lib.sh}"
+if [[ ! -r "$ELWA_RUN_SH_LIB" ]]; then
+    lib_url="https://raw.githubusercontent.com/${ELWA_GITHUB_REPO}/${ELWA_SETUP_REF}/deploy/terminal/run-sh.lib.sh"
+    echo "run-sh.lib.sh liegt nicht neben setup.sh - lade sie von ${lib_url} ..."
+    ELWA_RUN_SH_LIB="$(mktemp -t elwasys-run-sh-lib.XXXXXX)"
+    if ! curl -fsS "$lib_url" -o "$ELWA_RUN_SH_LIB"; then
+        echo "FEHLER: run-sh.lib.sh konnte weder lokal gefunden noch von ${lib_url} geladen" >&2
+        echo "werden. setup.sh braucht sie, um run.sh zu erzeugen. Aus einem Repo-Checkout" >&2
+        echo "starten oder ELWA_RUN_SH_LIB auf den Pfad der Datei setzen." >&2
+        exit 1
+    fi
+fi
+# shellcheck source=../deploy/terminal/run-sh.lib.sh
+source "$ELWA_RUN_SH_LIB"
+
 # Check if the script is run as root
 if [[ $EUID -eq 0 ]]
 then
@@ -357,68 +386,11 @@ EOT
     # Bedienfluss/das UI sind identisch zum frueheren Einmalstart - es kommt nur
     # Respawn (Ausfallsicherheit + Update-Uebernahme) hinzu, kein systemd noetig.
     #
-    # Supervisor-Vertrag (fuer Watchdog/Update, siehe deploy/terminal/README.md):
-    #   Ein externer Neustart == den laufenden java-Prozess beenden (z.B.
-    #   "sudo killall java" oder "pkill -f raspi-client"). Die run.sh-Loop faengt
-    #   das ab, wartet kurz und relauncht den AKTUELL per Symlink verlinkten Jar.
-    #   Ein Update haengt also nur den Symlink raspi-client.latest.jar um und
-    #   beendet den java-Prozess - die naechste Iteration liest das Symlink-Ziel
-    #   NEU und startet automatisch das neue Jar. "killall java" trifft die JVM,
-    #   nicht diesen bash-Supervisor - die Schleife laeuft weiter.
-    run_script="./run.sh"
-    tee "$run_script" > /dev/null <<EOT
-#!/bin/bash
-# elwasys Terminal-Supervisor - siehe deploy/terminal/README.md (Supervisor-Vertrag).
-# Erzeugt von Client-Raspi/setup.sh (config_elwasys).
-
-cd $ELWA_ROOT
-
-# Alt-Java-Prozesse EINMALIG vor der Schleife aufraeumen - NICHT im
-# Schleifenkoerper (sonst wuerde ein Relaunch sich selbst abschiessen). Trifft
-# nur die JVM, nicht diesen bash-Supervisor.
-sudo killall java 2> /dev/null
-
-while true; do
-    # N3 (QA-Review Phase 6): vor jedem (Re-)Start die bisherigen stdout/errout
-    # rotieren, WENN sie eine Grenze ueberschritten haben (einfache Groessen-
-    # Schranke statt echtem logrotate - kein externes Tool auf dem Geraet
-    # noetig). So bleibt trotz Anhaengen (statt Abschneiden, siehe unten) die
-    # Groesse ueber viele Relaunches/Crash-Loops hinweg begrenzt; die zuletzt
-    # rotierte Datei (*.1) bleibt als ein zusaetzliches Postmortem-Artefakt
-    # erhalten. Schwelle per ELWA_LOG_MAX_BYTES ueberschreibbar.
-    ELWA_LOG_MAX_BYTES=\${ELWA_LOG_MAX_BYTES:-5242880}
-    for f in log/stdout log/errout; do
-        if [ -f "\$f" ]; then
-            size=\$(wc -c < "\$f" 2>/dev/null || echo 0)
-            if [ "\${size:-0}" -gt "\$ELWA_LOG_MAX_BYTES" ]; then
-                mv -f "\$f" "\$f.1"
-            fi
-        fi
-    done
-
-    # Symlink raspi-client.latest.jar pro Iteration NEU aufloesen: ein
-    # Symlink-Wechsel (Update) zwischen zwei Iterationen greift damit
-    # automatisch beim naechsten Start.
-    # N3: anhaengen (>>) statt abschneiden (>) - ein Update-/Crash-Neustart
-    # loescht damit nicht mehr das rohe stdout/stderr des vorigen Laufs (das
-    # genau das Postmortem-Artefakt ist, das ein fehlgeschlagenes Auto-Update
-    # braucht). Anwendungs-Logs laufen ohnehin separat rollierend ueber
-    # logback.xml; diese Dateien fangen nur, was direkt auf STDOUT/STDERR
-    # landet (z.B. JVM-Absturz vor Logging-Init).
-    # Locale fest auf de_DE: Geldbetraege und Zeitangaben am Terminal sollen nicht davon
-    # abhaengen, mit welchem LANG das Pi-Image gerade gebootet ist (die Anzeige formatiert
-    # ueber FormatUtilities bewusst deutsch - so passen JVM-Default und Anzeige zusammen).
-    java -Djavafx.platform=gtk -Duser.language=de -Duser.country=DE \
-            -Dlogback.configurationFile=$ELWA_ROOT/logback.xml \
-            -jar raspi-client.latest.jar -verbose >> log/stdout 2>> log/errout
-
-    # JVM hat sich beendet (Crash oder gezielt von aussen fuer Update/Watchdog).
-    # Kurz warten (Fehler-Schleifen entzerren), dann den dann aktuell
-    # verlinkten Jar erneut starten.
-    sleep 2
-done
-EOT
-    chmod +x "$run_script"
+    # Der Inhalt liegt seit Issue #101 in deploy/terminal/run-sh.lib.sh, weil
+    # update.sh dieselbe Datei erzeugen muss: sonst erreicht jede Aenderung am
+    # Startbefehl nur frisch aufgesetzte Geraete. Supervisor-Vertrag und
+    # Vertragsversion sind dort dokumentiert.
+    elwa_generate_run_sh "./run.sh" "$ELWA_ROOT"
 
     # Create log output folder
     mkdir -p ./log

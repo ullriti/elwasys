@@ -4,9 +4,16 @@
 #
 # Warum: Ein bereits provisioniertes Terminal (aus setup.sh) soll auf ein neues
 # Client-fat-jar gehoben werden, OHNE das interaktive setup.sh erneut zu fahren -
-# elwasys.properties, logback.xml, run.sh und ~/.xsession bleiben unangetastet.
-# Dieses Skript legt nur das neue Jar ab, haengt die Symlinks um und stoesst den
-# Neustart gemaess Supervisor-Vertrag an.
+# elwasys.properties, logback.xml und ~/.xsession bleiben unangetastet (sie tragen
+# lokalen Zustand). Dieses Skript legt das neue Jar ab, haengt die Symlinks um,
+# bringt bei Bedarf den Supervisor-run.sh auf den aktuellen Vertrag und stoesst den
+# Neustart an.
+#
+# run.sh ist seit Issue #101 KEINE Ausnahme mehr: sie traegt keinen lokalen Zustand,
+# sondern den Supervisor-Vertrag und den Startbefehl der JVM, und wird vollstaendig
+# aus deploy/terminal/run-sh.lib.sh erzeugt - derselben Quelle, die setup.sh nutzt.
+# Solange update.sh sie ausliess, erreichte jede Aenderung am Startbefehl (JVM-Flags,
+# Heap, Logback-Pfad, Supervisor-Schleife) ausschliesslich frisch aufgesetzte Geraete.
 #
 # Supervisor-Vertrag (aus Phase 6 AP3, siehe deploy/terminal/README.md und der
 # von setup.sh generierte run.sh-Loop): Das laufende run.sh ist eine Endlosschleife,
@@ -59,6 +66,20 @@ ELWA_JAVA_PGREP="${ELWA_JAVA_PGREP:-pgrep -x java}"
 LATEST_LINK="raspi-client.latest.jar"
 PREVIOUS_LINK="raspi-client.previous.jar"
 
+# Gemeinsame Quelle des Supervisor-run.sh (Issue #101) - liegt neben diesem Skript
+# und MUSS beim Ausrollen mit aufs Geraet kopiert werden (siehe README, Schritt 0
+# des Cutover-Runbooks). Pfad vor dem `cd` nach ELWA_ROOT aufloesen.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ELWA_RUN_SH_LIB="${ELWA_RUN_SH_LIB:-${SCRIPT_DIR}/run-sh.lib.sh}"
+if [[ ! -r "${ELWA_RUN_SH_LIB}" ]]; then
+    echo "FEHLER: '${ELWA_RUN_SH_LIB}' nicht lesbar - update.sh braucht die Datei, um den" >&2
+    echo "Supervisor-run.sh zu erneuern. run-sh.lib.sh neben update.sh ablegen (beide aus" >&2
+    echo "deploy/terminal/) oder ELWA_RUN_SH_LIB setzen." >&2
+    exit 1
+fi
+# shellcheck source=run-sh.lib.sh
+source "${ELWA_RUN_SH_LIB}"
+
 # ==============================================================================
 # Hilfsfunktionen
 # ==============================================================================
@@ -81,12 +102,22 @@ Optionen:
 Aktualisiert ein bereits provisioniertes Terminal auf ein neues Client-Jar, ohne
 setup.sh erneut zu fahren. Bei --version wird der Download per SHA-256-Prüfsumme +
 Zip-Struktur verifiziert (Integrität), erst dann ausgerollt. Haengt den Symlink
-${LATEST_LINK} auf das neue Jar um (das bisherige Ziel wird zu ${PREVIOUS_LINK}) und
-stoesst den Neustart an.
+${LATEST_LINK} auf das neue Jar um (das bisherige Ziel wird zu ${PREVIOUS_LINK}),
+bringt den Supervisor-run.sh auf den aktuellen Vertrag (Issue #101) und stoesst den
+Neustart an.
+
+Exit-Codes:
+  0  Update ausgerollt (Neustart angestossen bzw. nicht noetig)
+  1  Fehler vor dem Ausrollen (Argumente, Download, Integritaet) - nichts geaendert
+  3  Symlink umgehaengt, aber Neustart scheiterte an Rechten (sudoers)
+  4  Symlink umgehaengt und run.sh erneuert, Neustart bewusst NICHT ausgeloest:
+     das Geraet faehrt noch den Altbestand-Startbefehl ohne Supervisor-Schleife
+     und braucht einmalig einen Session-Neustart von Hand
 
 Env-Overrides: ELWA_ROOT (Default /opt/elwasys), ELWA_RESTART_CMD
 (Default 'sudo killall java'), ELWA_JAVA_PGREP (Default 'pgrep -x java'),
-ELWA_GITHUB_REPO (Default ullriti/elwasys).
+ELWA_GITHUB_REPO (Default ullriti/elwasys), ELWA_RUN_SH_LIB (Default
+run-sh.lib.sh neben diesem Skript).
 
 Hinweis: Braucht das neue Jar ein hoeheres Java als das installierte JRE, zuerst
 deploy/terminal/upgrade-jre.sh ausfuehren (Java 21).
@@ -279,8 +310,90 @@ else
 fi
 
 # ==============================================================================
+# Supervisor-run.sh auf den aktuellen Vertrag bringen (Issue #101)
+# ==============================================================================
+
+# Reihenfolge: NACH dem Symlink-Wechsel, VOR dem Neustart. Der neue Startbefehl soll
+# schon stehen, wenn der Supervisor das naechste Mal anlaeuft.
+run_sh="run.sh"
+run_sh_version="$(elwa_run_sh_contract_version "${run_sh}")"
+
+# Hat die run.sh, die JETZT laeuft, ueberhaupt die Supervisor-Schleife? Diese Frage
+# entscheidet ueber den Neustart weiter unten - und sie muss VOR dem Erneuern
+# beantwortet werden, weil danach jede run.sh eine Schleife hat.
+#
+# Eine FEHLENDE run.sh zaehlt hier bewusst NICHT als Altbestand: dann ist auch nichts
+# aus ihr gestartet, was ein Kill dunkel zuruecklassen koennte. Wir legen sie an und
+# fahren den normalen Weg. Nur eine vorhandene run.sh OHNE Schleife ist der
+# gefaehrliche Fall (Einmalstart aus dem urspruenglichen setup.sh).
+supervisor_running=1
+if [[ -f "${run_sh}" ]]; then
+    elwa_run_sh_has_supervisor "${run_sh}" || supervisor_running=0
+fi
+
+if (( run_sh_version < ELWA_RUN_SH_CONTRACT )); then
+    log_state "Erneuere ${run_sh} (Vertrag v${run_sh_version} -> v${ELWA_RUN_SH_CONTRACT}) ..."
+
+    # Truststore-Flags eines Altbestand-Geraets mitnehmen: der urspruengliche setup.sh
+    # richtete einen eigenen Truststore mit generiertem Passwort ein, der heutige nicht
+    # mehr. Wuerden die Flags beim Erneuern wegfallen, verloere ein Geraet mit privater
+    # CA still das Vertrauen zum Backend (backend.url ist https-Pflicht, Issue #35).
+    carried_opts="$(elwa_run_sh_extract_java_opts "${run_sh}")"
+    if [[ -n "${carried_opts}" ]]; then
+        echo "Uebernehme vorhandene Truststore-Flags: ${carried_opts}"
+    fi
+
+    if [[ -f "${run_sh}" ]]; then
+        backup="${run_sh}.v${run_sh_version}.bak"
+        cp -p "${run_sh}" "${backup}"
+        echo "Bisherige Fassung gesichert als ${backup}."
+    fi
+
+    # elwa_generate_run_sh schreibt ueber Temp-Datei + Rename. Das ist hier wesentlich,
+    # nicht kosmetisch: laeuft die alte run.sh gerade, haelt bash einen Datei-Offset auf
+    # ihr Inode - ein In-place-Ueberschreiben liesse den laufenden Supervisor an einer
+    # verschobenen Byte-Position weiterlesen.
+    elwa_generate_run_sh "${run_sh}" "${ELWA_ROOT}" "${carried_opts}"
+
+    if (( supervisor_running == 0 )); then
+        # Altbestand ohne Schleife: die laufende run.sh startet die JVM genau einmal und
+        # laeuft danach aus. Ein Kill wuerde ~/.xsession beenden und das Terminal dunkel
+        # zuruecklassen - es gibt niemanden, der relauncht. Der Marker haelt diesen
+        # Zustand fest, bis die NEUE run.sh tatsaechlich angelaufen ist (sie loescht ihn
+        # als erste Amtshandlung).
+        : > "${ELWA_RUN_SH_PENDING_FILE}"
+    fi
+else
+    log_state "${run_sh} ist auf Vertrag v${run_sh_version} - keine Erneuerung noetig."
+fi
+
+# ==============================================================================
 # Neustart ausloesen (Supervisor-Vertrag)
 # ==============================================================================
+
+# Liegt der Pending-Marker, ist der LAUFENDE Prozess noch der alte, schleifenlose
+# Startbefehl - egal, was inzwischen in run.sh steht. Erst der Start der neuen run.sh
+# raeumt den Marker weg. Bis dahin: kein Kill.
+if [[ -e "${ELWA_RUN_SH_PENDING_FILE}" ]]; then
+    log_state "Neustart NICHT ausgeloest - dieses Terminal faehrt noch den Altbestand-Startbefehl."
+    cat >&2 <<EOF
+
+Das neue Jar ist ausgerollt (${LATEST_LINK} -> ${new_jar}) und die erneuerte run.sh
+liegt bereit, ABER der gerade laufende Startbefehl ist der Einmalstart aus dem
+urspruenglichen setup.sh - ohne Supervisor-Schleife. Wuerde jetzt 'killall java'
+laufen, bliebe das Terminal dunkel, bis jemand vor Ort ist.
+
+EINMALIG von Hand nachziehen (danach laeuft jedes weitere Update wie gewohnt):
+
+    sudo systemctl restart lightdm     # bzw. das Display-Manager-Unit des Geraets
+    # oder, wenn unklar:
+    sudo reboot
+
+Nach dem Start verschwindet ${ELWA_ROOT}/${ELWA_RUN_SH_PENDING_FILE} von selbst -
+das ist die Quittung, dass der neue Supervisor laeuft.
+EOF
+    exit 4
+fi
 
 # Laeuft eine JVM unter dem Supervisor? Dann beenden - die run.sh-Loop liest das
 # Symlink-Ziel neu und startet das neue Jar. Laeuft keine (Terminal aus/Display
