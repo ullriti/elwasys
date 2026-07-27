@@ -12,6 +12,12 @@ name: CI
 # Client-Raspi jar talks to a real backend Spring context (TerminalMaintenanceRealClientE2ETest,
 # backend module) - it runs as an extra step in "client" (which already has Xvfb + a local
 # PostgreSQL for run-ui-tests.sh), see Client-Raspi/run-cross-component-e2e.sh.
+#
+# Auf master laufen die Jobs NICHT bedingungslos: der vorgeschaltete "guard"-Job entscheidet
+# anhand der Commit-Message, ob der Push überhaupt Code oder Paket verändert (reine docs:/
+# chore:/style:/test:/ci:-Commits werden übersprungen). Begründung und Regel:
+# scripts/commit-triggers-build.sh. Für Pull Requests greift der Guard nie - dort läuft immer
+# alles, und genau dieser PR-Lauf ist die Absicherung, auf die sich der Skip auf master stützt.
 on:
   pull_request:
   push:
@@ -27,6 +33,90 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
+  # Guard – entscheidet, ob die eigentlichen Jobs laufen, und berechnet die Version.
+  #
+  # (1) Build-Relevanz: bei einem Push auf master wird die Commit-Message gegen
+  #     scripts/commit-triggers-build.sh geprüft (docs:/style:/chore:/test:/ci: -> kein Lauf,
+  #     alles andere und jeder Breaking-Change-Marker -> Lauf). Bei Pull Requests immer "true".
+  #     Bei einem Push mit mehreren Commits genügt EIN relevanter Commit (fail-safe).
+  # (2) Versions-Gate: GitVersion einmal ausführen. Das validiert GitVersion.yml schon im PR
+  #     (eine kaputte Konfiguration soll nicht erst im Release-Lauf auffallen) und schreibt die
+  #     berechnete Version in die Job-Summary, damit im PR sichtbar ist, welchen Bump der
+  #     Titel/die Commits auslösen werden.
+  # ---------------------------------------------------------------------------
+  guard:
+    name: Build-Relevanz & Version
+    runs-on: ubuntu-24.04
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # GitVersion braucht die vollständige Historie inkl. Tags - mit dem
+          # Standard-Shallow-Clone (fetch-depth 1) findet es keine Versionsquelle.
+          fetch-depth: 0
+
+      - name: Selbsttest der Guard-Regel
+        run: bash scripts/commit-triggers-build-selftest.sh
+
+      - name: Build-Relevanz bestimmen
+        id: decide
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [[ "${EVENT_NAME}" != "push" ]]; then
+            echo "Kein Push (${EVENT_NAME}) - es wird immer gebaut."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Die Commit-Messages werden ÜBER DIE EVENT-DATEI gelesen, nicht per ${{ }}
+          # interpoliert: eine Commit-Message ist Fremdtext und würde als ${{ }}-Ausdruck
+          # direkt in die Shell-Zeile eingesetzt (Script-Injection).
+          run=false
+          # Eine Zeile je Commit, base64-kodiert: Commit-Messages sind mehrzeilig, und jq
+          # kann keine NUL-Bytes ausgeben - base64 ist das einzige Trennverfahren, das
+          # beliebige Message-Inhalte unbeschadet durch die Schleife bringt.
+          while IFS= read -r encoded; do
+            msg="$(printf '%s' "${encoded}" | base64 -d)"
+            if bash scripts/commit-triggers-build.sh "${msg}"; then
+              echo "Relevant: $(printf '%s' "${msg}" | head -n1)"
+              run=true
+            else
+              echo "Überspringbar: $(printf '%s' "${msg}" | head -n1)"
+            fi
+          done < <(jq -r '.commits[]?.message | @base64' "$GITHUB_EVENT_PATH")
+          echo "run=${run}" >> "$GITHUB_OUTPUT"
+          if [[ "${run}" != "true" ]]; then
+            echo "::notice::Kein CI-Lauf: dieser Push ändert weder Code noch Paket (siehe scripts/commit-triggers-build.sh)."
+          fi
+
+      - name: Set up GitVersion
+        uses: gittools/actions/gitversion/setup@v4.7.0
+        with:
+          versionSpec: '6.3.x'
+
+      - name: Determine version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v4.7.0
+
+      - name: Version in die Job-Summary schreiben
+        env:
+          FULL_SEM_VER: ${{ steps.gitversion.outputs.fullSemVer }}
+          MMP: ${{ steps.gitversion.outputs.majorMinorPatch }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Version (GitVersion)"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Version dieses Standes | \`${FULL_SEM_VER}\` |"
+            echo "| Stabile Version bei Freigabe | \`${MMP}\` |"
+            echo "| CI-/Release-Lauf auf master | \`${{ steps.decide.outputs.run }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
   # Raspi-Client – JavaFX TestFX characterization tests + a headless end-to-end
   # test that boots the whole app against a seeded PostgreSQL and the in-project
   # fhem simulator. Runs under Xvfb (see docs/kb/06-ui-tests.md).
@@ -34,6 +124,8 @@ jobs:
   client:
     name: Client-Raspi (headless UI + E2E)
     runs-on: ubuntu-24.04
+    needs: guard
+    if: needs.guard.outputs.run == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -104,6 +196,8 @@ jobs:
   backend-e2e:
     name: Backend Portal (Playwright E2E)
     runs-on: ubuntu-24.04
+    needs: guard
+    if: needs.guard.outputs.run == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -162,6 +256,8 @@ jobs:
   backend:
     name: Backend (Spring Boot, Testcontainers)
     runs-on: ubuntu-24.04
+    needs: guard
+    if: needs.guard.outputs.run == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -205,6 +301,8 @@ jobs:
   helm:
     name: Helm chart (lint + template)
     runs-on: ubuntu-24.04
+    needs: guard
+    if: needs.guard.outputs.run == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -227,6 +325,8 @@ jobs:
   terminal-scripts:
     name: Terminal update scripts (dry-run selftest)
     runs-on: ubuntu-24.04
+    needs: guard
+    if: needs.guard.outputs.run == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -251,6 +351,8 @@ jobs:
   cutover-scripts:
     name: Cutover & ops scripts (offline selftest)
     runs-on: ubuntu-24.04
+    needs: guard
+    if: needs.guard.outputs.run == 'true'
     steps:
       - uses: actions/checkout@v4
 
