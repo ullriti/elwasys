@@ -43,9 +43,10 @@ import org.springframework.util.StreamUtils;
 public class ElwasysAppShell implements AppShellConfigurator {
 
     /**
-     * Portal-Design (AdminLTE-Look des Alt-Portals) - bewusst NICHT als kompiliertes
-     * Vaadin-Theme ({@code @Theme}/{@code src/main/frontend/themes/...}), sondern zur Laufzeit
-     * als dokumentweites Inline-Stylesheet in den {@code <head>} eingehängt.
+     * Portal-Design (seit dem UI-Redesign v2, siehe docs/specs/0002-ui-design/v2/) - bewusst
+     * NICHT als kompiliertes Vaadin-Theme ({@code @Theme}/{@code src/main/frontend/themes/...}),
+     * sondern zur Laufzeit als dokumentweites Inline-Stylesheet in den {@code <head>}
+     * eingehängt.
      *
      * <p><b>Warum kein {@code @Theme}:</b> Ein eigenes Theme (oder irgendein
      * {@code @CssImport}/{@code @JsModule}) zwingt Vaadin, ein anwendungs-spezifisches
@@ -62,8 +63,9 @@ public class ElwasysAppShell implements AppShellConfigurator {
      * die aus dem Dokument-Scope bis in die Web-Components wirken - Lumo-Custom-Properties
      * (vererben sich in die Shadow-DOMs) und {@code ::part()}-Selektoren auf den von Vaadin
      * exponierten Teilen (Navbar/Drawer der AppLayout, Grid-Zellen, SideNav-Items) - plus die
-     * ohnehin im Light-DOM liegenden Klassen-Hooks der Views. Es verändert nur Farben/Rahmen,
-     * keine Texte oder Struktur, damit die E2E-Suite (backend/e2e, P1-P20) unverändert bleibt.
+     * ohnehin im Light-DOM liegenden Klassen-Hooks der Views. Es verändert ausschließlich die
+     * Darstellung (Farben, Rahmen, Abstände, Anordnung) und KEINE Beschriftungen - die
+     * E2E-Suite (backend/e2e, P1-P20) lokalisiert über sie.
      */
     @Override
     public void configurePage(AppShellSettings settings) {
