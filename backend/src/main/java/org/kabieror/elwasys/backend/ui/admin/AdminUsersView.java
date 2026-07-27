@@ -100,7 +100,7 @@ public class AdminUsersView extends AbstractAdminListView<UserEntity> {
         // Währungstext (alphabetisch statt nach Betrag).
         grid.addColumn(this::formatCredit).setHeader("Guthaben").setSortable(true).setComparator(this::creditValue);
         grid.addComponentColumn(this::statusBadge).setHeader("Status");
-        grid.addComponentColumn(this::expiredExecutionsWarning).setHeader("").setFlexGrow(0).setWidth("50px");
+        grid.addComponentColumn(this::expiredExecutionsWarning).setHeader("").setFlexGrow(0).setAutoWidth(true);
     }
 
     @Override
@@ -179,12 +179,6 @@ public class AdminUsersView extends AbstractAdminListView<UserEntity> {
         btn.addClickListener(e -> openExpiredExecutionsDialog(user));
         Span wrapper = new Span(btn);
         return wrapper;
-    }
-
-    @Override
-    protected String actionColumnWidth() {
-        // Vier Aktionen statt der zwei der Basisklasse (Bearbeiten/Guthaben/Umsätze/Löschen).
-        return "190px";
     }
 
     @Override

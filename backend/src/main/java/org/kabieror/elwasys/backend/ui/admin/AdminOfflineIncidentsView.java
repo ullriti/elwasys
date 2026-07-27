@@ -125,26 +125,31 @@ public class AdminOfflineIncidentsView extends VerticalLayout {
         // ValueProvider-Überladung: sie ist null-sicher (ein nie gemeldetes "Aufgetreten" ist
         // erlaubt, siehe TerminalOfflineIncidentEntity#occurredAt) und ordnet leere Werte in allen
         // Spalten gleich ein - ein eigener nullsFirst-Vergleicher hätte hier gegenläufig sortiert.
-        // Breiten in rem, nicht em - Begruendung siehe portal-theme.css (Versalien-Kopf in
-        // 0.75rem wuerde em-Breiten im Kopf anders aufloesen als im Koerper).
+        // Die Spalten vermessen sich selbst (setAutoWidth), statt ausgerechnete Breiten zu
+        // tragen: der Versalien-Kopf des Designs v2 baut breiter als die vorherige
+        // Normalschrift, und mit festen Breiten wurden erst die Ueberschriften gekuerzt
+        // ("AUFGET...") und dann - beim Nachbessern - die Aktionsspalte aus dem sichtbaren
+        // Bereich geschoben. Nur "Grund" waechst mit der Restbreite mit.
         this.grid.addColumn(i -> PortalFormats.dateTime(i.getOccurredAt())).setHeader("Aufgetreten").setFlexGrow(0)
-                .setWidth("10rem").setSortable(true).setComparator(TerminalOfflineIncidentEntity::getOccurredAt);
+                .setAutoWidth(true).setSortable(true).setComparator(TerminalOfflineIncidentEntity::getOccurredAt);
         this.grid.addColumn(i -> PortalFormats.dateTime(i.getReportedAt())).setHeader("Gemeldet").setFlexGrow(0)
-                .setWidth("10rem").setSortable(true).setComparator(TerminalOfflineIncidentEntity::getReportedAt);
-        this.grid.addColumn(i -> i.getLocation().getName()).setHeader("Standort").setFlexGrow(0).setWidth("9rem")
+                .setAutoWidth(true).setSortable(true).setComparator(TerminalOfflineIncidentEntity::getReportedAt);
+        this.grid.addColumn(i -> i.getLocation().getName()).setHeader("Standort").setFlexGrow(0).setAutoWidth(true)
                 .setSortable(true).setComparator(i -> i.getLocation().getName());
-        this.grid.addColumn(i -> kindLabel(i.getKind())).setHeader("Art").setFlexGrow(0).setWidth("11rem")
+        this.grid.addColumn(i -> kindLabel(i.getKind())).setHeader("Art").setFlexGrow(0).setAutoWidth(true)
                 .setSortable(true).setComparator(i -> kindLabel(i.getKind()));
         // Der Nutzer ist informativ und kann fehlen (nie gemeldet oder zwischenzeitlich gelöscht -
         // der Vorfall bleibt trotzdem bestehen, siehe TerminalOfflineIncidentService#report).
         this.grid.addColumn(i -> i.getUser() == null ? "-" : i.getUser().getName()).setHeader("Benutzer")
-                .setFlexGrow(0).setWidth("11rem");
+                .setFlexGrow(0).setAutoWidth(true);
         this.grid.addComponentColumn(AdminOfflineIncidentsView::amountLabel).setHeader("Betrag").setFlexGrow(0)
-                .setWidth("7rem");
+                .setAutoWidth(true);
         this.grid.addColumn(TerminalOfflineIncidentEntity::getReason).setHeader("Grund");
         this.grid.addComponentColumn(AdminOfflineIncidentsView::statusBadge).setHeader("Status").setFlexGrow(0)
-                .setWidth("9rem");
-        this.grid.addComponentColumn(this::actionButtons).setHeader("").setFlexGrow(0).setWidth("120px");
+                .setAutoWidth(true);
+        // Die acht Spalten davor fuellen die Breite bereits fast aus; ohne diese Bemessung
+        // lag der "Quittieren"-Knopf ausserhalb des sichtbaren Bereichs.
+        this.grid.addComponentColumn(this::actionButtons).setHeader("").setFlexGrow(0).setAutoWidth(true);
     }
 
     /** Verständliche Bezeichnung statt des rohen {@code kind}-Schlüssels aus der Meldung. */
@@ -239,6 +244,9 @@ public class AdminOfflineIncidentsView extends VerticalLayout {
             incidents = this.incidentService.findOpen();
         }
         this.grid.setItems(incidents);
+        // autoWidth misst erst, wenn Zellinhalt da ist - die Zeilen kommen aber gerade eben
+        // erst herein. Ohne die Neuvermessung behielten die Spalten die Breite des leeren Grids.
+        this.grid.recalculateColumnWidths();
         // Filtertext nach jedem Neuladen erneut anwenden (UI-Redesign v2 AP4) - grid.setItems(...)
         // legt einen neuen ListDataProvider an, der sonst ungefiltert wäre.
         this.filterField.reapply();

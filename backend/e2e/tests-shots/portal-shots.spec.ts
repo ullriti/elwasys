@@ -4,6 +4,7 @@ import {
   login,
   openAdminSection,
   rowActionButton,
+  gridRowCells,
   dialog,
   runSql,
 } from '../tests/helpers';
@@ -24,6 +25,7 @@ const PREFIX = 'ZZS';
 const DEV_RUNNING = `${PREFIX}-Waschmaschine 1`;
 const DEV_FREE = `${PREFIX}-Waschmaschine 2`;
 const DEV_OFF = `${PREFIX}-Trockner`;
+const DEV_EXPIRED = `${PREFIX}-Waschmaschine 3`;
 const PROGRAM = `${PREFIX}-Buntwäsche 40°`;
 const PROGRAM_DYN = `${PREFIX}-Trocknen nach Zeit`;
 const GROUP = `${PREFIX}-Mieter`;
@@ -115,7 +117,18 @@ function seed() {
       ('${DEV_FREE}', 92, (SELECT id FROM locations WHERE name='Default'),
         'zzs2', 'zzs2sw', 'zzs2pw', '', 0.5, 20, TRUE),
       ('${DEV_OFF}', 93, (SELECT id FROM locations WHERE name='Default'),
-        'zzs3', 'zzs3sw', 'zzs3pw', '', 0.5, 20, FALSE);
+        'zzs3', 'zzs3sw', 'zzs3pw', '', 0.5, 20, FALSE),
+      ('${DEV_EXPIRED}', 94, (SELECT id FROM locations WHERE name='Default'),
+        'zzs4', 'zzs4sw', 'zzs4pw', '', 0.5, 20, TRUE);
+
+    -- Verfallene Ausfuehrung: laengst ueber die Maximaldauer hinaus und nie abgerechnet.
+    -- Sie laesst das Warndreieck in der Benutzerliste erscheinen und fuellt den Dialog
+    -- "Verfallene Ausfuehrungsauftraege".
+    INSERT INTO executions (device_id, program_id, user_id, start, finished)
+      VALUES ((SELECT id FROM devices WHERE name='${DEV_EXPIRED}'),
+              (SELECT id FROM programs WHERE name='${PROGRAM}'),
+              (SELECT id FROM users WHERE username='${USERNAME}'),
+              NOW() - INTERVAL '3 days', FALSE);
 
     -- Laufende Ausfuehrung (vor 25 Minuten gestartet, Programm laeuft 90 Minuten).
     INSERT INTO executions (device_id, program_id, user_id, start, finished)
@@ -254,6 +267,14 @@ test('Admin-Bereich', async ({ page }) => {
   await captureDialog(page, 'dialog-umsaetze', async () => {
     (await rowActionButton(page, new RegExp(USER), 2)).click();
   });
+  // Warndreieck: eigene Spalte direkt vor den Aktionen, deshalb ueber die Zellen der Zeile.
+  const cells = await gridRowCells(page, new RegExp(USER));
+  await cells[cells.length - 2].locator('vaadin-button').click();
+  await expect(dialog(page)).toBeVisible();
+  await shot(page, 'dialog-verfallene-ausfuehrungen');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('vaadin-dialog-overlay')).toHaveCount(0);
+
   // Die Löschabfrage ist ein Vaadin ConfirmDialog und rendert als eigenes Element
   // (vaadin-confirm-dialog-overlay), nicht als vaadin-dialog-overlay - deshalb von Hand
   // statt über captureDialog. Beendet wird sie mit "Nein", damit nichts gelöscht wird.

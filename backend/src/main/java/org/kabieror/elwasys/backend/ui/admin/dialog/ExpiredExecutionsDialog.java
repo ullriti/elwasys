@@ -69,7 +69,7 @@ public class ExpiredExecutionsDialog extends Dialog {
         this.grid.addColumn(e -> e.getProgram().getName()).setHeader("Programm");
         this.grid.addColumn(e -> PortalFormats.currency(this.executionService.getPrice(e)))
                 .setHeader("Fälliger Betrag");
-        this.grid.addComponentColumn(this::rowButtons).setHeader("").setFlexGrow(0).setWidth("170px");
+        this.grid.addComponentColumn(this::rowButtons).setHeader("").setFlexGrow(0).setAutoWidth(true);
 
         add(explanation, new HorizontalLayout(btnFinishAll), this.grid);
 
@@ -85,7 +85,11 @@ public class ExpiredExecutionsDialog extends Dialog {
         Button btnDelete = new Button(new Icon(VaadinIcon.TRASH), e -> confirmDelete(execution));
         btnDelete.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_ERROR, ButtonVariant.LUMO_TERTIARY);
 
-        return new HorizontalLayout(btnFinish, btnDelete);
+        HorizontalLayout buttons = new HorizontalLayout(btnFinish, btnDelete);
+        // Enger Abstand wie in den Listenansichten: die v2-Bedienelemente sind groesser, der
+        // Lumo-Standardabstand von 1rem sprengte die Aktionsspalte.
+        buttons.getThemeList().add("spacing-xs");
+        return buttons;
     }
 
     private void finish(ExecutionEntity execution) {
@@ -123,5 +127,7 @@ public class ExpiredExecutionsDialog extends Dialog {
         // ExpiredExecutionsWindow: die Tabelle bleibt nach dem letzten "Löschen"/"Abrechnen"
         // einfach leer, der Administrator schließt selbst).
         this.grid.setItems(this.executionService.getExpiredExecutions(this.user));
+        // autoWidth misst erst, wenn Zellinhalt gerendert ist - der kommt aber gerade eben erst.
+        this.grid.recalculateColumnWidths();
     }
 }

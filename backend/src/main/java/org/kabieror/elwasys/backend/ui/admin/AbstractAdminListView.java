@@ -94,18 +94,11 @@ public abstract class AbstractAdminListView<T> extends VerticalLayout {
      */
     protected void initGrid() {
         configureColumns(this.grid);
-        this.grid.addComponentColumn(this::actionButtons).setHeader("").setFlexGrow(0).setWidth(actionColumnWidth());
+        this.grid.addComponentColumn(this::actionButtons).setHeader("").setFlexGrow(0).setAutoWidth(true);
         // Erst binden, dann laden: setGridItems() legt den Filter danach auf jeden neuen
         // Datenbestand.
         this.filterField.bindTo(this.grid, this::filterableText);
         loadData();
-    }
-
-    /**
-     * Breite der Aktionsspalte. Ansichten mit zusätzlichen Aktionsknöpfen überschreiben sie.
-     */
-    protected String actionColumnWidth() {
-        return "110px";
     }
 
     @Override
@@ -143,6 +136,10 @@ public abstract class AbstractAdminListView<T> extends VerticalLayout {
      */
     protected void setGridItems(List<T> items) {
         this.grid.setItems(items);
+        // autoWidth misst den Zellinhalt, sobald er gerendert ist - die Zeilen kommen aber erst
+        // mit diesem Aufruf. Ohne die Neuvermessung behielte die Aktionsspalte die Breite, die
+        // sie beim leeren Grid hatte.
+        this.grid.recalculateColumnWidths();
         this.filterField.reapply();
     }
 
@@ -216,7 +213,12 @@ public abstract class AbstractAdminListView<T> extends VerticalLayout {
         btnDelete.addThemeVariants(ButtonVariant.LUMO_ERROR, ButtonVariant.LUMO_TERTIARY);
         btnDelete.addClickListener(e -> confirmDelete(item));
 
-        return new HorizontalLayout(btnEdit, btnDelete);
+        HorizontalLayout buttons = new HorizontalLayout(btnEdit, btnDelete);
+        // Enger Abstand: die Bedienelemente sind mit dem UI-Redesign v2 groesser geworden
+        // (--lumo-size-*), der Lumo-Standardabstand von 1rem zwischen reinen Icon-Knoepfen
+        // sprengte damit die Aktionsspalte - der Loeschen-Knopf wurde abgeschnitten.
+        buttons.getThemeList().add("spacing-xs");
+        return buttons;
     }
 
     /**
