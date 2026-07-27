@@ -18,7 +18,45 @@ import java.util.Iterator;
  */
 public class Utilities {
 
-    public static final String APP_VERSION = "0.0.0-local-development";
+    /**
+     * Version, die gilt, solange die Anwendung nicht aus einem gebauten Jar läuft (IDE,
+     * {@code target/classes}, Testlauf). Zugleich der Sentinel, den der Helm-Chart-Guard und
+     * die Release-Prüfungen als "kein echtes Release" erkennen.
+     */
+    static final String LOCAL_DEVELOPMENT_VERSION = "0.0.0-local-development";
+
+    /**
+     * Version der laufenden Anwendung. Wird aus dem Jar-Manifest gelesen
+     * ({@code Implementation-Version}, von Maven aus {@code ${project.version}} gefüllt, siehe
+     * {@code Client-Raspi/pom.xml}) – vorher war das eine feste Konstante, die nur der
+     * Release-Workflow per {@code sed} ersetzte. Dadurch meldeten alle anderen Builds
+     * dauerhaft den Sentinel, auch dort, wo die Version nutzersichtbar wird (die
+     * {@code clientVersion} im WebSocket-Hello, die das Portal anzeigt).
+     */
+    public static final String APP_VERSION = resolveAppVersion(readManifestVersion());
+
+    /**
+     * Liest {@code Implementation-Version} aus dem Manifest des Jars, aus dem diese Klasse
+     * geladen wurde. Liefert {@code null}, wenn ohne Jar gestartet wurde (dann ist das Package
+     * nicht aus einem Archiv definiert) – der Aufrufer fällt darauf auf den Sentinel zurück.
+     */
+    private static String readManifestVersion() {
+        final Package pkg = Utilities.class.getPackage();
+        return pkg == null ? null : pkg.getImplementationVersion();
+    }
+
+    /**
+     * Wählt zwischen Manifest-Version und Sentinel. Paketprivat, damit der Fallback ohne
+     * gebautes Jar testbar ist.
+     *
+     * @param manifestVersion Die Version aus dem Jar-Manifest (darf {@code null}/leer sein).
+     * @return Die Manifest-Version, sonst {@link #LOCAL_DEVELOPMENT_VERSION}.
+     */
+    static String resolveAppVersion(String manifestVersion) {
+        return manifestVersion == null || manifestVersion.isBlank()
+                ? LOCAL_DEVELOPMENT_VERSION
+                : manifestVersion;
+    }
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 

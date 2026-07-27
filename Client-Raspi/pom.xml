@@ -154,12 +154,30 @@
 					</systemPropertyVariables>
 				</configuration>
 			</plugin>
+			<!-- Manifest-Einträge für das schlanke Jar. addDefaultImplementationEntries
+			     schreibt Implementation-Title/-Version (= ${project.version}) hinein;
+			     Utilities.APP_VERSION liest die Version zur Laufzeit von dort, statt sie
+			     als Quelltext-Konstante zu führen (siehe Utilities#resolveAppVersion). -->
+			<plugin>
+				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<archive>
+						<manifest>
+							<addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+						</manifest>
+					</archive>
+				</configuration>
+			</plugin>
 			<plugin>
 				<artifactId>maven-assembly-plugin</artifactId>
 				<configuration>
 					<archive>
 						<manifest>
 							<mainClass>org.kabieror.elwasys.raspiclient.application.Main</mainClass>
+							<!-- Das fat-jar ist das, was auf dem Terminal tatsächlich läuft -
+							     hier MUSS die Version im Manifest stehen, sonst meldet das
+							     Terminal dauerhaft den Sentinel als clientVersion. -->
+							<addDefaultImplementationEntries>true</addDefaultImplementationEntries>
 						</manifest>
 					</archive>
 					<descriptorRefs>

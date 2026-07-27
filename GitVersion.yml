@@ -1,0 +1,104 @@
+# GitVersion – berechnet die Projektversion aus der Git-Historie (SemVer 2.0).
+#
+# Warum: Bis hierher trugen Root-POM, Modul-POMs, Utilities.APP_VERSION und der
+# Helm-Chart den Sentinel "0.0.0-local-development"; die echte Version entstand
+# erst im Release-Workflow aus dem von Hand vergebenen GitHub-Release-Tag. Damit
+# konnte die Version nur so gut sein wie der Tag, den jemand eingetippt hat.
+# GitVersion leitet sie stattdessen reproduzierbar aus Tags + Commit-Historie ab;
+# der Release-Workflow (.github/workflows/release.yml) und der CI-Gate-Job
+# (.github/workflows/ci.yml, Job "version") lesen sie hier heraus.
+# Hintergrund/Entscheidung: docs/architecture/0016-gitversion-und-paketbereitstellung.md
+#
+# Ergebnis pro Branch (Beispiel nach dem ersten Release 1.0.0):
+#   master                 -> 1.1.0-rc.7      (Vorabversion, jeder Merge eindeutig)
+#   claude/*, feature/*    -> 1.1.0-alpha.3
+#   Pull Request           -> 1.1.0-PullRequest0107.2
+#   Git-Tag "1.1.0"        -> 1.1.0           (die stabile Version selbst)
+#
+# Der stabile Release-Lauf verwendet bewusst NICHT diese Vorabversion, sondern
+# nur den Kern MajorMinorPatch (1.4.0) und taggt damit – siehe release.yml.
+
+# SemVer-Kern wird ohne Vorabkennung getaggt ("1.4.0"). Das Präfix-Regex erlaubt
+# zusätzlich ein optionales v/V, falls doch einmal "v1.4.0" getaggt wird; erzeugt
+# wird von uns immer die präfixlose Form, damit durchgängig
+# Tag == SemVer == Jar-Dateiname == Image-Tag == Chart-appVersion gilt (die
+# Terminals leiten ihren Download-Dateinamen direkt aus dem Tag ab, siehe
+# deploy/terminal/update.sh).
+tag-prefix: '[vV]?'
+
+# ACHTUNG Terminologie: GitVersion 6 hat die "mode"-Werte umbenannt. "ContinuousDelivery"
+# bedeutet hier eine FORTLAUFENDE Vorabnummer (1.4.0-rc.1, -rc.2, …); das früher so
+# genannte Verhalten mit fixer Nummer + "+n"-Build-Metadata heißt jetzt
+# "ManualDeployment". Wir brauchen die fortlaufende Variante: "+" ist weder in einem
+# Docker-Tag noch in einem Maven-Versionsstring brauchbar, und jeder master-Merge soll
+# ein eindeutiges Paket ergeben. Darum steht der Modus unten bei den Branches EXPLIZIT –
+# die eingebauten Branch-Defaults (feature: ManualDeployment) würden einen reinen
+# Root-Wert sonst still überschreiben.
+mode: ContinuousDelivery
+
+# Startpunkt der Versionsreihe. Das heutige Repo trägt keinen einzigen Tag, deshalb
+# begänne GitVersion sonst bei 0.0.1 - hinter dem letzten veröffentlichten Stand vor dem
+# Umbau (0.4.2). Die Reihe startet auf Auftraggeber-Entscheidung (2026-07-27) bei 1.0.0:
+# der erste Stand nach der Modernisierung ist die erste Vollversion.
+#
+# Sobald der Tag 1.0.0 existiert, ist diese Angabe wirkungslos (Tags gewinnen) und kann
+# entfallen.
+next-version: 1.0.0
+
+# ---------------------------------------------------------------------------
+# Bump-Regeln aus Conventional Commits (AGENTS.md §5 "Commits & Branches").
+#
+# Das funktioniert hier deshalb verlässlich, weil PRs per Squash gemerged werden
+# und der PR-Titel – ebenfalls nach Conventional Commits – dabei zur
+# master-Commit-Message wird. Die klassischen "+semver:"-Marker bleiben als
+# Notausgang erhalten (z. B. um einen Major-Bump ohne "!"-Commit zu erzwingen).
+#
+# Es gewinnt der höchste Treffer über alle Commits seit der letzten Version.
+# ---------------------------------------------------------------------------
+
+# Major: "feat!:" / "fix(scope)!:" … oder ein "BREAKING CHANGE:"-Footer.
+major-version-bump-message: '(?m)^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^)]*\))?!:|^BREAKING[ -]CHANGE:|\+semver:\s?(breaking|major)'
+
+# Minor: neue Funktion.
+minor-version-bump-message: '(?m)^feat(\([^)]*\))?:|\+semver:\s?(feature|minor)'
+
+# Patch: Fehlerbehebung, Performance, Refactoring.
+patch-version-bump-message: '(?m)^(fix|perf|refactor)(\([^)]*\))?:|\+semver:\s?(fix|patch)'
+
+# Commits ohne passenden Typ (docs:, chore:, test:, …) lösen für sich genommen
+# keinen Bump aus; der Branch-Default "increment: Patch" (unten) sorgt dafür,
+# dass eine Release-Reihe trotzdem immer eine neue, höhere Version bekommt.
+
+branches:
+  main:
+    # Dieses Repo nutzt "master" als Standardbranch; die Voreinstellung von
+    # GitVersion kennt nur "main"/"master" über dieses Regex – hier explizit,
+    # damit die label/increment-Werte unten sichtbar dazugehören.
+    regex: ^master$|^main$
+    mode: ContinuousDelivery
+    # rc statt "leer": Ohne Vorabkennung lieferte jeder master-Commit bis zum
+    # nächsten Tag dieselbe Version (1.4.0), und die automatischen Vorab-Releases
+    # je Merge würden kollidieren. Mit label "rc" zählt GitVersion die Commits
+    # seit der letzten Version mit (1.4.0-rc.1, -rc.2, …) – jeder master-Merge
+    # bekommt so ein eindeutiges Paket, der stabile Release-Lauf taggt später
+    # den Kern 1.4.0.
+    label: rc
+    increment: Patch
+    is-main-branch: true
+    source-branches: []
+  feature:
+    # Session-/Feature-Branches dieses Projekts heißen "claude/…" (AGENTS.md §5),
+    # daneben die üblichen feature/-Namen.
+    regex: ^claude[/-]|^features?[/-]
+    mode: ContinuousDelivery
+    label: alpha
+    increment: Inherit
+    source-branches:
+      - main
+  pull-request:
+    regex: ^(pull|pull\-requests|pr)[/-]
+    label: PullRequest
+    increment: Inherit
+    source-branches:
+      - main
+      - feature
