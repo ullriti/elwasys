@@ -9,12 +9,16 @@ description: >-
   Sub-Chart mitgeliefert, siehe die Begründung in values.yaml unter "database:" und in
   docs/kb/05-migration-plan.md ("Entscheidungen").
 type: application
-# Chart-Version: eigene, vom Anwendungs-Release unabhängige Versionierung dieses Helm-Charts
-# (SemVer, hochzählen bei Chart-Änderungen wie neuen Values/Templates).
-version: 0.1.0
-# appVersion: Version des Backend-Images, das standardmäßig referenziert wird (siehe
-# values.yaml image.tag - überschreibt bei Bedarf appVersion). Folgt dem Projektstand, siehe
-# root pom.xml <version> (aktuell "0.0.0-local-development", vor dem ersten echten Release).
+# Chart-Version und appVersion stehen hier bewusst auf Platzhaltern: beim Release setzt
+# .github/workflows/release.yml sie über "helm package --version/--app-version" auf die von
+# GitVersion berechnete Release-Version und pusht den Chart als OCI-Artefakt nach
+# ghcr.io/<owner>/charts/elwasys-backend. Chart und Backend werden immer gemeinsam
+# ausgeliefert - deshalb sind beide Versionen gekoppelt ("Chart 1.4.2 deployt Backend 1.4.2").
+#
+# Im Repo bleibt der Sentinel stehen, damit ein Deployment aus dem Checkout ohne
+# "--set image.tag" am imageTag-Guard des Charts scheitert (templates/_helpers.tpl, Issue #89)
+# statt still ein nicht existierendes GHCR-Image zu ziehen.
+version: 0.0.0
 appVersion: "0.0.0-local-development"
 home: https://elwasys.de
 sources:
