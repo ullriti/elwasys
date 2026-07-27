@@ -9,6 +9,7 @@ import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.textfield.TextField;
@@ -112,8 +113,16 @@ public class UserDashboardView extends VerticalLayout {
         topPanels.add(buildSparkTile("Letzte Einzahlung", this.lastInpaymentValueLabel));
         add(topPanels);
 
-        add(new H3("Buchungen"));
-        add(buildFilterField());
+        // Überschrift und Filter in einer Zeile - dieselbe Toolbar-Anordnung wie in den
+        // Admin-Listen (AbstractAdminListView), damit das Portal an beiden Stellen gleich zu
+        // bedienen ist.
+        H3 bookingsHeading = new H3("Buchungen");
+        HorizontalLayout bookingsToolbar = new HorizontalLayout(bookingsHeading, buildFilterField());
+        bookingsToolbar.addClassName("list-toolbar");
+        bookingsToolbar.setWidthFull();
+        bookingsToolbar.setFlexGrow(1, bookingsHeading);
+        bookingsToolbar.setAlignItems(FlexComponent.Alignment.CENTER);
+        add(bookingsToolbar);
         // Sortierung: die Spalten zeigen formatierte Texte ("12.03.25, 14:07", "1,50 €") - ohne
         // eigenen Comparator würde das Grid genau diese Zeichenketten alphabetisch ordnen und
         // damit weder chronologisch noch numerisch sortieren. Deshalb je Spalte der Vergleich
@@ -124,7 +133,9 @@ public class UserDashboardView extends VerticalLayout {
         // zugunsten von Shadow-DOM-Parts als veraltet markiert - hier bewusst weiter verwendet,
         // weil das Portal-Theme die Zellen über CSS-Klassen anspricht, nicht über ::part).
         this.grid.addColumn(e -> PortalFormats.currency(e.getAmount())).setHeader("Betrag").setFlexGrow(0)
-                .setWidth("8em").setComparator(CreditAccountingEntryEntity::getAmount).setSortable(true)
+                // 9em statt 8em: die Kopfzeilen stehen seit dem UI-Redesign v2 in Versalien mit
+                // Sperrung, "BETRAG" passte sonst nicht mehr und wurde zu "BETR..." gekürzt.
+                .setWidth("9em").setComparator(CreditAccountingEntryEntity::getAmount).setSortable(true)
                 .setClassNameGenerator(e -> "tabular-nums");
         this.grid.addColumn(CreditAccountingEntryEntity::getDescription).setHeader("Buchungstext")
                 .setComparator(CreditAccountingEntryEntity::getDescription).setSortable(true);
@@ -142,8 +153,11 @@ public class UserDashboardView extends VerticalLayout {
      * damit das Eingetippte genau das trifft, was der Benutzer vor sich sieht.
      */
     private TextField buildFilterField() {
-        this.filterField.addClassName("grid-filter-field");
-        this.filterField.setPlaceholder("Filtern");
+        // Dieselbe Klasse und dieselbe Beschriftung wie die Filterfelder der Admin-Listen
+        // (AbstractAdminListView): ein Portal, ein Suchfeld - unterschiedliche Breiten oder
+        // Platzhalter wären dem Benutzer nur als Unsauberkeit aufgefallen.
+        this.filterField.addClassName("list-filter");
+        this.filterField.setPlaceholder("Suchen");
         this.filterField.setAriaLabel("Buchungen filtern");
         this.filterField.setPrefixComponent(new Icon(VaadinIcon.SEARCH));
         this.filterField.setClearButtonVisible(true);
