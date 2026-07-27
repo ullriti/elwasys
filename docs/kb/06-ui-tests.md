@@ -289,6 +289,24 @@ Die maßgebliche Portal-E2E-Suite läuft gegen das ins Backend eingebettete Vaad
   adressiert sie über ihre Quellcode-Reihenfolge (`actionButtons()`-Methode der jeweiligen View).
 - **Aktiver Navigationspunkt**: Vaadin markiert das gerade ausgewählte `vaadin-side-nav-item` mit
   dem Attribut **`[current]`** (nicht `[active]`).
+- **Jeder Ansichtsname steht zweimal im DOM** (seit dem UI-Redesign v2): einmal im Kopfbalken
+  (`ui/component/NavbarViewName` leitet ihn aus der `@PageTitle`-Annotation der View ab), einmal
+  in der Seitenleiste bzw. als Seitenüberschrift. Ein `page.getByText('<Ansichtsname>',
+  { exact: true })` scheitert deshalb am **Strict Mode** von Playwright („resolved to 2
+  elements") – und zwar für *jeden* Ansichtsnamen („Übersicht", „Geräte", „Benutzer", …).
+  Statt auf den Text zu zielen, das gemeinte Element adressieren: den Menüpunkt über
+  `page.locator('vaadin-side-nav-item[path="…"]')`, den Kopfbalken über `.navbar-view-name`.
+  Aufgetreten ist das bereits in P15 (`user-portal.spec.ts`, „Übersicht").
+- **`vaadin-side-nav-item` führt ein verstecktes „Toggle child items"-Label mit** (der
+  Aufklapp-Knopf für Unterpunkte, auch wenn es keine gibt). Sein Textinhalt ist damit nie nur
+  die Beschriftung → **`toContainText`, nicht `toHaveText`**.
+- **`vaadin-grid-sorter` setzt seine Richtung vor der Sortierung**: das `direction`-Attribut
+  wechselt sofort im Browser, sortiert wird aber erst eine Serverrunde später. Eine Zusicherung,
+  die zwischen beidem liest, sieht die alte Reihenfolge und meldet einen Fehler, den es nicht
+  gibt (aufgetreten bei P30, sah aus wie ein ignorierter `setComparator`). Deshalb nicht die
+  Zeilen einmalig einsammeln und vergleichen, sondern positionsbezogen und auto-wiederholend
+  zusichern (`tr[aria-rowindex="…"]` + `toHaveAccessibleName`) – deterministisch, ohne
+  `waitForTimeout`. Muster: `dataRow()` in `list-filter-sort.spec.ts`.
 - **Notification in Position `MIDDLE` ist modal** (Issue #89): sie blockiert bis zu ihrem Ablauf
   JEDE Eingabe – auch einen `{ force: true }`-Klick, der dann still ins Leere geht (Symptom:
   „Clicking the checkbox did not change its state"). Nach einer Aktion, die eine solche
@@ -297,13 +315,33 @@ Die maßgebliche Portal-E2E-Suite läuft gegen das ins Backend eingebettete Vaad
 
 ### Portal-Design zur Laufzeit (kein kompiliertes Theme)
 
-Das Portal liefert den AdminLTE-Look aus (blauer Header, dunkle Sidebar, gerahmte
-Zebra-Tabellen, Login als Karte). Das Styling ist **bewusst kein kompiliertes Vaadin-Theme**,
-sondern ein zur Laufzeit in den `<head>` injiziertes Stylesheet (`ElwasysAppShell#configurePage`
-→ `backend/src/main/resources/portal-theme.css`) – ein echtes `@Theme`/`@CssImport` würde einen
-Frontend-Bundle-Build und damit den Vaadin-Lizenzcheck erzwingen, der in dieser Umgebung
-abbricht (siehe docs/kb/05-migration-plan.md). Für die E2E-Suite ist das rein kosmetisch: nur
-Farben/Rahmen, keine Texte/Struktur/Selektoren.
+Das Portal liefert das **Design v2** aus ([`docs/specs/0002-ui-design/v2/`](../specs/0002-ui-design/v2/README.md)):
+64-px-Kopfbalken im Markenblau mit Logo-Mark, Ansichtsname und Benutzer-Chip, dunkle
+Seitenleiste mit Pillen-Navigation, Grids ohne Zebra-Streifen und Spaltentrenner mit
+Zeilen-Hover, Login als zweigeteilter Bildschirm. Das Styling ist **bewusst kein kompiliertes
+Vaadin-Theme**, sondern ein zur Laufzeit in den `<head>` injiziertes Stylesheet
+(`ElwasysAppShell#configurePage` → `backend/src/main/resources/portal-theme.css`) – ein echtes
+`@Theme`/`@CssImport` würde einen Frontend-Bundle-Build und damit den Vaadin-Lizenzcheck
+erzwingen, der in dieser Umgebung abbricht (siehe docs/kb/05-migration-plan.md).
+
+Für die E2E-Suite ist das **überwiegend**, aber nicht vollständig kosmetisch: Farben, Rahmen und
+Abstände liegen im CSS, der Ansichtsname im Kopfbalken und die Filterfelder über den Listen sind
+dagegen echte zusätzliche DOM-Knoten (siehe die zwei Selektor-Regeln oben).
+
+**Was rein visuelle Fehler angeht, ist die Suite blind** – im Redesign v2 sind drei Fehler
+genau so durchgerutscht und erst am Bildschirm bzw. in den Entwicklerwerkzeugen aufgefallen:
+ein Lumo-Verlauf, der den Kopfbalken weiß übermalte (Texte/Selektoren blieben korrekt), ein per
+`display:none` unbedienbar gewordener Umschalter und eine CSS-Regel, die der Browser wegen eines
+Kombinators nach `::part()` schon beim Parsen verwarf. Für die optische Abnahme gibt es deshalb
+**`backend/e2e/tests-shots/portal-shots.spec.ts`**: ein Screenshot-Durchlauf über alle Seiten und
+Dialoge, der seine eigenen Daten seedet und wieder abräumt. Er liegt bewusst **außerhalb** des
+`testDir` (`./tests`) und wird von `npm test` daher nicht eingesammelt – er ist ein Werkzeug für
+die optische Abnahme, kein Regressionstest, und läuft nicht im CI mit. Anstoßen lässt er sich,
+indem man Playwright auf den Ordner zeigt (`npx playwright test -c tests-shots`); dann gilt
+allerdings **nicht** die `playwright.config.ts` des Projekts, Browser-Pfad, `baseURL` und der
+`webServer`-Start müssen also selbst bereitgestellt werden (bequemer: `testDir` für den Lauf
+umstellen und gegen einen bereits laufenden Server mit `E2E_NO_WEBSERVER=1` fahren). Der
+Ablageort der Bilder steht in `SHOT_DIR` (Default `/tmp/portal-shots`).
 
 ### Testfall-Übersicht (P1–P28)
 
@@ -394,6 +432,12 @@ Am Code gezählt:
 
 ## Historie
 
+- **2026-07-27** — UI-Redesign v2: Portal-Design-Abschnitt auf v2 gehoben, zwei neue
+  Selektor-Regeln (Ansichtsname steht seit `NavbarViewName` zweimal im DOM → Strict Mode;
+  `vaadin-side-nav-item` führt ein verstecktes „Toggle child items"-Label →
+  `toContainText`) und der Screenshot-Durchlauf `backend/e2e/tests-shots/portal-shots.spec.ts`
+  für die optische Abnahme ([Worklog](../worklog/2026-07-27-ui-redesign-v2.md) ·
+  [Spec v2](../specs/0002-ui-design/v2/README.md)).
 - **2026-07-23** — Test-Inventar code-verifiziert (Backend 265 `@Test`/51 Klassen, Portal-E2E
   23 + 4 Smoke, Client 71 `@Test`); Backend-Standard-Suite zuletzt 259 grün, Portal-E2E grün
   ([Worklog AP6](../worklog/2026-07-23-ap6-deployment-betrieb-cutover.md) ·

@@ -2,6 +2,7 @@ package org.kabieror.elwasys.backend.ui.admin.dialog;
 
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.formlayout.FormLayout;
+import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
 import com.vaadin.flow.component.textfield.BigDecimalField;
 import com.vaadin.flow.component.textfield.TextField;
@@ -65,13 +66,16 @@ public class CreditTopUpDialog extends AbstractFormDialog {
         });
 
         this.bfAmount.setWidthFull();
+        // UI-Redesign v2: Währungszeichen als Feld-Suffix; das Feldlabel ("Betrag") bleibt
+        // unverändert.
+        this.bfAmount.setSuffixComponent(new Span("€"));
 
         this.tfText.setValue(inpaymentText);
         this.tfText.setWidthFull();
 
         FormLayout form = new FormLayout(this.rgAction, this.bfAmount, this.tfText);
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
-        add(form);
+        addToBody(form);
 
         Button btnSave = addFooterActions("Buchen", () -> execute(onSaved));
         // Issue #49: Doppelklick-Schutz auf dem geldbewegenden "Buchen"-Knopf (deaktiviert bis

@@ -6,6 +6,7 @@ import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
@@ -25,6 +26,7 @@ import org.kabieror.elwasys.backend.events.DomainEvent;
 import org.kabieror.elwasys.backend.events.ExecutionChangedEvent;
 import org.kabieror.elwasys.backend.service.CreditService;
 import org.kabieror.elwasys.backend.service.UserService;
+import org.kabieror.elwasys.backend.ui.component.ListFilterField;
 import org.kabieror.elwasys.backend.ui.component.PortalFormats;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
@@ -48,6 +50,10 @@ import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
  * an und aktualisiert Guthaben-Kachel, "Letzte Einzahlung"-Kachel und Buchungstabelle bei jedem
  * {@link CreditChangedEvent}/{@link ExecutionChangedEvent} des EIGENEN Benutzers (andere
  * Benutzer betreffen diese Session dank der Datenisolation ohnehin nicht).
+ *
+ * <p><b>Seit dem UI-Redesign v2</b> (docs/specs/0002-ui-design/v2/MAPPING.md, "Benutzerbereich",
+ * siehe docs/kb/05-migration-plan.md): die Buchungstabelle ist sortier- und filterbar - der
+ * Aufbau der Seite bleibt sonst unverändert.
  */
 @Route(value = "user", layout = UserLayout.class)
 @PageTitle("Übersicht - Waschportal")
@@ -64,6 +70,15 @@ public class UserDashboardView extends VerticalLayout {
     private final Span creditValueLabel = new Span();
     private final Span lastInpaymentValueLabel = new Span();
     private final Grid<CreditAccountingEntryEntity> grid = new Grid<>();
+
+    /**
+     * Freitextfilter über der Buchungstabelle (UI-Redesign v2): eine Buchungshistorie wächst mit
+     * jeder Einzahlung und jedem Waschgang, gesucht wird darin aber fast immer nach einem
+     * konkreten Datum, Betrag oder Buchungstext. Es ist dieselbe Komponente wie über den
+     * Admin-Listen - ein Portal, ein Suchfeld mit einer Suchsemantik.
+     */
+    private final ListFilterField<CreditAccountingEntryEntity> filterField =
+            new ListFilterField<>("Buchungen filtern");
 
     private Registration broadcasterRegistration;
 
@@ -93,17 +108,53 @@ public class UserDashboardView extends VerticalLayout {
         topPanels.add(buildSparkTile("Letzte Einzahlung", this.lastInpaymentValueLabel));
         add(topPanels);
 
-        add(new H3("Buchungen"));
+        // Überschrift und Filter in einer Zeile - dieselbe Toolbar-Anordnung wie in den
+        // Admin-Listen (AbstractAdminListView), damit das Portal an beiden Stellen gleich zu
+        // bedienen ist.
+        H3 bookingsHeading = new H3("Buchungen");
+        HorizontalLayout bookingsToolbar = new HorizontalLayout(bookingsHeading, this.filterField);
+        bookingsToolbar.addClassName("list-toolbar");
+        bookingsToolbar.setWidthFull();
+        bookingsToolbar.setFlexGrow(1, bookingsHeading);
+        bookingsToolbar.setAlignItems(FlexComponent.Alignment.CENTER);
+        add(bookingsToolbar);
+        // Sortierung: die Spalten zeigen formatierte Texte ("12.03.25, 14:07", "1,50 €") - ohne
+        // eigenen Comparator würde das Grid genau diese Zeichenketten alphabetisch ordnen und
+        // damit weder chronologisch noch numerisch sortieren. Deshalb je Spalte der Vergleich
+        // auf dem Rohwert.
         this.grid.addColumn(e -> PortalFormats.dateTime(e.getDate())).setHeader("Datum").setFlexGrow(0)
-                .setWidth("12em");
+                .setWidth("12rem").setComparator(CreditAccountingEntryEntity::getDate).setSortable(true);
+        // Tabellarische Ziffern auf der Betragsspalte (setClassNameGenerator ist in Vaadin 24.10
+        // zugunsten von Shadow-DOM-Parts als veraltet markiert - hier bewusst weiter verwendet,
+        // weil das Portal-Theme die Zellen über CSS-Klassen anspricht, nicht über ::part).
         this.grid.addColumn(e -> PortalFormats.currency(e.getAmount())).setHeader("Betrag").setFlexGrow(0)
-                .setWidth("8em");
-        this.grid.addColumn(CreditAccountingEntryEntity::getDescription).setHeader("Buchungstext");
+                // Breiten in rem, nicht em, und 9 statt 8: der Versalien-Kopf des Designs v2
+                // steht in 0.75rem - eine em-Breite ergäbe im Kopf schmalere Spalten als im
+                // Körper (siehe Kommentar in portal-theme.css), und "BETRAG" braucht etwas
+                // mehr Platz als die vorherige Normalschrift.
+                .setWidth("9rem").setComparator(CreditAccountingEntryEntity::getAmount).setSortable(true)
+                .setClassNameGenerator(e -> "tabular-nums");
+        this.grid.addColumn(CreditAccountingEntryEntity::getDescription).setHeader("Buchungstext")
+                .setComparator(CreditAccountingEntryEntity::getDescription).setSortable(true);
         this.grid.setSizeFull();
         add(this.grid);
         setFlexGrow(1, this.grid);
 
+        // Erst binden, dann laden: refresh() legt den Filter danach auf jeden neuen Datenbestand.
+        this.filterField.bindTo(this.grid, UserDashboardView::filterableText);
+
         refresh();
+    }
+
+    /**
+     * Suchtext einer Buchung für das Filterfeld (UI-Redesign v2): die drei angezeigten Spalten,
+     * jeweils über dieselbe Formatierung wie die Zelle selbst - gesucht wird damit genau das, was
+     * der Benutzer vor sich sieht.
+     */
+    private static String filterableText(CreditAccountingEntryEntity entry) {
+        return String.join(" ", PortalFormats.dateTime(entry.getDate()),
+                PortalFormats.currency(entry.getAmount()),
+                entry.getDescription() == null ? "" : entry.getDescription());
     }
 
     @Override
@@ -148,6 +199,9 @@ public class UserDashboardView extends VerticalLayout {
         this.lastInpaymentValueLabel.setText(
                 this.creditService.getLastInpayment(this.user).map(e -> e.getDate().format(DATE_FORMAT)).orElse("-"));
         this.grid.setItems(this.creditService.getAccountingEntries(this.user));
+        // Ein Live-Update darf einen gesetzten Filter nicht stillschweigend fallen lassen - sonst
+        // stünde plötzlich wieder die volle Historie da, während im Feld noch der Suchbegriff steht.
+        this.filterField.reapply();
     }
 
     private static VerticalLayout buildSparkTile(String caption, Span valueLabel) {

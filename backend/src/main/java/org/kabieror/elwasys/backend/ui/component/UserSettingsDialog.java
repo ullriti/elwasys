@@ -45,7 +45,7 @@ public class UserSettingsDialog extends AbstractFormDialog {
 
         FormLayout form = new FormLayout(this.tfEmail, this.cbEmailNotification, this.tfPushoverKey);
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
-        add(form);
+        addToBody(form);
 
         addFooterActions("OK", () -> save(onSaved));
     }

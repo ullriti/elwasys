@@ -41,7 +41,7 @@ public class ChangePasswordDialog extends AbstractFormDialog {
 
         FormLayout form = new FormLayout(this.tfOldPassword, this.tfNewPassword1, this.tfNewPassword2);
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
-        add(form);
+        addToBody(form);
 
         addFooterActions("OK", () -> save(onSaved));
 

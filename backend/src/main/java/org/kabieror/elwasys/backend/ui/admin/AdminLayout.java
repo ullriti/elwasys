@@ -2,6 +2,7 @@ package org.kabieror.elwasys.backend.ui.admin;
 
 import com.vaadin.flow.component.applayout.AppLayout;
 import com.vaadin.flow.component.applayout.DrawerToggle;
+import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.sidenav.SideNav;
@@ -9,6 +10,7 @@ import com.vaadin.flow.component.sidenav.SideNavItem;
 import com.vaadin.flow.spring.security.AuthenticationContext;
 import org.kabieror.elwasys.backend.service.PasswordService;
 import org.kabieror.elwasys.backend.service.UserService;
+import org.kabieror.elwasys.backend.ui.component.NavbarViewName;
 import org.kabieror.elwasys.backend.ui.component.UserMenuBar;
 
 /**
@@ -29,6 +31,13 @@ import org.kabieror.elwasys.backend.ui.component.UserMenuBar;
  * {@code @RolesAllowed("ADMIN")} (Vaadins {@code NavigationAccessControl} prüft pro Route, ein
  * Layout allein schützt keine Kind-Routen), damit ein Nicht-Administrator eine Admin-Route
  * auch bei direkter URL-Eingabe nicht erreichen kann (vgl. Testfall P18).
+ *
+ * <p><b>UI-Redesign v2 (siehe docs/specs/0002-ui-design/v2/MAPPING.md, "Rahmen")</b>: der
+ * Kopfbalken trägt zusätzlich einen dekorativen Logo-Mark links vom Titel und - über
+ * {@link NavbarViewName} - den Namen der gerade angezeigten Ansicht; die Seitenleiste steht
+ * dauerhaft offen ({@link #setDrawerOpened(boolean)}), ihr Umschalter wird auf breiten
+ * Fenstern per CSS ausgeblendet (portal-theme.css, Media-Query ab 900px). Navigationspunkte
+ * und Rollen-Guards bleiben unverändert.
  */
 public class AdminLayout extends AppLayout {
 
@@ -36,10 +45,17 @@ public class AdminLayout extends AppLayout {
             PasswordService passwordService) {
         DrawerToggle toggle = new DrawerToggle();
 
+        // Reine Deko (abgerundetes Quadrat mit Kreis, komplett in portal-theme.css gezeichnet) -
+        // trägt keine Information und wird deshalb vor Screenreadern verborgen.
+        Div logoMark = new Div();
+        logoMark.addClassName("navbar-logo-mark");
+        logoMark.getElement().setAttribute("aria-hidden", "true");
+
         H1 title = new H1("Waschportal");
         title.addClassName("admin-layout-title");
 
-        addToNavbar(toggle, title, new UserMenuBar(authenticationContext, userService, passwordService));
+        addToNavbar(toggle, logoMark, title, new NavbarViewName(),
+                new UserMenuBar(authenticationContext, userService, passwordService));
 
         SideNav nav = new SideNav();
         nav.addItem(new SideNavItem("Dashboard", AdminDashboardView.class, VaadinIcon.DASHBOARD.create()));

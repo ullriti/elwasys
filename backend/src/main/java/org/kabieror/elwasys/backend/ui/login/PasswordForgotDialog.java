@@ -37,7 +37,7 @@ public class PasswordForgotDialog extends AbstractFormDialog {
 
         VerticalLayout content = new VerticalLayout(explanation, this.tfEmail);
         content.setPadding(false);
-        add(content);
+        addToBody(content);
 
         addFooterActions("OK", this::execute);
 

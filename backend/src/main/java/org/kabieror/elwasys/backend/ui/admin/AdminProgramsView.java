@@ -44,9 +44,17 @@ public class AdminProgramsView extends AbstractAdminListView<ProgramEntity> {
     @Override
     protected void configureColumns(Grid<ProgramEntity> grid) {
         grid.addColumn(ProgramEntity::getName).setHeader("Name").setSortable(true);
-        grid.addColumn(p -> p.getType() == ProgramType.DYNAMIC ? "Dynamisch" : "Statisch").setHeader("Typ")
-                .setSortable(true);
+        grid.addColumn(AdminProgramsView::typeLabel).setHeader("Typ").setSortable(true);
         grid.addColumn(this::formatPrice).setHeader("Preis");
+    }
+
+    /**
+     * Beschriftung der Typ-Spalte. Eigene Methode, damit Spaltentext und Suchtext
+     * ({@link #filterableText}) dieselbe Quelle haben - sonst fände der Filter eine später
+     * geänderte Beschriftung nicht mehr, ohne dass es auffiele (wie bei {@link #formatPrice}).
+     */
+    private static String typeLabel(ProgramEntity program) {
+        return program.getType() == ProgramType.DYNAMIC ? "Dynamisch" : "Statisch";
     }
 
     private String formatPrice(ProgramEntity program) {
@@ -66,6 +74,12 @@ public class AdminProgramsView extends AbstractAdminListView<ProgramEntity> {
     @Override
     protected List<ProgramEntity> findAll() {
         return this.programService.findAll();
+    }
+
+    /** Suchtext für das Filterfeld (UI-Redesign v2 AP4): Name, Typ und formatierter Preis. */
+    @Override
+    protected String filterableText(ProgramEntity program) {
+        return program.getName() + " " + typeLabel(program) + " " + formatPrice(program);
     }
 
     @Override

@@ -60,7 +60,7 @@ public class LocationFormDialog extends AbstractFormDialog {
 
         FormLayout form = new FormLayout(this.tfName, this.selGroups, this.ifOfflineMaxDuration);
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
-        add(form);
+        addToBody(form);
 
         if (editMode) {
             this.tfName.setValue(locationToEdit.getName());

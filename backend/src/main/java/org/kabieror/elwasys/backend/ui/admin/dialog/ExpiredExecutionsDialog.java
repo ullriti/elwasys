@@ -12,6 +12,7 @@ import java.util.List;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.service.ExecutionService;
+import org.kabieror.elwasys.backend.ui.component.AbstractFormDialog;
 import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
 import org.kabieror.elwasys.backend.ui.component.PortalFormats;
 
@@ -44,6 +45,9 @@ public class ExpiredExecutionsDialog extends Dialog {
         setHeaderTitle("Verfallene Ausführungsaufträge von " + user.getName());
         setModal(true);
         setWidth("60em");
+        // UI-Redesign v2: dasselbe Schließen-Kreuz wie in den Formular-Dialogen (dieser Dialog
+        // erbt bewusst nicht von AbstractFormDialog, siehe dortiges Klassen-Javadoc).
+        AbstractFormDialog.addCloseButton(this);
 
         Paragraph explanation = new Paragraph(
                 "Diese Ausführungsaufträge wurden gestartet, jedoch nie beendet, möglicherweise durch einen Fehler "
@@ -65,7 +69,7 @@ public class ExpiredExecutionsDialog extends Dialog {
         this.grid.addColumn(e -> e.getProgram().getName()).setHeader("Programm");
         this.grid.addColumn(e -> PortalFormats.currency(this.executionService.getPrice(e)))
                 .setHeader("Fälliger Betrag");
-        this.grid.addComponentColumn(this::rowButtons).setHeader("").setFlexGrow(0).setWidth("170px");
+        this.grid.addComponentColumn(this::rowButtons).setHeader("").setFlexGrow(0).setAutoWidth(true);
 
         add(explanation, new HorizontalLayout(btnFinishAll), this.grid);
 
@@ -81,7 +85,11 @@ public class ExpiredExecutionsDialog extends Dialog {
         Button btnDelete = new Button(new Icon(VaadinIcon.TRASH), e -> confirmDelete(execution));
         btnDelete.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_ERROR, ButtonVariant.LUMO_TERTIARY);
 
-        return new HorizontalLayout(btnFinish, btnDelete);
+        HorizontalLayout buttons = new HorizontalLayout(btnFinish, btnDelete);
+        // Enger Abstand wie in den Listenansichten: die v2-Bedienelemente sind groesser, der
+        // Lumo-Standardabstand von 1rem sprengte die Aktionsspalte.
+        buttons.getThemeList().add("spacing-xs");
+        return buttons;
     }
 
     private void finish(ExecutionEntity execution) {
@@ -119,5 +127,7 @@ public class ExpiredExecutionsDialog extends Dialog {
         // ExpiredExecutionsWindow: die Tabelle bleibt nach dem letzten "Löschen"/"Abrechnen"
         // einfach leer, der Administrator schließt selbst).
         this.grid.setItems(this.executionService.getExpiredExecutions(this.user));
+        // autoWidth misst erst, wenn Zellinhalt gerendert ist - der kommt aber gerade eben erst.
+        this.grid.recalculateColumnWidths();
     }
 }

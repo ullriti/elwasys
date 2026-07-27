@@ -95,9 +95,12 @@ public class AdminUsersView extends AbstractAdminListView<UserEntity> {
         grid.addColumn(u -> u.getGroup() == null ? "" : u.getGroup().getName()).setHeader("Gruppe")
                 .setSortable(true);
         grid.addColumn(this::formatCardIds).setHeader("Kartennummer");
-        grid.addColumn(this::formatCredit).setHeader("Guthaben");
+        // UI-Redesign v2 AP4: Guthaben ist im Prototyp sortierbar - der Vergleicher muss auf dem
+        // tatsächlichen BigDecimal-Wert arbeiten, sonst sortiert Vaadin am formatierten
+        // Währungstext (alphabetisch statt nach Betrag).
+        grid.addColumn(this::formatCredit).setHeader("Guthaben").setSortable(true).setComparator(this::creditValue);
         grid.addComponentColumn(this::statusBadge).setHeader("Status");
-        grid.addComponentColumn(this::expiredExecutionsWarning).setHeader("").setFlexGrow(0).setWidth("50px");
+        grid.addComponentColumn(this::expiredExecutionsWarning).setHeader("").setFlexGrow(0).setAutoWidth(true);
     }
 
     @Override
@@ -118,13 +121,40 @@ public class AdminUsersView extends AbstractAdminListView<UserEntity> {
     }
 
     private String formatCredit(UserEntity user) {
+        return PortalFormats.currency(creditValue(user));
+    }
+
+    /**
+     * Roher Guthabenwert für den Sortier-Vergleicher der Guthaben-Spalte (UI-Redesign v2 AP4) -
+     * dieselbe Datenquelle wie {@link #formatCredit}, nur ungeformt.
+     */
+    private BigDecimal creditValue(UserEntity user) {
         // Issue #30: aus der in loadData() gebündelt geladenen Map statt einer Abfrage pro Zeile.
-        BigDecimal credit = this.creditByUserId.getOrDefault(user.getId(), BigDecimal.ZERO);
-        return PortalFormats.currency(credit);
+        return this.creditByUserId.getOrDefault(user.getId(), BigDecimal.ZERO);
+    }
+
+    /**
+     * Suchtext der Zeile für das Filterfeld (UI-Redesign v2 AP4): deckt Name, Username, Gruppe,
+     * Kartennummern und den Status-Badge-Text ab - dieselben Spalten wie {@link #configureColumns}
+     * (ohne Guthaben, dessen Formatierung als Suchtext wenig sinnvolle Treffer liefern würde).
+     */
+    @Override
+    protected String filterableText(UserEntity user) {
+        String group = user.getGroup() == null ? "" : user.getGroup().getName();
+        return String.join(" ", user.getName(), user.getUsername(), group, formatCardIds(user), statusLabel(user));
+    }
+
+    /**
+     * Beschriftung der Status-Spalte. Eigene Methode, damit Badge-Text und Suchtext
+     * ({@link #filterableText}) dieselbe Quelle haben - sonst fände der Filter eine später
+     * geänderte Beschriftung nicht mehr, ohne dass es auffiele.
+     */
+    private static String statusLabel(UserEntity user) {
+        return user.isBlocked() ? "Gesperrt" : "Aktiv";
     }
 
     private Span statusBadge(UserEntity user) {
-        Span badge = new Span(user.isBlocked() ? "Gesperrt" : "Aktiv");
+        Span badge = new Span(statusLabel(user));
         badge.getElement().getThemeList().add("badge" + (user.isBlocked() ? " error" : " success"));
         return badge;
     }
@@ -149,12 +179,6 @@ public class AdminUsersView extends AbstractAdminListView<UserEntity> {
         btn.addClickListener(e -> openExpiredExecutionsDialog(user));
         Span wrapper = new Span(btn);
         return wrapper;
-    }
-
-    @Override
-    protected String actionColumnWidth() {
-        // Vier Aktionen statt der zwei der Basisklasse (Bearbeiten/Guthaben/Umsätze/Löschen).
-        return "190px";
     }
 
     @Override
@@ -228,6 +252,8 @@ public class AdminUsersView extends AbstractAdminListView<UserEntity> {
         // Issue #30: Guthaben aller Benutzer in zwei Abfragen bündeln, statt pro Grid-Zeile
         // (formatCredit) eine eigene Guthabenabfrage auszulösen.
         this.creditByUserId = this.creditService.getCredits(users);
-        getGrid().setItems(users);
+        // setGridItems() statt getGrid().setItems(...) (UI-Redesign v2 AP4): wendet den aktuell
+        // eingegebenen Filtertext nach dem Neuladen erneut an.
+        setGridItems(users);
     }
 }

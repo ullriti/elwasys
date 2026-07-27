@@ -4,7 +4,6 @@ import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.combobox.MultiSelectComboBox;
 import com.vaadin.flow.component.formlayout.FormLayout;
-import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.NumberField;
 import com.vaadin.flow.component.textfield.TextField;
@@ -36,6 +35,10 @@ import org.kabieror.elwasys.backend.ui.component.FormValidation;
  * ({@code AdminLocationsView}), das macht diesen Nebenpfad überflüssig statt einer
  * Funktionslücke (siehe docs/kb/05-migration-plan.md, "Entscheidungen", Gestaltungsrahmen
  * Portal-Neubau).
+ *
+ * <p>UI-Redesign v2 (siehe docs/specs/0002-ui-design/v2/MAPPING.md und
+ * docs/kb/05-migration-plan.md): derselbe Feldsatz, nur in die vier Abschnitte Stammdaten /
+ * Gateway-Anbindung / Automatisches Ende / Zuordnung gegliedert.
  */
 public class DeviceFormDialog extends AbstractFormDialog {
 
@@ -113,12 +116,26 @@ public class DeviceFormDialog extends AbstractFormDialog {
         this.selGroups.setItemLabelGenerator(UserGroupEntity::getName);
         this.selGroups.setWidthFull();
 
-        FormLayout form = new FormLayout(this.tfName, this.cbPosition, this.cbLocation, this.tfFhemName,
-                this.tfFhemSwitchName, this.tfFhemPowerName, this.tfDeconzUuid, this.nfAutoEndPowerThreshold,
-                this.ifAutoEndWaitTime, this.cbEnabled);
-        form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1), new FormLayout.ResponsiveStep("30em", 2));
+        // UI-Redesign v2: derselbe Feldsatz in vier thematischen Abschnitten statt eines einzigen
+        // Formulars - was zusammengehört (Gateway-Namen, Auto-Ende-Parameter) steht jetzt auch
+        // beieinander. Feldreihenfolge innerhalb der Abschnitte unverändert.
+        FormLayout masterData = addSection("Stammdaten");
+        masterData.add(this.tfName, this.cbPosition, this.cbLocation, this.cbEnabled);
+        // Die Checkbox über die volle Breite, sonst stünde sie als halbe Zeile neben "Standort".
+        masterData.setColspan(this.cbEnabled, 2);
 
-        add(form, new H3("Programme"), this.selPrograms, new H3("Benutzergruppen"), this.selGroups);
+        FormLayout gateway = addSection("Gateway-Anbindung");
+        gateway.add(this.tfFhemName, this.tfFhemSwitchName, this.tfFhemPowerName, this.tfDeconzUuid);
+
+        FormLayout autoEnd = addSection("Automatisches Ende");
+        autoEnd.add(this.nfAutoEndPowerThreshold, this.ifAutoEndWaitTime);
+
+        // Die beiden Mehrfachauswahlen brauchen die volle Breite (Chips laufen sonst um);
+        // ihre eigenen Feldlabels ersetzen die früheren H3-Zwischenüberschriften.
+        FormLayout assignment = addSection("Zuordnung");
+        assignment.add(this.selPrograms, this.selGroups);
+        assignment.setColspan(this.selPrograms, 2);
+        assignment.setColspan(this.selGroups, 2);
 
         if (editMode) {
             this.tfName.setValue(deviceToEdit.getName());

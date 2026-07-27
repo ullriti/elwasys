@@ -188,11 +188,33 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   weder CI noch Release aus (`scripts/commit-triggers-build.sh`). Siehe
   [ADR 0023](../architecture/0023-gitversion-und-paketbereitstellung.md) und
   [04-build-and-run.md](04-build-and-run.md).
+- **Portal-Design (UI-Redesign v2, seit 2026-07-27):** Das Portal liefert das **Design v2**
+  aus der vom Auftraggeber gelieferten Spezifikation
+  [`docs/specs/0002-ui-design/v2/`](../specs/0002-ui-design/v2/README.md) aus – im **vollen**
+  Umfang, also einschließlich der funktionalen Ergänzungen des Prototyps (Freitext-Filter je
+  Liste, zusätzliche sortierbare Spalten) und des Restzeit-Fortschrittsbalkens auf den
+  Gerätekarten. Kopfbalken 64 px mit Logo-Mark, Ansichtsname und Benutzer-Chip mit
+  Initialen-Avatar; Pillen-Navigation; Grids ohne Zebra-Streifen und Spaltentrenner; Dialoge
+  mit Schließen-Kreuz, feststehendem Kopf/Fuß und Abschnittsgliederung; Login als
+  zweigeteilter Bildschirm. Weiterhin **Laufzeit-CSS statt kompiliertem Theme**
+  (`ElwasysAppShell#configurePage` → `portal-theme.css`; Lizenz-Rahmenbedingung aus
+  [ADR 0019](../architecture/0019-ap6-vaadin-lizenz-restrisiko.md) unverändert). Fachlich
+  ändert sich nichts – gleiche Views, Felder, Validierung und Meldungen. Neu im UI-Paket:
+  `ui/component/NavbarViewName` (Ansichtsname aus der `@PageTitle`-Annotation) und
+  `ui/component/ListFilterField` (ein Filterfeld, eine Suchsemantik für alle drei Listen).
+  **Für Tests wichtig:** durch `NavbarViewName` steht jeder Ansichtsname **zweimal** im DOM –
+  ein `getByText('<Ansichtsname>', { exact: true })` scheitert am Strict Mode (Regel in
+  [06-ui-tests.md](06-ui-tests.md)). Die optische Abnahme läuft über den Screenshot-Durchlauf
+  `backend/e2e/tests-shots/portal-shots.spec.ts` (bewusst außerhalb des `testDir`, nicht im
+  CI). Kein ADR nötig: Umsetzung einer gelieferten Design-Spezifikation, die tragenden
+  Entscheidungen stehen in ADR 0003/0019. Details:
+  [Worklog](../worklog/2026-07-27-ui-redesign-v2.md).
 - **Nächster Schritt:** **Generalprobe nach [Spec 0001](../specs/0001-finale-review.md)**
   (Cutover-Probelauf, Migrations-Dry-Run mit Produktivdaten-Kopie, Backup-Restore-Probe,
   Ausfall-Drills, Alarm-Probe beider Stufen, Soak-Test, Vor-Ort-Kalibrierung), dann Pilotphase
   und **Live-Gang** (Cutover nach
-  [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md)). Unabhängig davon offen:
+  [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md)). Davor steht die **optische
+  Abnahme des Designs v2** durch den Auftraggeber (Screenshot-Durchlauf). Unabhängig davon offen:
   Issue #97 (Readiness-Gates des Testharness scheiterten still). Neue Vorhaben vorab als Spec
   in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.
   Die Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).

@@ -1,80 +1,198 @@
 /*
- * elwasys-Portal-Design - stellt den vertrauten AdminLTE-Look des Alt-Portals (Portal/, in
- * Phase 5 AP1 entfernt) im neuen Vaadin-Flow-Portal wieder her: blauer Kopfbalken, dunkle
- * Sidebar mit hervorgehobenem aktivem Punkt, gerahmte/gezebra-te Tabellen, hellgrauer
- * Inhaltsbereich und eine als Karte gerahmte Login-Maske.
+ * elwasys-Portal-Design v2 (docs/specs/0002-ui-design/v2/) - Modernisierung des in Phase 3
+ * entstandenen AdminLTE-Looks: weichere Radien, flachere Schatten, hellerer Inhaltsgrund,
+ * größere Bedienelemente, Grids ohne Zebra-Streifen, Navbar mit Logo-Mark/Ansichtsname/
+ * Benutzer-Chip, Seitenleiste als Pillen und ein zweigeteilter Login-Bildschirm.
  *
- * Dieses Stylesheet wird zur LAUFZEIT dokumentweit in den <head> eingehängt (siehe
- * ElwasysAppShell#configurePage) und nicht als kompiliertes Vaadin-Theme ausgeliefert - die
- * ausführliche Begründung (Vaadin-24.10-Lizenzcheck beim Frontend-Build) steht dort im Javadoc.
+ * Markenfarben UNVERÄNDERT gegenüber v1: Kopfbalken-/Akzentblau #4488dd, Sidebar #222d32,
+ * Statusfarben frei/besetzt/deaktiviert - dieselbe Palette wie das Terminal
+ * (Client-Raspi/.../ui/medium/MainForm.css), damit Terminal und Portal als EIN Produkt wirken.
  *
- * Wirkprinzip: Lumo-Custom-Properties (vererben sich in die Shadow-DOMs der Komponenten) +
- * ::part()-Selektoren auf den von Vaadin exponierten Teilen + die Light-DOM-Klassen-Hooks der
- * Views. Es werden ausschließlich Farben/Rahmen verändert - keine Texte, keine Struktur.
+ * Einbindung wie bisher: ElwasysAppShell#configurePage hängt diese Datei zur LAUFZEIT als
+ * dokumentweites Inline-Stylesheet in den <head> ein - kein Vaadin-Theme, kein Frontend-Build
+ * (ausführliche Begründung - Vaadin-24.10-Lizenzcheck beim Frontend-Build - steht im Javadoc
+ * dort). Wirkprinzip deshalb weiterhin: Lumo-Custom-Properties (vererben sich in die
+ * Shadow-DOMs), ::part()-Selektoren auf den von Vaadin exponierten Teilen und die
+ * Light-DOM-Klassen-Hooks der Views. Texte werden nirgends verändert - die E2E-Suite
+ * (backend/e2e, P1-P20) lokalisiert über sie.
  */
 
-/*
- * Farbpalette - bewusst dieselbe wie das Terminal (Client-Raspi/.../ui/medium/MainForm.css),
- * damit Terminal und Portal als EIN Produkt wirken: Blau #4488dd (Terminal-Toolbar/-Akzent),
- * Grün #53a22d/#94d966 (frei/Erfolg), Rot #c82a1c/#f1666e (besetzt/Fehler), Grau #aaaaaa
- * (deaktiviert). Diese ersetzen das zuvor hier verwendete AdminLTE-Blau #3c8dbc; das Alt-Portal
- * selbst nutzte noch die Vaadin-7-Valo-Standardfarben (Blau ~#197de1), war also mit dem Terminal
- * ohnehin nie farbgleich - die Vereinheitlichung auf die Terminal-Palette ist eine bewusste
- * Verbesserung (Auftraggeber-Rückfrage 2026-07-22).
- */
 html {
+  /* --- Marke: unverändert ------------------------------------------------ */
   --lumo-primary-color: #4488dd;
   --lumo-primary-color-50pct: rgba(68, 136, 221, 0.5);
   --lumo-primary-color-10pct: rgba(68, 136, 221, 0.12);
   --lumo-primary-text-color: #2f6fbf;
 
-  /* Status-Farben an die Terminal-Palette angleichen (Badges "Frei"/"Aktiv", "Besetzt"/… ). */
+  /* Status-Farben an die Terminal-Palette angleichen (Badges "Frei"/"Aktiv", "Besetzt"/…). */
   --lumo-success-color: #53a22d;
   --lumo-success-text-color: #3f7f22;
   --lumo-error-color: #c82a1c;
   --lumo-error-text-color: #b02417;
 
-  --lumo-border-radius-s: 2px;
-  --lumo-border-radius-m: 3px;
-  --lumo-border-radius-l: 3px;
+  /* --- v2: weichere Radien (v1: 2/3/3px) --------------------------------- */
+  --lumo-border-radius-s: 6px;
+  --lumo-border-radius-m: 8px;
+  --lumo-border-radius-l: 12px;
 
+  /* --- v2: neutrale Textskala statt Lumo-Graustufen ---------------------- */
+  --lumo-header-text-color: #101828;
+  --lumo-body-text-color: #1f2429;
+  --lumo-secondary-text-color: #667085;
+  --lumo-tertiary-text-color: #98a2b3;
+
+  /* --- v2: ruhigere Flächen ---------------------------------------------- */
+  --lumo-base-color: #ffffff;
+  --lumo-contrast-5pct: #f8fafc;
+  --lumo-contrast-10pct: #f2f4f7;
+  --lumo-contrast-20pct: #e6e8ec;
+
+  /* --- v2: größere Bedienelemente ---------------------------------------- */
+  --lumo-size-s: 2rem;
+  --lumo-size-m: 2.5rem;
+  --lumo-size-l: 2.75rem;
+
+  /* --- v2: flachere, weitere Schatten ------------------------------------ */
+  --lumo-box-shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --lumo-box-shadow-s: 0 4px 10px -4px rgba(16, 24, 40, 0.12);
+  --lumo-box-shadow-m: 0 12px 28px -8px rgba(16, 24, 40, 0.24);
+  --lumo-box-shadow-l: 0 24px 48px -12px rgba(16, 24, 40, 0.28);
+
+  /* --- v2: outlined statt gefüllte Eingabefelder -------------------------- */
+  --vaadin-input-field-background: #ffffff;
+  --vaadin-input-field-border-width: 1px;
+  --vaadin-input-field-border-color: #d0d5dd;
+  --vaadin-input-field-border-radius: 8px;
+  --vaadin-input-field-height: 2.5rem;
+
+  --vaadin-button-border-radius: 10px;
+  --vaadin-button-font-weight: 600;
+
+  /* --- Eigene Variablen -------------------------------------------------- */
   --elwa-header-blue: #4488dd;
-  --elwa-sidebar-dark: #222d32;
-  --elwa-sidebar-active: #1e282c;
-  --elwa-sidebar-text: #b8c7ce;
-  --elwa-content-bg: #ecf0f5;
-  --elwa-box-border: #d2d6de;
+  --elwa-sidebar-dark: #222d32;      /* unverändert */
+  --elwa-sidebar-active: #4488dd;    /* v1: #1e282c + blauer Balken links */
+  --elwa-sidebar-hover: #1a2429;
+  --elwa-sidebar-text: #b8c7ce;      /* unverändert */
+  --elwa-content-bg: #f4f6f9;        /* v1: #ecf0f5 */
+  --elwa-box-border: #e6e8ec;        /* v1: #d2d6de */
+  --elwa-row-hover: #f8fafc;
 
-  /* Terminal-Statusfarben für den oberen Rand der Dashboard-Gerätekarten. */
+  /* Terminal-Statusfarben für Statuspunkt und oberen Rand der Gerätekarten. */
   --elwa-status-free: #94d966;
   --elwa-status-occupied: #f1666e;
   --elwa-status-disabled: #aaaaaa;
+
+  /* Rahmen/Flächen innerhalb von Karten und Dialogen (Abschnitte, Fußzeile, Verlauf). */
+  --elwa-inner-border: #eef0f4;
+  --elwa-inner-bg: #fcfcfd;
 }
 
 /* ------------------------------------------------------------------ *
- *  Kopfbalken (AppLayout-Navbar) - durchgehend AdminLTE-Blau, weiße Schrift.
+ *  Kopfbalken - höher (64px statt 50px), Trennlinie statt Schlagschatten.
+ *  Die Reihenfolge im Navbar-Slot ist: DrawerToggle, Logo-Mark, Titel,
+ *  Ansichtsname, Benutzermenü (siehe AdminLayout/UserLayout). Abstände laufen
+ *  bewusst über Margins der einzelnen Elemente statt über "gap" auf dem
+ *  Navbar-Part: die Elemente sind in den Shadow-Slot der AppLayout eingehängt,
+ *  eine Lücke auf dem Part-Container würde sie nicht zuverlässig erreichen.
  * ------------------------------------------------------------------ */
 vaadin-app-layout::part(navbar) {
   background-color: var(--elwa-header-blue);
+  /* Lumo legt auf der Navbar der primären Sektion einen Verlauf ab:
+     "background-image: linear-gradient(var(--lumo-contrast-5pct), var(--lumo-contrast-5pct))".
+     Solange --lumo-contrast-5pct halbtransparent war (Lumo-Standard, v1), schien das Blau
+     darunter durch. v2 setzt den Token auf ein DECKENDES #f8fafc - der Verlauf übermalte den
+     Kopfbalken damit vollständig weiß, samt der weißen Schrift darauf. Die Hintergrundfarbe
+     allein genügt hier also nicht, das Bild muss ausdrücklich weg. */
+  background-image: none;
   color: #ffffff;
   border-bottom: none;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
-  min-height: 50px;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.16);
+  min-height: 64px;
+  padding-inline: 1.25rem;
+}
+
+/* Menü-Icon (DrawerToggle) in Weiß. */
+vaadin-app-layout::part(navbar) vaadin-drawer-toggle,
+vaadin-drawer-toggle {
+  color: #ffffff;
+}
+
+/*
+ * v2: die Seitenleiste steht auf dem Desktop dauerhaft offen (Vorgabe der AppLayout, sobald sie
+ * nicht im Overlay-Modus ist - ein ausdrückliches setDrawerOpened(true) wäre dort wirkungslos
+ * und WÜRDE auf schmalen Fenstern die Overlay-Leiste beim Laden über den Inhalt legen). Der
+ * Umschalter ist auf dem Desktop überflüssig und wird ausgeblendet; unterhalb von 900px bleibt
+ * er sichtbar, weil die AppLayout die Leiste dann als Overlay führt.
+ */
+@media (min-width: 900px) {
+  vaadin-drawer-toggle {
+    display: none;
+  }
+}
+
+/* Logo-Mark links neben dem Titel: reine Deko (abgerundetes Quadrat mit weißem
+   Kreis), ohne eigenen Text - der Kreis ist ein Pseudo-Element, damit die Java-Seite
+   nur ein einzelnes leeres Div setzen muss. */
+.navbar-logo-mark {
+  width: 1.85rem;
+  height: 1.85rem;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background-color: rgba(255, 255, 255, 0.2);
+  display: grid;
+  place-items: center;
+  margin-inline-start: 0.25rem;
+}
+
+.navbar-logo-mark::after {
+  content: "";
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-sizing: border-box;
 }
 
 .admin-layout-title,
 .user-layout-title {
   color: #ffffff;
-  font-size: 1.2rem;
+  font-size: 1.125rem;
   font-weight: 600;
+  letter-spacing: 0.01em;
   line-height: 1;
-  margin: 0 0 0 0.25rem;
+  margin: 0 0 0 0.6rem;
   white-space: nowrap;
 }
 
-/* Menü-Icon (DrawerToggle) in Weiß. */
-vaadin-app-layout::part(navbar) vaadin-drawer-toggle {
-  color: #ffffff;
+/* Name der aktuellen Ansicht, durch einen senkrechten Strich vom Produktnamen
+   getrennt (der Strich ist ein Pseudo-Element, kein eigenes Java-Element). */
+.navbar-view-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-inline-start: 0.75rem;
+  min-width: 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.navbar-view-name::before {
+  content: "";
+  flex-shrink: 0;
+  width: 1px;
+  height: 1.5rem;
+  background-color: rgba(255, 255, 255, 0.28);
+}
+
+/* Solange kein Ansichtsname feststeht (vor der ersten Navigation), darf auch der
+   Trennstrich nicht allein im Kopfbalken stehen. */
+.navbar-view-name:empty {
+  display: none;
 }
 
 /* Benutzermenü nach rechts schieben und in Weiß darstellen. */
@@ -86,123 +204,257 @@ vaadin-app-layout::part(navbar) vaadin-drawer-toggle {
   color: #ffffff;
 }
 
+/* Benutzer-Chip: Initialen-Avatar + Name als abgerundete Pille im Kopfbalken. */
+.user-menu-bar vaadin-menu-bar-button {
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.user-menu-chip {
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.user-menu-chip vaadin-avatar {
+  --vaadin-avatar-size: 2rem;
+  background-color: #ffffff;
+  color: #2f6fbf;
+  font-weight: 700;
+}
+
+.user-menu-chip .user-menu-name {
+  font-size: 0.9375rem;
+  white-space: nowrap;
+}
+
+/* Nicht klickbarer Kopfblock des aufgeklappten Benutzermenüs (Avatar, Name, Rolle).
+   Bewusst KEIN Menüpunkt - die E2E-Suite adressiert die Einträge über
+   getByRole('menuitem'), siehe backend/e2e/tests/helpers.ts#openUserMenu. */
+.user-menu-header {
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.75rem 0.9rem;
+  min-width: 13rem;
+}
+
+.user-menu-header vaadin-avatar {
+  --vaadin-avatar-size: 2.25rem;
+  background-color: #eaf2fc;
+  color: #2f6fbf;
+  font-weight: 700;
+}
+
+.user-menu-header .user-menu-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--lumo-header-text-color);
+}
+
+.user-menu-header .user-menu-role {
+  font-size: 0.8125rem;
+  color: var(--lumo-secondary-text-color);
+}
+
 /* ------------------------------------------------------------------ *
- *  Sidebar (AppLayout-Drawer) - dunkles Charcoal, helle Navigationstexte.
- *  Die SideNav-Items ziehen ihre Farben selbst aus diesen Lumo-Variablen,
- *  daher genügt es, sie hier auf Drawer-Ebene umzudefinieren.
+ *  Sidebar - Farbe unverändert, Einträge als abgerundete Pillen, aktiver
+ *  Punkt in Markenblau statt dunkler Fläche mit linkem Balken.
  * ------------------------------------------------------------------ */
 vaadin-app-layout::part(drawer) {
   background-color: var(--elwa-sidebar-dark);
   border-right: none;
-  padding: 0;
+  padding: 0.75rem 0;
 
   --lumo-body-text-color: var(--elwa-sidebar-text);
   --lumo-contrast-90pct: #ffffff;
+  /* Die mittleren Kontraststufen bleiben aus v1 erhalten: Lumo greift je nach
+     Komponente auf sie zurück, auf der dunklen Fläche wären die Vorgabewerte
+     unlesbar. */
   --lumo-contrast-80pct: #dfe7ea;
   --lumo-contrast-70pct: #cdd8dd;
   --lumo-contrast-60pct: var(--elwa-sidebar-text);
   --lumo-contrast-50pct: #a3b3bb;
+  --lumo-contrast-5pct: var(--elwa-sidebar-hover);
 
-  /* Hover-Hintergrund der Items: SideNav nutzt --lumo-contrast-5pct dafür. */
-  --lumo-contrast-5pct: var(--elwa-sidebar-active);
-
-  /* Aktiver Punkt: dunkler Hintergrund + weiße Schrift (SideNav nutzt diese Variablen). */
-  --lumo-primary-color: var(--elwa-header-blue);
+  --lumo-primary-color: var(--elwa-sidebar-active);
   --lumo-primary-text-color: #ffffff;
   --lumo-primary-color-10pct: var(--elwa-sidebar-active);
 }
 
 vaadin-app-layout::part(drawer) vaadin-side-nav {
   width: 100%;
-  padding: 0.25rem 0;
+  padding: 0;
 }
 
-/* Hover-Hervorhebung der Navigationspunkte. */
+vaadin-side-nav-item::part(link) {
+  margin: 0.15rem 0.6rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 9px;
+  gap: 0.75rem;
+  font-weight: 500;
+}
+
 vaadin-side-nav-item:hover::part(link) {
-  background-color: var(--elwa-sidebar-active);
+  background-color: var(--elwa-sidebar-hover);
 }
 
 /*
  * Aktiver Navigationspunkt (Vaadin markiert ihn mit dem Attribut [current], NICHT [active]):
- * dunkler Hintergrund, weiße Schrift und der blaue linke Balken des Alt-Portals. Die Farben
- * werden hier explizit auf den exponierten link-Part gesetzt, weil der current-Zustand in
- * Vaadins Lumo-Styling sonst die dunkle Standard-Textfarbe verwendet (auf der dunklen Sidebar
+ * v2 füllt die Pille in Markenblau statt der dunklen Fläche mit linkem Balken. Die Farben
+ * werden explizit auf den exponierten link-Part gesetzt, weil der current-Zustand in Vaadins
+ * Lumo-Styling sonst die dunkle Standard-Textfarbe verwendet (auf der dunklen Sidebar
  * unsichtbar).
  */
 vaadin-side-nav-item[current]::part(link) {
   color: #ffffff;
   background-color: var(--elwa-sidebar-active);
-  box-shadow: inset 3px 0 0 0 var(--elwa-header-blue);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   font-weight: 600;
 }
 
 /* ------------------------------------------------------------------ *
- *  Inhaltsbereich - hellgrauer Hintergrund wie im Alt-Portal.
+ *  Inhaltsbereich - hellerer Grund, mehr Luft, kräftigere Überschriften.
  *  Die geroutete View ist das einzige Kind der AppLayout ohne slot-Attribut.
  * ------------------------------------------------------------------ */
 vaadin-app-layout > :not([slot]) {
   background-color: var(--elwa-content-bg);
+  padding: 1.75rem 2rem;
 }
 
 vaadin-app-layout > :not([slot]) h2 {
-  font-weight: 400;
-  color: #2f3d44;
-  margin-top: 0.25rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--lumo-header-text-color);
+  margin-top: 0;
 }
 
 /* ------------------------------------------------------------------ *
- *  Tabellen (Grid) - gerahmt und gezebra-t statt nackt.
+ *  Listenansichten - Toolbar aus Überschrift, Filterfeld und "Neu".
+ * ------------------------------------------------------------------ */
+.list-toolbar {
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+}
+
+.list-filter {
+  width: 15rem;
+  max-width: 100%;
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Grid - weißer Kopf mit Versalien-Labels, keine Zebra-Streifen, keine
+ *  senkrechten Zelltrenner, Hover-Hervorhebung der Zeile.
  * ------------------------------------------------------------------ */
 vaadin-grid {
   border: 1px solid var(--elwa-box-border);
-  border-radius: 3px;
+  border-radius: 12px;
   background-color: #ffffff;
+  box-shadow: var(--lumo-box-shadow-xs);
+  /* Ohne dieses overflow blieben die runden Ecken unsichtbar: die weiße Kopfzeile und die
+     Zeilenflächen malen bis in die Ecken und überdecken den Radius, die Tabelle wirkt eckig. */
+  overflow: hidden;
 }
 
+/*
+ * ACHTUNG bei Spaltenbreiten: der Versalien-Kopf steht in 0.75rem, die Datenzellen in 1rem.
+ * Eine in "em" angegebene Spaltenbreite löst sich gegen die Schriftgröße der JEWEILIGEN Zelle
+ * auf - 12em wären im Kopf 144px und im Körper 192px, die Kopfzeile liefe also gegenüber ihren
+ * Daten nach links weg (genau davor warnt docs/specs/0002-ui-design/v1/MAPPING.md). Deshalb
+ * geben die Views ihre Spaltenbreiten in "rem" an, das an der Wurzel-Schriftgröße hängt und in
+ * Kopf wie Körper denselben Wert ergibt.
+ */
 vaadin-grid::part(header-cell) {
-  background-color: #f7f8fa;
-  color: #4b5563;
+  background-color: #ffffff;
+  border-bottom: 1px solid var(--elwa-box-border);
+  color: var(--lumo-secondary-text-color);
+  font-size: 0.75rem;
   font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 vaadin-grid::part(cell) {
-  border-inline-end: 1px solid #f0f1f3;
+  border-inline-end: none;
+  padding-block: 0.35rem;
 }
 
-vaadin-grid::part(even-row-cell) {
-  background-color: #f7f9fb;
+/*
+ * Grund- und Hover-Farbe liegen auf der ZEILE, nicht auf den Zellen: nach der
+ * CSS-Shadow-Parts-Spezifikation darf auf ::part() kein Kombinator in den Shadow-Baum hinein
+ * folgen. Eine Regel der Art "::part(row):hover > [part~=body-cell]" verwirft der Browser
+ * schon beim Parsen - im Chromium dieser Umgebung nachgemessen, die Zeile blieb ohne
+ * Hervorhebung. Die Zellen werden deshalb durchsichtig, damit die Zeilenfarbe durchscheint;
+ * bewusst nur die body-Zellen/-Zeilen, damit Kopf- und Fußzeile unberührt bleiben (die
+ * Kopfzeile hat ihre eigene Regel oben und darf nicht mit-hovern).
+ */
+vaadin-grid::part(body-cell) {
+  background-color: transparent;
+}
+
+vaadin-grid::part(body-row) {
+  background-color: #ffffff;
+}
+
+vaadin-grid::part(body-row):hover {
+  background-color: var(--elwa-row-hover);
+}
+
+/* Zahlenspalten (Dauer, Preis, Guthaben) laufen sonst optisch aus, weil die
+   Ziffern unterschiedlich breit sind. Wird über einen ClassNameGenerator auf die
+   jeweiligen Spalten gesetzt. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ------------------------------------------------------------------ *
- *  Dashboard-Karten - weiße Boxen. Die Gerätekarten sind wie im Alt-Portal
- *  (Portal/.../dashboard.scss: .device-container 50%/100%) RESPONSIV: zwei pro
- *  Reihe auf breiten Bildschirmen, eine pro Reihe wenn es eng wird - nicht mehr
- *  fest 24em (das ließ die Verlaufstabelle abgeschnitten wirken). Der obere Rand
- *  ist in der Terminal-Statusfarbe eingefärbt (frei = grün, besetzt = rot,
- *  deaktiviert = grau; Klassen setzt AdminDashboardView#populateDevicePanel).
+ *  Karten (Dashboard-Geräte, Spark-Kacheln des Benutzerbereichs).
  * ------------------------------------------------------------------ */
 .dashboard-device-panel,
 .dashboard-spark {
   background-color: #ffffff;
   border: 1px solid var(--elwa-box-border);
-  border-top: 4px solid var(--elwa-header-blue);
-  border-radius: 3px;
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  box-shadow: var(--lumo-box-shadow-xs);
   box-sizing: border-box;
+  /* Innenabstand und Mindestbreite fehlten bisher ganz: die Kachel legt ihr
+     VerticalLayout bewusst auf setPadding(false) (siehe UserDashboardView#buildSparkTile),
+     also klebten Wert und Beschriftung am Rand und "Letzte Einzahlung" brach um. Maße
+     wie im Prototyp. */
+  min-width: 14em;
+  padding: 1.15rem 1.35rem;
+}
+
+.dashboard-spark-value {
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #2f3d44;
+}
+
+.dashboard-spark-caption {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+/*
+ * v2: die Spark-Kacheln tragen keinen blauen Oberrand mehr - der farbige Oberrand bleibt den
+ * Gerätekarten als Statusanzeige vorbehalten (frei = grün, besetzt = rot, deaktiviert = grau;
+ * Klassen setzt AdminDashboardView#populateDevicePanel). Die Karten sind wie im Alt-Portal
+ * responsiv: zwei pro Reihe auf breiten Bildschirmen, eine pro Reihe wenn es eng wird.
+ */
+.dashboard-device-panel {
+  border-top: 4px solid var(--elwa-header-blue);
+  flex: 1 1 calc(50% - 0.5rem);
+  min-width: 26em;
+  padding: 1rem 1.15rem;
 }
 
 /* Der Karten-Container muss die volle Breite des Standort-Panels einnehmen, sonst
    schrumpft die FlexLayout auf ihren Inhalt und rechts bleibt Platz ungenutzt. */
 .dashboard-device-list {
   width: 100%;
-}
-
-.dashboard-device-panel {
-  /* Zwei Karten pro Reihe (Container hat flex-wrap + 1rem gap), die dank flex-grow
-     die volle Breite ausfüllen; Umbruch auf eine Reihe sobald weniger als ~26em
-     Platz bleibt. */
-  flex: 1 1 calc(50% - 0.5rem);
-  min-width: 26em;
 }
 
 .dashboard-device-panel.device-status-free {
@@ -223,16 +475,144 @@ vaadin-grid::part(even-row-cell) {
 }
 
 /* ------------------------------------------------------------------ *
- *  Offline-Vorfälle (Issue #89) - der Hinweisstreifen auf dem Dashboard und der
- *  Schadensbetrag in der Vorfallsliste. Beide sollen sofort ins Auge fallen: es
- *  geht um verlorenes Geld, das ein Mensch aktiv zur Kenntnis nehmen muss.
+ *  Gerätekarte v2 - Statuspunkt, Gerätename, Kennzahlen-Panel,
+ *  Fortschrittsbalken, Verlaufs-Überschrift. Die Farbe des Statuspunktes kommt
+ *  über die zusätzlich am SELBEN Element gesetzte device-status-*-Klasse.
+ * ------------------------------------------------------------------ */
+.device-header {
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+/* Der Gerätename ist die Überschrift der Karte und im Entwurf entsprechend größer
+   als der übrige Kartentext (docs/specs/0002-ui-design/v2/, "Dashboard-Gerätekarten"). */
+.device-name {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--lumo-header-text-color);
+}
+
+.device-status-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background-color: var(--elwa-status-disabled);
+}
+
+.device-status-dot.device-status-free {
+  background-color: var(--elwa-status-free);
+}
+
+.device-status-dot.device-status-occupied {
+  background-color: var(--elwa-status-occupied);
+}
+
+.device-status-dot.device-status-disabled {
+  background-color: var(--elwa-status-disabled);
+}
+
+/* Kennzahlen der laufenden Ausführung (Programm / Nutzer / Restzeit) als eigenes
+   Panel. Umbruch statt fester Spalten, damit schmale Karten nicht überlaufen. */
+.device-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.75rem 1.25rem;
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--elwa-inner-border);
+  border-radius: 12px;
+  background-color: var(--elwa-inner-bg);
+  padding: 0.85rem 1rem;
+}
+
+.device-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.device-metric-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lumo-secondary-text-color);
+}
+
+.device-metric-value {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--lumo-header-text-color);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Restzeit-Balken. "flex: 1 0 100%" sorgt dafür, dass er in einer Flex-Reihe
+   (z. B. innerhalb von .device-metrics) immer eine eigene Zeile bekommt - er
+   funktioniert damit sowohl innerhalb des Kennzahlen-Panels als auch daneben. */
+.device-progress {
+  flex: 1 0 100%;
+  width: 100%;
+  height: 6px;
+  margin: 0;
+}
+
+.device-progress::part(bar) {
+  height: 6px;
+  border-radius: 999px;
+  background-color: var(--elwa-inner-border);
+}
+
+/* Eine Statusfärbung des Balkens gibt es bewusst nicht: er erscheint nur, solange eine
+   Ausführung läuft, das Gerät ist dann immer "besetzt" - eine Fallunterscheidung nach
+   Status hätte also nur einen einzigen Fall. */
+.device-progress::part(value) {
+  border-radius: 999px;
+  background-color: var(--lumo-primary-color);
+}
+
+/* Überschrift "Verlauf" mit Anzahl. Die Typografie steht auf .history-header,
+   damit sie sowohl greift, wenn die Klasse auf dem Label selbst sitzt, als auch,
+   wenn sie auf einer Zeile aus Label + Anzahl sitzt (.history-count setzt sich
+   in dem Fall wieder ab). */
+.history-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lumo-secondary-text-color);
+}
+
+.history-count {
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--lumo-tertiary-text-color);
+}
+
+/* ------------------------------------------------------------------ *
+ *  Hinweisstreifen und Schadensbetrag (Offline-Vorfälle, Issue #89). Beide
+ *  sollen sofort ins Auge fallen: es geht um verlorenes Geld, das ein Mensch
+ *  aktiv zur Kenntnis nehmen muss.
  * ------------------------------------------------------------------ */
 .dashboard-incident-banner {
-  background-color: #fdecea;
-  border: 1px solid var(--elwa-box-border);
-  border-left: 4px solid var(--lumo-error-color);
-  border-radius: 3px;
-  padding: 0.5rem 0.75rem;
+  background-color: #fef3f2;
+  border: 1px solid #fbd5d1;
+  border-radius: 10px;
+  color: #912018;
+  padding: 0.85rem 1.1rem;
   width: 100%;
   box-sizing: border-box;
 }
@@ -244,25 +624,247 @@ vaadin-grid::part(even-row-cell) {
 }
 
 /* ------------------------------------------------------------------ *
- *  Login-Maske - als Karte mit blauem oberem Rand, auf grauem Hintergrund.
+ *  Dialoge - runder, tieferer Schatten, abgedunkelter Hintergrund.
+ * ------------------------------------------------------------------ */
+vaadin-dialog-overlay::part(overlay),
+vaadin-confirm-dialog-overlay::part(overlay) {
+  border-radius: 16px;
+  box-shadow: var(--lumo-box-shadow-l);
+}
+
+vaadin-dialog-overlay::part(backdrop),
+vaadin-confirm-dialog-overlay::part(backdrop) {
+  background-color: rgba(16, 24, 40, 0.5);
+  backdrop-filter: blur(3px);
+}
+
+vaadin-dialog-overlay::part(header) {
+  padding: 1.5rem 1.5rem 0.25rem 1.5rem;
+}
+
+vaadin-dialog-overlay::part(header-content) {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--lumo-header-text-color);
+}
+
+vaadin-dialog-overlay::part(footer) {
+  border-top: 1px solid var(--elwa-inner-border);
+  background-color: var(--elwa-inner-bg);
+  padding: 1.1rem 1.5rem;
+  gap: 0.75rem;
+}
+
+/* Schließen-Kreuz oben rechts in der Kopfzeile. */
+.dialog-close {
+  flex-shrink: 0;
+  color: var(--lumo-tertiary-text-color);
+}
+
+.dialog-close:hover {
+  background-color: var(--lumo-contrast-10pct);
+  color: #475467;
+}
+
+/*
+ * Kopf und Fuß stehen fest, nur der Inhalt scrollt. Dafür muss der Inhalts-Part der
+ * Overlay-Box selbst eine Flex-Spalte ohne eigenes Scrollen sein - bewusst über :has()
+ * nur bei Dialogen mit .dialog-body, damit alle übrigen Dialoge unverändert bleiben.
+ */
+vaadin-dialog-overlay:has(.dialog-body)::part(content) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Abschnittsgliederung der Formulardialoge (Gerät, Programm): Versalien-Label
+   über einem hell abgesetzten Feldblock. */
+.dialog-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dialog-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--lumo-secondary-text-color);
+}
+
+.dialog-section > vaadin-form-layout {
+  border: 1px solid var(--elwa-inner-border);
+  border-radius: 12px;
+  background-color: var(--elwa-inner-bg);
+  padding: 1rem 1.15rem;
+  box-sizing: border-box;
+}
+
+/*
+ * Segmented Control auf einer RadioButtonGroup (Programm-Typ): die Radio-Punkte
+ * verschwinden, die Beschriftungen werden zu Schaltflächen in einer gemeinsamen
+ * Spur. Bindung, Werte und Beschriftungen bleiben die der RadioButtonGroup - es
+ * ändert sich ausschließlich die Darstellung.
+ */
+.segmented-control::part(group-field) {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 10px;
+  background-color: var(--lumo-contrast-10pct);
+}
+
+.segmented-control vaadin-radio-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 2.1rem;
+  padding: 0 1rem;
+  margin: 0;
+  border-radius: 8px;
+  font-weight: 600;
+  color: var(--lumo-secondary-text-color);
+  cursor: pointer;
+}
+
+/* Der Radio-Punkt verschwindet, das Eingabefeld NICHT: es ist das fokussierbare
+   Element der Komponente. Ein "display:none" darauf (oder ein Zusammenfallen der
+   Fläche, an der es hängt) nähme dem Umschalter Tastaturbedienung und Klickfläche -
+   die E2E-Suite ist genau darüber gestolpert. Der Punkt wird deshalb nur
+   flächenlos und unsichtbar, das Eingabefeld deckt dafür den ganzen Segmentknopf ab. */
+.segmented-control vaadin-radio-button::part(radio) {
+  width: 0;
+  height: 0;
+  margin: 0;
+  opacity: 0;
+}
+
+.segmented-control vaadin-radio-button input[slot="input"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* Weil sowohl der Radio-Punkt (auf dem Vaadin bei [focus-ring] seinen Fokusring zeichnet)
+   als auch das Eingabefeld unsichtbar sind, wäre sonst nirgends zu sehen, wo der Fokus
+   steht - Tastaturbedienung ohne sichtbaren Fokus (WCAG 2.4.7). Der Ring gehört deshalb an
+   den Segmentknopf selbst; :focus-within, weil das fokussierte Element das eingebettete
+   input ist. */
+.segmented-control vaadin-radio-button:focus-within {
+  outline: 2px solid var(--lumo-primary-color);
+  outline-offset: 2px;
+}
+
+.segmented-control vaadin-radio-button[checked] {
+  background-color: #ffffff;
+  color: var(--lumo-header-text-color);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.1);
+}
+
+/* ------------------------------------------------------------------ *
+ *  Login - zweigeteilter Bildschirm: Markenfläche in der Sidebar-Farbe links,
+ *  Formular auf Weiß rechts (v1: zentrierte Karte auf grauem Grund; die dortige
+ *  Regel für die H2-Überschrift entfällt, weil die Wortmarke jetzt Teil der
+ *  Markenfläche ist - siehe LoginView).
  * ------------------------------------------------------------------ */
 .login-view {
-  background-color: var(--elwa-content-bg);
+  background-color: #ffffff;
+  padding: 0;
+  flex-wrap: wrap;
+  align-content: stretch;
 }
 
-.login-view h2 {
-  color: #444444;
+/* Beide Hälften wachsen gleich und brechen bei schmalem Fenster untereinander. */
+.login-brand,
+.login-form-panel {
+  flex: 1 1 26rem;
+  box-sizing: border-box;
+}
+
+.login-brand {
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 3.5rem;
+  background-color: var(--elwa-sidebar-dark);
+  color: #ffffff;
+}
+
+.login-brand-row {
+  align-items: center;
+  gap: 0.9rem;
+}
+
+/* Logo-Mark der Markenfläche - wie im Kopfbalken reine Deko, Kreis als Pseudo-Element. */
+.login-brand-mark {
+  width: 3rem;
+  height: 3rem;
+  flex-shrink: 0;
+  border-radius: 14px;
+  background-color: var(--elwa-header-blue);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 6px 16px -6px rgba(68, 136, 221, 0.8);
+}
+
+.login-brand-mark::after {
+  content: "";
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  border: 3px solid #ffffff;
+  box-sizing: border-box;
+}
+
+.login-brand-title {
+  font-size: 1.5rem;
   font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #ffffff;
 }
 
+.login-brand-text {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--elwa-sidebar-text);
+  max-width: 26rem;
+  margin: 0;
+}
+
+.login-form-panel {
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  background-color: #ffffff;
+  overflow: auto;
+}
+
+/* Die Login-Form wirkt jetzt als reines Formular - Rahmen und Schatten der
+   früheren Karte entfallen. */
 .login-view vaadin-login-form,
 .login-view vaadin-login-form-wrapper {
   background-color: #ffffff;
-  border-top: 3px solid var(--elwa-header-blue);
-  border-radius: 3px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+  border-top: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .reset-password-view {
-  background-color: var(--elwa-content-bg);
+  background-color: #ffffff;
 }

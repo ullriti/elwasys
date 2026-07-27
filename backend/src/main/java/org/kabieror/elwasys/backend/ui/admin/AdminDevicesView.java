@@ -55,8 +55,17 @@ public class AdminDevicesView extends AbstractAdminListView<DeviceEntity> {
         grid.addComponentColumn(this::statusBadge).setHeader("Status");
     }
 
+    /**
+     * Beschriftung der Status-Spalte. Eigene Methode, damit Badge-Text und Suchtext
+     * ({@link #filterableText}) dieselbe Quelle haben - sonst fände der Filter eine später
+     * geänderte Beschriftung nicht mehr, ohne dass es auffiele.
+     */
+    private static String statusLabel(DeviceEntity device) {
+        return device.isEnabled() ? "Aktiviert" : "Deaktiviert";
+    }
+
     private Span statusBadge(DeviceEntity device) {
-        Span badge = new Span(device.isEnabled() ? "Aktiviert" : "Deaktiviert");
+        Span badge = new Span(statusLabel(device));
         badge.getElement().getThemeList().add("badge" + (device.isEnabled() ? " success" : "contrast"));
         return badge;
     }
@@ -64,6 +73,13 @@ public class AdminDevicesView extends AbstractAdminListView<DeviceEntity> {
     @Override
     protected List<DeviceEntity> findAll() {
         return this.deviceService.findAll();
+    }
+
+    /** Suchtext für das Filterfeld (UI-Redesign v2 AP4): Position, Name, Standort und Status. */
+    @Override
+    protected String filterableText(DeviceEntity device) {
+        return device.getPosition() + " " + device.getName() + " " + device.getLocation().getName() + " "
+                + statusLabel(device);
     }
 
     @Override

@@ -44,13 +44,35 @@ public class AdminLocationsView extends AbstractAdminListView<LocationEntity> {
     @Override
     protected void configureColumns(Grid<LocationEntity> grid) {
         grid.addColumn(LocationEntity::getName).setHeader("Name").setSortable(true);
-        grid.addColumn(l -> l.getValidUserGroups().size()).setHeader("Benutzergruppen");
-        grid.addColumn(l -> l.getOfflineMaxDurationMinutes() + " min").setHeader("Offline-Maximaldauer");
+        grid.addColumn(AdminLocationsView::userGroupCountLabel).setHeader("Benutzergruppen");
+        grid.addColumn(AdminLocationsView::offlineMaxDurationLabel).setHeader("Offline-Maximaldauer");
+    }
+
+    /**
+     * Beschriftungen der beiden abgeleiteten Spalten. Eigene Methoden, damit Spaltentext und
+     * Suchtext ({@link #filterableText}) dieselbe Quelle haben - sonst fände der Filter eine später
+     * geänderte Darstellung nicht mehr, ohne dass es auffiele.
+     */
+    private static String userGroupCountLabel(LocationEntity location) {
+        return String.valueOf(location.getValidUserGroups().size());
+    }
+
+    private static String offlineMaxDurationLabel(LocationEntity location) {
+        return location.getOfflineMaxDurationMinutes() + " min";
     }
 
     @Override
     protected List<LocationEntity> findAll() {
         return this.locationService.findAll();
+    }
+
+    /**
+     * Suchtext für das Filterfeld (UI-Redesign v2 AP4): Name, Anzahl Benutzergruppen und
+     * Offline-Maximaldauer - dieselben Spalten wie {@link #configureColumns}.
+     */
+    @Override
+    protected String filterableText(LocationEntity location) {
+        return location.getName() + " " + userGroupCountLabel(location) + " " + offlineMaxDurationLabel(location);
     }
 
     @Override
