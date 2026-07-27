@@ -300,6 +300,13 @@ Die maßgebliche Portal-E2E-Suite läuft gegen das ins Backend eingebettete Vaad
 - **`vaadin-side-nav-item` führt ein verstecktes „Toggle child items"-Label mit** (der
   Aufklapp-Knopf für Unterpunkte, auch wenn es keine gibt). Sein Textinhalt ist damit nie nur
   die Beschriftung → **`toContainText`, nicht `toHaveText`**.
+- **`vaadin-grid-sorter` setzt seine Richtung vor der Sortierung**: das `direction`-Attribut
+  wechselt sofort im Browser, sortiert wird aber erst eine Serverrunde später. Eine Zusicherung,
+  die zwischen beidem liest, sieht die alte Reihenfolge und meldet einen Fehler, den es nicht
+  gibt (aufgetreten bei P30, sah aus wie ein ignorierter `setComparator`). Deshalb nicht die
+  Zeilen einmalig einsammeln und vergleichen, sondern positionsbezogen und auto-wiederholend
+  zusichern (`tr[aria-rowindex="…"]` + `toHaveAccessibleName`) – deterministisch, ohne
+  `waitForTimeout`. Muster: `dataRow()` in `list-filter-sort.spec.ts`.
 - **Notification in Position `MIDDLE` ist modal** (Issue #89): sie blockiert bis zu ihrem Ablauf
   JEDE Eingabe – auch einen `{ force: true }`-Klick, der dann still ins Leere geht (Symptom:
   „Clicking the checkbox did not change its state"). Nach einer Aktion, die eine solche

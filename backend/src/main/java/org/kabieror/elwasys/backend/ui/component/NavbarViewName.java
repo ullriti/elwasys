@@ -41,17 +41,24 @@ public class NavbarViewName extends Span implements AfterNavigationObserver {
 
     @Override
     public void afterNavigation(AfterNavigationEvent event) {
-        setText(viewNameOf(event));
+        setText(viewNameOf(event.getActiveChain()));
     }
 
-    private static String viewNameOf(AfterNavigationEvent event) {
-        List<HasElement> chain = event.getActiveChain();
-        if (chain.isEmpty()) {
+    /**
+     * Der anzuzeigende Ansichtsname zu einer aktiven Navigationskette. Nimmt die Kette statt des
+     * {@link AfterNavigationEvent} entgegen, damit die Ableitung des Namens ohne laufende
+     * Anwendung prüfbar ist (dasselbe Muster wie {@code AbstractFormDialog#failureText}): ein
+     * {@code AfterNavigationEvent} lässt sich nur mit einem echten {@code Router} bauen (es ist
+     * ein {@link java.util.EventObject}, dessen Quelle nicht {@code null} sein darf) - die Kette
+     * ist ohnehin das Einzige, was diese Methode aus dem Ereignis liest.
+     */
+    static String viewNameOf(List<HasElement> activeChain) {
+        if (activeChain.isEmpty()) {
             return "";
         }
         // Das erste Element der aktiven Kette ist das Navigationsziel selbst, danach folgen
         // seine Layouts (siehe AfterNavigationEvent#getActiveChain).
-        String title = pageTitleOf(chain.get(0).getClass());
+        String title = pageTitleOf(activeChain.get(0).getClass());
         return title.endsWith(TITLE_SUFFIX) ? title.substring(0, title.length() - TITLE_SUFFIX.length()) : title;
     }
 
