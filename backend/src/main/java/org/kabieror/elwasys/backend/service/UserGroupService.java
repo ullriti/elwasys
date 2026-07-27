@@ -3,6 +3,7 @@ package org.kabieror.elwasys.backend.service;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
 import org.kabieror.elwasys.backend.domain.DiscountType;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
@@ -18,6 +19,7 @@ import org.kabieror.elwasys.backend.repository.ProgramRepository;
 import org.kabieror.elwasys.backend.repository.UserGroupRepository;
 import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -127,18 +129,8 @@ public class UserGroupService {
      */
     @Transactional
     public void setValidLocations(UserGroupEntity group, Set<Integer> locationIds) {
-        for (LocationEntity location : this.locationRepository.findAll()) {
-            boolean shouldBeValid = locationIds.contains(location.getId());
-            boolean isValid = location.getValidUserGroups().contains(group);
-            if (shouldBeValid && !isValid) {
-                location.getValidUserGroups().add(group);
-                this.locationRepository.save(location);
-            } else if (!shouldBeValid && isValid) {
-                location.getValidUserGroups().remove(group);
-                this.locationRepository.save(location);
-            }
-        }
-        this.eventPublisher.publishEvent(new UserGroupChangedEvent(group.getId()));
+        syncGroupMembership(group, locationIds, this.locationRepository, LocationEntity::getId,
+                LocationEntity::getValidUserGroups);
     }
 
     /**
@@ -148,18 +140,8 @@ public class UserGroupService {
      */
     @Transactional
     public void setValidDevices(UserGroupEntity group, Set<Integer> deviceIds) {
-        for (DeviceEntity device : this.deviceRepository.findAll()) {
-            boolean shouldBeValid = deviceIds.contains(device.getId());
-            boolean isValid = device.getValidUserGroups().contains(group);
-            if (shouldBeValid && !isValid) {
-                device.getValidUserGroups().add(group);
-                this.deviceRepository.save(device);
-            } else if (!shouldBeValid && isValid) {
-                device.getValidUserGroups().remove(group);
-                this.deviceRepository.save(device);
-            }
-        }
-        this.eventPublisher.publishEvent(new UserGroupChangedEvent(group.getId()));
+        syncGroupMembership(group, deviceIds, this.deviceRepository, DeviceEntity::getId,
+                DeviceEntity::getValidUserGroups);
     }
 
     /**
@@ -169,15 +151,34 @@ public class UserGroupService {
      */
     @Transactional
     public void setValidPrograms(UserGroupEntity group, Set<Integer> programIds) {
-        for (ProgramEntity program : this.programRepository.findAll()) {
-            boolean shouldBeValid = programIds.contains(program.getId());
-            boolean isValid = program.getValidUserGroups().contains(group);
+        syncGroupMembership(group, programIds, this.programRepository, ProgramEntity::getId,
+                ProgramEntity::getValidUserGroups);
+    }
+
+    /**
+     * Gemeinsame Umschalt-Logik der drei {@code setValid*}-Methoden (die sich nur in
+     * Repository und Zugriffspfad auf die Gegenseite unterscheiden, siehe Klassenkommentar):
+     * jede Entität wird genau dann gespeichert, wenn sich ihre Gruppenzugehörigkeit
+     * tatsächlich ändert - unveränderte Zeilen erzeugen wie bisher kein Update. Am Ende genau
+     * EIN {@link UserGroupChangedEvent} (Begründung siehe {@link #setValidLocations}).
+     *
+     * @param targetIds     die Ids der Entitäten, für die die Gruppe künftig zugelassen sein soll
+     * @param idAccessor    liest die Id der Entität (Abgleich gegen {@code targetIds})
+     * @param groupsAccessor liest die veränderbare Gruppen-Sammlung der Entität
+     */
+    private <E> void syncGroupMembership(UserGroupEntity group, Set<Integer> targetIds,
+            JpaRepository<E, Integer> repository, Function<E, Integer> idAccessor,
+            Function<E, Set<UserGroupEntity>> groupsAccessor) {
+        for (E entity : repository.findAll()) {
+            Set<UserGroupEntity> validGroups = groupsAccessor.apply(entity);
+            boolean shouldBeValid = targetIds.contains(idAccessor.apply(entity));
+            boolean isValid = validGroups.contains(group);
             if (shouldBeValid && !isValid) {
-                program.getValidUserGroups().add(group);
-                this.programRepository.save(program);
+                validGroups.add(group);
+                repository.save(entity);
             } else if (!shouldBeValid && isValid) {
-                program.getValidUserGroups().remove(group);
-                this.programRepository.save(program);
+                validGroups.remove(group);
+                repository.save(entity);
             }
         }
         this.eventPublisher.publishEvent(new UserGroupChangedEvent(group.getId()));
@@ -185,18 +186,22 @@ public class UserGroupService {
 
     @Transactional(readOnly = true)
     public List<LocationEntity> findValidLocations(UserGroupEntity group) {
-        return this.locationRepository.findAll().stream().filter(l -> l.getValidUserGroups().contains(group))
-                .toList();
+        return findValidFor(group, this.locationRepository, LocationEntity::getValidUserGroups);
     }
 
     @Transactional(readOnly = true)
     public List<DeviceEntity> findValidDevices(UserGroupEntity group) {
-        return this.deviceRepository.findAll().stream().filter(d -> d.getValidUserGroups().contains(group)).toList();
+        return findValidFor(group, this.deviceRepository, DeviceEntity::getValidUserGroups);
     }
 
     @Transactional(readOnly = true)
     public List<ProgramEntity> findValidPrograms(UserGroupEntity group) {
-        return this.programRepository.findAll().stream().filter(p -> p.getValidUserGroups().contains(group))
-                .toList();
+        return findValidFor(group, this.programRepository, ProgramEntity::getValidUserGroups);
+    }
+
+    /** Gegenstück zu {@link #syncGroupMembership} für die drei {@code findValid*}-Methoden. */
+    private <E> List<E> findValidFor(UserGroupEntity group, JpaRepository<E, Integer> repository,
+            Function<E, Set<UserGroupEntity>> groupsAccessor) {
+        return repository.findAll().stream().filter(entity -> groupsAccessor.apply(entity).contains(group)).toList();
     }
 }

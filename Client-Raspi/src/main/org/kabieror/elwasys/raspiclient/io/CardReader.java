@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Vector;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Dieser Kartenleser wartet auf eine Eingabe vom Kartenleser und benachrichtigt
@@ -42,7 +42,7 @@ public class CardReader {
     private String cachedId = "";
 
     public CardReader(Stage stage) {
-        this.cardDetectedEventListener = new Vector<ICardDetectedEventListener>();
+        this.cardDetectedEventListener = new CopyOnWriteArrayList<>();
         this.stage = stage;
         this.stage.addEventHandler(KeyEvent.KEY_TYPED, e -> this.onKeyTyped(e));
         this.stage.addEventFilter(KeyEvent.KEY_PRESSED, e -> this.onKeyPressed(e));

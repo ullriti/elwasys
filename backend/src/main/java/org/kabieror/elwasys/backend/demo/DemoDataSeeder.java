@@ -66,7 +66,7 @@ public class DemoDataSeeder implements ApplicationRunner {
     /** Klartext-Passwort aller Demo-Benutzer (Login am Portal), siehe Klassen-Javadoc. */
     public static final String DEMO_PASSWORD = "demo";
 
-    private static final Logger log = LoggerFactory.getLogger(DemoDataSeeder.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DemoDataSeeder.class);
 
     private final UserGroupRepository userGroupRepository;
     private final LocationRepository locationRepository;
@@ -97,7 +97,7 @@ public class DemoDataSeeder implements ApplicationRunner {
     @Transactional
     public void run(ApplicationArguments args) {
         if (this.userRepository.findByUsernameIgnoreCaseAndDeletedFalse("anna").isPresent()) {
-            log.info("[demo] Demo-Daten bereits vorhanden (Marker-Benutzer 'anna') - Seeding uebersprungen.");
+            LOG.info("[demo] Demo-Daten bereits vorhanden (Marker-Benutzer 'anna') - Seeding uebersprungen.");
             return;
         }
         // Issue #38 (Pre-Launch AP5): Schutz gegen einen versehentlichen Start des demo-Profils
@@ -122,7 +122,7 @@ public class DemoDataSeeder implements ApplicationRunner {
                             + "wuerde u.a. das Admin-Passwort auf 'admin' zuruecksetzen). Fuer Demo-Daten eine "
                             + "frische Datenbank verwenden (siehe backend/run-demo.sh).");
         }
-        log.info("[demo] Lege Demo-Daten an ...");
+        LOG.info("[demo] Lege Demo-Daten an ...");
 
         // --- Benutzergruppen (Default existiert bereits aus der Flyway-Baseline) --------------
         UserGroupEntity gDefault = findGroupByName("Default");
@@ -212,7 +212,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         runningExecution(washSouth1, pColored, anna, now.minusMinutes(25));
         runningExecution(dryerNorth1, pDryer, ben, now.minusMinutes(10));
 
-        log.info("[demo] Demo-Daten angelegt: 4 Gruppen, 3 Standorte, 5 Programme, 6 Geraete, "
+        LOG.info("[demo] Demo-Daten angelegt: 4 Gruppen, 3 Standorte, 5 Programme, 6 Geraete, "
                 + "5 Benutzer (+admin), Guthaben, Historie und laufende Ausfuehrungen. "
                 + "Login am Portal: admin/admin bzw. <benutzer>/{}", DEMO_PASSWORD);
     }
@@ -300,10 +300,9 @@ public class DemoDataSeeder implements ApplicationRunner {
         e.setStop(start.plus(duration));
         e.setFinished(true);
         ExecutionEntity saved = this.executionRepository.save(e);
-        BigDecimal price = this.pricingService.getPrice(program, duration, user);
-        if (price != null) {
-            this.creditService.payExecution(saved, price);
-        }
+        // getPrice liefert seit Issue #90 nie mehr null (Switch-Expression ohne
+        // null-Rückgabepfad, siehe PricingService) - die frühere defensive Prüfung entfällt.
+        this.creditService.payExecution(saved, this.pricingService.getPrice(program, duration, user));
     }
 
     /** Legt eine noch laufende Ausfuehrung an (Start gesetzt, kein Stop, nicht abgeschlossen). */

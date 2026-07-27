@@ -144,9 +144,13 @@ class ExecutionControllerOfflineReplayTest {
         // Nicht-Replay-Starts laden den Nutzer frisch und gesperrt (Issue #20).
         when(this.userRepository.findWithLockById(any())).thenReturn(Optional.of(this.user));
 
-        this.controller = new ExecutionController(this.programRepository, this.userRepository, permissionService,
-                pricingService, creditService, this.executionService, scopeGuard, idempotencyService,
-                clientTimestampPolicy, advisoryLockService, this.eventPublisher);
+        // Die fachlichen Start-Wächter liegen seit Issue #90 in ExecutionStartGuard - hier
+        // bewusst die ECHTE Implementierung (mit gemockten Abhängigkeiten), damit die
+        // Gegenprobe "ohne Replay-Flag greifen die Wächter unverändert" weiterhin greift.
+        ExecutionStartGuard executionStartGuard = new ExecutionStartGuard(this.userRepository, permissionService,
+                pricingService, creditService, this.executionService, advisoryLockService);
+        this.controller = new ExecutionController(this.programRepository, this.userRepository, this.executionService,
+                executionStartGuard, scopeGuard, idempotencyService, clientTimestampPolicy, this.eventPublisher);
     }
 
     @Test

@@ -1,4 +1,5 @@
 import { Page, Locator, expect } from '@playwright/test';
+import { execFileSync } from 'child_process';
 
 /**
  * Shared helpers for the elwasys backend Portal E2E suite (Vaadin Flow, Phase 3 AP6) -
@@ -121,4 +122,38 @@ export async function rowActionButton(page: Page, rowName: string | RegExp, inde
  * ConfirmDeleteDialog). */
 export async function confirmDeletion(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Ja', exact: true }).click();
+}
+
+/**
+ * Opens the dialog behind the Nth row-action button (see `rowActionButton` for the index order)
+ * and asserts its title before handing the dialog back - the shape every "open the editor of row
+ * X" step in this suite had spelled out for itself (finale Review R3c, Issue #92).
+ */
+export async function openEditDialog(
+  page: Page,
+  rowName: string | RegExp,
+  buttonIndex: number,
+  expectedTitle: string,
+): Promise<Locator> {
+  const button = await rowActionButton(page, rowName, buttonIndex);
+  await button.click();
+  const win = dialog(page);
+  await expect(win.locator('h2[slot="title"]')).toHaveText(expectedTitle);
+  return win;
+}
+
+/**
+ * Runs a SQL script against the E2E database as the postgres superuser - the way the specs seed
+ * and clean up their own fixtures (the backend owns the schema, so the fixtures are inserted
+ * directly instead of through an API the portal does not offer).
+ *
+ * `ON_ERROR_STOP=1` makes a broken script fail the test instead of silently seeding half a
+ * fixture; psql's stdout stays hidden (`-q` leaves nothing useful there) while stderr is passed
+ * through, so a failure is readable in the test output.
+ */
+export function runSql(dbName: string, script: string): void {
+  execFileSync('sudo', ['-u', 'postgres', 'psql', '-q', '-v', 'ON_ERROR_STOP=1', '-d', dbName], {
+    input: script,
+    stdio: ['pipe', 'ignore', 'inherit'],
+  });
 }

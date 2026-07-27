@@ -6,8 +6,6 @@ import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Paragraph;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent.Alignment;
 import com.vaadin.flow.component.orderedlayout.FlexComponent.JustifyContentMode;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -18,6 +16,7 @@ import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.auth.AnonymousAllowed;
 import java.util.List;
+import org.kabieror.elwasys.backend.ui.component.Notifications;
 import org.kabieror.elwasys.backend.exception.InvalidOrExpiredResetTokenException;
 import org.kabieror.elwasys.backend.exception.PasswordTooShortException;
 import org.kabieror.elwasys.backend.service.PasswordResetService;
@@ -112,21 +111,11 @@ public class ResetPasswordView extends VerticalLayout implements BeforeEnterObse
             this.tfNewPassword1.setErrorMessage(e.getMessage());
             return;
         } catch (InvalidOrExpiredResetTokenException e) {
-            showError(e.getMessage());
+            Notifications.showError(e.getMessage());
             return;
         }
 
-        showSuccess("Passwort wurde erfolgreich geändert.");
+        Notifications.showSuccess("Passwort wurde erfolgreich geändert.");
         UI.getCurrent().navigate("login");
-    }
-
-    private static void showError(String message) {
-        Notification notification = Notification.show(message, 5000, Notification.Position.MIDDLE);
-        notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
-    }
-
-    private static void showSuccess(String message) {
-        Notification notification = Notification.show(message, 4000, Notification.Position.MIDDLE);
-        notification.addThemeVariants(NotificationVariant.LUMO_SUCCESS);
     }
 }

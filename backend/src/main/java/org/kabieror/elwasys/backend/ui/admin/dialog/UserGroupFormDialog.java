@@ -1,14 +1,8 @@
 package org.kabieror.elwasys.backend.ui.admin.dialog;
 
-import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.MultiSelectComboBox;
-import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.H3;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
 import com.vaadin.flow.component.textfield.NumberField;
 import com.vaadin.flow.component.textfield.TextField;
@@ -23,6 +17,8 @@ import org.kabieror.elwasys.backend.service.DeviceService;
 import org.kabieror.elwasys.backend.service.LocationService;
 import org.kabieror.elwasys.backend.service.ProgramService;
 import org.kabieror.elwasys.backend.service.UserGroupService;
+import org.kabieror.elwasys.backend.ui.component.AbstractFormDialog;
+import org.kabieror.elwasys.backend.ui.component.FormValidation;
 
 /**
  * Modaler Dialog zum Anlegen/Bearbeiten einer Benutzergruppe - fachlicher Nachfolger von
@@ -33,7 +29,7 @@ import org.kabieror.elwasys.backend.service.UserGroupService;
  * "Entscheidungen", Gestaltungsrahmen Portal-Neubau: UX-Verbesserungen sind erwünscht,
  * solange die Struktur wiedererkennbar bleibt).
  */
-public class UserGroupFormDialog extends Dialog {
+public class UserGroupFormDialog extends AbstractFormDialog {
 
     private static final String NONE = "none";
     private static final String FIX = "fix";
@@ -53,13 +49,11 @@ public class UserGroupFormDialog extends Dialog {
     public UserGroupFormDialog(UserGroupService userGroupService, LocationService locationService,
             DeviceService deviceService, ProgramService programService, UserGroupEntity groupToEdit,
             Runnable onSaved) {
+        super(entityTitle("Gruppe", groupToEdit != null), "45em");
         this.userGroupService = userGroupService;
         this.groupToEdit = groupToEdit;
 
         boolean editMode = groupToEdit != null;
-        setHeaderTitle(editMode ? "Gruppe bearbeiten" : "Gruppe erstellen");
-        setModal(true);
-        setWidth("45em");
 
         this.tfName.setRequired(true);
         this.tfName.setWidthFull();
@@ -118,10 +112,7 @@ public class UserGroupFormDialog extends Dialog {
         }
         updateDiscountFieldVisibility();
 
-        Button btnCancel = new Button("Abbrechen", e -> close());
-        Button btnSave = new Button(editMode ? "Speichern" : "Erstellen", e -> save(onSaved));
-        btnSave.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-        getFooter().add(new HorizontalLayout(btnCancel, btnSave));
+        addFooterActions(saveCaption(editMode), () -> save(onSaved));
     }
 
     private void updateDiscountFieldVisibility() {
@@ -131,25 +122,18 @@ public class UserGroupFormDialog extends Dialog {
     }
 
     private void save(Runnable onSaved) {
-        boolean valid = true;
-        if (this.tfName.isEmpty()) {
-            this.tfName.setInvalid(true);
-            this.tfName.setErrorMessage("Bitte Name eingeben.");
-            valid = false;
-        } else {
-            this.tfName.setInvalid(false);
-        }
+        // Bewusst bitweises "&=" statt des kurzschließenden "&&": ALLE Felder sollen geprüft und
+        // markiert werden, nicht nur bis zum ersten Fehler - sonst müsste der Administrator die
+        // Fehler eines Formulars einzeln nacheinander aufdecken.
+        boolean valid = FormValidation.require(this.tfName, "Bitte Name eingeben.");
 
+        // Geprüft wird nur das Rabattfeld der gewählten Rabattart - die anderen sind ausgeblendet.
         String type = this.rgDiscountType.getValue();
-        if (FIX.equals(type) && this.nfDiscountFix.isEmpty()) {
-            this.nfDiscountFix.setInvalid(true);
-            this.nfDiscountFix.setErrorMessage("Bitte Rabatt eingeben.");
-            valid = false;
+        if (FIX.equals(type)) {
+            valid &= FormValidation.require(this.nfDiscountFix, "Bitte Rabatt eingeben.");
         }
-        if (FACTOR.equals(type) && this.nfDiscountFactorPercent.isEmpty()) {
-            this.nfDiscountFactorPercent.setInvalid(true);
-            this.nfDiscountFactorPercent.setErrorMessage("Bitte Rabatt eingeben.");
-            valid = false;
+        if (FACTOR.equals(type)) {
+            valid &= FormValidation.require(this.nfDiscountFactorPercent, "Bitte Rabatt eingeben.");
         }
 
         if (!valid) {
@@ -188,10 +172,7 @@ public class UserGroupFormDialog extends Dialog {
             this.userGroupService.setValidPrograms(group,
                     this.selPrograms.getValue().stream().map(ProgramEntity::getId).collect(Collectors.toSet()));
         } catch (RuntimeException e) {
-            Notification notification = Notification.show(
-                    "Die Benutzergruppe konnte nicht gespeichert werden. " + e.getMessage(), 5000,
-                    Notification.Position.MIDDLE);
-            notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
+            showFailure("Die Benutzergruppe konnte nicht gespeichert werden.", e);
             return;
         }
 

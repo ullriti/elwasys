@@ -2,6 +2,7 @@ package org.kabieror.elwasys.raspiclient.ui.small;
 
 import javafx.application.Platform;
 
+import org.kabieror.elwasys.common.FormatUtilities;
 import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
 import org.kabieror.elwasys.raspiclient.ui.IMainFormStateManager;
@@ -10,6 +11,7 @@ import org.kabieror.elwasys.raspiclient.ui.MainFormStateTransition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
@@ -25,7 +27,7 @@ import java.util.concurrent.TimeUnit;
  *
  */
 class MainFormStateManager implements IMainFormStateManager {
-    private static final String TEXT_CREDIT_INSUFFICENT = "Guthaben reicht nicht aus!";
+    private static final String TEXT_CREDIT_INSUFFICIENT = "Guthaben reicht nicht aus!";
     private static final String TEXT_USER_BLOCKED = "Diese Karte ist gesperrt!";
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
     /**
@@ -256,6 +258,10 @@ class MainFormStateManager implements IMainFormStateManager {
         };
 
         // Benutzer registriert
+        // Geldbeträge durchgängig über FormatUtilities.formatCurrency statt über inline
+        // aufgebaute NumberFormat-Instanzen (#91) - identisch zu ui/medium (DeviceListEntry).
+        // FormatUtilities ist auf Locale.GERMANY festgelegt; auf den Terminals ist das die
+        // ohnehin geltende Standard-Locale, die Anzeige bleibt damit unverändert.
         final Runnable userRegistered = () -> {
             this.controller.confirmation_username.setText(this.controller.registeredUser.getName());
             if (this.controller.confirmation_username.getStyleClass().contains("username-error")) {
@@ -266,15 +272,15 @@ class MainFormStateManager implements IMainFormStateManager {
                 this.controller.confirmation_userIcon.getStyleClass().remove("no-user-registered");
             }
 
-            this.controller.confirmation_credit.setText(NumberFormat.getCurrencyInstance()
-                    .format(this.controller.registeredUser.getCredit()));
+            this.controller.confirmation_credit.setText(
+                    FormatUtilities.formatCurrency(this.controller.registeredUser.getCredit()));
 
-            this.controller.confirmation_cost.setText(NumberFormat.getCurrencyInstance()
-                    .format(this.controller.selectedProgram.getPriceAtMaxDuration()));
+            this.controller.confirmation_cost.setText(
+                    FormatUtilities.formatCurrency(this.controller.selectedProgram.getPriceAtMaxDuration()));
 
-            this.controller.confirmation_remainingCredit.setText(NumberFormat.getCurrencyInstance()
-                    .format((this.controller.registeredUser.getCredit()
-                            .subtract(this.controller.selectedProgram.getPriceAtMaxDuration()))));
+            this.controller.confirmation_remainingCredit.setText(
+                    FormatUtilities.formatCurrency(this.controller.registeredUser.getCredit()
+                            .subtract(this.controller.selectedProgram.getPriceAtMaxDuration())));
 
             this.controller.confirmation_credit.setVisible(true);
             this.controller.confirmation_remainingCredit.setVisible(true);
@@ -289,12 +295,11 @@ class MainFormStateManager implements IMainFormStateManager {
                     .contains("no-user-registered")) {
                 this.controller.confirmation_userIcon.getStyleClass().add("no-user-registered");
             }
-            this.controller.confirmation_credit
-                    .setText(NumberFormat.getCurrencyInstance().format(0));
+            this.controller.confirmation_credit.setText(FormatUtilities.formatCurrency(BigDecimal.ZERO));
             this.controller.confirmation_cost.setText(
-                    NumberFormat.getCurrencyInstance().format(this.controller.selectedProgram.getPriceAtMaxDuration()));
-            this.controller.confirmation_remainingCredit.setText(
-                    NumberFormat.getCurrencyInstance().format(this.controller.selectedProgram.getPriceAtMaxDuration().negate()));
+                    FormatUtilities.formatCurrency(this.controller.selectedProgram.getPriceAtMaxDuration()));
+            this.controller.confirmation_remainingCredit.setText(FormatUtilities
+                    .formatCurrency(this.controller.selectedProgram.getPriceAtMaxDuration().negate()));
             this.controller.confirmation_remainingCredit.getStyleClass().clear();
 
             this.controller.confirmation_credit.setVisible(false);
@@ -302,7 +307,7 @@ class MainFormStateManager implements IMainFormStateManager {
 
         };
 
-        final Runnable creditSufficent = () -> {
+        final Runnable creditSufficient = () -> {
             if (this.controller.confirmation_remainingCredit.getStyleClass()
                     .contains("remaining-error")) {
                 this.controller.confirmation_remainingCredit.getStyleClass()
@@ -311,12 +316,12 @@ class MainFormStateManager implements IMainFormStateManager {
             this.controller.confirmation_errorMessage.setVisible(false);
         };
 
-        final Runnable creditInsufficent = () -> {
+        final Runnable creditInsufficient = () -> {
             if (!this.controller.confirmation_remainingCredit.getStyleClass()
                     .contains("remaining-error")) {
                 this.controller.confirmation_remainingCredit.getStyleClass().add("remaining-error");
             }
-            this.controller.confirmation_errorMessage.setText(TEXT_CREDIT_INSUFFICENT);
+            this.controller.confirmation_errorMessage.setText(TEXT_CREDIT_INSUFFICIENT);
             this.controller.confirmation_errorMessage.setVisible(true);
         };
 
@@ -339,7 +344,7 @@ class MainFormStateManager implements IMainFormStateManager {
                         MainFormState.SELECT_DEVICE), backToDeviceSelection);
         // Geräteauswahl <-- Guthaben nicht ausreichend
         this.stateTransitions
-                .put(new MainFormStateTransition(MainFormState.CONFIRMATION_CREDIT_INSUFFICENT,
+                .put(new MainFormStateTransition(MainFormState.CONFIRMATION_CREDIT_INSUFFICIENT,
                         MainFormState.SELECT_DEVICE), backToDeviceSelection);
         // Geräteauswahl <-- Benutzer gesperrt
         this.stateTransitions
@@ -359,7 +364,7 @@ class MainFormStateManager implements IMainFormStateManager {
                         MainFormState.PROGRAM_SELECTED), abortConfirmation);
         // Programmauswahl <-- Guthaben nicht ausreichend
         this.stateTransitions
-                .put(new MainFormStateTransition(MainFormState.CONFIRMATION_CREDIT_INSUFFICENT,
+                .put(new MainFormStateTransition(MainFormState.CONFIRMATION_CREDIT_INSUFFICIENT,
                         MainFormState.PROGRAM_SELECTED), abortConfirmation);
         // Programmauswahl <-- Benutzer gesperrt
         this.stateTransitions
@@ -385,9 +390,9 @@ class MainFormStateManager implements IMainFormStateManager {
                 });
         // Guthaben nicht ausreichend --> Bereit zum Programmstart
         this.stateTransitions
-                .put(new MainFormStateTransition(MainFormState.CONFIRMATION_CREDIT_INSUFFICENT,
+                .put(new MainFormStateTransition(MainFormState.CONFIRMATION_CREDIT_INSUFFICIENT,
                         MainFormState.CONFIRMATION_READY), () -> {
-                            creditSufficent.run();
+                            creditSufficient.run();
                             userRegistered.run();
                             this.controller.confirmation_buttonDoor.visibleProperty().set(false);
                             this.controller.confirmation_buttonStart.visibleProperty().set(true);
@@ -410,9 +415,9 @@ class MainFormStateManager implements IMainFormStateManager {
                         });
         // Guthaben nicht ausreichend --> Karte nicht erkennt
         this.stateTransitions
-                .put(new MainFormStateTransition(MainFormState.CONFIRMATION_CREDIT_INSUFFICENT,
+                .put(new MainFormStateTransition(MainFormState.CONFIRMATION_CREDIT_INSUFFICIENT,
                         MainFormState.CONFIRMATION_CARD_UNKNOWN), () -> {
-                            creditSufficent.run();
+                            creditSufficient.run();
                             cardUnknown.run();
                         });
         // Benutzer gesperrt --> Karte nicht erkannt
@@ -426,23 +431,23 @@ class MainFormStateManager implements IMainFormStateManager {
         // Warte auf Karte --> Guthaben nicht ausreichend
         this.stateTransitions
                 .put(new MainFormStateTransition(MainFormState.CONFIRMATION_WAIT_FOR_CARD,
-                        MainFormState.CONFIRMATION_CREDIT_INSUFFICENT), () -> {
+                        MainFormState.CONFIRMATION_CREDIT_INSUFFICIENT), () -> {
                             userRegistered.run();
-                            creditInsufficent.run();
+                            creditInsufficient.run();
                         });
         // Karte nicht erkannt --> Guthaben nicht ausreichend
         this.stateTransitions
                 .put(new MainFormStateTransition(MainFormState.CONFIRMATION_CARD_UNKNOWN,
-                        MainFormState.CONFIRMATION_CREDIT_INSUFFICENT), () -> {
+                        MainFormState.CONFIRMATION_CREDIT_INSUFFICIENT), () -> {
                             userRegistered.run();
-                            creditInsufficent.run();
+                            creditInsufficient.run();
                         });
         // Benutzer gesperrt --> Guthaben nicht ausreichend
         this.stateTransitions
                 .put(new MainFormStateTransition(MainFormState.CONFIRMATION_USER_BLOCKED,
-                        MainFormState.CONFIRMATION_CREDIT_INSUFFICENT), () -> {
+                        MainFormState.CONFIRMATION_CREDIT_INSUFFICIENT), () -> {
                             userNotBlocked.run();
-                            creditInsufficent.run();
+                            creditInsufficient.run();
                         });
 
         // Warte auf Karte --> Benutzer gesperrt
@@ -461,9 +466,9 @@ class MainFormStateManager implements IMainFormStateManager {
                         });
         // Guthaben nicht ausreichend --> Benutzer gesperrt
         this.stateTransitions
-                .put(new MainFormStateTransition(MainFormState.CONFIRMATION_CREDIT_INSUFFICENT,
+                .put(new MainFormStateTransition(MainFormState.CONFIRMATION_CREDIT_INSUFFICIENT,
                         MainFormState.CONFIRMATION_USER_BLOCKED), () -> {
-                            creditSufficent.run();
+                            creditSufficient.run();
                             userBlocked.run();
                         });
 
@@ -475,7 +480,7 @@ class MainFormStateManager implements IMainFormStateManager {
                 });
         // Guthaben nicht ausreichend --> Tür öffnen
         this.stateTransitions.put(new MainFormStateTransition(
-                MainFormState.CONFIRMATION_CREDIT_INSUFFICENT, MainFormState.OPEN_DOOR), () -> {
+                MainFormState.CONFIRMATION_CREDIT_INSUFFICIENT, MainFormState.OPEN_DOOR), () -> {
                     this.controller.confirmationPane.setVisible(false);
                     this.controller.doorOpenPane.setVisible(true);
                 });
@@ -521,10 +526,10 @@ class MainFormStateManager implements IMainFormStateManager {
         // Gerätenamen und Programmdauer als Beschriftung setzen
         this.controller.confirmation_labelDevice.setText(this.controller.selectedDevice.getName()
                 + " (" + (this.controller.selectedProgram.getMaxDuration().toMinutes()) + " min)");
-        this.controller.confirmation_cost
-                .setText(NumberFormat.getCurrencyInstance().format(this.controller.selectedProgram.getPriceAtMaxDuration()));
-        this.controller.confirmation_remainingCredit
-                .setText(NumberFormat.getCurrencyInstance().format(this.controller.selectedProgram.getPriceAtMaxDuration().negate()));
+        this.controller.confirmation_cost.setText(
+                FormatUtilities.formatCurrency(this.controller.selectedProgram.getPriceAtMaxDuration()));
+        this.controller.confirmation_remainingCredit.setText(FormatUtilities
+                .formatCurrency(this.controller.selectedProgram.getPriceAtMaxDuration().negate()));
 
         this.controller.confirmation_remainingCredit.getStyleClass().clear();
         this.controller.confirmation_errorMessage.setVisible(false);
@@ -539,7 +544,7 @@ class MainFormStateManager implements IMainFormStateManager {
             this.controller.confirmation_userIcon.getStyleClass().add("no-user-registered");
         }
 
-        this.controller.confirmation_credit.setText(NumberFormat.getCurrencyInstance().format(0));
+        this.controller.confirmation_credit.setText(FormatUtilities.formatCurrency(BigDecimal.ZERO));
     }
 
     /**

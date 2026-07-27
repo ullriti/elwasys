@@ -8,7 +8,7 @@
 	<version>0.0.0-local-development</version>
 	<packaging>pom</packaging>
 	<name>elwasys parent</name>
-	<description>Aggregator/parent POM for the elwasys modules (Common, Client-Raspi, backend).</description>
+	<description>Aggregator/parent POM for the elwasys modules (Client-Raspi, backend; the former Common module was dissolved into Client-Raspi).</description>
 
 	<modules>
 		<module>Client-Raspi</module>
@@ -17,7 +17,7 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<!-- Default Java language level for all modules (Common, Client-Raspi, backend). -->
+		<!-- Default Java language level for all modules (Client-Raspi, backend). -->
 		<maven.compiler.release>21</maven.compiler.release>
 	</properties>
 

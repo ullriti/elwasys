@@ -7,6 +7,8 @@ import javafx.scene.Scene;
 import javafx.scene.text.Font;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Startpunkt der Anwendung. Kommandozeilen-Parameter: -f Startet die Anwendung
@@ -16,6 +18,8 @@ import javafx.stage.Stage;
  *
  */
 public class Main extends Application {
+
+    private static final Logger logger = LoggerFactory.getLogger(Main.class);
 
     /**
      * Gibt die Art des Anzeigegeräts an, auf dem diese Instanz des Waschwächters läuft
@@ -105,7 +109,9 @@ public class Main extends Application {
 
             primaryStage.show();
         } catch (final Exception e) {
-            e.printStackTrace();
+            // Ueber den Logger statt printStackTrace: nur so landet der Startfehler in der per
+            // Fernwartung (LOG_REQUEST) abrufbaren Logdatei (#91).
+            logger.error("Failed to start up the main window.", e);
         }
     }
 }

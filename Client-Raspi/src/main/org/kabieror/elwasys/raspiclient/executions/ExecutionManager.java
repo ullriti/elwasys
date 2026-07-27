@@ -14,7 +14,8 @@ import java.io.IOException;
 import java.security.InvalidParameterException;
 import java.util.List;
 import java.util.Map;
-import java.util.Vector;
+import java.util.ArrayList;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -67,9 +68,9 @@ public class ExecutionManager implements ICloseListener {
     public ExecutionManager(IDevicePowerManager devicePowerManager) {
         this.devicePowerManager = devicePowerManager;
 
-        this.startListeners = new Vector<>();
-        this.finishListeners = new Vector<>();
-        this.errorListeners = new Vector<>();
+        this.startListeners = new CopyOnWriteArrayList<>();
+        this.finishListeners = new CopyOnWriteArrayList<>();
+        this.errorListeners = new CopyOnWriteArrayList<>();
         this.executorService = Executors.newScheduledThreadPool(4);
 
         ElwaManager.instance.listenToCloseEvent(this);
@@ -231,7 +232,7 @@ public class ExecutionManager implements ICloseListener {
      */
     public List<ClientExecution> getRunningExecutions() {
         return this.executionFinishers.keySet().stream().filter(ClientExecution::isRunning)
-                .collect(Collectors.toCollection(Vector::new));
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 
     /**

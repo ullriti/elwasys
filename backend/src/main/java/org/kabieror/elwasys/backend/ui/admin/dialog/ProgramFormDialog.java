@@ -1,15 +1,11 @@
 package org.kabieror.elwasys.backend.ui.admin.dialog;
 
-import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.button.ButtonVariant;
+import com.vaadin.flow.component.HasValidation;
 import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.combobox.MultiSelectComboBox;
-import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.H3;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
 import com.vaadin.flow.component.textfield.BigDecimalField;
@@ -24,6 +20,8 @@ import org.kabieror.elwasys.backend.domain.TimeUnitType;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
 import org.kabieror.elwasys.backend.service.ProgramService;
 import org.kabieror.elwasys.backend.service.UserGroupService;
+import org.kabieror.elwasys.backend.ui.component.AbstractFormDialog;
+import org.kabieror.elwasys.backend.ui.component.FormValidation;
 
 /**
  * Modaler Dialog zum Anlegen/Bearbeiten eines Programms - fachlicher Nachfolger von
@@ -32,7 +30,7 @@ import org.kabieror.elwasys.backend.service.UserGroupService;
  * Preisfeldern (Preis bzw. Grundgebühr+Zeitpreis+Abrechnungsintervall), Maximaldauer, Freie
  * Zeit, Auto-Ende, Frühester Abbruch, freigegebene Benutzergruppen.
  */
-public class ProgramFormDialog extends Dialog {
+public class ProgramFormDialog extends AbstractFormDialog {
 
     private static final String STATIC = "static";
     private static final String DYNAMIC = "dynamic";
@@ -55,13 +53,11 @@ public class ProgramFormDialog extends Dialog {
 
     public ProgramFormDialog(ProgramService programService, UserGroupService userGroupService,
             ProgramEntity programToEdit, Runnable onSaved) {
+        super(entityTitle("Programm", programToEdit != null), "45em");
         this.programService = programService;
         this.programToEdit = programToEdit;
 
         boolean editMode = programToEdit != null;
-        setHeaderTitle(editMode ? "Programm bearbeiten" : "Programm erstellen");
-        setModal(true);
-        setWidth("45em");
 
         this.tfName.setRequired(true);
         this.tfName.setWidthFull();
@@ -121,10 +117,7 @@ public class ProgramFormDialog extends Dialog {
         }
         updateTypeFieldVisibility();
 
-        Button btnCancel = new Button("Abbrechen", e -> close());
-        Button btnSave = new Button(editMode ? "Speichern" : "Erstellen", e -> save(onSaved));
-        btnSave.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-        getFooter().add(new HorizontalLayout(btnCancel, btnSave));
+        addFooterActions(saveCaption(editMode), () -> save(onSaved));
     }
 
     private void updateTypeFieldVisibility() {
@@ -144,14 +137,17 @@ public class ProgramFormDialog extends Dialog {
     }
 
     private void save(Runnable onSaved) {
+        // Bewusst bitweises "&=" statt des kurzschließenden "&&": ALLE Felder sollen geprüft und
+        // markiert werden, nicht nur bis zum ersten Fehler - sonst müsste der Administrator die
+        // Fehler eines Formulars einzeln nacheinander aufdecken.
         boolean valid = true;
-        valid &= requireText(this.tfName, "Bitte Name eingeben.");
+        valid &= FormValidation.require(this.tfName, "Bitte Name eingeben.");
         boolean dynamic = DYNAMIC.equals(this.rgType.getValue());
         if (dynamic) {
-            valid &= requireBigDecimal(this.bfFlagfall, "Bitte Grundgebühr eingeben.");
-            valid &= requireBigDecimal(this.bfRate, "Bitte Zeitpreis eingeben.");
+            valid &= FormValidation.require(this.bfFlagfall, "Bitte Grundgebühr eingeben.");
+            valid &= FormValidation.require(this.bfRate, "Bitte Zeitpreis eingeben.");
         } else {
-            valid &= requireBigDecimal(this.bfPrice, "Bitte Preis eingeben.");
+            valid &= FormValidation.require(this.bfPrice, "Bitte Preis eingeben.");
         }
         valid &= requireDuration(this.maxDuration, "Der Wert muss größer als 0 sein.", true);
         valid &= requireDuration(this.freeDuration, "Der Wert darf nicht negativ sein.", false);
@@ -178,10 +174,7 @@ public class ProgramFormDialog extends Dialog {
                         this.selGroups.getValue());
             }
         } catch (RuntimeException e) {
-            Notification notification = Notification.show(
-                    "Das Programm konnte nicht gespeichert werden. " + e.getMessage(), 5000,
-                    Notification.Position.MIDDLE);
-            notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
+            showFailure("Das Programm konnte nicht gespeichert werden.", e);
             return;
         }
 
@@ -189,43 +182,22 @@ public class ProgramFormDialog extends Dialog {
         onSaved.run();
     }
 
-    private static boolean requireText(TextField field, String message) {
-        if (field.isEmpty()) {
-            field.setInvalid(true);
-            field.setErrorMessage(message);
-            return false;
-        }
-        field.setInvalid(false);
-        return true;
-    }
-
-    private static boolean requireBigDecimal(BigDecimalField field, String message) {
-        if (field.isEmpty()) {
-            field.setInvalid(true);
-            field.setErrorMessage(message);
-            return false;
-        }
-        field.setInvalid(false);
-        return true;
-    }
-
     private static boolean requireDuration(DurationField field, String message, boolean mustBePositive) {
         Duration value = field.getValue();
-        if (value == null || (mustBePositive ? value.isZero() || value.isNegative() : value.isNegative())) {
-            field.setInvalid(true);
-            field.setErrorMessage(message);
-            return false;
-        }
-        field.setInvalid(false);
-        return true;
+        boolean valid = value != null && !value.isNegative() && !(mustBePositive && value.isZero());
+        return FormValidation.check(valid, field, message);
     }
 
     /**
      * Kleines zusammengesetztes Feld (Zahl + Zeiteinheit) für Dauer-Eingaben - Nachbildung
      * der entsprechenden {@code CssLayout}-Gruppen aus {@code ProgramWindow} (Alt-Portal:
      * Maximaldauer/Freie Zeit/Frühester Abbruch, jeweils Zahl + Stunden/Minuten/Sekunden).
+     *
+     * <p>Implementiert {@link HasValidation}, damit die Fehlermarkierung über denselben Weg
+     * läuft wie bei den echten Eingabefeldern ({@link FormValidation}); angezeigt wird sie - wie
+     * bisher - am Zahlenfeld, denn nur dort ist Platz für die Meldung.
      */
-    private static final class DurationField extends HorizontalLayout {
+    private static final class DurationField extends HorizontalLayout implements HasValidation {
 
         private final IntegerField amount = new IntegerField();
         private final ComboBox<TimeUnitType> unit = new ComboBox<>();
@@ -272,12 +244,24 @@ public class ProgramFormDialog extends Dialog {
             };
         }
 
-        void setInvalid(boolean invalid) {
+        @Override
+        public void setInvalid(boolean invalid) {
             this.amount.setInvalid(invalid);
         }
 
-        void setErrorMessage(String message) {
+        @Override
+        public boolean isInvalid() {
+            return this.amount.isInvalid();
+        }
+
+        @Override
+        public void setErrorMessage(String message) {
             this.amount.setErrorMessage(message);
+        }
+
+        @Override
+        public String getErrorMessage() {
+            return this.amount.getErrorMessage();
         }
     }
 }

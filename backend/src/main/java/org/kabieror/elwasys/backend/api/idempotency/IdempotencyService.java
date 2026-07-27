@@ -55,7 +55,7 @@ public class IdempotencyService {
     /** Speichergrenze der Spalte {@code terminal_idempotency_keys.idempotency_key} (V4). */
     private static final int MAX_KEY_LENGTH = 64;
 
-    private final Logger logger = LoggerFactory.getLogger(getClass());
+    private static final Logger LOG = LoggerFactory.getLogger(IdempotencyService.class);
 
     private final TerminalIdempotencyKeyRepository repository;
 
@@ -121,7 +121,7 @@ public class IdempotencyService {
             if (!storedOperation.equals(operation)) {
                 throw new IdempotencyKeyReusedException(storedOperation, operation);
             }
-            this.logger.debug("Idempotency-Key '{}' bereits verarbeitet (operation={}) - liefere gespeicherte "
+            LOG.debug("Idempotency-Key '{}' bereits verarbeitet (operation={}) - liefere gespeicherte "
                     + "Antwort erneut aus, ohne '{}' erneut auszufuehren.", idempotencyKey, operation, operation);
             return new IdempotentResult<>(deserialize(existing.get().getResponseBody(), responseType), true);
         }

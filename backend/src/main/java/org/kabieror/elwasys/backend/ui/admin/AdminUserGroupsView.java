@@ -1,22 +1,11 @@
 package org.kabieror.elwasys.backend.ui.admin;
 
-import com.vaadin.flow.component.AttachEvent;
-import com.vaadin.flow.component.DetachEvent;
-import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.grid.Grid;
-import com.vaadin.flow.component.html.H2;
-import com.vaadin.flow.component.icon.Icon;
-import com.vaadin.flow.component.icon.VaadinIcon;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
-import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
-import com.vaadin.flow.shared.Registration;
 import jakarta.annotation.security.RolesAllowed;
 import java.text.NumberFormat;
+import java.util.List;
 import java.util.Locale;
 import org.kabieror.elwasys.backend.domain.DiscountType;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
@@ -27,7 +16,6 @@ import org.kabieror.elwasys.backend.service.LocationService;
 import org.kabieror.elwasys.backend.service.ProgramService;
 import org.kabieror.elwasys.backend.service.UserGroupService;
 import org.kabieror.elwasys.backend.ui.admin.dialog.UserGroupFormDialog;
-import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
 /**
@@ -36,78 +24,39 @@ import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
  *
  * <p><b>Seit Phase 3 AP5</b> (siehe docs/kb/05-migration-plan.md, "Live-Updates zwischen Sessions"):
  * die Liste lädt sich über den {@link UiBroadcaster} automatisch neu, wenn irgendeine Session
- * eine Benutzergruppe anlegt, bearbeitet oder löscht.
+ * eine Benutzergruppe anlegt, bearbeitet oder löscht. Gerüst und Lösch-Ablauf kommen aus
+ * {@link AbstractAdminListView} (Issue #92).
  */
 @Route(value = "admin/user-groups", layout = AdminLayout.class)
 @PageTitle("Benutzergruppen - Waschportal")
 @RolesAllowed("ADMIN")
-public class AdminUserGroupsView extends VerticalLayout {
+public class AdminUserGroupsView extends AbstractAdminListView<UserGroupEntity> {
 
     private final UserGroupService userGroupService;
     private final LocationService locationService;
     private final DeviceService deviceService;
     private final ProgramService programService;
-    private final UiBroadcaster broadcaster;
-
-    private final Grid<UserGroupEntity> grid = new Grid<>();
-
-    private Registration broadcasterRegistration;
 
     public AdminUserGroupsView(UserGroupService userGroupService, LocationService locationService,
             DeviceService deviceService, ProgramService programService, UiBroadcaster broadcaster) {
+        super("Benutzergruppen", "admin-user-groups-view", "Neu", broadcaster);
         this.userGroupService = userGroupService;
         this.locationService = locationService;
         this.deviceService = deviceService;
         this.programService = programService;
-        this.broadcaster = broadcaster;
-
-        setSizeFull();
-        addClassName("admin-user-groups-view");
-
-        H2 title = new H2("Benutzergruppen");
-        Button btnNew = new Button("Neu", new Icon(VaadinIcon.PLUS), e -> openCreateDialog());
-        btnNew.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-
-        HorizontalLayout toolbar = new HorizontalLayout(title, btnNew);
-        toolbar.setWidthFull();
-        toolbar.setFlexGrow(1, title);
-        toolbar.setAlignItems(com.vaadin.flow.component.orderedlayout.FlexComponent.Alignment.CENTER);
-
-        configureGrid();
-
-        add(toolbar, this.grid);
-        setFlexGrow(1, this.grid);
-
-        loadData();
+        initGrid();
     }
 
     @Override
-    protected void onAttach(AttachEvent attachEvent) {
-        super.onAttach(attachEvent);
-        this.broadcasterRegistration = this.broadcaster.register(attachEvent.getUI(), event -> {
-            if (event instanceof UserGroupChangedEvent) {
-                loadData();
-            }
-        });
-    }
-
-    @Override
-    protected void onDetach(DetachEvent detachEvent) {
-        if (this.broadcasterRegistration != null) {
-            this.broadcasterRegistration.remove();
-            this.broadcasterRegistration = null;
-        }
-        super.onDetach(detachEvent);
-    }
-
-    private void configureGrid() {
-        this.grid.setSizeFull();
-        this.grid.addColumn(UserGroupEntity::getName).setHeader("Name").setSortable(true);
-        this.grid.addColumn(this::formatDiscount).setHeader("Rabatt");
-        this.grid.addComponentColumn(this::actionButtons).setHeader("").setFlexGrow(0).setWidth("110px");
+    protected void configureColumns(Grid<UserGroupEntity> grid) {
+        grid.addColumn(UserGroupEntity::getName).setHeader("Name").setSortable(true);
+        grid.addColumn(this::formatDiscount).setHeader("Rabatt");
     }
 
     private String formatDiscount(UserGroupEntity group) {
+        // Rabattwert ist ein primitives double (nicht BigDecimal wie die Geldbeträge im Portal) -
+        // deshalb hier bewusst direkt NumberFormat statt PortalFormats.currency, sowohl für den
+        // Betrags- als auch für den Prozentfall (eine Prozent-Anzeige gibt es ohnehin nur hier).
         if (group.getDiscountType() == DiscountType.FIX) {
             return NumberFormat.getCurrencyInstance(Locale.GERMANY).format(group.getDiscountValue());
         } else if (group.getDiscountType() == DiscountType.FACTOR) {
@@ -116,47 +65,41 @@ public class AdminUserGroupsView extends VerticalLayout {
         return "-";
     }
 
-    private HorizontalLayout actionButtons(UserGroupEntity group) {
-        Button btnEdit = new Button(new Icon(VaadinIcon.EDIT));
-        btnEdit.setTooltipText("Bearbeiten");
-        btnEdit.addClickListener(e -> openEditDialog(group));
-
-        Button btnDelete = new Button(new Icon(VaadinIcon.TRASH));
-        btnDelete.setTooltipText("Löschen");
-        btnDelete.addThemeVariants(ButtonVariant.LUMO_ERROR, ButtonVariant.LUMO_TERTIARY);
-        btnDelete.addClickListener(e -> confirmDelete(group));
-
-        return new HorizontalLayout(btnEdit, btnDelete);
+    @Override
+    protected List<UserGroupEntity> findAll() {
+        return this.userGroupService.findAll();
     }
 
-    private void openCreateDialog() {
+    @Override
+    protected boolean isRelevantChange(Object event) {
+        return event instanceof UserGroupChangedEvent;
+    }
+
+    @Override
+    protected void openCreateDialog() {
         new UserGroupFormDialog(this.userGroupService, this.locationService, this.deviceService, this.programService,
                 null, this::loadData).open();
     }
 
-    private void openEditDialog(UserGroupEntity group) {
+    @Override
+    protected void openEditDialog(UserGroupEntity group) {
         new UserGroupFormDialog(this.userGroupService, this.locationService, this.deviceService, this.programService,
                 group, this::loadData).open();
     }
 
-    private void confirmDelete(UserGroupEntity group) {
-        ConfirmDeleteDialog.show("Benutzergruppe löschen",
-                "Möchten Sie diese Benutzergruppe wirklich löschen? " + group.getName()
-                        + " Benutzern, denen die Gruppe derzeit zugewiesen ist, wird eine andere Gruppe zugewiesen.",
-                () -> {
-                    try {
-                        this.userGroupService.delete(group);
-                    } catch (EntityInUseException e) {
-                        Notification notification = Notification.show(e.getMessage(), 5000,
-                                Notification.Position.MIDDLE);
-                        notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
-                        return;
-                    }
-                    loadData();
-                });
+    @Override
+    protected void delete(UserGroupEntity group) throws EntityInUseException {
+        this.userGroupService.delete(group);
     }
 
-    private void loadData() {
-        this.grid.setItems(this.userGroupService.findAll());
+    @Override
+    protected String deleteDialogTitle() {
+        return "Benutzergruppe löschen";
+    }
+
+    @Override
+    protected String deleteDialogQuestion(UserGroupEntity group) {
+        return "Möchten Sie diese Benutzergruppe wirklich löschen? " + group.getName()
+                + " Benutzern, denen die Gruppe derzeit zugewiesen ist, wird eine andere Gruppe zugewiesen.";
     }
 }

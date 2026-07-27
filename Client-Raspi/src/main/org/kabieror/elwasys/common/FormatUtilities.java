@@ -11,14 +11,22 @@ import java.util.Locale;
  * @author Oliver Kabierschke
  */
 public class FormatUtilities {
-    private static NumberFormat currencyFormat = NumberFormat.getCurrencyInstance(Locale.GERMANY);
-
+    /**
+     * Geldbetraege durchgaengig in deutscher Schreibweise ({@code 12,34 €}), unabhaengig von der
+     * Standard-Locale der JVM - das Terminal steht in einer deutschen Waschkueche, nicht dort, wo
+     * das Pi-Image gerade gebootet wurde. Der Startbefehl setzt die JVM-Locale passend dazu
+     * (siehe {@code Client-Raspi/setup.sh}).
+     * <p>
+     * Bewusst je Aufruf eine neue Instanz statt eines geteilten statischen Formatters:
+     * {@link NumberFormat} ist nicht threadsicher, und die Aufrufer sitzen zwar heute alle auf
+     * dem FX-Thread, das ist aber nichts, worauf sich die naechste Aenderung verlassen sollte.
+     */
     public static String formatCurrency(BigDecimal value) {
-        return currencyFormat.format(value);
+        return NumberFormat.getCurrencyInstance(Locale.GERMANY).format(value);
     }
 
     public static String formatCurrency(double value) {
-        return currencyFormat.format(value);
+        return NumberFormat.getCurrencyInstance(Locale.GERMANY).format(value);
     }
 
     public static String formatDuration(Duration d, boolean appendTimeUnit) {

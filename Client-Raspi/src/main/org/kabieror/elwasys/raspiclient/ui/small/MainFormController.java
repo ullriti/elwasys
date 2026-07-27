@@ -10,7 +10,6 @@ import javafx.scene.control.ListView;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.Pane;
 
-import org.kabieror.elwasys.common.Utilities;
 import org.kabieror.elwasys.raspiclient.api.ApiException;
 import org.kabieror.elwasys.raspiclient.application.ActionContainer;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
@@ -21,6 +20,7 @@ import org.kabieror.elwasys.raspiclient.model.ClientExecution;
 import org.kabieror.elwasys.raspiclient.model.ClientProgram;
 import org.kabieror.elwasys.raspiclient.model.ClientUser;
 import org.kabieror.elwasys.raspiclient.ui.AbstractMainFormController;
+import org.kabieror.elwasys.raspiclient.ui.CardLoginOutcome;
 import org.kabieror.elwasys.raspiclient.ui.MainFormState;
 import org.kabieror.elwasys.raspiclient.ui.small.components.ProgramListItem;
 import org.slf4j.Logger;
@@ -355,10 +355,7 @@ public class MainFormController extends AbstractMainFormController {
                                 .displayError("Interner Fehler", "Das Starten der Ausführung wurde unterbrochen.",
                                         true));
                     } catch (FhemException e1) {
-                        this.logger.error("Communication with FHEM-Server failed.", e);
-                        Platform.runLater(() -> this.displayError("Kommunikationsfehler",
-                                e1.getLocalizedMessage() + "\n" + e1.getCause().getLocalizedMessage(), actionContainer,
-                                true));
+                        this.onFhemFailure(e1, actionContainer);
                     } finally {
                         Platform.runLater(this::endWait);
                     }
@@ -409,10 +406,7 @@ public class MainFormController extends AbstractMainFormController {
                             this.endWait();
                         });
                     } catch (FhemException e1) {
-                        this.logger.error("Communication with FHEM-Server failed.", e);
-                        Platform.runLater(() -> this.displayError("Kommunikationsfehler",
-                                e1.getLocalizedMessage() + "\n" + e1.getCause().getLocalizedMessage(), actionContainer,
-                                true));
+                        this.onFhemFailure(e1, actionContainer);
                     }
 
                     // Gerätelisten-Eintrag benachrichtigen,
@@ -698,16 +692,46 @@ public class MainFormController extends AbstractMainFormController {
     }
 
     /**
+     * Behandelt einen fehlgeschlagenen FHEM-Zugriff beim Starten einer Ausführung. Zusammenfassung
+     * der beiden zuvor wortgleich duplizierten {@code catch (FhemException)}-Blöcke (#91): eine der
+     * beiden Kopien loggte durch einen Copy-Paste-Fehler den {@code ActionEvent} der äußeren
+     * Lambda statt der gefangenen Ausnahme, wodurch der Stacktrace für die Ferndiagnose
+     * (LOG_REQUEST) verloren ging. Über den typisierten Parameter ist diese Fehlerklasse hier
+     * strukturell ausgeschlossen.
+     *
+     * @param e           Die aufgetretene FHEM-Ausnahme.
+     * @param retryAction Die Aktion, mit der der Benutzer den Vorgang wiederholen kann.
+     */
+    private void onFhemFailure(FhemException e, ActionContainer retryAction) {
+        this.logger.error("Communication with FHEM-Server failed.", e);
+        Platform.runLater(() -> this.displayError("Kommunikationsfehler",
+                e.getLocalizedMessage() + "\n" + e.getCause().getLocalizedMessage(), retryAction, true));
+    }
+
+    /**
+     * Baut die Fehlerseite auf. Gemeinsamer Kern der beiden {@code displayError}-Überladungen
+     * (#91) - beide unterschieden sich nur darin, ob eine wiederholbare Aktion hinterlegt wird;
+     * der Meldungsaufbau und das Schalten des Zurück-Buttons waren wortgleich dupliziert.
+     *
+     * @param title             Titel
+     * @param detail            Details
+     * @param backOptionEnabled Ob der Zurück-Button aktiv sein soll
+     */
+    private void prepareErrorPane(String title, String detail, boolean backOptionEnabled) {
+        this.error_buttonCancel.setDisable(!backOptionEnabled);
+        this.error_title.setText(title);
+        this.error_detail.setText(
+                detail + "\nBitte Log-Datei prüfen, um mehr über diesen Fehler zu erfahren.");
+    }
+
+    /**
      * Zeigt einen Fehler an
      *
      * @param title  Titel
      * @param detail Details
      */
     private void displayError(String title, String detail, boolean backOptionEnabled) {
-        this.error_buttonCancel.setDisable(!backOptionEnabled);
-        this.error_title.setText(title);
-        this.error_detail.setText(
-                detail + "\nBitte Log-Datei prüfen, um mehr über diesen Fehler zu erfahren.");
+        this.prepareErrorPane(title, detail, backOptionEnabled);
         this.stateManager.gotoState(MainFormState.ERROR);
     }
 
@@ -721,10 +745,7 @@ public class MainFormController extends AbstractMainFormController {
      */
     public void displayError(String title, String detail, ActionContainer retryAction,
                              boolean backOptionEnabled) {
-        this.error_buttonCancel.setDisable(!backOptionEnabled);
-        this.error_title.setText(title);
-        this.error_detail.setText(
-                detail + "\nBitte Log-Datei prüfen, um mehr über diesen Fehler zu erfahren.");
+        this.prepareErrorPane(title, detail, backOptionEnabled);
         this.retryAction = () -> {
             this.stateManager.gotoStateBeforeError();
             retryAction.getAction().run();
@@ -837,7 +858,7 @@ public class MainFormController extends AbstractMainFormController {
     public void onCardDetected(CardDetectedEvent e) {
         if (this.stateManager.getState().equals(MainFormState.CONFIRMATION_WAIT_FOR_CARD)
                 || this.stateManager.getState()
-                .equals(MainFormState.CONFIRMATION_CREDIT_INSUFFICENT)
+                .equals(MainFormState.CONFIRMATION_CREDIT_INSUFFICIENT)
                 || this.stateManager.getState().equals(MainFormState.CONFIRMATION_CARD_UNKNOWN)
                 || this.stateManager.getState().equals(MainFormState.CONFIRMATION_USER_BLOCKED)) {
             // Suche den zur Karte passenden Benutzer
@@ -856,30 +877,21 @@ public class MainFormController extends AbstractMainFormController {
                         // Common.Program#getPrice(maxDuration, registeredUser) im Alt-Code).
                         this.selectedProgram = this.reloadSelectedProgramFor(this.registeredUser);
                     } catch (final ApiException e1) {
-                        if (e1.is(404, "card-not-found")) {
-                            // Karten-Id maskiert loggen (Issue #56): WARN landet im INFO-Log, das
-                            // per Fernwartung (LOG_REQUEST) abrufbar ist.
-                            this.logger.warn("There is no user associated to card "
-                                    + Utilities.maskCardId(e.getCardId()) + ".");
-                            this.registeredUser = null;
-                            Platform.runLater(() -> this.stateManager
-                                    .gotoState(MainFormState.CONFIRMATION_CARD_UNKNOWN));
-                        } else if (e1.is(403, "user-blocked")) {
-                            this.registeredUser = null;
-                            Platform.runLater(() -> this.stateManager
-                                    .gotoState(MainFormState.CONFIRMATION_USER_BLOCKED));
-                        } else if (e1.is(403, "location-not-allowed")) {
+                        // Klassifikation + maskiertes Logging liegen in CardLoginOutcome (#91,
+                        // Issue #56) - gemeinsam mit ui/medium. Die UI-Reaktion bleibt hier
+                        // größenspezifisch (Zustandswechsel statt Toolbar-Markierung).
+                        final CardLoginOutcome outcome = CardLoginOutcome.of(e1);
+                        outcome.log(this.logger, e.getCardId(), e1);
+                        this.registeredUser = null;
+                        switch (outcome) {
                             // ui/small hat (anders als ui/medium) nie eine eigene Prüfung der
                             // Standort-Zugehörigkeit gehabt - der nächstliegende bestehende
                             // Zustand ohne eigene Erweiterung ist "Karte unbekannt".
-                            this.logger.info("User is not allowed to use this location.");
-                            this.registeredUser = null;
-                            Platform.runLater(() -> this.stateManager
-                                    .gotoState(MainFormState.CONFIRMATION_CARD_UNKNOWN));
-                        } else {
-                            this.logger.error("Communication error while looking up user.", e1);
-                            this.registeredUser = null;
-                            Platform.runLater(() -> {
+                            case CARD_NOT_FOUND, LOCATION_NOT_ALLOWED -> Platform.runLater(
+                                    () -> this.stateManager.gotoState(MainFormState.CONFIRMATION_CARD_UNKNOWN));
+                            case USER_BLOCKED -> Platform.runLater(
+                                    () -> this.stateManager.gotoState(MainFormState.CONFIRMATION_USER_BLOCKED));
+                            case COMMUNICATION_ERROR -> Platform.runLater(() -> {
                                 this.displayError("Kommunikationsfehler", e1.getLocalizedMessage(),
                                         actionContainer, true);
                                 this.endWait();
@@ -895,7 +907,7 @@ public class MainFormController extends AbstractMainFormController {
                     } else {
                         // Guthaben reicht nicht aus
                         Platform.runLater(() -> this.stateManager
-                                .gotoState(MainFormState.CONFIRMATION_CREDIT_INSUFFICENT));
+                                .gotoState(MainFormState.CONFIRMATION_CREDIT_INSUFFICIENT));
                     }
 
                     Platform.runLater(this::endWait);

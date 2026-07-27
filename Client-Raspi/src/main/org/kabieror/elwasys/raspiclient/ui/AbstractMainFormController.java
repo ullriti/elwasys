@@ -2,7 +2,6 @@ package org.kabieror.elwasys.raspiclient.ui;
 
 import javafx.application.Platform;
 import javafx.fxml.Initializable;
-import org.kabieror.elwasys.common.LocationOccupiedException;
 import org.kabieror.elwasys.common.NoDataFoundException;
 import org.kabieror.elwasys.raspiclient.application.ActionContainer;
 import org.kabieror.elwasys.raspiclient.application.AlreadyRunningException;
@@ -17,7 +16,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.sql.SQLException;
 
 /**
  * Abstrakter Controller des Hauptfensters
@@ -90,11 +88,6 @@ public abstract class AbstractMainFormController implements Initializable, IExec
         try {
             ElwaManager.instance.initiate();
             return true;
-        } catch (final SQLException e) {
-            this.logger.error("Initialization error.", e);
-            Platform.runLater(() -> this
-                    .displayError("Start fehlgeschlagen", "Datenbankfehler: " + e.getLocalizedMessage(),
-                            actionContainer, false));
         } catch (final IOException e) {
             this.logger.error("Initialization error.", e);
             Platform.runLater(() -> this
@@ -105,14 +98,6 @@ public abstract class AbstractMainFormController implements Initializable, IExec
             Platform.runLater(() -> this
                     .displayError("Start fehlgeschlagen", "Interner Fehler: " + e.getLocalizedMessage(),
                             actionContainer, false));
-        } catch (final LocationOccupiedException e) {
-            this.logger.error("Initialization error. Location '" +
-                    ElwaManager.instance.getConfigurationManager().getLocationName() +
-                    "' is already occupied by a client with the uid '" + e.getUid() +
-                    "'.", e);
-            Platform.runLater(() -> this.displayError("Start fehlgeschlagen",
-                    "Fehler: Der Standort '" + ElwaManager.instance.getConfigurationManager().getLocationName() +
-                            "' wird bereits von einem anderen Client besetzt.", actionContainer, false));
         } catch (FhemException e) {
             this.logger.error("Initialization error.", e);
             Platform.runLater(() -> this.displayError("Start fehlgeschlagen",

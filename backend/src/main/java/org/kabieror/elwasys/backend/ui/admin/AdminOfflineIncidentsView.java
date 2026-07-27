@@ -8,8 +8,6 @@ import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.html.Span;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -19,6 +17,7 @@ import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 import java.util.Comparator;
 import java.util.List;
+import org.kabieror.elwasys.backend.ui.component.Notifications;
 import org.kabieror.elwasys.backend.auth.ElwasysUserPrincipal;
 import org.kabieror.elwasys.backend.domain.TerminalOfflineIncidentEntity;
 import org.kabieror.elwasys.backend.service.TerminalOfflineIncidentService;
@@ -191,9 +190,7 @@ public class AdminOfflineIncidentsView extends VerticalLayout {
 
     private void acknowledge(TerminalOfflineIncidentEntity incident) {
         this.incidentService.acknowledge(incident.getId(), this.actingAdminName);
-        Notification notification = Notification.show("Der Vorfall wurde quittiert.", 4000,
-                Notification.Position.MIDDLE);
-        notification.addThemeVariants(NotificationVariant.LUMO_SUCCESS);
+        Notifications.showSuccess("Der Vorfall wurde quittiert.");
         loadData();
     }
 

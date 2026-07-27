@@ -7,10 +7,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.WebSocketMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 
@@ -115,7 +117,7 @@ public class TerminalConnectionRegistry {
      * @return {@code true}, wenn eine offene Verbindung gefunden und die Nachricht
      *         übergeben wurde; {@code false}, wenn der Standort nicht (mehr) verbunden ist
      */
-    public boolean send(Integer locationId, org.springframework.web.socket.WebSocketMessage<?> message)
+    public boolean send(Integer locationId, WebSocketMessage<?> message)
             throws IOException {
         Connection connection = this.connectionsByLocationId.get(locationId);
         if (connection == null || !connection.session.isOpen()) {
@@ -155,7 +157,7 @@ public class TerminalConnectionRegistry {
      * {@code TerminalHeartbeatScheduler}) und schließt Verbindungen, deren letztes PONG
      * länger als {@code timeout} zurückliegt.
      */
-    void pingAndReapStale(Duration timeout, java.util.function.Consumer<WebSocketSession> pingAction) {
+    void pingAndReapStale(Duration timeout, Consumer<WebSocketSession> pingAction) {
         Instant threshold = Instant.now().minus(timeout);
         for (Map.Entry<Integer, Connection> entry : this.connectionsByLocationId.entrySet()) {
             Connection connection = entry.getValue();

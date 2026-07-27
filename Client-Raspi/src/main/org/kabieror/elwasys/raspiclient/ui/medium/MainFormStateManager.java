@@ -181,7 +181,7 @@ class MainFormStateManager implements IMainFormStateManager {
     /**
      * Aktualisiert den Zustand der Toolbar.
      */
-    public void upateToolbarState() {
+    public void updateToolbarState() {
         applyToolbarState(this.activeController.getToolbarState());
     }
 

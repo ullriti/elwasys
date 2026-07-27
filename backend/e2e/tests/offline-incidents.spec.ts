@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { execFileSync } from 'child_process';
 import {
   loginAsAdmin,
   openAdminSection,
   gridRowCells,
   gridRowActions,
   confirmDeletion,
+  runSql,
 } from './helpers';
 
 /**
@@ -28,13 +28,9 @@ const OPEN_REASON = `E2E-Vorfall-offen-${STAMP}`;
 const ACK_REASON = `E2E-Vorfall-quittiert-${STAMP}`;
 const INCIDENT_USER = 'e2e_incident_user';
 
-/** Run a SQL script against the E2E database as the postgres superuser (same pattern as
- * dashboard.spec.ts). */
+/** Run a SQL script against the E2E database (see helpers.runSql). */
 function sql(script: string) {
-  execFileSync('sudo', ['-u', 'postgres', 'psql', '-q', '-v', 'ON_ERROR_STOP=1', '-d', DB_NAME], {
-    input: script,
-    stdio: ['pipe', 'ignore', 'inherit'],
-  });
+  runSql(DB_NAME, script);
 }
 
 /**

@@ -1,13 +1,7 @@
 package org.kabieror.elwasys.backend.ui.admin.dialog;
 
-import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.combobox.MultiSelectComboBox;
-import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
-import com.vaadin.flow.component.notification.Notification;
-import com.vaadin.flow.component.notification.NotificationVariant;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.textfield.IntegerField;
 import com.vaadin.flow.component.textfield.TextField;
 import java.util.Set;
@@ -15,6 +9,8 @@ import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.UserGroupEntity;
 import org.kabieror.elwasys.backend.service.LocationService;
 import org.kabieror.elwasys.backend.service.UserGroupService;
+import org.kabieror.elwasys.backend.ui.component.AbstractFormDialog;
+import org.kabieror.elwasys.backend.ui.component.FormValidation;
 
 /**
  * Modaler Dialog zum Anlegen/Bearbeiten eines Standorts - fachlicher Nachfolger von
@@ -30,7 +26,7 @@ import org.kabieror.elwasys.backend.service.UserGroupService;
  * {@link LocationService#DEFAULT_OFFLINE_MAX_DURATION_MINUTES}, wird an das Terminal über
  * {@code SnapshotDto#offlineMaxDurationMinutes()} ausgeliefert.
  */
-public class LocationFormDialog extends Dialog {
+public class LocationFormDialog extends AbstractFormDialog {
 
     private final LocationService locationService;
     private final LocationEntity locationToEdit;
@@ -41,13 +37,11 @@ public class LocationFormDialog extends Dialog {
 
     public LocationFormDialog(LocationService locationService, UserGroupService userGroupService,
             LocationEntity locationToEdit, Runnable onSaved) {
+        super(entityTitle("Standort", locationToEdit != null), "40em");
         this.locationService = locationService;
         this.locationToEdit = locationToEdit;
 
         boolean editMode = locationToEdit != null;
-        setHeaderTitle(editMode ? "Standort bearbeiten" : "Standort erstellen");
-        setModal(true);
-        setWidth("40em");
 
         this.tfName.setRequired(true);
         this.tfName.setWidthFull();
@@ -76,26 +70,17 @@ public class LocationFormDialog extends Dialog {
                     : LocationService.DEFAULT_OFFLINE_MAX_DURATION_MINUTES);
         }
 
-        Button btnCancel = new Button("Abbrechen", e -> close());
-        Button btnSave = new Button(editMode ? "Speichern" : "Erstellen", e -> save(onSaved));
-        btnSave.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-        getFooter().add(new HorizontalLayout(btnCancel, btnSave));
+        addFooterActions(saveCaption(editMode), () -> save(onSaved));
     }
 
     private void save(Runnable onSaved) {
-        if (this.tfName.isEmpty()) {
-            this.tfName.setInvalid(true);
-            this.tfName.setErrorMessage("Bitte Name eingeben.");
+        if (!FormValidation.require(this.tfName, "Bitte Name eingeben.")) {
             return;
         }
-        this.tfName.setInvalid(false);
-
-        if (this.ifOfflineMaxDuration.isEmpty() || this.ifOfflineMaxDuration.getValue() < 1) {
-            this.ifOfflineMaxDuration.setInvalid(true);
-            this.ifOfflineMaxDuration.setErrorMessage("Bitte einen Wert von mindestens 1 Minute eingeben.");
+        if (!FormValidation.check(!this.ifOfflineMaxDuration.isEmpty() && this.ifOfflineMaxDuration.getValue() >= 1,
+                this.ifOfflineMaxDuration, "Bitte einen Wert von mindestens 1 Minute eingeben.")) {
             return;
         }
-        this.ifOfflineMaxDuration.setInvalid(false);
 
         try {
             if (this.locationToEdit == null) {
@@ -106,10 +91,7 @@ public class LocationFormDialog extends Dialog {
                         this.ifOfflineMaxDuration.getValue());
             }
         } catch (RuntimeException e) {
-            Notification notification = Notification.show(
-                    "Der Standort konnte nicht gespeichert werden. " + e.getMessage(), 5000,
-                    Notification.Position.MIDDLE);
-            notification.addThemeVariants(NotificationVariant.LUMO_ERROR);
+            showFailure("Der Standort konnte nicht gespeichert werden.", e);
             return;
         }
 

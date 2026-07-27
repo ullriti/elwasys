@@ -253,7 +253,10 @@ Die maßgebliche Portal-E2E-Suite läuft gegen das ins Backend eingebettete Vaad
   akzeptiert) für die Benutzer-Portal-Fälle. Läuft garantiert **nach** der `webServer`-
   Bereitschaftsprüfung (Schema existiert erst nach Flyway-Migration) und **vor** jedem Test.
 - **`backend/e2e/tests/helpers.ts`**: gemeinsame Lokatoren-Helfer (Login, Navigation,
-  ComboBox-Auswahl, Grid-Zeilen-Zugriff, Dialog-Handling).
+  ComboBox-Auswahl, Grid-Zeilen-Zugriff, Dialog-Handling inkl. `openEditDialog()` für
+  „Zeilen-Aktion klicken und Dialogtitel prüfen") sowie `runSql(dbName, script)` – der eine Weg,
+  auf dem die Specs (und `global-setup.ts`) ihre Fixtures direkt in die E2E-Datenbank seeden und
+  wieder aufräumen.
 - **Spec-Dateien**: `login.spec.ts`, `admin.spec.ts`, `admin-crud.spec.ts`, `dashboard.spec.ts`,
   `offline-incidents.spec.ts`, `user-portal.spec.ts`.
 

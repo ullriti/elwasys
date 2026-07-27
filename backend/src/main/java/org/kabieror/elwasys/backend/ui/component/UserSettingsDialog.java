@@ -1,11 +1,7 @@
 package org.kabieror.elwasys.backend.ui.component;
 
-import com.vaadin.flow.component.button.Button;
-import com.vaadin.flow.component.button.ButtonVariant;
 import com.vaadin.flow.component.checkbox.Checkbox;
-import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.formlayout.FormLayout;
-import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.textfield.TextField;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.service.UserService;
@@ -17,7 +13,7 @@ import org.kabieror.elwasys.backend.service.UserService;
  * siehe {@link UserService#updateOwnSettings} für das, was NICHT Teil dieses Dialogs ist
  * (Name/Username/Kartennummern/Gruppe/Admin-Flag/Gesperrt-Status).
  */
-public class UserSettingsDialog extends Dialog {
+public class UserSettingsDialog extends AbstractFormDialog {
 
     private final UserService userService;
     private final UserEntity user;
@@ -27,12 +23,9 @@ public class UserSettingsDialog extends Dialog {
     private final TextField tfPushoverKey = new TextField("Pushover-Key");
 
     public UserSettingsDialog(UserService userService, UserEntity user, Runnable onSaved) {
+        super("Benutzer ändern - " + user.getName(), "35em");
         this.userService = userService;
         this.user = user;
-
-        setHeaderTitle("Benutzer ändern - " + user.getName());
-        setModal(true);
-        setWidth("35em");
 
         this.tfEmail.setWidthFull();
         this.tfEmail.setMaxLength(50);
@@ -54,10 +47,7 @@ public class UserSettingsDialog extends Dialog {
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
         add(form);
 
-        Button btnCancel = new Button("Abbrechen", e -> close());
-        Button btnSave = new Button("OK", e -> save(onSaved));
-        btnSave.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
-        getFooter().add(new HorizontalLayout(btnCancel, btnSave));
+        addFooterActions("OK", () -> save(onSaved));
     }
 
     private void save(Runnable onSaved) {
@@ -65,24 +55,21 @@ public class UserSettingsDialog extends Dialog {
         boolean emailRequired = this.cbEmailNotification.getValue();
 
         if (emailRequired && (email == null || email.isBlank())) {
-            this.tfEmail.setInvalid(true);
-            this.tfEmail.setErrorMessage("Für Benachrichtigungen wird eine Email-Adresse benötigt.");
+            FormValidation.reject(this.tfEmail, "Für Benachrichtigungen wird eine Email-Adresse benötigt.");
             return;
         }
-        if (email != null && !email.isBlank() && !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
-            this.tfEmail.setInvalid(true);
-            this.tfEmail.setErrorMessage("Dies ist keine gültige Email-Adresse.");
+        // Eine leere Adresse ist erlaubt (das Feld ist optional), eine gefüllte muss passen.
+        if (!FormValidation.check(email == null || email.isBlank() || FormValidation.isValidEmail(email),
+                this.tfEmail, "Dies ist keine gültige Email-Adresse.")) {
             return;
         }
-        this.tfEmail.setInvalid(false);
 
         String pushoverKey = this.tfPushoverKey.getValue();
-        if (pushoverKey != null && !pushoverKey.isEmpty() && !pushoverKey.matches("[a-zA-Z0-9]+")) {
-            this.tfPushoverKey.setInvalid(true);
-            this.tfPushoverKey.setErrorMessage("Der Schlüssel muss aus Zahlen und Buchstaben bestehen.");
+        if (!FormValidation.check(
+                pushoverKey == null || pushoverKey.isEmpty() || pushoverKey.matches("[a-zA-Z0-9]+"),
+                this.tfPushoverKey, "Der Schlüssel muss aus Zahlen und Buchstaben bestehen.")) {
             return;
         }
-        this.tfPushoverKey.setInvalid(false);
 
         this.userService.updateOwnSettings(this.user, email, emailRequired, pushoverKey);
 

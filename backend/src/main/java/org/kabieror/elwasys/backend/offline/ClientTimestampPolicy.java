@@ -37,7 +37,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class ClientTimestampPolicy {
 
-    private final Logger logger = LoggerFactory.getLogger(getClass());
+    private static final Logger LOG = LoggerFactory.getLogger(ClientTimestampPolicy.class);
 
     private final OfflineProperties properties;
 
@@ -63,7 +63,7 @@ public class ClientTimestampPolicy {
         LocalDateTime latestAccepted = now.plus(tolerance);
 
         if (clientTimestamp.isBefore(earliestAccepted) || clientTimestamp.isAfter(latestAccepted)) {
-            this.logger.warn(
+            LOG.warn(
                     "Client-Zeitstempel {} fuer Vorgang '{}' am Standort '{}' liegt ausserhalb des erlaubten "
                             + "Fensters [{}, {}] (offline.max-duration={}min, Toleranz={}) - verwende stattdessen "
                             + "die Serverzeit {}.", clientTimestamp, operation, location.getName(), earliestAccepted,
@@ -106,7 +106,7 @@ public class ClientTimestampPolicy {
      */
     public void requireValidReplayTimestamp(LocalDateTime clientTimestamp, LocationEntity location) {
         if (clientTimestamp == null) {
-            this.logger.warn("Privilegierte Nachmeldung am Standort '{}' ohne Original-Zeitstempel abgelehnt "
+            LOG.warn("Privilegierte Nachmeldung am Standort '{}' ohne Original-Zeitstempel abgelehnt "
                     + "(Issue #67).", location.getName());
             throw new InvalidReplayTimestampException(
                     "Eine Offline-Nachmeldung erfordert den Original-Zeitstempel des Ereignisses.");
@@ -115,7 +115,7 @@ public class ClientTimestampPolicy {
         Duration tolerance = this.properties.getClockDriftTolerance();
         LocalDateTime latestAccepted = now.plus(tolerance);
         if (clientTimestamp.isAfter(latestAccepted)) {
-            this.logger.warn(
+            LOG.warn(
                     "Privilegierte Nachmeldung am Standort '{}' mit Zeitstempel {} in der Zukunft abgelehnt "
                             + "(spätestens {}, Toleranz={}) - Issue #67.", location.getName(), clientTimestamp,
                     latestAccepted, tolerance);
@@ -126,7 +126,7 @@ public class ClientTimestampPolicy {
         if (clientTimestamp.isAfter(now.minus(minBackdating))) {
             // Nicht ablehnen (legitime Sofort-Nachmeldung, s. Javadoc), aber als Auffälligkeit
             // protokollieren, damit ein anomales Muster (gehäufte „jetzt"-Replays) sichtbar wird.
-            this.logger.warn(
+            LOG.warn(
                     "Privilegierte Nachmeldung am Standort '{}' mit verdächtig aktuellem Zeitstempel {} angenommen "
                             + "(jünger als {} - moeglich bei Sofort-Abbruch, sonst pruefen) - Issue #67.",
                     location.getName(), clientTimestamp, minBackdating);

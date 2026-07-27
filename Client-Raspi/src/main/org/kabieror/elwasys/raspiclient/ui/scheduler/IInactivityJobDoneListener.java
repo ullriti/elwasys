@@ -1,7 +1,7 @@
 package org.kabieror.elwasys.raspiclient.ui.scheduler;
 
 /**
- * TODO: Describe
+ * Wird über das Ende eines Inaktivitäts-Auftrags benachrichtigt (siehe {@link InactivityJob}).
  *
  * @author Oliver Kabierschke
  */

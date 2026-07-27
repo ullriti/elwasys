@@ -96,7 +96,16 @@ public class WashguardConfiguration extends ConfigurationManager {
      * @return Der TCP-Port, auf welchem der FHEM-Server hört.
      */
     public int getFhemPort() {
-        return Integer.parseInt(this.props.getProperty("fhem.port"));
+        // Wie alle anderen numerischen Getter auf einen Default zurückfallen statt zu werfen
+        // (#91): eine fehlerhafte fhem.port-Angabe riss zuvor den kompletten Terminal-Start
+        // mit einer NumberFormatException ein. 7072 ist der Wert aus defaultconfig.properties.
+        try {
+            return Integer.parseInt(this.props.getProperty("fhem.port"));
+        } catch (final NumberFormatException e) {
+            this.logger.warn("The configuration value 'fhem.port' is not specified or has an invalid format. "
+                    + "Using the default 7072 instead.");
+            return 7072;
+        }
     }
 
     /**

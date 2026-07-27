@@ -134,20 +134,35 @@ Status/Log/Restart-Roundtrips gehen über den echten, ausgehenden Terminal-WebSo
 - **Reihenfolge-Unabhängigkeit**: stabile IDs, Registrierungs-Reset und frische Datenbanken für
   alle datenverändernden Tests.
 
+## Modulübergreifende Preis-Parität
+
+`OfflinePricing` (Terminal) ist eine 1:1-Portierung von `PricingService` (Backend) – sie muss
+es bleiben, sonst rechnet ein Terminal offline anders ab als das Backend online. Da die beiden
+Module einander bewusst nicht kennen, hängen beide Seiten an einer gemeinsamen Fixture:
+**`test-fixtures/pricing-parity.csv`** in der Repo-Wurzel, gelesen von
+`PricingServiceParityTest` (Backend) und `OfflinePricingParityTest` (Terminal). Wer eine
+Implementierung ändert, ohne die andere nachzuziehen, bekommt einen roten Test statt einer
+stillen Divergenz. Neue Preisregeln gehören als Zeile in die Fixture, nicht in nur einen der
+beiden Tests.
+
 ## Umfang (Inventar)
 
 Am Code gezählt:
-- **Client** (TestFX/JUnit): **71 `@Test`** in 28 Testklassen (40 Testdateien) – C1–C16, die
+- **Client** (TestFX/JUnit): **88 `@Test`** in 34 Testklassen (46 Testdateien) – C1–C16, die
   C15-Offline-Nachfolger sowie infrastrukturfreie Unit-Tests (Offline-Replay, Uhren-Plausibilität,
-  API-Fehlerbilder, Kartenmaskierung).
-- **Portal-E2E** (Playwright): **25 `test()`** in `backend/e2e/tests/` (login 2 / admin 3 /
-  admin-crud 12 / dashboard 1 / offline-incidents 2 / user-portal 5) zzgl. **4**
+  API-Fehlerbilder, Kartenmaskierung, deCONZ-WS-Reconnect).
+- **Portal-E2E** (Playwright): **27 `test()`** in `backend/e2e/tests/` (login 2 / admin 3 /
+  admin-crud 13 / dashboard 1 / offline-incidents 3 / user-portal 5) zzgl. **4**
   READ-ONLY-Smoke-`test()` in `tests-smoke/`.
 
 Backend-JUnit-Zahlen (nur als Querverweis): 06-ui-tests.md „Test-Inventar".
 
 ## Historie
 
+- **2026-07-26** — FR-3/FR-5 (#87/#88/#93): Umfang neu am Code gezählt (Client 88 `@Test`,
+  Portal-E2E 27 `test()` + 4 Smoke). Neu: Regressionstest deCONZ-WS-Reconnect (#87),
+  DYNAMIC-Programmanlage im Portal (#88); `InactivitySchedulerTest` und
+  `CreditServiceAccountingHistoryTest` warten jetzt auf Bedingungen statt auf knappe Fristen.
 - **2026-07-26** — Issue #89: Portal-Fälle P27/P28 (Offline-Vorfälle sichten und quittieren)
   ergänzt; Portal-E2E damit 25 `test()`.
 

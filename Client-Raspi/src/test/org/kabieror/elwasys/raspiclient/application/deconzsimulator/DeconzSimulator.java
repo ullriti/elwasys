@@ -143,6 +143,24 @@ public class DeconzSimulator {
         this.wsServer.broadcastText(this.gson.toJson(event));
     }
 
+    /**
+     * Drops the WebSocket connection(s) without giving up the port - the gateway restarts, the
+     * client under test has to reconnect by itself (issue #87). The HTTP API keeps serving, just
+     * like a deCONZ gateway whose event stream broke but whose REST endpoint is reachable.
+     */
+    public void dropWebSocketConnections() {
+        this.wsServer.dropConnections();
+        this.logger.info("Dropped the simulated deCONZ WebSocket connection(s)");
+    }
+
+    /**
+     * For test assertions: how many WebSocket handshakes the simulator has completed since it was
+     * started (a clean reconnect adds exactly one).
+     */
+    public int getAcceptedWebSocketConnections() {
+        return this.wsServer.getAcceptedConnections();
+    }
+
     /** For test assertions: whether the simulator currently thinks a light is switched on. */
     public boolean isOn(String uuid) {
         final SimulatedLight light = this.lights.get(uuid);

@@ -13,200 +13,100 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Added
-- Offline-Vorfälle der Terminals im Portal sichtbar und quittierbar (finale Review R5, #89): neue
-  Admin-Ansicht „Offline-Vorfälle" mit Schadensbetrag; die Quittierung (mit Bestätigung) beendet
-  den Betriebsalarm, der Vorfall bleibt als Beleg. Das Dashboard weist auf offene Vorfälle hin.
-- Betriebs-Alerting mitgeliefert (finale Review H4, #83): `deploy/monitoring/` pollt
-  `/actuator/health/operational` (Nichterreichbarkeit = Alarm) plus Zertifikats-Ablauf und
-  Plattenplatz und meldet per Pushover/Mail; systemd-Timer/Cron + Offline-Selbsttest.
-- Restore ausgearbeitet und geskriptet (finale Review H5, #84): `deploy/backup/restore-db.sh`
-  und `backup-db.sh` mit RPO/RTO, Backup-Scope (Secrets/Terminal-Properties/SD-Journal) und
+- Offline-Vorfälle der Terminals im Portal sichtbar und quittierbar (#89) – die Quittierung
+  beendet den Betriebsalarm, der Vorfall bleibt als Beleg.
+- Betriebs-Alerting mitgeliefert (#83): `deploy/monitoring/` überwacht Betriebs-Health,
+  Zertifikats-Ablauf und Plattenplatz und meldet per Pushover/Mail.
+- Restore ausgearbeitet und geskriptet (#84): `deploy/backup/` mit RPO/RTO, Backup-Scope und
   Offline-Dry-Run-Selbsttest.
-
-### Fixed
-- Cutover-Preflight (finale Review H6, #85): `verify-cutover-migration.sh` leitet die erwartete
-  Flyway-Historie aus dem Migrationsordner ab (bisher hart bis V10 – V11 hätte den realen Lauf
-  scheitern lassen); ein CI-Selbsttest hält Skript und Migrationen in Sync.
-- Passwort-Reset-Links in Produktion (finale Review H7, #86): `ELWASYS_PORTAL_BASE_URL` wird in
-  Compose und Helm durchgereicht (mit Guard bei fehlendem Wert), statt still auf
-  `http://localhost:8080` zu verlinken.
-- Offline-Replay-Paar-Atomizität über Lauf-Grenzen hinweg (finale Review H1, #80): ein
-  erfolgreich nachgemeldeter `START` wird nicht mehr sofort aus dem Journal entfernt, sondern
-  erst zusammen mit seinem Terminator – bricht der Lauf per Kommunikationsfehler dazwischen ab,
-  bleibt der `START` erhalten statt im Folgelauf als Waise dead-lettert zu werden.
-- Listener-Leak im Terminal (finale Review H2, #81): `stopListenToExecutionStartedEvent` und
-  `stopListenToExecutionErrorEvent` riefen versehentlich `add` statt `remove` auf; abgemeldete
-  Listener blieben registriert und wurden bei jedem weiteren Ereignis erneut benachrichtigt.
-- Fall-Through in der Gerätekachel-Darstellung (finale Review H3, #82): der `DISABLED`-Zweig
-  fiel ohne `break` in `UNREGISTERED` durch – deaktivierte Geräte zeigten „Keine Steckdose" und
-  waren wieder bedienbar, statt gesperrt zu bleiben.
+- Täglicher Purge-Job für abgelaufene Idempotenz-Schlüssel (#32).
+- Demo-Datenbestand fürs visuelle UI-Prüfen: `DemoDataSeeder` (Profil `demo`,
+  `backend/run-demo.sh`) legt einen idempotenten Beispielbestand an.
+- agentic-baseline-Setup: `AGENTS.md` als Single Source of Truth, `docs/`-Wissenssystem
+  (Worklog/Specs/ADRs) und `.claude/`-Commands/-Agenten.
 
 ### Changed
-- Deployment-Parität & Betrieb (finale Review #89): Compose zieht per Default das
-  GHCR-Release-Image (`ELWASYS_BACKEND_IMAGE`; lokaler Build als `docker-compose.build.yml`),
-  Helm bricht bei nicht gesetztem Image-Tag ab und der Release-Workflow hebt `Chart.yaml`
-  `appVersion`; das Terminal richtet NTP-Sync ein und der Watchdog überwacht ihn.
-- Offline-Replay-Härtung II (Code-Review-Follow-ups zu Epic #66, ADR 0021): Der privilegierte
-  Replay-Pfad (#67) verlangt jetzt einen plausiblen Original-Zeitstempel und lehnt einen
-  fehlenden oder in der Zukunft liegenden Zeitstempel ab (`422 invalid-replay-timestamp`); ein
-  „jetzt"/verdächtig aktueller Zeitstempel wird angenommen und nur auditiert (legitime
-  Sofort-Nachmeldung, z. B. sofortiger Abbruch – Schwelle `elwasys.offline.replay-min-backdating`,
-  Default 60 s), ein zu alter wie bisher auf Serverzeit gesetzt. Jede privilegierte Nachbuchung
-  wird auditiert. Das Terminal (#69) verliert einen
-  Poison-Eintrag nicht mehr, wenn der Dead-Letter-Write scheitert (Write-before-Remove) und
-  begrenzt den Wiederhol-Busy-Loop bei defektem Datenträger über einen neustartfesten
-  Fehlversuchszähler.
-- Deployment & Betrieb (Pre-Launch-Review AP6, Issues #31/#32/#35/#64, ADR 0019): Backend-Container
-  und Compose/Helm laufen jetzt fest auf Zeitzone `Europe/Berlin` (an die Terminals angeglichen),
-  der Compose-Stack bindet Port 8080 nur noch auf `127.0.0.1` (TLS-Proxy davor Pflicht) und begrenzt
-  die Container-Logs. Alle GitHub-/GHCR-Referenzen sind auf das kanonische Repo `ullriti/elwasys`
-  vereinheitlicht (vorher teils `kabieror`). Das Cutover-Runbook macht `https://` und die
-  Zeitzonen-Übereinstimmung zu Pflicht-Prüfpunkten und hat ein neues Kapitel „Dauerbetrieb"
-  (Backup, Alerting, Log-Rotation, Retention).
-- Betriebs-Health-Checks (Pre-Launch-Review AP6, Issue #32): Zwei betriebliche Health-Indicators
-  (aktiver Standort ohne verbundenes Terminal; offene, abgelaufene, unabgerechnete Ausführungen,
-  #60) melden als `OUT_OF_SERVICE` (HTTP 503) und sind extern alertbar – gezielt über die neue
-  Gruppe `/actuator/health/operational` oder das aggregierte Root-`/actuator/health`. Orchestrierung
-  und Deploy-Gates (Kubernetes-Probes, Compose-Healthcheck, Smoke-/Cutover-Checks) nutzen dagegen
-  `/actuator/health/liveness` bzw. `/readiness` (nur Prozess-Status), damit ein getrenntes Terminal
-  das Backend nicht fälschlich als „unhealthy" markiert. Details bleiben nur angemeldet sichtbar.
+- Aufräum-Refactorings aus der finalen Review (FR-4, #90/#91/#92), ohne Verhaltensänderung:
+  Backend (`SnapshotService`, `ExecutionStartGuard`, entdoppelte Gruppen-Zuordnung), Terminal
+  (`TerminalDataService`, `CardLoginOutcome`, Gerätekachel als Zustandstabelle) und Portal
+  (`AbstractAdminListView` für die fünf Admin-Listen, gemeinsame `Notifications`).
+- Portal-Dialoge auf ein gemeinsames Gerüst gezogen (#92): `AbstractFormDialog` (Kopf-/Fußzeile)
+  und `FormValidation` (Feldprüfungen) statt neun Kopien; Fernwartungs-Kopfzeile des Dashboards
+  als eigene Komponente. Unerwartete Speicherfehler zeigen jetzt eine verständliche Meldung und
+  landen im Server-Log statt als roher Ausnahmetext im Portal.
+- Doku- und Repo-Hygiene (FR-5, #93): CHANGELOG auf die eigene Kurzform gebracht (Details im
+  Änderungslog des Migrationsplans), Worklog-Index vervollständigt, tote Links/Dateien/
+  Kommentare entfernt, zwei erledigte „Offene Fragen" geschlossen.
+- Deployment-Parität & Betrieb (#89): Compose zieht per Default das GHCR-Release-Image, Helm
+  bricht ohne Image-Tag ab, das Terminal richtet NTP-Sync ein (Watchdog überwacht ihn).
+- Offline-Replay-Härtung II (#67/#69, ADR 0021): Der Replay-Pfad verlangt einen plausiblen
+  Original-Zeitstempel; das Terminal verliert bei scheiterndem Dead-Letter-Write keinen Eintrag mehr.
+- Deployment & Betrieb (AP6, #31/#32/#35/#64, ADR 0019): feste Zeitzone `Europe/Berlin`,
+  Compose bindet nur `127.0.0.1` (TLS-Proxy Pflicht), Repo-Referenzen auf `ullriti/elwasys`
+  vereinheitlicht, Runbook-Kapitel „Dauerbetrieb".
+- Betriebs-Health-Checks (#32/#60): betriebliche Indicators unter `/actuator/health/operational`
+  (extern alertbar), Orchestrierung/Deploy-Gates dagegen auf `liveness`/`readiness`.
+- Portal-Performance (AP5, #30/#37): Geräte-Historie lazy paginiert, Guthaben-Spalte gebündelt
+  berechnet, neue Indizes auf den heißen Pfaden (Migration V11).
+- Wissenssystem sortiert: KB nach `docs/kb/` verschoben, `cloud-config.yaml` nach
+  `deploy/cloud-init/`, Historie ins Worklog/CHANGELOG, Entscheidungen in ADRs.
+- Portal-Design an das Terminal angeglichen (gemeinsame Palette, responsive Dashboard-Karten).
 
 ### Fixed
-- Geister-Execution beim Offline-Replay (#68, ADR 0021): Gelingt der `START` einer offline
-  gebuchten Ausführung, scheitert sein `FINISH`/`ABORT` aber fachlich und wird dead-lettert,
-  räumt das Terminal die serverseitig „laufende" Execution jetzt per kompensierendem `abort`
-  auf (best effort) und alarmiert laut, statt sie stumm bis zum Ablauf der Maximaldauer belegt
-  zu lassen.
-- Terminal-Auto-Update (Pre-Launch-Review AP6, Issues #34/#62/#63): Ein fehlgeschlagenes Deploy
-  löst keine Update/Rollback-Endlosschleife mehr aus — die fehlgeschlagene Zielversion wird gemerkt
-  und nicht erneut versucht, bis eine andere Version erscheint. Heruntergeladene Client-Jars werden
-  gegen eine mitveröffentlichte SHA-256-Prüfsumme verifiziert (manipuliertes/halbes Jar wird
-  verworfen, kein Deploy). `setup.sh` lädt idempotent (`.part`+`mv`, `ln -sfn`) und legt eine enge
-  sudoers-Regel für den Update-Kill an; schlägt der Kill mangels Rechten fehl, wird nicht mehr
-  grundlos zurückgerollt. Aufräumen weiterer Deployment-Inkonsistenzen (abgeleitete
-  Migrationsversion im Preflight, Helm-Passwort-Guard, realistisches Cron-Beispiel, #64).
-
-### Added
-- Idempotenz-Schlüssel-Aufräumung (Pre-Launch-Review AP6, Issue #32): Ein täglicher Job löscht
-  `terminal_idempotency_keys` älter als 30 Tage (konfigurierbar), damit die Tabelle im Dauerbetrieb
-  nicht unbegrenzt wächst.
-
-### Changed
-- Portal-Performance (Pre-Launch-Review AP5, Issues #30/#37): Das Admin-Dashboard lädt die
-  Geräte-Historie jetzt seitenweise (lazy) statt vollständig, und die Guthaben-Spalte der
-  Benutzerliste wird gebündelt in zwei Abfragen berechnet statt einer pro Zeile — das Portal
-  skaliert damit mit der übernommenen Alt-Datenbank. Neue DB-Indizes auf den heißen
-  Guthaben-/Historie-Pfaden (`executions`, `credit_accounting`, Migration V11).
-
-### Fixed
-- Portal-CRUD/Robustheit (Pre-Launch-Review AP5, Issues #38/#39/#49): Ein belegtes Gerät lässt
-  sich nicht mehr löschen (die laufende Ausführung würde sonst weiter Guthaben belasten); das
-  Löschen nicht abgerechneter Ausführungen verlangt eine Bestätigung, geldbewegende Knöpfe sind
-  gegen Doppelklick geschützt. Das Löschen eines Benutzers mit sehr langem Namen schlägt nicht
-  mehr fehl (Soft-Delete-Name wird auf die Spaltenbreite gekürzt, #39). Der Demo-Modus bricht ab,
-  statt versehentlich eine produktive Datenbank zu überschreiben (#38).
-
-### Tests
-- Testabdeckung/-determinismus (Pre-Launch-Review AP5, Issues #40/#50): Route-Zugriffsschutz per
-  Classpath-Scan aller Portal-Views abgesichert; neue E2E-Tests für Auszahlung/zu-wenig-Guthaben,
-  Benutzer-Löschung und den öffentlichen Passwort-Reset-Link; nichtdeterministische Wartezeiten
-  aus Backend- und E2E-Tests entfernt.
+- Cutover-Preflight (#85): `verify-cutover-migration.sh` leitet die erwartete Flyway-Historie aus
+  dem Migrationsordner ab (bisher hart bis V10), ein CI-Selbsttest hält beides in Sync.
+- Passwort-Reset-Links in Produktion (#86): `ELWASYS_PORTAL_BASE_URL` wird in Compose und Helm
+  durchgereicht, statt still auf `http://localhost:8080` zu verlinken.
+- Offline-Replay-Paar-Atomizität über Lauf-Grenzen hinweg (#80): ein nachgemeldeter `START` wird
+  erst zusammen mit seinem Terminator aus dem Journal entfernt.
+- Listener-Leak im Terminal (#81): `stopListenToExecutionStartedEvent`/`…ErrorEvent` riefen
+  `add` statt `remove` auf – abgemeldete Listener blieben registriert.
+- Geldbeträge am kleinen Terminal-Display hingen an der Locale des Pi-Images (#91): sie laufen
+  jetzt wie am mittleren Display über `FormatUtilities` (deutsche Schreibweise), und der
+  Startbefehl setzt die JVM-Locale passend dazu - auf einem Image mit `LANG=C` stand dort vorher
+  eine andere Währungsschreibweise als im übrigen Terminal.
+- Verlorener Stacktrace bei FHEM-Fehlern am kleinen Terminal-Display (#91): der
+  `catch`-Block loggte das UI-Ereignis statt der Ausnahme - die Ferndiagnose sah den Fehler nicht.
+- Fall-Through in der Gerätekachel (#82): deaktivierte Geräte zeigten „Keine Steckdose" und waren
+  wieder bedienbar, statt gesperrt zu bleiben.
+- Geister-Execution beim Offline-Replay (#68, ADR 0021): eine serverseitig „laufende" Execution
+  wird per kompensierendem `abort` aufgeräumt, statt bis zur Maximaldauer belegt zu bleiben.
+- Terminal-Auto-Update (AP6, #34/#62/#63): keine Update/Rollback-Endlosschleife mehr, Jars werden
+  gegen eine SHA-256-Prüfsumme verifiziert, `setup.sh` lädt idempotent.
+- Portal-CRUD/Robustheit (AP5, #38/#39/#49): belegte Geräte sind nicht löschbar, geldbewegende
+  Knöpfe sind gegen Doppelklick geschützt, der Demo-Modus schützt Produktivdatenbanken.
+- Kartenlogin/Portal-Kleinfehler (AP4, #23/#42/#45/#46): case-insensitive Namenskollision
+  abgewiesen, uuid-Endpunkt validiert (400 statt 500), `last_used_at` gedrosselt,
+  Passwortgenerator-Alphabet korrigiert.
+- Geld-/Abrechnungs-Integrität (AP3, #20/#22/#29/#36/#41, ADR 0017): Nutzer-Zeilensperre und
+  Advisory-Lock je Gerät verhindern Doppelstart/Doppelabrechnung; Idempotenz gehärtet,
+  Beträge validiert, Benachrichtigungen erst nach Commit.
+- Terminal-Stabilität & Aufräumen (AP2, #19/#27/#28/#51/#52/#53/#55/#56/#57/#58/#61): deCONZ-WS
+  verbindet nach Abbruch neu, keine doppelten Listener/Finishes, UI-Mutationen auf dem
+  FX-Thread, Journal-Schreiben mit `DSYNC`, RFID-Ids im Log maskiert.
+- Offline-Replay-Kern gehärtet (AP1, #16/#17/#18/#54/#59, ADR 0016): privilegierter Replay-Pfad,
+  Dead-Letter + Paar-Reihenfolge im Journal, Zeitstempel-Invariante `stop ≥ start` mit
+  Dauer-Deckel, unplausible lokale Uhr verwirft den Snapshot.
+- Portal-Erscheinungsbild wiederhergestellt: vertrautes Design via Laufzeit-Inline-CSS statt
+  kompiliertem `@Theme` (umgeht den Vaadin-24.10-Lizenzcheck).
 
 ### Security
-- Auth & Security (Pre-Launch-Review AP4, Issues #21/#23/#24/#25/#26/#42/#44/#45/#46/#47/#48,
-  ADR 0018): Kartenlogin sucht Kartennummern nicht mehr als regulären Ausdruck und validiert
-  das Format streng – `cardId=".*"` meldet keinen beliebigen Benutzer mehr an (#21). Der
-  Portal-Login hat jetzt ein Brute-Force-Limit (temporäre Sperre nach zu vielen Fehlversuchen,
-  In-Memory), das „gesperrt" bewusst nicht von „falsches Passwort" unterscheidbar macht (#25).
-- Passwort-Reset verrät nicht mehr, ob eine Adresse existiert (immer neutrale Meldung), und
-  drosselt den Versand gegen Mail-Flooding (#24, ADR 0018); mehrere Konten je Adresse führen
-  nicht mehr zum Absturz (#47). Passwörter erfordern serverseitig mindestens 8 Zeichen (#44).
-- Fernwartungs-Antworten werden gegen den erwarteten Standort geprüft (#26); ein geleaktes
-  Standort-Token bleibt ein bewusst akzeptiertes, dokumentiertes Restrisiko (#43, ADR 0018).
+- Auth & Security (AP4, #21/#24/#25/#26/#43/#44/#47, ADR 0018): Kartenlogin ohne Regex-Auswertung
+  und mit strenger Formatprüfung, Brute-Force-Limit am Portal-Login, Passwort-Reset ohne
+  Existenz-Preisgabe und mit Versand-Drosselung, Mindestlänge 8, Standortprüfung der
+  Fernwartungs-Antworten.
 
-### Fixed
-- Case-insensitiver Benutzername kollidiert nicht mehr mit dem case-sensitiven DB-Constraint –
-  „Anna"/„anna" werden beim Anlegen abgewiesen statt beide Logins dauerhaft zu sperren (#23).
-  Der deconz-uuid-Endpunkt validiert die Eingabe (400 statt 500, #42); die Terminal-Token-Auth
-  schreibt `last_used_at` nur noch gedrosselt statt bei jedem Request (#45); der
-  Passwortgenerator-Alphabet-Tippfehler ist behoben (#46). (Pre-Launch-Review AP4)
-- Geld-/Abrechnungs-Integrität (Pre-Launch-Review AP3, Issues #20/#22/#29/#36/#41, ADR 0017):
-  Geld-/Belegungspfade gegen Nebenläufigkeit abgesichert – pessimistische Nutzer-Zeilensperre
-  (Guthabencheck/Auszahlung/Abbuchung), frisch gesperrte Ausführung beim Beenden und
-  Advisory-Lock je Gerät im Start-Pfad verhindern Doppelstart, Doppelabrechnung und negatives
-  Guthaben (#20).
-- Idempotenz gehärtet: gleiche Schlüssel werden serialisiert (kein HTTP 500 mehr durch eine
-  vergiftete Transaktion), ein Schlüssel > 64 Zeichen wird mit 400 abgelehnt (#29); ein Replay
-  prüft den Vorgang (`operation`, sonst 409) und liefert die gespeicherte Antwort auch nach
-  Löschung einer Referenz-Entität statt 404 (#41).
-- Guthaben-Buchungen validieren den Betrag (`> 0`) in Service und Dialog – kein umgekehrter
-  oder leerer Buchungssatz mehr (#22). Ende-/Abbruch-Benachrichtigungen (SMTP/Pushover) laufen
-  per `AFTER_COMMIT`-Event außerhalb der DB-Transaktion; ein Rollback versendet nichts mehr (#36).
-- Terminal-Stabilität & Aufräumen (Pre-Launch-Review AP2, Issues #19/#27/#28/#51/#52/#53/#55/#56/#57/#58/#61):
-  deCONZ-WebSocket verbindet nach einem Abbruch/Neustart wieder neu, sodass die
-  Programm-Ende-Erkennung nicht dauerhaft ausfällt (#19); ein portal-ausgelöster Neustart
-  erzeugt keinen zweiten WebSocket-Client und keine doppelten Karten-/Klick-Listener mehr
-  (#27); Terminal-Nebenläufigkeit gehärtet – `ConcurrentHashMap` und ein Retry unter Lock
-  verhindern ein doppeltes Execution-Finish (#28); der Fremdeinschalt-Watchdog überspringt
-  ein fehlerhaftes Gerät statt den ganzen Zyklus abzubrechen (#51).
-- Weitere Terminal-Härtung: UI-Mutationen konsequent auf den JavaFX-Thread (#52); eine
-  kaputte 2xx-Antwort löst nicht mehr fälschlich den Offline-Pfad aus (#53); das
-  Offline-Journal schreibt mit `DSYNC` (kein Buchungsverlust bei Stromausfall, #55);
-  RFID-Karten-Ids werden im Log maskiert und die Fernwartung liefert deterministisch das
-  INFO-Log (#56); der Wiederaufnahme-Scan überspringt eine Ausführung mit entferntem Programm
-  statt in den Fehlerzustand zu laufen (#57); das deCONZ-Passwort kommt aus einem CSPRNG
-  (`openssl rand`, #58); tote SMTP-Konfiguration im Terminal-Client entfernt (#61).
-- Offline-Replay-Kern gehärtet (Pre-Launch-Review AP1, Issues #16/#17/#18/#54/#59, ADR 0016):
-  Nachmeldungen laufen über einen privilegierten Replay-Pfad (`replay`-Flag), der die
-  fachlichen Wächter überspringt, statt das Journal bei einer zwischenzeitlichen
-  Sperrung/Guthabenänderung dauerhaft zu verklemmen (#16).
-- Client-Journal-Replay robust gemacht: Dead-Letter für dauerhaft abgelehnte Einträge,
-  Paar-Reihenfolge (START erst mit vorliegendem FINISH), einzelnes Entfernen statt `clear()`
-  (kein Verlust parallel hinzugekommener Enden), NPE-Absicherung beim Auflösen der
-  Backend-Id (#17).
-- Zeitstempel-Invariante `stop ≥ start` erzwungen und Abrechnungsdauer auf `maxDuration`
-  gedeckelt – kein `stop < start`/0-€-Waschgang und keine Überberechnung mehr bei
-  Offline-Nachmeldungen; der reale End-Zeitstempel bleibt als Audit-Record erhalten (#18).
-- Terminal wertet einen Snapshot als unbrauchbar, wenn die lokale Uhr vor dem
-  Snapshot-Zeitpunkt liegt (Raspberry Pi ohne RTC), statt falsch abzurechnen (#54).
-
-### Added
-- Demo-Datenbestand fürs visuelle UI-Prüfen: `DemoDataSeeder` (`backend/.../demo/`,
-  `@Profile("demo")`) legt beim Start einen realistischen, idempotenten Beispielbestand an
-  (4 Benutzergruppen mit allen Rabattarten, 3 Standorte, 5 Programme, 6 Geräte inkl. eines
-  deaktivierten, 5 Benutzer inkl. gesperrtem Gast, Guthaben, Ausführungshistorie und laufende
-  Ausführungen). Start über `backend/run-demo.sh` (Profil `demo`, Demo-DB `elwasys_demo`,
-  Portal auf :8080, Login admin/admin bzw. `<benutzer>`/`demo`); Profil-Konfiguration
-  `application-demo.yml`; Regressionstest `DemoDataSeederTest` (5 Tests). Keine
-  Flyway-Migration (Demo-Daten gehören nicht ins Produktivschema). Siehe
-  docs/kb/06-ui-tests.md „Demo-Daten" und docs/kb/04-build-and-run.md „Demo-Modus".
-- agentic-baseline-Setup: `AGENTS.md` als Single Source of Truth (Instruktionen), thin
-  `CLAUDE.md` mit `@AGENTS.md`-Import; `docs/`-Wissenssystem (`worklog/`, `specs/`,
-  `architecture/` mit ADR 0001–0015, `agent-setup.md`); `.claude/` mit Commands
-  (`adapt-baseline`, `audit-ai-docs`, `review`) und Agenten (`orchestrator`,
-  `code-reviewer`, `backend`, `terminal`, `portal`, `devops`); `scripts/bootstrap.sh` +
-  `scripts/check-ai-docs.sh`; Root-Configs (`.editorconfig`, `.gitattributes`,
-  `.env.example`, `.vscode/`).
-
-### Changed
-- Knowledge Base von `kb/` nach `docs/kb/` verschoben und alle Repo-internen
-  `kb/`-Referenzen (Kommentare/Doku) auf `docs/kb/` umgestellt.
-- Provisionierungs-Artefakt `cloud-config.yaml` von `kb/cloud-init/` nach
-  `deploy/cloud-init/` verschoben (Betriebs-/Infra-Artefakt statt Wissensdokument; das
-  Erklär-Dokument `docs/kb/07-cloud-init.md` bleibt in der KB).
-- KB entwirrt und nach Zweck getrennt: `docs/kb/` = Sollzustand + „Aktueller Stand";
-  Historie (früher „Status-Log"/„Änderungslog") → append-only [Worklog](docs/worklog/README.md)
-  und dieses CHANGELOG; Auftraggeber-/Architektur-Entscheidungen → ADRs. Wissen gehört ins
-  Repo, nicht in lokalen User-Speicher.
-- Portal-Design an das Terminal angeglichen: gemeinsame Farbpalette (Blau `#4488dd`, Status-
-  Grün/-Rot/-Grau wie das Terminal); Dashboard-Gerätekarten responsiv (50 %/100 %) mit
-  status-farbigem Oberrand und voller Breitennutzung.
-
-### Fixed
-- Portal-Erscheinungsbild wiederhergestellt (vorher nackte Lumo-Standardoptik ohne Stylesheet):
-  vertrautes Design via Laufzeit-Inline-CSS statt kompiliertem `@Theme` (umgeht den
-  Vaadin-24.10-Lizenzcheck). Details:
-  [Worklog](docs/worklog/2026-07-22-portal-design.md), docs/kb/05-migration-plan.md.
+### Tests
+- Offline-Preisberechnung des Terminals an das Backend gebunden (#91): beide Seiten prüfen
+  dieselbe Fixture `test-fixtures/pricing-parity.csv` - eine Divergenz zwischen Offline- und
+  Online-Abrechnung fällt jetzt als roter Test auf statt beim Nutzer.
+- Testlücken der finalen Review geschlossen (FR-3, #87/#88): Regressionstest für den
+  deCONZ-WebSocket-Reconnect (Programm-Ende-Erkennung), Portal-E2E für dynamische Programme;
+  `InactivitySchedulerTest`/`CreditServiceAccountingHistoryTest` warten auf Bedingungen statt
+  auf knappe Fristen.
+- Testabdeckung/-determinismus (AP5, #40/#50): Route-Zugriffsschutz per Classpath-Scan, neue
+  E2E-Tests (Auszahlung, Benutzer-Löschung, Passwort-Reset-Link), nichtdeterministische
+  Wartezeiten entfernt.
 
 ## 2026-07-22 — Phase 6: Produktivumschaltung (AP1–AP7)
 

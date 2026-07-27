@@ -3,7 +3,6 @@ package org.kabieror.elwasys.raspiclient.application;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 import org.apache.commons.lang3.StringUtils;
-import org.kabieror.elwasys.common.LocationOccupiedException;
 import org.kabieror.elwasys.common.NoDataFoundException;
 import org.kabieror.elwasys.common.Utilities;
 import org.kabieror.elwasys.raspiclient.api.ApiClient;
@@ -37,13 +36,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.Vector;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -71,13 +66,10 @@ public class ElwaManager {
     private final List<ICloseListener> closeListeners;
 
     /**
-     * Identitäts-Cache der von diesem Client verwalteten Geräte, je Geräte-Id
-     * (Phase 4 AP4). Bildet den Identitäts-Cache nach, den {@code Common.DataManager}
-     * intern führte (siehe {@link ClientDevice} Klassenkommentar) - wichtig, damit
-     * {@link ClientDevice#getCurrentExecution()} über mehrere
-     * {@link #getManagedDevices()}-Aufrufe hinweg konsistent bleibt.
+     * Der fachliche Datenzugriff (REST-API mit Offline-Rückfall). Ausgelagert aus dieser
+     * Klasse (#91), siehe {@link TerminalDataService}.
      */
-    private final Map<Integer, ClientDevice> deviceCache = new ConcurrentHashMap<>();
+    private TerminalDataService terminalDataService;
 
     /**
      * Die Anbindung an das Backend über die REST-API v1 (Phase 4 AP4). Ersetzt
@@ -99,8 +91,8 @@ public class ElwaManager {
      * Offline-Buchungen am Terminal"): persistenter Standort-Snapshot, persistentes
      * Ereignis-Journal und die daraus gespeiste Offline-Entscheidungslogik/das Journal-Replay.
      * Greifen NUR, wenn ein {@link ApiClient}-Aufruf mit
-     * {@link ApiException#isCommunicationFailure()} scheitert (siehe {@link #cardLogin},
-     * {@link #getDevicesForUser}, {@link #createExecution}, {@link #getManagedDevices()}).
+     * {@link ApiException#isCommunicationFailure()} scheitert (siehe
+     * {@link TerminalDataService}).
      */
     private OfflineSnapshotStore offlineSnapshotStore;
     private OfflineJournal offlineJournal;
@@ -163,8 +155,8 @@ public class ElwaManager {
 
         this.logger.info("Client is starting up");
 
-        this.closeListeners = new Vector<ICloseListener>();
-        this.closeRequestListeners = new Vector<ICloseRequestListener>();
+        this.closeListeners = new CopyOnWriteArrayList<>();
+        this.closeRequestListeners = new CopyOnWriteArrayList<>();
         try {
             this.configurationManager = new WashguardConfiguration();
         } catch (final Exception e) {
@@ -178,8 +170,8 @@ public class ElwaManager {
      * Initiiert die Manager
      */
     public void initiate()
-            throws ClassNotFoundException, SQLException, IOException, InterruptedException,
-            LocationOccupiedException, FhemException, NoDataFoundException, AlreadyRunningException {
+            throws ClassNotFoundException, IOException, InterruptedException,
+            FhemException, NoDataFoundException, AlreadyRunningException {
         DeconzEventListener deconzEventListener = null;
         try {
             this.logger.info("Starting up managers");
@@ -204,6 +196,7 @@ public class ElwaManager {
             this.offlineSnapshotStore = new OfflineSnapshotStore(workDir.resolve("offline-snapshot.json"));
             this.offlineJournal = new OfflineJournal(workDir.resolve("offline-journal.jsonl"));
             this.offlineGateway = new OfflineGateway(this.apiClient, this.offlineSnapshotStore, this.offlineJournal);
+            this.terminalDataService = new TerminalDataService(this.apiClient, this.offlineGateway);
             // Vorfalls-Meldung (Issue #89): ein Dead-Letter ist eine verlorene Offline-Buchung
             // (Geld) und darf nicht nur im lokalen Pi-Log stehen. Die Outbox haelt die Meldung
             // persistent, bis das Backend sie ueber die WS-Verbindung quittiert hat.
@@ -283,7 +276,7 @@ public class ElwaManager {
             // Standort-Token) - siehe docs/kb/05-migration-plan.md, Änderungslog "Phase 4
             // AP4" für die Einordnung dieses Befunds.
             for (ClientDevice d : this.getManagedDevices()) {
-                DeviceOverviewDto overview = this.lastOverviewFor(d.getId());
+                DeviceOverviewDto overview = this.terminalDataService.lastOverviewFor(d.getId());
                 if (overview != null && overview.runningExecutionId() != null) {
                     ExecutionDto execDto = this.apiClient.getExecution(overview.runningExecutionId());
                     ClientProgram program = findProgram(d, execDto.programId());
@@ -340,17 +333,6 @@ public class ElwaManager {
             }
         }
         return null;
-    }
-
-    /**
-     * Merkt sich den zuletzt geladenen Übersichts-Datensatz je Gerät, damit
-     * {@link #initiate()} nach {@link #getManagedDevices()} nicht dieselben Daten ein
-     * zweites Mal laden muss.
-     */
-    private final Map<Integer, DeviceOverviewDto> lastOverview = new ConcurrentHashMap<>();
-
-    private DeviceOverviewDto lastOverviewFor(int deviceId) {
-        return this.lastOverview.get(deviceId);
     }
 
     /**
@@ -415,14 +397,7 @@ public class ElwaManager {
      * (z. B. {@code MainFormController#onCardDetected}) bleiben dadurch unverändert.
      */
     public UserDto cardLogin(String cardId) throws ApiException {
-        try {
-            return this.apiClient.cardLogin(cardId);
-        } catch (ApiException e) {
-            if (!e.isCommunicationFailure()) {
-                throw e;
-            }
-            return this.offlineGateway.cardLogin(cardId, e);
-        }
+        return this.terminalDataService.cardLogin(cardId);
     }
 
     /**
@@ -431,14 +406,7 @@ public class ElwaManager {
      * {@link DeviceDto}-Vertrag wie zuvor {@code ApiClient#getDevices} direkt.
      */
     public List<DeviceDto> getDevicesForUser(int userId) throws ApiException {
-        try {
-            return this.apiClient.getDevices(userId);
-        } catch (ApiException e) {
-            if (!e.isCommunicationFailure()) {
-                throw e;
-            }
-            return this.offlineGateway.getDevicesForUser(userId, e);
-        }
+        return this.terminalDataService.getDevicesForUser(userId);
     }
 
     /**
@@ -451,18 +419,7 @@ public class ElwaManager {
      */
     public ClientExecution createExecution(ClientUser user, ClientDevice device, ClientProgram program)
             throws ApiException {
-        LocalDateTime clientTimestamp = LocalDateTime.now();
-        String idempotencyKey = UUID.randomUUID().toString();
-        try {
-            ExecutionDto dto = this.apiClient.createExecution(user.getId(), device.getId(), program.getId(),
-                    clientTimestamp, idempotencyKey);
-            return ClientExecution.of(dto, device, program, user);
-        } catch (ApiException e) {
-            if (!e.isCommunicationFailure()) {
-                throw e;
-            }
-            return this.offlineGateway.createExecution(user, device, program, clientTimestamp, idempotencyKey, e);
-        }
+        return this.terminalDataService.createExecution(user, device, program);
     }
 
     /**
@@ -576,25 +533,7 @@ public class ElwaManager {
      * {@link ClientDevice} Klassenkommentar).
      */
     public List<ClientDevice> getManagedDevices() throws ApiException {
-        List<DeviceOverviewDto> overview;
-        try {
-            overview = this.apiClient.getDevicesOverview();
-        } catch (ApiException e) {
-            if (!e.isCommunicationFailure()) {
-                throw e;
-            }
-            // Phase 4 AP6 (siehe docs/kb/05-migration-plan.md): Backend nicht erreichbar - falle
-            // auf die im letzten Snapshot enthaltenen Geräte zurück, sofern noch nutzbar.
-            overview = this.offlineGateway.getDevicesOverview(e);
-        }
-        List<ClientDevice> result = new java.util.ArrayList<>(overview.size());
-        for (DeviceOverviewDto dto : overview) {
-            ClientDevice device = this.deviceCache.computeIfAbsent(dto.id(), ClientDevice::new);
-            device.updateFrom(dto);
-            this.lastOverview.put(dto.id(), dto);
-            result.add(device);
-        }
-        return result;
+        return this.terminalDataService.getManagedDevices();
     }
 
     /**

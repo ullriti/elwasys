@@ -15,6 +15,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A minimal RFC 6455 WebSocket <em>server</em> used to fake the deCONZ event
@@ -42,6 +43,8 @@ class DeconzWebSocketServer {
     private final Logger logger = LoggerFactory.getLogger(getClass());
     private final ServerSocket serverSocket;
     private final List<OutputStream> clients = new CopyOnWriteArrayList<>();
+    private final List<Socket> clientSockets = new CopyOnWriteArrayList<>();
+    private final AtomicInteger acceptedConnections = new AtomicInteger();
     private volatile boolean running = false;
 
     DeconzWebSocketServer() throws IOException {
@@ -70,6 +73,29 @@ class DeconzWebSocketServer {
         } catch (final IOException e) {
             logger.debug("Error closing the simulated deCONZ WebSocket server socket.", e);
         }
+        closeClientConnections();
+    }
+
+    /**
+     * Drops every currently connected client but keeps listening on the same port - the
+     * equivalent of a deCONZ gateway that restarts or of a Wi-Fi hiccup. Used by the reconnect
+     * regression test (issue #87): the client under test must notice the broken connection and
+     * reconnect on its own, to the very same port.
+     */
+    void dropConnections() {
+        closeClientConnections();
+    }
+
+    /**
+     * The number of WebSocket handshakes this server has completed since it was started. A
+     * reconnect increments it by exactly one - which is what proves that a dropped connection
+     * does NOT produce two parallel reconnect attempts (issue #87, {@code isReconnectRunning}).
+     */
+    int getAcceptedConnections() {
+        return acceptedConnections.get();
+    }
+
+    private void closeClientConnections() {
         for (final OutputStream os : clients) {
             try {
                 os.close();
@@ -78,6 +104,14 @@ class DeconzWebSocketServer {
             }
         }
         clients.clear();
+        for (final Socket socket : clientSockets) {
+            try {
+                socket.close();
+            } catch (final IOException ignored) {
+                // best effort
+            }
+        }
+        clientSockets.clear();
     }
 
     /**
@@ -125,6 +159,8 @@ class DeconzWebSocketServer {
                 out = socket.getOutputStream();
                 writeHandshakeResponse(out, key);
                 clients.add(out);
+                clientSockets.add(socket);
+                acceptedConnections.incrementAndGet();
                 logger.info("A client connected to the simulated deCONZ WebSocket server.");
 
                 // Drain (and ignore) anything the client sends. The real
@@ -141,6 +177,7 @@ class DeconzWebSocketServer {
                 if (out != null) {
                     clients.remove(out);
                 }
+                clientSockets.remove(socket);
                 try {
                     socket.close();
                 } catch (final IOException ignored) {

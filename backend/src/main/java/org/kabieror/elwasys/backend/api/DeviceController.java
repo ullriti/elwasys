@@ -1,6 +1,8 @@
 package org.kabieror.elwasys.backend.api;
 
+import jakarta.validation.Valid;
 import java.time.Duration;
+import java.util.Comparator;
 import java.util.List;
 import org.kabieror.elwasys.backend.api.dto.DeviceDto;
 import org.kabieror.elwasys.backend.api.dto.DeviceOverviewDto;
@@ -103,7 +105,7 @@ public class DeviceController {
      */
     @PostMapping("/{id}/deconz-uuid")
     public DeviceOverviewDto updateDeconzUuid(@AuthenticationPrincipal TerminalPrincipal terminal,
-            @PathVariable Integer id, @jakarta.validation.Valid @RequestBody UpdateDeconzUuidRequest request) {
+            @PathVariable Integer id, @Valid @RequestBody UpdateDeconzUuidRequest request) {
         DeviceEntity device = this.scopeGuard.requireDeviceInScope(id, terminal);
         device.setDeconzUuid(request.deconzUuid());
         device = this.deviceRepository.save(device);
@@ -117,12 +119,10 @@ public class DeviceController {
         var lastUser = this.executionService.getLastUser(device);
         Integer lastUserId = lastUser.map(UserEntity::getId).orElse(null);
         String lastUserName = lastUser.map(UserEntity::getName).orElse(null);
-        List<ProgramDto> programs = device.getPrograms().stream()
-                .sorted((a, b) -> a.getId().compareTo(b.getId()))
-                .map(program -> ProgramDto.of(program,
-                        this.pricingService.getPrice(program, Duration.ofSeconds(program.getMaxDurationSeconds()),
-                                null)))
-                .toList();
+        // Preisbildung je Programm bewusst über dieselbe Hilfsmethode wie der benutzerbezogene
+        // Pfad (user == null bedeutet "kein Gruppenrabatt", siehe PricingService#getPrice).
+        List<ProgramDto> programs = device.getPrograms().stream().sorted(Comparator.comparing(ProgramEntity::getId))
+                .map(program -> toProgramDto(program, null)).toList();
         return DeviceOverviewDto.of(device, occupied, runningExecutionId, lastUserId, lastUserName, programs);
     }
 
