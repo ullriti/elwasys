@@ -1,0 +1,1478 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  html, body { margin:0; padding:0; }
+  body { background:#f4f6f9; }
+  a { color:#2f6fbf; text-decoration:none; }
+  a:hover { color:#1d5aa6; text-decoration:underline; }
+  input, textarea, button, select { font-family:inherit; font-size:inherit; }
+  input:focus, textarea:focus, select:focus { outline:none; border-color:#4488dd; box-shadow:0 0 0 3px rgba(68,136,221,0.18); }
+  ::placeholder { color:#98a2b3; }
+</style>
+</helmet>
+<div style="height:100vh;display:flex;flex-direction:column;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.5;color:#1f2429;background:#f4f6f9;">
+
+  <sc-if value="{{ isLogin }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1;display:flex;flex-wrap:wrap;min-height:0;background:#ffffff;">
+      <div style="flex:1 1 26rem;background:#222d32;color:#ffffff;display:flex;flex-direction:column;justify-content:center;gap:1.25rem;padding:3.5rem;box-sizing:border-box;">
+        <div style="display:flex;align-items:center;gap:0.9rem;">
+          <div style="width:3rem;height:3rem;border-radius:14px;background:#4488dd;display:grid;place-items:center;box-shadow:0 6px 16px -6px rgba(68,136,221,0.8);">
+            <div style="width:1.25rem;height:1.25rem;border-radius:50%;border:3px solid #ffffff;box-sizing:border-box;"></div>
+          </div>
+          <div style="font-size:1.5rem;font-weight:600;letter-spacing:-0.01em;">Waschportal</div>
+        </div>
+        <div style="font-size:1rem;line-height:1.6;color:#b8c7ce;max-width:26rem;text-wrap:pretty;">Standorte, Geräte, Programme und Guthaben an einer Stelle verwalten.</div>
+        <div style="display:flex;gap:0.5rem;margin-top:0.5rem;">
+          <div style="width:2.5rem;height:4px;border-radius:2px;background:#4488dd;"></div>
+          <div style="width:1rem;height:4px;border-radius:2px;background:#3a474d;"></div>
+          <div style="width:1rem;height:4px;border-radius:2px;background:#3a474d;"></div>
+        </div>
+      </div>
+      <div style="flex:1 1 26rem;display:flex;align-items:center;justify-content:center;padding:3rem 2rem;box-sizing:border-box;background:#ffffff;">
+        <div style="width:22rem;max-width:100%;display:flex;flex-direction:column;gap:1.25rem;">
+          <div style="display:flex;flex-direction:column;gap:0.35rem;">
+            <div style="font-size:1.625rem;font-weight:600;color:#101828;letter-spacing:-0.02em;">Login</div>
+            <div style="font-size:0.9375rem;color:#667085;">Bitte melden Sie sich an.</div>
+          </div>
+          <label style="display:flex;flex-direction:column;gap:0.35rem;">
+            <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Benutzername</span>
+            <input type="text" defaultValue="admin" style="height:2.75rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:10px;background:#ffffff;padding:0 0.85rem;color:#101828;" />
+          </label>
+          <label style="display:flex;flex-direction:column;gap:0.35rem;">
+            <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Passwort</span>
+            <input type="password" defaultValue="geheim123" style="height:2.75rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:10px;background:#ffffff;padding:0 0.85rem;color:#101828;" />
+          </label>
+          <div style="display:flex;justify-content:flex-end;margin-top:-0.5rem;">
+            <button type="button" onClick="{{ openForgotDialog }}" style="border:none;background:transparent;padding:0;color:#2f6fbf;font-size:0.875rem;font-weight:600;cursor:pointer;" style-hover="text-decoration:underline;">Passwort vergessen?</button>
+          </div>
+          <button type="button" onClick="{{ doLogin }}" style="height:2.75rem;border:none;border-radius:10px;background:#4488dd;color:#ffffff;font-weight:600;font-size:1rem;cursor:pointer;box-shadow:0 2px 6px -1px rgba(68,136,221,0.5);" style-hover="background:#3b7bcb;">Login</button>
+          <div style="display:flex;align-items:center;gap:0.75rem;color:#98a2b3;font-size:0.8125rem;">
+            <div style="flex:1;height:1px;background:#eef0f4;"></div>
+            <span>oder</span>
+            <div style="flex:1;height:1px;background:#eef0f4;"></div>
+          </div>
+          <button type="button" onClick="{{ doLoginAsUser }}" style="height:2.75rem;border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;color:#344054;font-weight:600;cursor:pointer;" style-hover="background:#f8fafc;">Als normaler Benutzer anmelden</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isPortal }}" hint-placeholder-val="{{ true }}">
+  <div style="flex:1;display:flex;flex-direction:column;min-height:0;">
+
+    <div style="flex-shrink:0;display:flex;align-items:center;gap:0.75rem;height:64px;padding:0 1.25rem;background:#4488dd;color:#ffffff;box-shadow:inset 0 -1px 0 rgba(255,255,255,0.16);z-index:30;">
+      <sc-if value="{{ showDrawerToggle }}" hint-placeholder-val="{{ false }}">
+        <button type="button" onClick="{{ toggleDrawer }}" title="Menü" style="width:2.25rem;height:2.25rem;flex-shrink:0;display:grid;place-items:center;border:none;border-radius:10px;background:transparent;color:#ffffff;cursor:pointer;" style-hover="background:rgba(255,255,255,0.18);">
+          <svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true"><rect width="18" height="2" y="0" fill="currentColor"></rect><rect width="18" height="2" y="6" fill="currentColor"></rect><rect width="18" height="2" y="12" fill="currentColor"></rect></svg>
+        </button>
+      </sc-if>
+      <div style="display:flex;align-items:center;gap:0.6rem;min-width:0;">
+        <div style="width:1.85rem;height:1.85rem;flex-shrink:0;border-radius:9px;background:rgba(255,255,255,0.2);display:grid;place-items:center;">
+          <div style="width:0.8rem;height:0.8rem;border-radius:50%;border:2px solid #ffffff;box-sizing:border-box;"></div>
+        </div>
+        <h1 style="margin:0;font-size:1.125rem;font-weight:600;line-height:1;letter-spacing:0.01em;color:#ffffff;white-space:nowrap;">Waschportal</h1>
+      </div>
+      <div style="width:1px;height:1.5rem;background:rgba(255,255,255,0.28);flex-shrink:0;"></div>
+      <span style="font-size:0.9375rem;font-weight:500;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ viewLabel }}</span>
+      <div style="margin-left:auto;position:relative;flex-shrink:0;">
+        <button type="button" onClick="{{ toggleMenu }}" style="display:flex;align-items:center;gap:0.6rem;height:2.5rem;padding:0.25rem 0.6rem 0.25rem 0.3rem;border:none;border-radius:999px;background:{{ userMenuBg }};color:#ffffff;font-weight:600;cursor:pointer;" style-hover="background:rgba(255,255,255,0.18);">
+          <span style="width:2rem;height:2rem;border-radius:50%;background:#ffffff;color:#2f6fbf;display:grid;place-items:center;font-size:0.8125rem;font-weight:700;letter-spacing:0.02em;">{{ userInitials }}</span>
+          <span style="font-size:0.9375rem;white-space:nowrap;">{{ userName }}</span>
+          <svg width="10" height="6" viewBox="0 0 10 6" aria-hidden="true" style="margin-right:0.25rem;opacity:0.85;"><path d="M0 0 L5 6 L10 0 Z" fill="currentColor"></path></svg>
+        </button>
+        <sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;top:calc(100% + 0.5rem);right:0;min-width:15rem;background:#ffffff;color:#1f2429;border:1px solid #eef0f4;border-radius:12px;box-shadow:0 12px 28px -8px rgba(16,24,40,0.24);padding:0.35rem 0;z-index:40;">
+            <div style="display:flex;align-items:center;gap:0.7rem;padding:0.75rem 0.9rem;">
+              <span style="width:2.25rem;height:2.25rem;flex-shrink:0;border-radius:50%;background:#eaf2fc;color:#2f6fbf;display:grid;place-items:center;font-size:0.875rem;font-weight:700;">{{ userInitials }}</span>
+              <span style="display:flex;flex-direction:column;min-width:0;">
+                <span style="font-size:0.9375rem;font-weight:600;color:#101828;">{{ userName }}</span>
+                <span style="font-size:0.8125rem;color:#667085;">{{ userRole }}</span>
+              </span>
+            </div>
+            <div style="height:1px;background:#eef0f4;margin:0.25rem 0;"></div>
+            <div onClick="{{ openSettingsDialog }}" style="display:flex;align-items:center;gap:0.7rem;padding:0.6rem 0.9rem;margin:0 0.35rem;border-radius:8px;cursor:pointer;font-size:0.9375rem;font-weight:500;color:#344054;" style-hover="background:#f2f4f7;"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"></circle><circle cx="8" cy="8" r="2.2" fill="currentColor"></circle></svg><span>Einstellungen</span></div>
+            <div onClick="{{ openPasswordDialog }}" style="display:flex;align-items:center;gap:0.7rem;padding:0.6rem 0.9rem;margin:0 0.35rem;border-radius:8px;cursor:pointer;font-size:0.9375rem;font-weight:500;color:#344054;" style-hover="background:#f2f4f7;"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="5" r="3.6" fill="none" stroke="currentColor" stroke-width="1.6"></circle><rect x="7" y="7" width="8" height="1.7" fill="currentColor" transform="rotate(45 7 7)"></rect></svg><span>Passwort ändern</span></div>
+            <div style="height:1px;background:#eef0f4;margin:0.25rem 0;"></div>
+            <div onClick="{{ doLogout }}" style="display:flex;align-items:center;gap:0.7rem;padding:0.6rem 0.9rem;margin:0 0.35rem;border-radius:8px;cursor:pointer;font-size:0.9375rem;font-weight:500;color:#b02417;" style-hover="background:#fef3f2;"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="0" y="1" width="1.7" height="14" fill="currentColor"></rect><rect x="4" y="7.2" width="10" height="1.7" fill="currentColor"></rect><path d="M10 4 L15 8 L10 12 Z" fill="currentColor"></path></svg><span>Logout</span></div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <div style="flex:1;display:flex;min-height:0;">
+
+      <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ true }}">
+        <nav style="width:15.5rem;flex-shrink:0;background:#222d32;padding:0.75rem 0;overflow-y:auto;">
+          <sc-if value="{{ isUserPortal }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ goOverview }}" style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.85rem;margin:0.15rem 0.6rem;border-radius:9px;cursor:pointer;color:#ffffff;background:#4488dd;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,0.2);">
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0 L16 7 H13 V16 H9.5 V10.5 H6.5 V16 H3 V7 H0 Z" fill="currentColor"></path></svg>
+              <span>Übersicht</span>
+            </div>
+          </sc-if>
+          <sc-if value="{{ isAdminPortal }}" hint-placeholder-val="{{ true }}">
+          <div onClick="{{ goDashboard }}" style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.85rem;margin:0.15rem 0.6rem;border-radius:9px;cursor:pointer;color:#b8c7ce;background:#222d32;font-weight:400;box-shadow:none;color:{{ navDashboard.fg }};background:{{ navDashboard.bg }};font-weight:{{ navDashboard.weight }};box-shadow:{{ navDashboard.bar }};" style-hover="background:#1a2429;">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="0" y="0" width="7" height="7" fill="currentColor"></rect><rect x="9" y="0" width="7" height="7" fill="currentColor"></rect><rect x="0" y="9" width="7" height="7" fill="currentColor"></rect><rect x="9" y="9" width="7" height="7" fill="currentColor"></rect></svg>
+            <span>Dashboard</span>
+          </div>
+          <div onClick="{{ goUsers }}" style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.85rem;margin:0.15rem 0.6rem;border-radius:9px;cursor:pointer;color:{{ navUsers.fg }};background:{{ navUsers.bg }};font-weight:{{ navUsers.weight }};box-shadow:{{ navUsers.bar }};" style-hover="background:#1a2429;">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="4.5" r="3.5" fill="currentColor"></circle><path d="M1 16 C1 11.5 4 9.5 8 9.5 C12 9.5 15 11.5 15 16 Z" fill="currentColor"></path></svg>
+            <span>Benutzer</span>
+          </div>
+          <div onClick="{{ goGroups }}" style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.85rem;margin:0.15rem 0.6rem;border-radius:9px;cursor:pointer;color:{{ navGroups.fg }};background:{{ navGroups.bg }};font-weight:{{ navGroups.weight }};box-shadow:{{ navGroups.bar }};" style-hover="background:#1a2429;">
+            <svg width="18" height="16" viewBox="0 0 18 16" aria-hidden="true"><circle cx="6" cy="4.5" r="3.5" fill="currentColor"></circle><circle cx="14" cy="5.5" r="2.5" fill="currentColor"></circle><path d="M0 16 C0 11.5 2.7 9.5 6 9.5 C9.3 9.5 12 11.5 12 16 Z" fill="currentColor"></path><path d="M12.5 16 C12.5 12.5 13 10.5 14 10.5 C16 10.5 18 12 18 16 Z" fill="currentColor"></path></svg>
+            <span>Benutzergruppen</span>
+          </div>
+          <div onClick="{{ goPrograms }}" style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.85rem;margin:0.15rem 0.6rem;border-radius:9px;cursor:pointer;color:{{ navPrograms.fg }};background:{{ navPrograms.bg }};font-weight:{{ navPrograms.weight }};box-shadow:{{ navPrograms.bar }};" style-hover="background:#1a2429;">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="2"></circle><circle cx="8" cy="8" r="2.5" fill="currentColor"></circle></svg>
+            <span>Programme</span>
+          </div>
+          <div onClick="{{ goDevices }}" style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.85rem;margin:0.15rem 0.6rem;border-radius:9px;cursor:pointer;color:{{ navDevices.fg }};background:{{ navDevices.bg }};font-weight:{{ navDevices.weight }};box-shadow:{{ navDevices.bar }};" style-hover="background:#1a2429;">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="0" y="0" width="9" height="9" fill="currentColor"></rect><rect x="7" y="7" width="9" height="9" fill="currentColor" opacity="0.7"></rect></svg>
+            <span>Geräte</span>
+          </div>
+          <div onClick="{{ goLocations }}" style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.85rem;margin:0.15rem 0.6rem;border-radius:9px;cursor:pointer;color:{{ navLocations.fg }};background:{{ navLocations.bg }};font-weight:{{ navLocations.weight }};box-shadow:{{ navLocations.bar }};" style-hover="background:#1a2429;">
+            <svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true"><path d="M7 0 C3.1 0 0 3 0 6.6 C0 11.4 7 16 7 16 C7 16 14 11.4 14 6.6 C14 3 10.9 0 7 0 Z M7 9 A2.6 2.6 0 1 1 7 3.8 A2.6 2.6 0 1 1 7 9 Z" fill="currentColor"></path></svg>
+            <span>Standorte</span>
+          </div>
+          <div onClick="{{ goIncidents }}" style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.85rem;margin:0.15rem 0.6rem;border-radius:9px;cursor:pointer;color:{{ navIncidents.fg }};background:{{ navIncidents.bg }};font-weight:{{ navIncidents.weight }};box-shadow:{{ navIncidents.bar }};" style-hover="background:#1a2429;">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0 L16 15 L0 15 Z" fill="currentColor"></path><rect x="7" y="5" width="2" height="5" fill="#222d32"></rect><rect x="7" y="11.5" width="2" height="2" fill="#222d32"></rect></svg>
+            <span>Offline-Vorfälle</span>
+          </div>
+          </sc-if>
+        </nav>
+      </sc-if>
+
+      <main style="flex:1;min-width:0;overflow:auto;background:#f4f6f9;padding:1.75rem 2rem;display:flex;flex-direction:column;gap:1.25rem;">
+
+        <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:1rem;">
+            <h2 style="margin:0.25rem 0 0 0;font-size:1.5rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Dashboard</h2>
+
+            <sc-if value="{{ incidentBannerVisible }}" hint-placeholder-val="{{ true }}">
+              <div style="background:#fef3f2;border:1px solid #fbd5d1;border-radius:10px;padding:0.85rem 1.1rem;width:100%;box-sizing:border-box;color:#912018;">
+                <span>{{ incidentBannerText }}</span>
+                <a href="#" onClick="{{ goIncidents }}">Offline-Vorfälle</a>
+              </div>
+            </sc-if>
+
+            <sc-for list="{{ dashboardLocations }}" as="loc" hint-placeholder-count="2">
+              <div style="display:flex;flex-direction:column;gap:1rem;margin-bottom:1rem;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;width:100%;">
+                  <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <h3 style="margin:0;font-size:1.125rem;font-weight:600;color:#4488dd;">{{ loc.name }}</h3>
+                    <span title="{{ loc.connectedSince }}" style="display:inline-block;font-size:0.75rem;font-weight:600;line-height:1;padding:0.45em 0.75em;border-radius:999px;background:{{ loc.badgeBg }};color:{{ loc.badgeFg }};">{{ loc.connectionText }}</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:0.5rem;">
+                    <button type="button" onClick="{{ showLog }}" style="display:flex;align-items:center;gap:0.4rem;height:1.9rem;padding:0 0.7rem;border:1px solid #e6e8ec;border-radius:8px;background:#ffffff;color:#2f6fbf;font-size:0.8125rem;font-weight:600;cursor:pointer;" style-hover="background:rgba(68,136,221,0.12);">
+                      <svg width="12" height="14" viewBox="0 0 12 14" aria-hidden="true"><path d="M0 0 H8 L12 4 V14 H0 Z" fill="currentColor"></path></svg>
+                      <span>Log anzeigen</span>
+                    </button>
+                    <button type="button" onClick="{{ restartTerminal }}" style="display:flex;align-items:center;gap:0.4rem;height:1.9rem;padding:0 0.7rem;border:1px solid #f3d6d2;border-radius:8px;background:#ffffff;color:#b02417;font-size:0.8125rem;font-weight:600;cursor:pointer;" style-hover="background:rgba(200,42,28,0.12);">
+                      <svg width="13" height="13" viewBox="0 0 13 13" aria-hidden="true"><circle cx="6.5" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="2"></circle><rect x="5.5" y="0" width="2" height="6" fill="currentColor"></rect></svg>
+                      <span>Neustart</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div style="display:flex;flex-wrap:wrap;gap:1rem;width:100%;">
+                  <sc-for list="{{ loc.devices }}" as="dev" hint-placeholder-count="2">
+                    <div style="flex:1 1 calc(50% - 0.5rem);min-width:26em;box-sizing:border-box;background:#ffffff;border:1px solid #e6e8ec;border-top:4px solid {{ dev.statusColor }};border-radius:14px;box-shadow:0 1px 2px rgba(16,24,40,0.06);padding:1.15rem 1.25rem;display:flex;flex-direction:column;gap:0.9rem;">
+                      <div style="display:flex;align-items:center;gap:0.6rem;width:100%;">
+                        <span style="width:0.5rem;height:0.5rem;border-radius:50%;flex-shrink:0;background:{{ dev.statusColor }};"></span>
+                        <span style="flex:1;font-size:1.0625rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">{{ dev.name }}</span>
+                        <sc-if value="{{ dev.disabled }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-size:0.6875rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#667085;background:#f2f4f7;border-radius:999px;padding:0.3em 0.65em;">Deaktiviert</span>
+                        </sc-if>
+                        <span style="display:inline-block;font-size:0.75rem;font-weight:600;line-height:1;padding:0.45em 0.75em;border-radius:999px;background:{{ dev.badgeBg }};color:{{ dev.badgeFg }};">{{ dev.statusText }}</span>
+                      </div>
+                      <sc-if value="{{ dev.running }}" hint-placeholder-val="{{ false }}">
+                        <div style="border:1px solid #eef0f4;background:#fcfcfd;border-radius:12px;padding:0.85rem 1rem;display:flex;flex-direction:column;gap:0.75rem;">
+                          <div style="display:grid;grid-template-columns:1.4fr 1.2fr 0.9fr;gap:0.75rem;">
+                            <div style="display:flex;flex-direction:column;gap:0.15rem;min-width:0;">
+                              <span style="font-size:0.6875rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#667085;">Programm</span>
+                              <span style="font-size:0.9375rem;font-weight:600;color:#101828;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ dev.runProgram }}</span>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:0.15rem;min-width:0;">
+                              <span style="font-size:0.6875rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#667085;">Nutzer</span>
+                              <span style="font-size:0.9375rem;font-weight:600;color:#101828;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ dev.runUser }}</span>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:0.15rem;">
+                              <span style="font-size:0.6875rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#667085;">Restzeit</span>
+                              <span style="font-size:0.9375rem;font-weight:600;color:#101828;font-variant-numeric:tabular-nums;">{{ dev.runRemaining }}</span>
+                            </div>
+                          </div>
+                          <div style="height:6px;border-radius:999px;background:#eef0f4;overflow:hidden;">
+                            <div style="height:100%;border-radius:999px;background:{{ dev.statusColor }};width:{{ dev.runProgressWidth }};"></div>
+                          </div>
+                        </div>
+                      </sc-if>
+                      <div style="display:flex;align-items:baseline;gap:0.6rem;">
+                        <span style="font-size:0.6875rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#667085;">Verlauf</span>
+                        <span style="font-size:0.75rem;color:#98a2b3;">{{ dev.historyCount }}</span>
+                      </div>
+                      <div style="border:1px solid #eef0f4;border-radius:10px;overflow:hidden;">
+                        <div style="display:grid;grid-template-columns:1.4fr 1.4fr 1fr 1fr;background:#fcfcfd;border-bottom:1px solid #eef0f4;color:#667085;font-weight:600;font-size:0.6875rem;letter-spacing:0.04em;text-transform:uppercase;">
+                          <div onClick="{{ dev.sortDate }}" style="padding:0.6rem 0.85rem;display:flex;align-items:center;gap:0.3rem;cursor:pointer;user-select:none;">Datum<span style="color:#4488dd;font-size:0.625rem;">{{ dev.arrDate }}</span></div>
+                          <div onClick="{{ dev.sortUser }}" style="padding:0.6rem 0.85rem;display:flex;align-items:center;gap:0.3rem;cursor:pointer;user-select:none;">Benutzer<span style="color:#4488dd;font-size:0.625rem;">{{ dev.arrUser }}</span></div>
+                          <div onClick="{{ dev.sortDuration }}" style="padding:0.6rem 0.85rem;display:flex;align-items:center;gap:0.3rem;cursor:pointer;user-select:none;">Dauer<span style="color:#4488dd;font-size:0.625rem;">{{ dev.arrDuration }}</span></div>
+                          <div onClick="{{ dev.sortPrice }}" style="padding:0.6rem 0.85rem;display:flex;align-items:center;gap:0.3rem;cursor:pointer;user-select:none;">Preis<span style="color:#4488dd;font-size:0.625rem;">{{ dev.arrPrice }}</span></div>
+                        </div>
+                        <div style="max-height:10.5em;overflow-y:auto;">
+                          <sc-for list="{{ dev.history }}" as="ex" hint-placeholder-count="4">
+                            <div style="display:grid;grid-template-columns:1.4fr 1.4fr 1fr 1fr;border-top:1px solid #f4f6f8;font-size:0.9375rem;background:{{ ex.bg }};" style-hover="background:#f8fafc;">
+                              <div style="padding:0.55rem 0.85rem;color:#475467;">{{ ex.date }}</div>
+                              <div style="padding:0.55rem 0.85rem;color:#101828;">{{ ex.user }}</div>
+                              <div style="padding:0.55rem 0.85rem;color:#475467;font-variant-numeric:tabular-nums;">{{ ex.duration }}</div>
+                              <div style="padding:0.55rem 0.85rem;color:#101828;font-weight:600;font-variant-numeric:tabular-nums;">{{ ex.price }}</div>
+                            </div>
+                          </sc-for>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isUsers }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:1rem;">
+            <div style="display:flex;align-items:center;gap:1rem;width:100%;">
+              <h2 style="margin:0.25rem 0 0 0;flex:1;font-size:1.5rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Benutzer</h2>
+              <input type="text" placeholder="Filtern …" value="{{ usersFilter }}" onInput="{{ setUsersFilter }}" style="height:2.5rem;width:15rem;border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;padding:0 0.75rem;color:#1f2429;" />
+              <button type="button" onClick="{{ openUserDialog }}" style="display:flex;align-items:center;gap:0.4rem;height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#4488dd;color:#ffffff;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(68,136,221,0.35);" style-hover="background:#3b7bcb;">
+                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="5" y="0" width="2" height="12" fill="currentColor"></rect><rect x="0" y="5" width="12" height="2" fill="currentColor"></rect></svg>
+                <span>Neu</span>
+              </button>
+            </div>
+            <div style="border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;overflow-x:auto;overflow-y:hidden;">
+              <div style="display:grid;grid-template-columns:1.4fr 1.2fr 1.1fr 1.2fr 1fr 0.9fr 50px 190px;min-width:1060px;background:#ffffff;border-bottom:1px solid #e6e8ec;color:#667085;font-weight:600;font-size:0.75rem;letter-spacing:0.04em;text-transform:uppercase;">
+                <div onClick="{{ sortUsersName }}" style="padding:0.7rem 1.25rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Name<span style="color:#4488dd;font-size:0.6875rem;">{{ arrUsersName }}</span></div>
+                <div onClick="{{ sortUsersUsername }}" style="padding:0.7rem 1.25rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Username<span style="color:#4488dd;font-size:0.6875rem;">{{ arrUsersUsername }}</span></div>
+                <div onClick="{{ sortUsersGroup }}" style="padding:0.7rem 1.25rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Gruppe<span style="color:#4488dd;font-size:0.6875rem;">{{ arrUsersGroup }}</span></div>
+                <div style="padding:0.7rem 1.25rem;">Kartennummer</div>
+                <div onClick="{{ sortUsersCredit }}" style="padding:0.7rem 1.25rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Guthaben<span style="color:#4488dd;font-size:0.6875rem;">{{ arrUsersCredit }}</span></div>
+                <div style="padding:0.7rem 1.25rem;">Status</div>
+                <div style="padding:0.7rem 1.25rem;"></div>
+                <div style="padding:0.7rem 1.25rem;"></div>
+              </div>
+              <sc-for list="{{ users }}" as="u" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:1.4fr 1.2fr 1.1fr 1.2fr 1fr 0.9fr 50px 190px;min-width:1060px;align-items:center;border-top:1px solid #eef0f4;background:{{ u.bg }};" style-hover="background:#f8fafc;">
+                  <div style="padding:0.85rem 1.25rem;">{{ u.name }}</div>
+                  <div style="padding:0.85rem 1.25rem;">{{ u.username }}</div>
+                  <div style="padding:0.85rem 1.25rem;">{{ u.group }}</div>
+                  <div style="padding:0.85rem 1.25rem;">{{ u.cards }}</div>
+                  <div style="padding:0.85rem 1.25rem;">{{ u.credit }}</div>
+                  <div style="padding:0.85rem 1.25rem;">
+                    <span style="display:inline-block;font-size:0.75rem;font-weight:600;line-height:1;padding:0.45em 0.75em;border-radius:999px;background:{{ u.badgeBg }};color:{{ u.badgeFg }};">{{ u.status }}</span>
+                  </div>
+                  <div style="padding:0.5rem 0.5rem;text-align:center;color:#c82a1c;">
+                    <sc-if value="{{ u.warn }}" hint-placeholder-val="{{ false }}">
+                      <span onClick="{{ openExpiredDialog }}" title="Es gibt nicht abgerechnete Programmausführungen" style="cursor:pointer;">
+                        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0 L16 15 L0 15 Z" fill="currentColor"></path><rect x="7" y="5" width="2" height="5" fill="#ffffff"></rect><rect x="7" y="11.5" width="2" height="2" fill="#ffffff"></rect></svg>
+                      </span>
+                    </sc-if>
+                  </div>
+                  <div style="padding:0.35rem 0.75rem;display:flex;gap:0.35rem;">
+                    <button type="button" onClick="{{ openUserDialog }}" title="Bearbeiten" style="width:2rem;height:2rem;display:grid;place-items:center;border:none;border-radius:8px;background:#ffffff;border:1px solid #e6e8ec;color:#475467;cursor:pointer;" style-hover="background:#f2f4f7;">
+                      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M0 11 L9.5 1.5 L12.5 4.5 L3 14 L0 14 Z" fill="currentColor"></path></svg>
+                    </button>
+                    <button type="button" onClick="{{ openCreditDialog }}" title="Guthaben aufladen" style="width:2rem;height:2rem;display:grid;place-items:center;border:none;border-radius:8px;background:#ffffff;border:1px solid #e6e8ec;color:#475467;font-weight:600;cursor:pointer;" style-hover="background:#f2f4f7;">€</button>
+                    <button type="button" onClick="{{ openHistoryDialog }}" title="Umsätze ansehen" style="width:2rem;height:2rem;display:grid;place-items:center;border:none;border-radius:8px;background:#ffffff;border:1px solid #e6e8ec;color:#475467;cursor:pointer;" style-hover="background:#f2f4f7;">
+                      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="0" y="0" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6"></rect><rect x="3" y="4" width="8" height="1.6" fill="currentColor"></rect><rect x="3" y="8" width="8" height="1.6" fill="currentColor"></rect></svg>
+                    </button>
+                    <button type="button" onClick="{{ openDeleteUser }}" title="Löschen" style="width:2rem;height:2rem;display:grid;place-items:center;border:none;border-radius:10px;background:transparent;color:#b02417;cursor:pointer;" style-hover="background:rgba(200,42,28,0.12);">
+                      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="1.5" y="3" width="11" height="1.8" fill="currentColor"></rect><rect x="5" y="0.5" width="4" height="1.8" fill="currentColor"></rect><path d="M2.5 5.5 H11.5 L10.6 14 H3.4 Z" fill="currentColor"></path></svg>
+                    </button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isGroups }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:1rem;">
+            <div style="display:flex;align-items:center;gap:1rem;width:100%;">
+              <h2 style="margin:0.25rem 0 0 0;flex:1;font-size:1.5rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Benutzergruppen</h2>
+              <input type="text" placeholder="Filtern …" value="{{ groupsFilter }}" onInput="{{ setGroupsFilter }}" style="height:2.5rem;width:15rem;border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;padding:0 0.75rem;color:#1f2429;" />
+              <button type="button" onClick="{{ openFormDialog }}" style="display:flex;align-items:center;gap:0.4rem;height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#4488dd;color:#ffffff;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(68,136,221,0.35);" style-hover="background:#3b7bcb;">
+                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="5" y="0" width="2" height="12" fill="currentColor"></rect><rect x="0" y="5" width="12" height="2" fill="currentColor"></rect></svg>
+                <span>Neu</span>
+              </button>
+            </div>
+            <div style="border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;overflow-x:auto;overflow-y:hidden;">
+              <div style="display:grid;grid-template-columns:2fr 1fr 110px;min-width:560px;background:#ffffff;border-bottom:1px solid #e6e8ec;color:#667085;font-weight:600;font-size:0.75rem;letter-spacing:0.04em;text-transform:uppercase;">
+                <div onClick="{{ sortGroupsName }}" style="padding:0.7rem 1.25rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Name<span style="color:#4488dd;font-size:0.6875rem;">{{ arrGroupsName }}</span></div>
+                <div style="padding:0.7rem 1.25rem;">Rabatt</div>
+                <div style="padding:0.7rem 1.25rem;"></div>
+              </div>
+              <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+                <div style="display:grid;grid-template-columns:2fr 1fr 110px;min-width:560px;align-items:center;border-top:1px solid #eef0f4;background:{{ g.bg }};" style-hover="background:#f8fafc;">
+                  <div style="padding:0.85rem 1.25rem;">{{ g.name }}</div>
+                  <div style="padding:0.85rem 1.25rem;">{{ g.discount }}</div>
+                  <div style="padding:0.35rem 0.75rem;display:flex;gap:0.35rem;">
+                    <button type="button" onClick="{{ openFormDialog }}" title="Bearbeiten" style="width:2rem;height:2rem;display:grid;place-items:center;border:none;border-radius:8px;background:#ffffff;border:1px solid #e6e8ec;color:#475467;cursor:pointer;" style-hover="background:#f2f4f7;">
+                      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M0 11 L9.5 1.5 L12.5 4.5 L3 14 L0 14 Z" fill="currentColor"></path></svg>
+                    </button>
+                    <button type="button" onClick="{{ openDeleteGroup }}" title="Löschen" style="width:2rem;height:2rem;display:grid;place-items:center;border:none;border-radius:10px;background:transparent;color:#b02417;cursor:pointer;" style-hover="background:rgba(200,42,28,0.12);">
+                      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="1.5" y="3" width="11" height="1.8" fill="currentColor"></rect><rect x="5" y="0.5" width="4" height="1.8" fill="currentColor"></rect><path d="M2.5 5.5 H11.5 L10.6 14 H3.4 Z" fill="currentColor"></path></svg>
+                    </button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isPrograms }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:1rem;">
+            <div style="display:flex;align-items:center;gap:1rem;width:100%;">
+              <h2 style="margin:0.25rem 0 0 0;flex:1;font-size:1.5rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Programme</h2>
+              <input type="text" placeholder="Filtern …" value="{{ programsFilter }}" onInput="{{ setProgramsFilter }}" style="height:2.5rem;width:15rem;border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;padding:0 0.75rem;color:#1f2429;" />
+              <button type="button" onClick="{{ openFormDialog }}" style="display:flex;align-items:center;gap:0.4rem;height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#4488dd;color:#ffffff;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(68,136,221,0.35);" style-hover="background:#3b7bcb;">
+                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="5" y="0" width="2" height="12" fill="currentColor"></rect><rect x="0" y="5" width="12" height="2" fill="currentColor"></rect></svg>
+                <span>Neu</span>
+              </button>
+            </div>
+            <div style="border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;overflow-x:auto;overflow-y:hidden;">
+              <div style="display:grid;grid-template-columns:2fr 1fr 1.4fr 110px;min-width:660px;background:#ffffff;border-bottom:1px solid #e6e8ec;color:#667085;font-weight:600;font-size:0.75rem;letter-spacing:0.04em;text-transform:uppercase;">
+                <div onClick="{{ sortProgramsName }}" style="padding:0.7rem 1.25rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Name<span style="color:#4488dd;font-size:0.6875rem;">{{ arrProgramsName }}</span></div>
+                <div onClick="{{ sortProgramsType }}" style="padding:0.7rem 1.25rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Typ<span style="color:#4488dd;font-size:0.6875rem;">{{ arrProgramsType }}</span></div>
+                <div style="padding:0.7rem 1.25rem;">Preis</div>
+                <div style="padding:0.7rem 1.25rem;"></div>
+              </div>
+              <sc-for list="{{ programs }}" as="p" hint-placeholder-count="4">
+                <div style="display:grid;grid-template-columns:2fr 1fr 1.4fr 110px;min-width:660px;align-items:center;border-top:1px solid #eef0f4;background:{{ p.bg }};" style-hover="background:#f8fafc;">
+                  <div style="padding:0.85rem 1.25rem;">{{ p.name }}</div>
+                  <div style="padding:0.85rem 1.25rem;">{{ p.type }}</div>
+                  <div style="padding:0.85rem 1.25rem;">{{ p.price }}</div>
+                  <div style="padding:0.35rem 0.75rem;display:flex;gap:0.35rem;">
+                    <button type="button" onClick="{{ openFormDialog }}" title="Bearbeiten" style="width:2rem;height:2rem;display:grid;place-items:center;border:none;border-radius:8px;background:#ffffff;border:1px solid #e6e8ec;color:#475467;cursor:pointer;" style-hover="background:#f2f4f7;">
+                      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M0 11 L9.5 1.5 L12.5 4.5 L3 14 L0 14 Z" fill="currentColor"></path></svg>
+                    </button>
+                    <button type="button" onClick="{{ openDeleteProgram }}" title="Löschen" style="width:2rem;height:2rem;display:grid;place-items:center;border:none;border-radius:10px;background:transparent;color:#b02417;cursor:pointer;" style-hover="background:rgba(200,42,28,0.12);">
+                      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="1.5" y="3" width="11" height="1.8" fill="currentColor"></rect><rect x="5" y="0.5" width="4" height="1.8" fill="currentColor"></rect><path d="M2.5 5.5 H11.5 L10.6 14 H3.4 Z" fill="currentColor"></path></svg>
+                    </button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isDevices }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:1rem;">
+            <div style="display:flex;align-items:center;gap:1rem;width:100%;">
+              <h2 style="margin:0.25rem 0 0 0;flex:1;font-size:1.5rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Geräte</h2>
+              <input type="text" placeholder="Filtern …" value="{{ devicesFilter }}" onInput="{{ setDevicesFilter }}" style="height:2.5rem;width:15rem;border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;padding:0 0.75rem;color:#1f2429;" />
+              <button type="button" onClick="{{ openDeviceDialog }}" style="display:flex;align-items:center;gap:0.4rem;height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#4488dd;color:#ffffff;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(68,136,221,0.35);" style-hover="background:#3b7bcb;">
+                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="5" y="0" width="2" height="12" fill="currentColor"></rect><rect x="0" y="5" width="12" height="2" fill="currentColor"></rect></svg>
+                <span>Neu</span>
+              </button>
+            </div>
+            <div style="border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;overflow-x:auto;overflow-y:hidden;">
+              <div style="display:grid;grid-template-columns:90px 1.6fr 1.4fr 1fr 110px;min-width:760px;background:#ffffff;border-bottom:1px solid #e6e8ec;color:#667085;font-weight:600;font-size:0.75rem;letter-spacing:0.04em;text-transform:uppercase;">
+                <div onClick="{{ sortDevicesPosition }}" style="padding:0.7rem 1.25rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Pos.<span style="color:#4488dd;font-size:0.6875rem;">{{ arrDevicesPosition }}</span></div>
+                <div onClick="{{ sortDevicesName }}" style="padding:0.7rem 1.25rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Name<span style="color:#4488dd;font-size:0.6875rem;">{{ arrDevicesName }}</span></div>
+                <div onClick="{{ sortDevicesLocation }}" style="padding:0.7rem 1.25rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Standort<span style="color:#4488dd;font-size:0.6875rem;">{{ arrDevicesLocation }}</span></div>
+                <div style="padding:0.7rem 1.25rem;">Status</div>
+                <div style="padding:0.7rem 1.25rem;"></div>
+              </div>
+              <sc-for list="{{ deviceRows }}" as="d" hint-placeholder-count="4">
+                <div style="display:grid;grid-template-columns:90px 1.6fr 1.4fr 1fr 110px;min-width:760px;align-items:center;border-top:1px solid #eef0f4;background:{{ d.bg }};" style-hover="background:#f8fafc;">
+                  <div style="padding:0.85rem 1.25rem;">{{ d.position }}</div>
+                  <div style="padding:0.85rem 1.25rem;">{{ d.name }}</div>
+                  <div style="padding:0.85rem 1.25rem;">{{ d.location }}</div>
+                  <div style="padding:0.85rem 1.25rem;">
+                    <span style="display:inline-block;font-size:0.75rem;font-weight:600;line-height:1;padding:0.45em 0.75em;border-radius:999px;background:{{ d.badgeBg }};color:{{ d.badgeFg }};">{{ d.status }}</span>
+                  </div>
+                  <div style="padding:0.35rem 0.75rem;display:flex;gap:0.35rem;">
+                    <button type="button" onClick="{{ openDeviceDialog }}" title="Bearbeiten" style="width:2rem;height:2rem;display:grid;place-items:center;border:none;border-radius:8px;background:#ffffff;border:1px solid #e6e8ec;color:#475467;cursor:pointer;" style-hover="background:#f2f4f7;">
+                      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M0 11 L9.5 1.5 L12.5 4.5 L3 14 L0 14 Z" fill="currentColor"></path></svg>
+                    </button>
+                    <button type="button" onClick="{{ openDeleteDevice }}" title="Löschen" style="width:2rem;height:2rem;display:grid;place-items:center;border:none;border-radius:10px;background:transparent;color:#b02417;cursor:pointer;" style-hover="background:rgba(200,42,28,0.12);">
+                      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="1.5" y="3" width="11" height="1.8" fill="currentColor"></rect><rect x="5" y="0.5" width="4" height="1.8" fill="currentColor"></rect><path d="M2.5 5.5 H11.5 L10.6 14 H3.4 Z" fill="currentColor"></path></svg>
+                    </button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isLocations }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:1rem;">
+            <div style="display:flex;align-items:center;gap:1rem;width:100%;">
+              <h2 style="margin:0.25rem 0 0 0;flex:1;font-size:1.5rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Standorte</h2>
+              <input type="text" placeholder="Filtern …" value="{{ locationsFilter }}" onInput="{{ setLocationsFilter }}" style="height:2.5rem;width:15rem;border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;padding:0 0.75rem;color:#1f2429;" />
+              <button type="button" onClick="{{ openFormDialog }}" style="display:flex;align-items:center;gap:0.4rem;height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#4488dd;color:#ffffff;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(68,136,221,0.35);" style-hover="background:#3b7bcb;">
+                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><rect x="5" y="0" width="2" height="12" fill="currentColor"></rect><rect x="0" y="5" width="12" height="2" fill="currentColor"></rect></svg>
+                <span>Neu</span>
+              </button>
+            </div>
+            <div style="border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;overflow-x:auto;overflow-y:hidden;">
+              <div style="display:grid;grid-template-columns:2fr 1.2fr 1.4fr 110px;min-width:720px;background:#ffffff;border-bottom:1px solid #e6e8ec;color:#667085;font-weight:600;font-size:0.75rem;letter-spacing:0.04em;text-transform:uppercase;">
+                <div onClick="{{ sortLocationsName }}" style="padding:0.7rem 1.25rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Name<span style="color:#4488dd;font-size:0.6875rem;">{{ arrLocationsName }}</span></div>
+                <div style="padding:0.7rem 1.25rem;">Benutzergruppen</div>
+                <div style="padding:0.7rem 1.25rem;">Offline-Maximaldauer</div>
+                <div style="padding:0.7rem 1.25rem;"></div>
+              </div>
+              <sc-for list="{{ locationRows }}" as="l" hint-placeholder-count="2">
+                <div style="display:grid;grid-template-columns:2fr 1.2fr 1.4fr 110px;min-width:720px;align-items:center;border-top:1px solid #eef0f4;background:{{ l.bg }};" style-hover="background:#f8fafc;">
+                  <div style="padding:0.85rem 1.25rem;">{{ l.name }}</div>
+                  <div style="padding:0.85rem 1.25rem;">{{ l.groups }}</div>
+                  <div style="padding:0.85rem 1.25rem;">{{ l.offline }}</div>
+                  <div style="padding:0.35rem 0.75rem;display:flex;gap:0.35rem;">
+                    <button type="button" onClick="{{ openFormDialog }}" title="Bearbeiten" style="width:2rem;height:2rem;display:grid;place-items:center;border:none;border-radius:8px;background:#ffffff;border:1px solid #e6e8ec;color:#475467;cursor:pointer;" style-hover="background:#f2f4f7;">
+                      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M0 11 L9.5 1.5 L12.5 4.5 L3 14 L0 14 Z" fill="currentColor"></path></svg>
+                    </button>
+                    <button type="button" onClick="{{ openDeleteLocation }}" title="Löschen" style="width:2rem;height:2rem;display:grid;place-items:center;border:none;border-radius:10px;background:transparent;color:#b02417;cursor:pointer;" style-hover="background:rgba(200,42,28,0.12);">
+                      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><rect x="1.5" y="3" width="11" height="1.8" fill="currentColor"></rect><rect x="5" y="0.5" width="4" height="1.8" fill="currentColor"></rect><path d="M2.5 5.5 H11.5 L10.6 14 H3.4 Z" fill="currentColor"></path></svg>
+                    </button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isIncidents }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:1rem;">
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:0.75rem 1rem;width:100%;">
+              <h2 style="margin:0.25rem 0 0 0;flex:1 1 12rem;font-size:1.5rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Offline-Vorfälle</h2>
+              <span style="display:inline-block;font-size:0.75rem;font-weight:600;line-height:1;padding:0.45em 0.75em;border-radius:999px;background:{{ openCountBg }};color:{{ openCountFg }};">{{ openCountText }}</span>
+              <input type="text" placeholder="Filtern …" value="{{ incidentsFilter }}" onInput="{{ setIncidentsFilter }}" style="height:2.5rem;width:15rem;border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;padding:0 0.75rem;color:#1f2429;" />
+              <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+                <input type="checkbox" checked="{{ showAcknowledged }}" onChange="{{ toggleAck }}" style="width:1.1rem;height:1.1rem;accent-color:#4488dd;cursor:pointer;" />
+                <span>Auch quittierte Vorfälle anzeigen</span>
+              </label>
+            </div>
+            <p style="margin:0;font-size:0.875rem;color:#4b5563;max-width:70em;text-wrap:pretty;">Diese Vorfälle hat ein Terminal aus seinem Offline-Betrieb gemeldet. Eine verlorene Buchung ist eine Programmausführung, die das Terminal offline abgerechnet hat, die das Backend aber endgültig abgelehnt hat - der Betrag wurde also nie gutgeschrieben oder belastet. Eine Geister-Ausführung ist eine Ausführung, die nach einem fehlgeschlagenen Abbruch offen geblieben ist. Solange ein Vorfall nicht quittiert ist, meldet die Betriebsüberwachung Alarm; die Quittierung beendet den Alarm, der Vorfall bleibt als Beleg erhalten.</p>
+            <div style="border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;overflow-x:auto;overflow-y:hidden;">
+              <div style="display:grid;grid-template-columns:160px 160px 144px 176px 176px 112px 1fr 144px 120px;min-width:1280px;background:#ffffff;border-bottom:1px solid #e6e8ec;color:#667085;font-weight:600;font-size:0.75rem;letter-spacing:0.04em;text-transform:uppercase;">
+                <div onClick="{{ sortIncidentsOccurred }}" style="padding:0.7rem 1rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Aufgetreten<span style="color:#4488dd;font-size:0.6875rem;">{{ arrIncidentsOccurred }}</span></div>
+                <div onClick="{{ sortIncidentsReported }}" style="padding:0.7rem 1rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Gemeldet<span style="color:#4488dd;font-size:0.6875rem;">{{ arrIncidentsReported }}</span></div>
+                <div onClick="{{ sortIncidentsLocation }}" style="padding:0.7rem 1rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Standort<span style="color:#4488dd;font-size:0.6875rem;">{{ arrIncidentsLocation }}</span></div>
+                <div onClick="{{ sortIncidentsKind }}" style="padding:0.7rem 1rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Art<span style="color:#4488dd;font-size:0.6875rem;">{{ arrIncidentsKind }}</span></div>
+                <div style="padding:0.7rem 1rem;">Benutzer</div>
+                <div style="padding:0.7rem 1rem;">Betrag</div>
+                <div style="padding:0.7rem 1rem;">Grund</div>
+                <div style="padding:0.7rem 1rem;">Status</div>
+                <div style="padding:0.7rem 1rem;"></div>
+              </div>
+              <sc-for list="{{ incidents }}" as="i" hint-placeholder-count="3">
+                <div style="display:grid;grid-template-columns:160px 160px 144px 176px 176px 112px 1fr 144px 120px;min-width:1280px;align-items:center;border-top:1px solid #eef0f4;background:{{ i.bg }};font-size:0.9375rem;">
+                  <div style="padding:0.8rem 1rem;">{{ i.occurred }}</div>
+                  <div style="padding:0.8rem 1rem;">{{ i.reported }}</div>
+                  <div style="padding:0.8rem 1rem;">{{ i.location }}</div>
+                  <div style="padding:0.8rem 1rem;">{{ i.kind }}</div>
+                  <div style="padding:0.8rem 1rem;">{{ i.user }}</div>
+                  <div style="padding:0.8rem 1rem;color:#b02417;font-weight:600;white-space:nowrap;">{{ i.amount }}</div>
+                  <div style="padding:0.8rem 1rem;">{{ i.reason }}</div>
+                  <div style="padding:0.8rem 1rem;">
+                    <span title="{{ i.statusTitle }}" style="display:inline-block;font-size:0.75rem;font-weight:600;line-height:1;padding:0.45em 0.75em;border-radius:999px;background:{{ i.badgeBg }};color:{{ i.badgeFg }};">{{ i.status }}</span>
+                  </div>
+                  <div style="padding:0.35rem 0.75rem;">
+                    <sc-if value="{{ i.open }}" hint-placeholder-val="{{ true }}">
+                      <button type="button" onClick="{{ openAcknowledge }}" style="height:1.9rem;padding:0 0.85rem;border:none;border-radius:8px;background:#4488dd;color:#ffffff;font-size:0.8125rem;font-weight:600;cursor:pointer;" style-hover="background:#3b7bcb;">Quittieren</button>
+                    </sc-if>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:1rem;">
+            <h2 style="margin:0.25rem 0 0 0;font-size:1.5rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Übersicht</h2>
+            <div style="display:flex;flex-wrap:wrap;gap:1rem;">
+              <div style="min-width:14em;background:#ffffff;border:1px solid #e6e8ec;border-radius:12px;box-shadow:0 1px 2px rgba(16,24,40,0.06);padding:1.15rem 1.35rem;display:flex;flex-direction:column;gap:0.15rem;">
+                <span style="font-size:1.75rem;font-weight:600;line-height:1.2;color:#2f3d44;">{{ ownCredit }}</span>
+                <span style="font-size:0.875rem;color:#6b7280;">Guthaben</span>
+              </div>
+              <div style="min-width:14em;background:#ffffff;border:1px solid #e6e8ec;border-radius:12px;box-shadow:0 1px 2px rgba(16,24,40,0.06);padding:1.15rem 1.35rem;display:flex;flex-direction:column;gap:0.15rem;">
+                <span style="font-size:1.75rem;font-weight:600;line-height:1.2;color:#2f3d44;">{{ ownLastInpayment }}</span>
+                <span style="font-size:0.875rem;color:#6b7280;">Letzte Einzahlung</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:0.75rem 1rem;">
+              <h3 style="margin:0.5rem 0 0 0;flex:1 1 10rem;font-size:1.125rem;font-weight:600;color:#2f3d44;">Buchungen</h3>
+              <input type="text" placeholder="Filtern …" value="{{ bookingsFilter }}" onInput="{{ setBookingsFilter }}" style="height:2.5rem;width:15rem;border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;padding:0 0.75rem;color:#1f2429;" />
+            </div>
+            <div style="border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;overflow-x:auto;overflow-y:hidden;">
+              <div style="display:grid;grid-template-columns:192px 128px 1fr;min-width:600px;background:#ffffff;border-bottom:1px solid #e6e8ec;color:#667085;font-weight:600;font-size:0.75rem;letter-spacing:0.04em;text-transform:uppercase;">
+                <div onClick="{{ sortBookingsDate }}" style="padding:0.7rem 1.25rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Datum<span style="color:#4488dd;font-size:0.6875rem;">{{ arrBookingsDate }}</span></div>
+                <div onClick="{{ sortBookingsAmount }}" style="padding:0.7rem 1.25rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Betrag<span style="color:#4488dd;font-size:0.6875rem;">{{ arrBookingsAmount }}</span></div>
+                <div onClick="{{ sortBookingsText }}" style="padding:0.7rem 1.25rem;display:flex;align-items:center;gap:0.35rem;cursor:pointer;user-select:none;">Buchungstext<span style="color:#4488dd;font-size:0.6875rem;">{{ arrBookingsText }}</span></div>
+              </div>
+              <sc-for list="{{ bookings }}" as="b" hint-placeholder-count="6">
+                <div style="display:grid;grid-template-columns:192px 128px 1fr;min-width:600px;align-items:center;border-top:1px solid #eef0f4;background:{{ b.bg }};" style-hover="background:#f8fafc;">
+                  <div style="padding:0.85rem 1.25rem;">{{ b.date }}</div>
+                  <div style="padding:0.85rem 1.25rem;color:{{ b.color }};">{{ b.amount }}</div>
+                  <div style="padding:0.85rem 1.25rem;">{{ b.text }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+      </main>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ dialogOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeDialog }}" style="position:fixed;inset:0;background:rgba(16,24,40,0.5);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:60;padding:2rem;">
+
+      <sc-if value="{{ isDeviceDialog }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stop }}" style="width:46rem;max-width:100%;max-height:100%;background:#ffffff;border-radius:16px;box-shadow:0 24px 48px -12px rgba(16,24,40,0.28);display:flex;flex-direction:column;overflow:hidden;">
+          <div style="display:flex;align-items:flex-start;gap:1rem;padding:1.5rem 1.5rem 0.25rem 1.5rem;flex-shrink:0;"><div style="flex:1;font-size:1.25rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Gerät bearbeiten</div><button type="button" onClick="{{ closeDialog }}" title="Schließen" style="width:2rem;height:2rem;flex-shrink:0;display:grid;place-items:center;border:none;border-radius:8px;background:transparent;color:#98a2b3;font-size:1rem;line-height:1;cursor:pointer;" style-hover="background:#f2f4f7;color:#475467;">✕</button></div>
+          <div style="flex:1;min-height:0;overflow:auto;padding:1rem 1.5rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:1.25rem;">
+            <div style="display:flex;flex-direction:column;gap:0.75rem;"><div style="font-size:0.75rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#667085;">Stammdaten</div><div style="border:1px solid #eef0f4;border-radius:12px;background:#fcfcfd;padding:1rem 1.15rem;display:grid;grid-template-columns:1fr 1fr;gap:0.9rem 1.25rem;"><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Name</span><input type="text" defaultValue="Waschmaschine 1" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" /></label><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Position</span><select defaultValue="1" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.55rem;color:#101828;"><option>1</option><option>2</option><option>3</option><option>4</option></select><span style="font-size:0.75rem;color:#667085;line-height:1.45;">Die Gerätenummer, unter der das Gerät im Terminal angezeigt wird.</span></label><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Standort</span><select defaultValue="Waschküche Haus A" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.55rem;color:#101828;"><option>Waschküche Haus A</option><option>Waschküche Haus B</option></select></label><div></div><label style="grid-column:1 / -1;display:flex;align-items:center;gap:0.6rem;padding:0.25rem 0;cursor:pointer;"><input type="checkbox" defaultChecked="{{ true }}" style="flex-shrink:0;width:1.15rem;height:1.15rem;accent-color:#4488dd;cursor:pointer;" /><span style="font-size:0.875rem;color:#344054;font-weight:600;">Aktiviert</span></label></div></div>
+            <div style="display:flex;flex-direction:column;gap:0.75rem;"><div style="font-size:0.75rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#667085;">Gateway-Anbindung</div><div style="border:1px solid #eef0f4;border-radius:12px;background:#fcfcfd;padding:1rem 1.15rem;display:grid;grid-template-columns:1fr 1fr;gap:0.9rem 1.25rem;"><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Fhem Name</span><input type="text" defaultValue="WM_A1" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" /><span style="font-size:0.75rem;color:#667085;line-height:1.45;">Der Name des Gerätes im Fhem-Server.</span></label><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Fhem Switch Name</span><input type="text" defaultValue="WM_A1_SW" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" /><span style="font-size:0.75rem;color:#667085;line-height:1.45;">Der Name des Schalters für das Gerät im Fhem-Server.</span></label><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Fhem Power Name</span><input type="text" defaultValue="WM_A1_PWR" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" /><span style="font-size:0.75rem;color:#667085;line-height:1.45;">Der Name des Leistungs-Messungs-Kanals im Fhem-Server.</span></label><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">deCONZ UUID</span><input type="text" defaultValue="" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" /><span style="font-size:0.75rem;color:#667085;line-height:1.45;">Die UUID des Zigbee-Geräts im deCONZ-Gateway (falls verwendet).</span></label></div></div>
+            <div style="display:flex;flex-direction:column;gap:0.75rem;"><div style="font-size:0.75rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#667085;">Automatisches Ende</div><div style="border:1px solid #eef0f4;border-radius:12px;background:#fcfcfd;padding:1rem 1.15rem;display:grid;grid-template-columns:1fr 1fr;gap:0.9rem 1.25rem;"><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Schwellwert (W)</span><input type="number" defaultValue="5" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" /><span style="font-size:0.75rem;color:#667085;line-height:1.45;">Schwellwert der abgenommenen Leistung in Watt, bei dessen Unterschreitung das laufende Programm beendet wird.</span></label><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Wartezeit (s)</span><input type="number" defaultValue="120" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" /><span style="font-size:0.75rem;color:#667085;line-height:1.45;">Wartezeit nach Unterschreiten des Schwellwerts, bevor das Programm automatisch beendet wird.</span></label></div></div>
+            <div style="display:flex;flex-direction:column;gap:0.75rem;"><div style="font-size:0.75rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#667085;">Zuordnung</div><div style="border:1px solid #eef0f4;border-radius:12px;background:#fcfcfd;padding:1rem 1.15rem;display:grid;grid-template-columns:1fr 1fr;gap:0.9rem 1.25rem;"><div style="grid-column:1 / -1;font-size:0.8125rem;color:#344054;font-weight:600;">Programme</div><div style="grid-column:1 / -1;min-height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0.4rem 0.5rem;display:flex;flex-wrap:wrap;gap:0.35rem;align-items:center;"><span style="display:inline-flex;align-items:center;gap:0.35rem;background:#eef2f7;border:1px solid #e0e6ee;border-radius:8px;padding:0.2rem 0.55rem;font-size:0.8125rem;color:#344054;">Waschen 30° <span style="color:#667085;cursor:pointer;">✕</span></span><span style="display:inline-flex;align-items:center;gap:0.35rem;background:#eef2f7;border:1px solid #e0e6ee;border-radius:8px;padding:0.2rem 0.55rem;font-size:0.8125rem;color:#344054;">Waschen 60° <span style="color:#667085;cursor:pointer;">✕</span></span><span style="display:inline-flex;align-items:center;gap:0.35rem;background:#eef2f7;border:1px solid #e0e6ee;border-radius:8px;padding:0.2rem 0.55rem;font-size:0.8125rem;color:#344054;">Kochwäsche 90° <span style="color:#667085;cursor:pointer;">✕</span></span></div><div style="grid-column:1 / -1;font-size:0.8125rem;color:#344054;font-weight:600;">Benutzergruppen</div><div style="grid-column:1 / -1;min-height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0.4rem 0.5rem;display:flex;flex-wrap:wrap;gap:0.35rem;align-items:center;"><span style="display:inline-flex;align-items:center;gap:0.35rem;background:#eef2f7;border:1px solid #e0e6ee;border-radius:8px;padding:0.2rem 0.55rem;font-size:0.8125rem;color:#344054;">Standard <span style="color:#667085;cursor:pointer;">✕</span></span><span style="display:inline-flex;align-items:center;gap:0.35rem;background:#eef2f7;border:1px solid #e0e6ee;border-radius:8px;padding:0.2rem 0.55rem;font-size:0.8125rem;color:#344054;">Mitarbeiter <span style="color:#667085;cursor:pointer;">✕</span></span></div></div></div>
+          </div>
+          <div style="flex-shrink:0;padding:1.1rem 1.5rem;display:flex;justify-content:flex-end;gap:0.75rem;border-top:1px solid #eef0f4;background:#fcfcfd;"><button type="button" onClick="{{ closeDialog }}" style="height:2.5rem;padding:0 1.1rem;border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;color:#344054;font-weight:600;cursor:pointer;" style-hover="background:#f2f4f7;">Abbrechen</button><button type="button" onClick="{{ saveDevice }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#4488dd;color:#ffffff;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(68,136,221,0.35);" style-hover="background:#3b7bcb;">Speichern</button></div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isUserDialog }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stop }}" style="width:35em;max-width:100%;max-height:100%;overflow:auto;background:#ffffff;border-radius:16px;box-shadow:0 24px 48px -12px rgba(16,24,40,0.28);display:flex;flex-direction:column;">
+          <div style="display:flex;align-items:flex-start;gap:1rem;padding:1.5rem 1.5rem 0.25rem 1.5rem;"><div style="flex:1;font-size:1.25rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Benutzer bearbeiten</div><button type="button" onClick="{{ closeDialog }}" title="Schließen" style="width:2rem;height:2rem;flex-shrink:0;display:grid;place-items:center;border:none;border-radius:8px;background:transparent;color:#98a2b3;font-size:1rem;line-height:1;cursor:pointer;" style-hover="background:#f2f4f7;color:#475467;">✕</button></div>
+          <div style="padding:1rem 1.5rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:0.75rem;">
+            <label style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Name</span>
+              <input type="text" defaultValue="Anna Brandt" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" />
+            </label>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Username</span>
+              <input type="text" defaultValue="abrandt" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" />
+            </label>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Email</span>
+              <input type="text" defaultValue="anna.brandt@example.org" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" />
+              <span style="font-size:0.75rem;color:#667085;line-height:1.45;">Optional</span>
+            </label>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Kartennummern</span>
+              <textarea rows="3" defaultValue="1004523991" style="border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0.5rem 0.7rem;resize:vertical;color:#101828;"></textarea>
+              <span style="font-size:0.75rem;color:#667085;line-height:1.45;">Die Kartennummern, die dem Benutzer zugeordnet sind. Eine Nummer pro Zeile.</span>
+            </label>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Benutzergruppe</span>
+              <select defaultValue="Standard" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.55rem;color:#101828;">
+                <option>Standard</option>
+                <option>Mitarbeiter</option>
+                <option>Gäste</option>
+              </select>
+            </label>
+            <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+              <input type="checkbox" style="width:1.1rem;height:1.1rem;accent-color:#4488dd;cursor:pointer;" />
+              <span>Gesperrt</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+              <input type="checkbox" style="width:1.1rem;height:1.1rem;accent-color:#4488dd;cursor:pointer;" />
+              <span>Sende dem Benutzer per Email ein neues Passwort</span>
+            </label>
+          </div>
+          <div style="padding:1.1rem 1.5rem;display:flex;justify-content:flex-end;gap:0.75rem;border-top:1px solid #eef0f4;background:#fcfcfd;border-radius:0 0 16px 16px;">
+            <button type="button" onClick="{{ closeDialog }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#ffffff;border:1px solid #e6e8ec;color:#344054;font-weight:600;cursor:pointer;" style-hover="background:#f2f4f7;">Abbrechen</button>
+            <button type="button" onClick="{{ saveUser }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#4488dd;color:#ffffff;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(68,136,221,0.35);" style-hover="background:#3b7bcb;">Speichern</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isCreditDialog }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stop }}" style="width:28em;max-width:100%;background:#ffffff;border-radius:16px;box-shadow:0 24px 48px -12px rgba(16,24,40,0.28);display:flex;flex-direction:column;">
+          <div style="display:flex;align-items:flex-start;gap:1rem;padding:1.5rem 1.5rem 0.25rem 1.5rem;"><div style="flex:1;font-size:1.25rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Guthaben von Anna Brandt</div><button type="button" onClick="{{ closeDialog }}" title="Schließen" style="width:2rem;height:2rem;flex-shrink:0;display:grid;place-items:center;border:none;border-radius:8px;background:transparent;color:#98a2b3;font-size:1rem;line-height:1;cursor:pointer;" style-hover="background:#f2f4f7;color:#475467;">✕</button></div>
+          <div style="padding:1rem 1.5rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:0.75rem;">
+            <div style="display:flex;flex-direction:column;gap:0.35rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Aktion</span>
+              <div style="display:flex;gap:1.25rem;">
+                <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;">
+                  <input type="radio" name="credit-action" defaultChecked="{{ true }}" style="accent-color:#4488dd;cursor:pointer;" />
+                  <span>Einzahlung</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;">
+                  <input type="radio" name="credit-action" style="accent-color:#4488dd;cursor:pointer;" />
+                  <span>Auszahlung</span>
+                </label>
+              </div>
+            </div>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Betrag</span>
+              <input type="text" defaultValue="10,00" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" />
+            </label>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Buchungstext</span>
+              <input type="text" defaultValue="Einzahlung vom Waschportal von Martina Kessler" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" />
+            </label>
+          </div>
+          <div style="padding:1.1rem 1.5rem;display:flex;justify-content:flex-end;gap:0.75rem;border-top:1px solid #eef0f4;background:#fcfcfd;border-radius:0 0 16px 16px;">
+            <button type="button" onClick="{{ closeDialog }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#ffffff;border:1px solid #e6e8ec;color:#344054;font-weight:600;cursor:pointer;" style-hover="background:#f2f4f7;">Abbrechen</button>
+            <button type="button" onClick="{{ bookCredit }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#4488dd;color:#ffffff;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(68,136,221,0.35);" style-hover="background:#3b7bcb;">Buchen</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isConfirmDialog }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stop }}" style="width:26em;max-width:100%;background:#ffffff;border-radius:16px;box-shadow:0 24px 48px -12px rgba(16,24,40,0.28);display:flex;flex-direction:column;">
+          <div style="display:flex;align-items:flex-start;gap:1rem;padding:1.5rem 1.5rem 0.25rem 1.5rem;"><div style="flex:1;font-size:1.25rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">{{ confirmTitle }}</div><button type="button" onClick="{{ closeDialog }}" title="Schließen" style="width:2rem;height:2rem;flex-shrink:0;display:grid;place-items:center;border:none;border-radius:8px;background:transparent;color:#98a2b3;font-size:1rem;line-height:1;cursor:pointer;" style-hover="background:#f2f4f7;color:#475467;">✕</button></div>
+          <div style="padding:0.25rem 1.5rem 1.25rem 1.5rem;color:#4b5563;text-wrap:pretty;">{{ confirmText }}</div>
+          <div style="padding:1.1rem 1.5rem;display:flex;justify-content:flex-end;gap:0.75rem;border-top:1px solid #eef0f4;background:#fcfcfd;border-radius:0 0 16px 16px;">
+            <button type="button" onClick="{{ closeDialog }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#ffffff;border:1px solid #e6e8ec;color:#344054;font-weight:600;cursor:pointer;" style-hover="background:#f2f4f7;">Nein</button>
+            <button type="button" onClick="{{ confirmAction }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#c82a1c;color:#ffffff;font-weight:500;cursor:pointer;" style-hover="background:#ad2417;">Ja</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isProgramDialog }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stop }}" style="width:46rem;max-width:100%;max-height:100%;background:#ffffff;border-radius:16px;box-shadow:0 24px 48px -12px rgba(16,24,40,0.28);display:flex;flex-direction:column;overflow:hidden;">
+          <div style="display:flex;align-items:flex-start;gap:1rem;padding:1.5rem 1.5rem 0.25rem 1.5rem;flex-shrink:0;"><div style="flex:1;font-size:1.25rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Programm bearbeiten</div><button type="button" onClick="{{ closeDialog }}" title="Schließen" style="width:2rem;height:2rem;flex-shrink:0;display:grid;place-items:center;border:none;border-radius:8px;background:transparent;color:#98a2b3;font-size:1rem;line-height:1;cursor:pointer;" style-hover="background:#f2f4f7;color:#475467;">✕</button></div>
+          <div style="flex:1;min-height:0;overflow:auto;padding:1rem 1.5rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:1.25rem;">
+            <div style="display:flex;flex-direction:column;gap:0.75rem;"><div style="font-size:0.75rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#667085;">Stammdaten</div><div style="border:1px solid #eef0f4;border-radius:12px;background:#fcfcfd;padding:1rem 1.15rem;display:grid;grid-template-columns:1fr 1fr;gap:0.9rem 1.25rem;"><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Name</span><input type="text" defaultValue="Waschen 30°" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" /></label><div></div><label style="grid-column:1 / -1;display:flex;align-items:center;gap:0.6rem;padding:0.25rem 0;cursor:pointer;"><input type="checkbox" defaultChecked="{{ true }}" style="flex-shrink:0;width:1.15rem;height:1.15rem;accent-color:#4488dd;cursor:pointer;" /><span style="font-size:0.875rem;color:#344054;font-weight:600;">Aktiviert</span></label></div></div>
+            <div style="display:flex;flex-direction:column;gap:0.75rem;"><div style="font-size:0.75rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#667085;">Preis</div><div style="border:1px solid #eef0f4;border-radius:12px;background:#fcfcfd;padding:1rem 1.15rem;display:grid;grid-template-columns:1fr 1fr;gap:0.9rem 1.25rem;"><div style="grid-column:1 / -1;display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Typ</span><div style="display:inline-flex;align-self:flex-start;padding:3px;background:#f2f4f7;border-radius:10px;gap:3px;"><button type="button" onClick="{{ setProgramStatic }}" style="height:2.1rem;padding:0 1rem;border:none;border-radius:8px;font-weight:600;cursor:pointer;background:{{ segStatic.bg }};color:{{ segStatic.fg }};box-shadow:{{ segStatic.sh }};">Statisch</button><button type="button" onClick="{{ setProgramDynamic }}" style="height:2.1rem;padding:0 1rem;border:none;border-radius:8px;font-weight:600;cursor:pointer;background:{{ segDynamic.bg }};color:{{ segDynamic.fg }};box-shadow:{{ segDynamic.sh }};">Dynamisch</button></div></div><sc-if value="{{ programStatic }}" hint-placeholder-val="{{ true }}"><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Preis</span><div style="display:flex;align-items:center;gap:0.5rem;"><input type="text" defaultValue="1,50" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" /><span style="color:#667085;font-weight:600;">€</span></div></label></sc-if><sc-if value="{{ programDynamic }}" hint-placeholder-val="{{ false }}"><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Grundgebühr</span><div style="display:flex;align-items:center;gap:0.5rem;"><input type="text" defaultValue="0,50" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" /><span style="color:#667085;font-weight:600;">€</span></div></label></sc-if><sc-if value="{{ programDynamic }}" hint-placeholder-val="{{ false }}"><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Zeitpreis</span><div style="display:flex;align-items:center;gap:0.5rem;"><input type="text" defaultValue="0,10" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" /><span style="color:#667085;font-weight:600;">€</span></div></label></sc-if><sc-if value="{{ programDynamic }}" hint-placeholder-val="{{ false }}"><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Abr.-Intervall</span><select defaultValue="Minuten" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.55rem;color:#101828;"><option>Sekunden</option><option>Minuten</option><option>Stunden</option></select><span style="font-size:0.75rem;color:#667085;line-height:1.45;">Nach jeder verstrichenen Einheit wird der Zeitpreis fällig.</span></label></sc-if></div></div>
+            <div style="display:flex;flex-direction:column;gap:0.75rem;"><div style="font-size:0.75rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#667085;">Laufzeit</div><div style="border:1px solid #eef0f4;border-radius:12px;background:#fcfcfd;padding:1rem 1.15rem;display:grid;grid-template-columns:1fr 1fr;gap:0.9rem 1.25rem;"><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Maximaldauer</span><div style="display:flex;gap:0.5rem;"><input type="number" defaultValue="30" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;flex:2;" /><select defaultValue="min" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.55rem;color:#101828;flex:1;"><option>s</option><option>min</option><option>h</option></select></div></label><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Freie Zeit</span><div style="display:flex;gap:0.5rem;"><input type="number" defaultValue="0" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;flex:2;" /><select defaultValue="s" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.55rem;color:#101828;flex:1;"><option>s</option><option>min</option><option>h</option></select></div></label><label style="display:flex;flex-direction:column;gap:0.3rem;"><span style="font-size:0.8125rem;color:#344054;font-weight:600;">Frühester Abbruch</span><div style="display:flex;gap:0.5rem;"><input type="number" defaultValue="0" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;flex:2;" /><select defaultValue="s" style="height:2.5rem;width:100%;box-sizing:border-box;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.55rem;color:#101828;flex:1;"><option>s</option><option>min</option><option>h</option></select></div></label><div></div><label style="grid-column:1 / -1;display:flex;align-items:center;gap:0.6rem;padding:0.25rem 0;cursor:pointer;"><input type="checkbox" defaultChecked="{{ true }}" style="flex-shrink:0;width:1.15rem;height:1.15rem;accent-color:#4488dd;cursor:pointer;" /><span style="font-size:0.875rem;color:#344054;font-weight:600;">Auto-Ende</span></label></div></div>
+            <div style="display:flex;flex-direction:column;gap:0.75rem;"><div style="font-size:0.75rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#667085;">Zuordnung</div><div style="border:1px solid #eef0f4;border-radius:12px;background:#fcfcfd;padding:1rem 1.15rem;display:grid;grid-template-columns:1fr 1fr;gap:0.9rem 1.25rem;"><div style="grid-column:1 / -1;font-size:0.8125rem;color:#344054;font-weight:600;">Benutzergruppen</div><div style="grid-column:1 / -1;min-height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0.4rem 0.5rem;display:flex;flex-wrap:wrap;gap:0.35rem;align-items:center;"><span style="display:inline-flex;align-items:center;gap:0.35rem;background:#eef2f7;border:1px solid #e0e6ee;border-radius:8px;padding:0.2rem 0.55rem;font-size:0.8125rem;color:#344054;">Standard <span style="color:#667085;cursor:pointer;">✕</span></span><span style="display:inline-flex;align-items:center;gap:0.35rem;background:#eef2f7;border:1px solid #e0e6ee;border-radius:8px;padding:0.2rem 0.55rem;font-size:0.8125rem;color:#344054;">Mitarbeiter <span style="color:#667085;cursor:pointer;">✕</span></span></div></div></div>
+          </div>
+          <div style="flex-shrink:0;padding:1.1rem 1.5rem;display:flex;justify-content:flex-end;gap:0.75rem;border-top:1px solid #eef0f4;background:#fcfcfd;"><button type="button" onClick="{{ closeDialog }}" style="height:2.5rem;padding:0 1.1rem;border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;color:#344054;font-weight:600;cursor:pointer;" style-hover="background:#f2f4f7;">Abbrechen</button><button type="button" onClick="{{ saveProgram }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#4488dd;color:#ffffff;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(68,136,221,0.35);" style-hover="background:#3b7bcb;">Speichern</button></div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isGroupDialog }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stop }}" style="width:45em;max-width:100%;max-height:100%;overflow:auto;background:#ffffff;border-radius:16px;box-shadow:0 24px 48px -12px rgba(16,24,40,0.28);display:flex;flex-direction:column;">
+          <div style="display:flex;align-items:flex-start;gap:1rem;padding:1.5rem 1.5rem 0.25rem 1.5rem;"><div style="flex:1;font-size:1.25rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Gruppe bearbeiten</div><button type="button" onClick="{{ closeDialog }}" title="Schließen" style="width:2rem;height:2rem;flex-shrink:0;display:grid;place-items:center;border:none;border-radius:8px;background:transparent;color:#98a2b3;font-size:1rem;line-height:1;cursor:pointer;" style-hover="background:#f2f4f7;color:#475467;">✕</button></div>
+          <div style="padding:1rem 1.5rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:0.75rem;">
+            <label style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Name</span>
+              <input type="text" defaultValue="Mitarbeiter" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" />
+            </label>
+            <div style="display:flex;flex-direction:column;gap:0.35rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Rabattierung</span>
+              <div style="display:flex;gap:1.25rem;">
+                <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;">
+                  <input type="radio" name="discount-type" checked="{{ discountNone }}" onChange="{{ setDiscountNone }}" style="accent-color:#4488dd;cursor:pointer;" />
+                  <span>Keiner</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;">
+                  <input type="radio" name="discount-type" checked="{{ discountFix }}" onChange="{{ setDiscountFix }}" style="accent-color:#4488dd;cursor:pointer;" />
+                  <span>Fix</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;">
+                  <input type="radio" name="discount-type" checked="{{ discountFactor }}" onChange="{{ setDiscountFactor }}" style="accent-color:#4488dd;cursor:pointer;" />
+                  <span>Faktor</span>
+                </label>
+              </div>
+            </div>
+            <sc-if value="{{ discountFix }}" hint-placeholder-val="{{ false }}">
+              <label style="display:flex;flex-direction:column;gap:0.2rem;">
+                <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Rabatt (€)</span>
+                <input type="number" defaultValue="0.5" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" />
+              </label>
+            </sc-if>
+            <sc-if value="{{ discountFactor }}" hint-placeholder-val="{{ true }}">
+              <label style="display:flex;flex-direction:column;gap:0.2rem;">
+                <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Rabatt (%)</span>
+                <input type="number" defaultValue="15" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" />
+              </label>
+            </sc-if>
+            <h3 style="margin:1rem 0 -0.25rem 0;font-size:0.75rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#667085;">Standorte</h3>
+            <div style="min-height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0.4rem 0.5rem;display:flex;flex-wrap:wrap;gap:0.35rem;align-items:center;">
+              <span style="display:inline-flex;align-items:center;gap:0.35rem;background:#eef2f7;border:1px solid #e0e6ee;border-radius:8px;padding:0.2rem 0.55rem;font-size:0.8125rem;color:#344054;">Waschküche Haus A <span style="color:#6b7280;cursor:pointer;">✕</span></span>
+              <span style="display:inline-flex;align-items:center;gap:0.35rem;background:#eef2f7;border:1px solid #e0e6ee;border-radius:8px;padding:0.2rem 0.55rem;font-size:0.8125rem;color:#344054;">Waschküche Haus B <span style="color:#6b7280;cursor:pointer;">✕</span></span>
+            </div>
+            <h3 style="margin:1rem 0 -0.25rem 0;font-size:0.75rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#667085;">Geräte</h3>
+            <div style="min-height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0.4rem 0.5rem;display:flex;flex-wrap:wrap;gap:0.35rem;align-items:center;">
+              <span style="display:inline-flex;align-items:center;gap:0.35rem;background:#eef2f7;border:1px solid #e0e6ee;border-radius:8px;padding:0.2rem 0.55rem;font-size:0.8125rem;color:#344054;">Waschmaschine 1 (Waschküche Haus A) <span style="color:#6b7280;cursor:pointer;">✕</span></span>
+              <span style="display:inline-flex;align-items:center;gap:0.35rem;background:#eef2f7;border:1px solid #e0e6ee;border-radius:8px;padding:0.2rem 0.55rem;font-size:0.8125rem;color:#344054;">Trockner 1 (Waschküche Haus B) <span style="color:#6b7280;cursor:pointer;">✕</span></span>
+            </div>
+            <h3 style="margin:1rem 0 -0.25rem 0;font-size:0.75rem;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#667085;">Programme</h3>
+            <div style="min-height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0.4rem 0.5rem;display:flex;flex-wrap:wrap;gap:0.35rem;align-items:center;">
+              <span style="display:inline-flex;align-items:center;gap:0.35rem;background:#eef2f7;border:1px solid #e0e6ee;border-radius:8px;padding:0.2rem 0.55rem;font-size:0.8125rem;color:#344054;">Waschen 30° <span style="color:#6b7280;cursor:pointer;">✕</span></span>
+              <span style="display:inline-flex;align-items:center;gap:0.35rem;background:#eef2f7;border:1px solid #e0e6ee;border-radius:8px;padding:0.2rem 0.55rem;font-size:0.8125rem;color:#344054;">Trocknen <span style="color:#6b7280;cursor:pointer;">✕</span></span>
+            </div>
+          </div>
+          <div style="padding:1.1rem 1.5rem;display:flex;justify-content:flex-end;gap:0.75rem;border-top:1px solid #eef0f4;background:#fcfcfd;border-radius:0 0 16px 16px;">
+            <button type="button" onClick="{{ closeDialog }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#ffffff;border:1px solid #e6e8ec;color:#344054;font-weight:600;cursor:pointer;" style-hover="background:#f2f4f7;">Abbrechen</button>
+            <button type="button" onClick="{{ saveGroup }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#4488dd;color:#ffffff;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(68,136,221,0.35);" style-hover="background:#3b7bcb;">Speichern</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isLocationDialog }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stop }}" style="width:40em;max-width:100%;max-height:100%;overflow:auto;background:#ffffff;border-radius:16px;box-shadow:0 24px 48px -12px rgba(16,24,40,0.28);display:flex;flex-direction:column;">
+          <div style="display:flex;align-items:flex-start;gap:1rem;padding:1.5rem 1.5rem 0.25rem 1.5rem;"><div style="flex:1;font-size:1.25rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Standort bearbeiten</div><button type="button" onClick="{{ closeDialog }}" title="Schließen" style="width:2rem;height:2rem;flex-shrink:0;display:grid;place-items:center;border:none;border-radius:8px;background:transparent;color:#98a2b3;font-size:1rem;line-height:1;cursor:pointer;" style-hover="background:#f2f4f7;color:#475467;">✕</button></div>
+          <div style="padding:1rem 1.5rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:0.75rem;">
+            <label style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Name</span>
+              <input type="text" defaultValue="Waschküche Haus A" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" />
+            </label>
+            <div style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Benutzergruppen</span>
+              <div style="min-height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0.4rem 0.5rem;display:flex;flex-wrap:wrap;gap:0.35rem;align-items:center;">
+                <span style="display:inline-flex;align-items:center;gap:0.35rem;background:#eef2f7;border:1px solid #e0e6ee;border-radius:8px;padding:0.2rem 0.55rem;font-size:0.8125rem;color:#344054;">Standard <span style="color:#6b7280;cursor:pointer;">✕</span></span>
+                <span style="display:inline-flex;align-items:center;gap:0.35rem;background:#eef2f7;border:1px solid #e0e6ee;border-radius:8px;padding:0.2rem 0.55rem;font-size:0.8125rem;color:#344054;">Mitarbeiter <span style="color:#6b7280;cursor:pointer;">✕</span></span>
+              </div>
+            </div>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Offline-Maximaldauer (Minuten)</span>
+              <input type="number" defaultValue="120" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" />
+              <span style="font-size:0.75rem;color:#667085;line-height:1.45;">Wie lange darf ein Terminal dieses Standorts ohne Backend-Verbindung eigenständig neue Buchungen annehmen, bevor es sie ablehnt?</span>
+            </label>
+          </div>
+          <div style="padding:1.1rem 1.5rem;display:flex;justify-content:flex-end;gap:0.75rem;border-top:1px solid #eef0f4;background:#fcfcfd;border-radius:0 0 16px 16px;">
+            <button type="button" onClick="{{ closeDialog }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#ffffff;border:1px solid #e6e8ec;color:#344054;font-weight:600;cursor:pointer;" style-hover="background:#f2f4f7;">Abbrechen</button>
+            <button type="button" onClick="{{ saveLocation }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#4488dd;color:#ffffff;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(68,136,221,0.35);" style-hover="background:#3b7bcb;">Speichern</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isExpiredDialog }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stop }}" style="width:60em;max-width:100%;max-height:100%;overflow:auto;background:#ffffff;border-radius:16px;box-shadow:0 24px 48px -12px rgba(16,24,40,0.28);display:flex;flex-direction:column;">
+          <div style="display:flex;align-items:flex-start;gap:1rem;padding:1.5rem 1.5rem 0.25rem 1.5rem;"><div style="flex:1;font-size:1.25rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Verfallene Ausführungsaufträge von Jonas Weber</div><button type="button" onClick="{{ closeDialog }}" title="Schließen" style="width:2rem;height:2rem;flex-shrink:0;display:grid;place-items:center;border:none;border-radius:8px;background:transparent;color:#98a2b3;font-size:1rem;line-height:1;cursor:pointer;" style-hover="background:#f2f4f7;color:#475467;">✕</button></div>
+          <div style="padding:1rem 1.5rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:0.75rem;">
+            <p style="margin:0;font-size:0.875rem;color:#4b5563;text-wrap:pretty;">Diese Ausführungsaufträge wurden gestartet, jedoch nie beendet, möglicherweise durch einen Fehler im elwaClient. Der höchstmögliche Betrag von laufenden Ausführung wird beim Berechnen des Guthabens eines Benutzers zwar bereits berücksichtigt, jedoch existiert für nicht korrekt beendete Ausführungen kein Eintrag im Guthaben-Konto eines Benutzers.</p>
+            <div>
+              <button type="button" onClick="{{ finishAllExecutions }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#ffffff;border:1px solid #e6e8ec;color:#344054;font-weight:600;cursor:pointer;" style-hover="background:#f2f4f7;">Alle abrechnen</button>
+            </div>
+            <div style="border:1px solid #e6e8ec;border-radius:10px;background:#ffffff;overflow:auto;max-height:22em;">
+              <div style="display:grid;grid-template-columns:1.2fr 1.6fr 1.2fr 1fr 170px;min-width:760px;background:#ffffff;border-bottom:1px solid #e6e8ec;color:#667085;font-weight:600;font-size:0.75rem;letter-spacing:0.04em;text-transform:uppercase;">
+                <div style="padding:0.7rem 1.25rem;">Startdatum</div>
+                <div style="padding:0.7rem 1.25rem;">Gerät</div>
+                <div style="padding:0.7rem 1.25rem;">Programm</div>
+                <div style="padding:0.7rem 1.25rem;">Fälliger Betrag</div>
+                <div style="padding:0.7rem 1.25rem;"></div>
+              </div>
+              <sc-for list="{{ expiredExecutions }}" as="x" hint-placeholder-count="2">
+                <div style="display:grid;grid-template-columns:1.2fr 1.6fr 1.2fr 1fr 170px;min-width:760px;align-items:center;border-top:1px solid #eef0f4;background:{{ x.bg }};" style-hover="background:#f8fafc;">
+                  <div style="padding:0.85rem 1.25rem;">{{ x.start }}</div>
+                  <div style="padding:0.85rem 1.25rem;">{{ x.device }}</div>
+                  <div style="padding:0.85rem 1.25rem;">{{ x.program }}</div>
+                  <div style="padding:0.85rem 1.25rem;">{{ x.price }}</div>
+                  <div style="padding:0.35rem 0.75rem;display:flex;gap:0.35rem;align-items:center;">
+                    <button type="button" onClick="{{ finishExecution }}" style="height:1.9rem;padding:0 0.75rem;border:1px solid #e6e8ec;border-radius:8px;background:#ffffff;color:#344054;font-size:0.8125rem;font-weight:600;cursor:pointer;" style-hover="background:#f2f4f7;">Abrechnen</button>
+                    <button type="button" onClick="{{ openDeleteExecution }}" title="Löschen" style="width:1.75rem;height:1.75rem;display:grid;place-items:center;border:none;border-radius:10px;background:transparent;color:#b02417;cursor:pointer;" style-hover="background:rgba(200,42,28,0.12);">
+                      <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true"><rect x="1.5" y="3" width="11" height="1.8" fill="currentColor"></rect><rect x="5" y="0.5" width="4" height="1.8" fill="currentColor"></rect><path d="M2.5 5.5 H11.5 L10.6 14 H3.4 Z" fill="currentColor"></path></svg>
+                    </button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="padding:1.1rem 1.5rem;display:flex;justify-content:flex-end;border-top:1px solid #eef0f4;background:#fcfcfd;border-radius:0 0 16px 16px;">
+            <button type="button" onClick="{{ closeDialog }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#ffffff;border:1px solid #e6e8ec;color:#344054;font-weight:600;cursor:pointer;" style-hover="background:#f2f4f7;">Schließen</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isForgotDialog }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stop }}" style="width:22em;max-width:100%;background:#ffffff;border-radius:16px;box-shadow:0 24px 48px -12px rgba(16,24,40,0.28);display:flex;flex-direction:column;">
+          <div style="display:flex;align-items:flex-start;gap:1rem;padding:1.5rem 1.5rem 0.25rem 1.5rem;"><div style="flex:1;font-size:1.25rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Passwort zurücksetzen</div><button type="button" onClick="{{ closeDialog }}" title="Schließen" style="width:2rem;height:2rem;flex-shrink:0;display:grid;place-items:center;border:none;border-radius:8px;background:transparent;color:#98a2b3;font-size:1rem;line-height:1;cursor:pointer;" style-hover="background:#f2f4f7;color:#475467;">✕</button></div>
+          <div style="padding:1rem 1.5rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:0.75rem;">
+            <p style="margin:0;color:#4b5563;text-wrap:pretty;">Bitte gib hier deine Email-Adresse ein. Falls ein Konto zu dieser Adresse existiert, erhältst du einen Link, mit welchem du ein neues Passwort setzen kannst.</p>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Email</span>
+              <input type="email" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" />
+            </label>
+          </div>
+          <div style="padding:1.1rem 1.5rem;display:flex;justify-content:flex-end;gap:0.75rem;border-top:1px solid #eef0f4;background:#fcfcfd;border-radius:0 0 16px 16px;">
+            <button type="button" onClick="{{ closeDialog }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#ffffff;border:1px solid #e6e8ec;color:#344054;font-weight:600;cursor:pointer;" style-hover="background:#f2f4f7;">Abbrechen</button>
+            <button type="button" onClick="{{ sendReset }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#4488dd;color:#ffffff;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(68,136,221,0.35);" style-hover="background:#3b7bcb;">OK</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isSettingsDialog }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stop }}" style="width:35em;max-width:100%;background:#ffffff;border-radius:16px;box-shadow:0 24px 48px -12px rgba(16,24,40,0.28);display:flex;flex-direction:column;">
+          <div style="display:flex;align-items:flex-start;gap:1rem;padding:1.5rem 1.5rem 0.25rem 1.5rem;"><div style="flex:1;font-size:1.25rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Benutzer ändern - Martina Kessler</div><button type="button" onClick="{{ closeDialog }}" title="Schließen" style="width:2rem;height:2rem;flex-shrink:0;display:grid;place-items:center;border:none;border-radius:8px;background:transparent;color:#98a2b3;font-size:1rem;line-height:1;cursor:pointer;" style-hover="background:#f2f4f7;color:#475467;">✕</button></div>
+          <div style="padding:1rem 1.5rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:0.75rem;">
+            <label style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Email</span>
+              <input type="text" placeholder="Email-Adresse hier eintragen" defaultValue="martina.kessler@example.org" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" />
+            </label>
+            <label title="Sende Benachrichtigungen über abgeschlossene Waschvorgänge an meine Email-Adresse." style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+              <input type="checkbox" defaultChecked="{{ true }}" style="width:1.1rem;height:1.1rem;accent-color:#4488dd;cursor:pointer;" />
+              <span>Email-Benachrichtigung</span>
+            </label>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Pushover-Key</span>
+              <input type="text" placeholder="Schlüssel hier eintragen" defaultValue="" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" />
+              <span style="font-size:0.75rem;color:#667085;line-height:1.45;">Trage deinen User-Key von Pushover.net hier ein, um dich per Push-Benachrichtigung über beendete Waschvorgänge benachrichtigen zu lassen.</span>
+            </label>
+          </div>
+          <div style="padding:1.1rem 1.5rem;display:flex;justify-content:flex-end;gap:0.75rem;border-top:1px solid #eef0f4;background:#fcfcfd;border-radius:0 0 16px 16px;">
+            <button type="button" onClick="{{ closeDialog }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#ffffff;border:1px solid #e6e8ec;color:#344054;font-weight:600;cursor:pointer;" style-hover="background:#f2f4f7;">Abbrechen</button>
+            <button type="button" onClick="{{ saveSettings }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#4488dd;color:#ffffff;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(68,136,221,0.35);" style-hover="background:#3b7bcb;">OK</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isPasswordDialog }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stop }}" style="width:22em;max-width:100%;background:#ffffff;border-radius:16px;box-shadow:0 24px 48px -12px rgba(16,24,40,0.28);display:flex;flex-direction:column;">
+          <div style="display:flex;align-items:flex-start;gap:1rem;padding:1.5rem 1.5rem 0.25rem 1.5rem;"><div style="flex:1;font-size:1.25rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Passwort ändern - Martina Kessler</div><button type="button" onClick="{{ closeDialog }}" title="Schließen" style="width:2rem;height:2rem;flex-shrink:0;display:grid;place-items:center;border:none;border-radius:8px;background:transparent;color:#98a2b3;font-size:1rem;line-height:1;cursor:pointer;" style-hover="background:#f2f4f7;color:#475467;">✕</button></div>
+          <div style="padding:1rem 1.5rem 1.5rem 1.5rem;display:flex;flex-direction:column;gap:0.75rem;">
+            <label style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Altes Passwort</span>
+              <input type="password" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" />
+            </label>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Neues Passwort</span>
+              <input type="password" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" />
+              <span style="font-size:0.75rem;color:#667085;line-height:1.45;">Mindestens 8 Zeichen.</span>
+            </label>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;">
+              <span style="font-size:0.8125rem;color:#344054;font-weight:600;">Wiederholung</span>
+              <input type="password" style="height:2.5rem;border:1px solid #d0d5dd;border-radius:8px;background:#ffffff;padding:0 0.7rem;color:#101828;" />
+            </label>
+          </div>
+          <div style="padding:1.1rem 1.5rem;display:flex;justify-content:flex-end;gap:0.75rem;border-top:1px solid #eef0f4;background:#fcfcfd;border-radius:0 0 16px 16px;">
+            <button type="button" onClick="{{ closeDialog }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#ffffff;border:1px solid #e6e8ec;color:#344054;font-weight:600;cursor:pointer;" style-hover="background:#f2f4f7;">Abbrechen</button>
+            <button type="button" onClick="{{ savePassword }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#4488dd;color:#ffffff;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(68,136,221,0.35);" style-hover="background:#3b7bcb;">OK</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isHistoryDialog }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stop }}" style="width:50em;height:35em;max-width:100%;max-height:100%;background:#ffffff;border-radius:10px;box-shadow:0 24px 48px -12px rgba(16,24,40,0.28);display:flex;flex-direction:column;">
+          <div style="display:flex;align-items:flex-start;gap:1rem;padding:1.5rem 1.5rem 0.25rem 1.5rem;"><div style="flex:1;font-size:1.25rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Umsätze von Anna Brandt</div><button type="button" onClick="{{ closeDialog }}" title="Schließen" style="width:2rem;height:2rem;flex-shrink:0;display:grid;place-items:center;border:none;border-radius:8px;background:transparent;color:#98a2b3;font-size:1rem;line-height:1;cursor:pointer;" style-hover="background:#f2f4f7;color:#475467;">✕</button></div>
+          <div style="flex:1;min-height:0;margin:0.5rem 1.5rem 1.5rem 1.5rem;border:1px solid #e6e8ec;border-radius:10px;overflow:auto;">
+            <div style="display:grid;grid-template-columns:192px 128px 1fr;min-width:560px;background:#ffffff;border-bottom:1px solid #e6e8ec;color:#667085;font-weight:600;font-size:0.75rem;letter-spacing:0.04em;text-transform:uppercase;">
+              <div style="padding:0.7rem 1.25rem;">Datum</div>
+              <div style="padding:0.7rem 1.25rem;">Betrag</div>
+              <div style="padding:0.7rem 1.25rem;">Buchungstext</div>
+            </div>
+            <sc-for list="{{ bookings }}" as="b" hint-placeholder-count="6">
+              <div style="display:grid;grid-template-columns:192px 128px 1fr;min-width:560px;align-items:center;border-top:1px solid #eef0f4;background:{{ b.bg }};" style-hover="background:#f8fafc;">
+                <div style="padding:0.85rem 1.25rem;">{{ b.date }}</div>
+                <div style="padding:0.85rem 1.25rem;color:{{ b.color }};">{{ b.amount }}</div>
+                <div style="padding:0.85rem 1.25rem;">{{ b.text }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isLogDialog }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stop }}" style="width:52em;max-width:100%;max-height:100%;background:#ffffff;border-radius:10px;box-shadow:0 24px 48px -12px rgba(16,24,40,0.28);display:flex;flex-direction:column;">
+          <div style="display:flex;align-items:flex-start;gap:1rem;padding:1.5rem 1.5rem 0.25rem 1.5rem;"><div style="flex:1;font-size:1.25rem;font-weight:600;color:#101828;letter-spacing:-0.01em;">Log des Terminals</div><button type="button" onClick="{{ closeDialog }}" title="Schließen" style="width:2rem;height:2rem;flex-shrink:0;display:grid;place-items:center;border:none;border-radius:8px;background:transparent;color:#98a2b3;font-size:1rem;line-height:1;cursor:pointer;" style-hover="background:#f2f4f7;color:#475467;">✕</button></div>
+          <div style="margin:0.5rem 1.5rem;padding:0.75rem;background:#1f2429;color:#dfe7ea;border-radius:10px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:0.8125rem;line-height:1.6;max-height:22em;overflow:auto;white-space:pre;">{{ logText }}</div>
+          <div style="padding:1.1rem 1.5rem;display:flex;justify-content:flex-end;border-top:1px solid #eef0f4;background:#fcfcfd;border-radius:0 0 16px 16px;">
+            <button type="button" onClick="{{ closeDialog }}" style="height:2.5rem;padding:0 1.1rem;border:none;border-radius:10px;background:#ffffff;border:1px solid #e6e8ec;color:#344054;font-weight:600;cursor:pointer;" style-hover="background:#f2f4f7;">Schließen</button>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ toastVisible }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;left:1rem;bottom:1rem;z-index:80;padding:0.75rem 1rem;border-radius:10px;box-shadow:0 12px 28px -8px rgba(16,24,40,0.3);color:#ffffff;font-weight:500;background:{{ toastBg }};">{{ toastText }}</div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;portal&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;admin&quot;,&quot;user&quot;],&quot;default&quot;:&quot;admin&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Portal&quot;},&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dashboard&quot;,&quot;users&quot;,&quot;groups&quot;,&quot;programs&quot;,&quot;devices&quot;,&quot;locations&quot;,&quot;incidents&quot;],&quot;default&quot;:&quot;dashboard&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Portal&quot;},&quot;showIncidentBanner&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Portal&quot;},&quot;showAcknowledgedIncidents&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Portal&quot;}}">
+class Component extends DCLogic {
+  state = {
+    view: null,
+    portal: null,
+    screen: null,
+    drawer: false,
+    narrow: false,
+    menu: false,
+    dialog: null,
+    confirm: null,
+    showAck: false,
+    sort: {},
+    filter: {},
+    programType: 'static',
+    discountType: 'factor',
+    toast: null
+  };
+
+  fmt(n) {
+    return n.toFixed(2).replace('.', ',') + ' \u20ac';
+  }
+
+  rowBg(i) {
+    return '#ffffff';
+  }
+
+  badge(kind) {
+    if (kind === 'success') return { bg: 'rgba(83,162,45,0.13)', fg: '#3f7f22' };
+    if (kind === 'error') return { bg: 'rgba(200,42,28,0.13)', fg: '#b02417' };
+    return { bg: 'rgba(31,36,41,0.08)', fg: '#4b5563' };
+  }
+
+  prep(view, data, textFields, sorters) {
+    const f = (this.state.filter[view] || '').trim().toLowerCase();
+    let rows = f
+      ? data.filter(d => textFields.map(k => String(d[k] ?? '')).join(' ').toLowerCase().includes(f))
+      : data.slice();
+    const st = this.state.sort[view];
+    if (st && sorters && sorters[st.key]) {
+      rows.sort((a, b) => (st.dir === 'desc' ? -1 : 1) * sorters[st.key](a, b));
+    }
+    return rows;
+  }
+
+  ts(value) {
+    const m = /^(\d{2})\.(\d{2})\.(\d{2}),\s*(\d{2}):(\d{2})$/.exec(value || '');
+    if (!m) return 0;
+    return new Date(2000 + +m[3], +m[2] - 1, +m[1], +m[4], +m[5]).getTime();
+  }
+
+  arrow(view, key) {
+    const st = this.state.sort[view];
+    return st && st.key === key ? (st.dir === 'desc' ? '\u25bc' : '\u25b2') : '';
+  }
+
+  sortBy(view, key) {
+    return () => {
+      const st = this.state.sort[view];
+      const dir = st && st.key === key && st.dir === 'asc' ? 'desc' : 'asc';
+      this.setState({ sort: { ...this.state.sort, [view]: { key, dir } } });
+    };
+  }
+
+  setFilter(view) {
+    return (e) => this.setState({ filter: { ...this.state.filter, [view]: e.target.value } });
+  }
+
+  navStyle(view) {
+    const current = (this.state.view || this.props.startView || 'dashboard') === view;
+    return current
+      ? { bg: '#4488dd', fg: '#ffffff', weight: '600', bar: '0 1px 2px rgba(0,0,0,0.2)' }
+      : { bg: 'transparent', fg: '#b8c7ce', weight: '500', bar: 'none' };
+  }
+
+  go(view) {
+    return () => this.setState({ view, menu: false });
+  }
+
+  toast(text, kind) {
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    this.setState({ toast: { text, kind } });
+    this.toastTimer = setTimeout(() => this.setState({ toast: null }), 3500);
+  }
+
+  componentDidMount() {
+    this.mql = window.matchMedia('(max-width: 900px)');
+    this.onNarrow = (e) => this.setState({ narrow: e.matches });
+    this.setState({ narrow: this.mql.matches });
+    this.mql.addEventListener('change', this.onNarrow);
+  }
+
+  componentWillUnmount() {
+    if (this.mql) this.mql.removeEventListener('change', this.onNarrow);
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+  }
+
+  usersData = [
+    { name: 'Anna Brandt', username: 'abrandt', group: 'Standard', cards: '1004523991', credit: 12.5, blocked: false, warn: false },
+    { name: 'Jonas Weber', username: 'jweber', group: 'Standard', cards: '2 Karten', credit: 3.2, blocked: false, warn: true },
+    { name: 'Martina Kessler', username: 'mkessler', group: 'Mitarbeiter', cards: '1009887432', credit: 47.0, blocked: false, warn: false },
+    { name: 'Sven Holtmann', username: 'sholtmann', group: 'G\u00e4ste', cards: '', credit: 0.0, blocked: true, warn: false },
+    { name: 'Petra L\u00f6we', username: 'ploewe', group: 'Standard', cards: '1002234567', credit: 8.75, blocked: false, warn: false }
+  ];
+
+  groupsData = [
+    { name: 'Standard', discount: '-' },
+    { name: 'Mitarbeiter', discount: '15\u00a0%' },
+    { name: 'G\u00e4ste', discount: '0,50 \u20ac' }
+  ];
+
+  programsData = [
+    { name: 'Waschen 30\u00b0', type: 'Statisch', price: '1,50 \u20ac' },
+    { name: 'Waschen 60\u00b0', type: 'Statisch', price: '2,00 \u20ac' },
+    { name: 'Kochw\u00e4sche 90\u00b0', type: 'Statisch', price: '2,50 \u20ac' },
+    { name: 'Trocknen', type: 'Dynamisch', price: '0,50 \u20ac + 0,10 \u20ac / min' }
+  ];
+
+  devicesData = [
+    { position: 1, name: 'Waschmaschine 1', location: 'Waschk\u00fcche Haus A', enabled: true },
+    { position: 2, name: 'Waschmaschine 2', location: 'Waschk\u00fcche Haus A', enabled: true },
+    { position: 1, name: 'Trockner 1', location: 'Waschk\u00fcche Haus B', enabled: true },
+    { position: 2, name: 'Trockner 2', location: 'Waschk\u00fcche Haus B', enabled: false }
+  ];
+
+  locationsData = [
+    { name: 'Waschk\u00fcche Haus A', groups: 2, offline: 120, connected: true, since: '26.07.26, 21:14' },
+    { name: 'Waschk\u00fcche Haus B', groups: 3, offline: 60, connected: false, since: '' }
+  ];
+
+  dashboardData = [
+    {
+      name: 'Waschk\u00fcche Haus A',
+      connected: true,
+      since: 'Verbunden seit 26.07.26, 21:14',
+      devices: [
+        {
+          name: 'Waschmaschine 1', enabled: true, occupied: false,
+          history: [
+            { date: '27.07.26, 06:12', user: 'Anna Brandt', duration: '01:32:04', price: 1.5 },
+            { date: '26.07.26, 19:40', user: 'Jonas Weber', duration: '00:58:11', price: 1.5 },
+            { date: '26.07.26, 14:05', user: 'Petra L\u00f6we', duration: '01:12:47', price: 2.0 },
+            { date: '25.07.26, 20:30', user: 'Anna Brandt', duration: '01:04:02', price: 1.5 }
+          ]
+        },
+        {
+          name: 'Waschmaschine 2', enabled: true, occupied: true,
+          running: true, runProgram: 'Waschen 60\u00b0', runUser: 'Jonas Weber', runRemaining: '00:24:16', runProgress: 62,
+          history: [
+            { date: '27.07.26, 08:02', user: 'Jonas Weber', duration: '00:35:44', price: 2.0, live: true },
+            { date: '26.07.26, 17:22', user: 'Martina Kessler', duration: '01:10:00', price: 1.7 },
+            { date: '26.07.26, 09:15', user: 'Petra L\u00f6we', duration: '00:55:31', price: 1.5 }
+          ]
+        }
+      ]
+    },
+    {
+      name: 'Waschk\u00fcche Haus B',
+      connected: false,
+      since: '',
+      devices: [
+        {
+          name: 'Trockner 1', enabled: true, occupied: false,
+          history: [
+            { date: '26.07.26, 22:05', user: 'Sven Holtmann', duration: '00:45:00', price: 1.1 },
+            { date: '26.07.26, 12:40', user: 'Anna Brandt', duration: '00:30:12', price: 0.8 }
+          ]
+        },
+        {
+          name: 'Trockner 2', enabled: false, occupied: false,
+          history: [
+            { date: '20.07.26, 18:11', user: 'Jonas Weber', duration: '00:40:03', price: 0.9 }
+          ]
+        }
+      ]
+    }
+  ];
+
+  incidentsData = [
+    { occurred: '26.07.26, 23:41', reported: '27.07.26, 05:02', location: 'Waschk\u00fcche Haus B', kind: 'Verlorene Buchung', user: 'Sven Holtmann', amount: 1.1, reason: 'Buchung endg\u00fcltig abgelehnt: Benutzer gesperrt', acknowledged: false },
+    { occurred: '25.07.26, 08:17', reported: '25.07.26, 08:20', location: 'Waschk\u00fcche Haus A', kind: 'Geister-Ausf\u00fchrung', user: 'Anna Brandt', amount: 1.5, reason: 'Kompensation fehlgeschlagen (HTTP 500)', acknowledged: false },
+    { occurred: '18.07.26, 19:03', reported: '18.07.26, 19:31', location: 'Waschk\u00fcche Haus A', kind: 'Verlorene Buchung', user: '-', amount: 2.0, reason: 'Replay-Fenster \u00fcberschritten', acknowledged: true, ackBy: 'Martina Kessler', ackAt: '19.07.26, 09:12' }
+  ];
+
+  expiredData = [
+    { start: '19.07.26, 21:04', device: 'Waschmaschine 2 (Waschk\u00fcche Haus A)', program: 'Waschen 60\u00b0', price: 2.0 },
+    { start: '11.07.26, 07:38', device: 'Trockner 1 (Waschk\u00fcche Haus B)', program: 'Trocknen', price: 1.4 }
+  ];
+
+  bookingsData = [
+    { date: '27.07.26, 06:12', amount: -1.5, text: 'Waschen 30\u00b0 an Waschmaschine 1' },
+    { date: '24.07.26, 18:02', amount: 20.0, text: 'Einzahlung vom Waschportal von Martina Kessler' },
+    { date: '22.07.26, 20:41', amount: -1.1, text: 'Trocknen an Trockner 1' },
+    { date: '21.07.26, 09:27', amount: -2.0, text: 'Waschen 60\u00b0 an Waschmaschine 2' },
+    { date: '14.07.26, 17:55', amount: -1.5, text: 'Waschen 30\u00b0 an Waschmaschine 1' },
+    { date: '02.07.26, 12:10', amount: 10.0, text: 'Einzahlung vom Waschportal von Martina Kessler' }
+  ];
+
+  logText = [
+    '2026-07-27 06:40:11 INFO  TerminalMain      - Terminal gestartet (Standort 1)',
+    '2026-07-27 06:40:12 INFO  BackendClient     - Verbindung zum Backend hergestellt',
+    '2026-07-27 06:41:03 INFO  CardReader        - Karte erkannt: 1004523991',
+    '2026-07-27 06:41:04 INFO  ExecutionService  - Programm "Waschen 30\u00b0" gestartet auf Ger\u00e4t 1',
+    '2026-07-27 08:02:44 INFO  ExecutionService  - Programm "Waschen 60\u00b0" gestartet auf Ger\u00e4t 2',
+    '2026-07-27 08:12:09 WARN  PowerMonitor      - Leistung unter Schwellwert (3,8 W) - warte 120 s',
+    '2026-07-27 08:14:11 INFO  ExecutionService  - Programm automatisch beendet (Ger\u00e4t 1)'
+  ].join('\n');
+
+  renderVals() {
+    const s = this.state;
+    const view = s.view || this.props.startView || 'dashboard';
+    const screen = s.screen || 'portal';
+    const showAck = s.showAck || (this.props.showAcknowledgedIncidents ?? false);
+    const bannerOn = this.props.showIncidentBanner ?? true;
+
+    const txt = (k) => (a, b) => String(a[k]).localeCompare(String(b[k]), 'de');
+    const num = (k) => (a, b) => a[k] - b[k];
+
+    const incidents = this.prep('incidents',
+      this.incidentsData.filter(i => showAck || !i.acknowledged),
+      ['location', 'kind', 'user', 'reason'],
+      { occurred: txt('occurred'), reported: txt('reported'), location: txt('location'), kind: txt('kind') })
+      .map((i, idx) => {
+        const b = this.badge(i.acknowledged ? 'success' : 'error');
+        return {
+          ...i,
+          bg: this.rowBg(idx),
+          amount: this.fmt(i.amount),
+          open: !i.acknowledged,
+          status: i.acknowledged ? 'Quittiert' : 'Offen',
+          statusTitle: i.acknowledged ? 'Quittiert von ' + i.ackBy + ' am ' + i.ackAt : '',
+          badgeBg: b.bg,
+          badgeFg: b.fg
+        };
+      });
+
+    const openCount = this.incidentsData.filter(i => !i.acknowledged).length;
+    const openBadge = this.badge(openCount === 0 ? 'success' : 'error');
+
+    const dashboardLocations = this.dashboardData.map((loc, li) => {
+      const lb = this.badge(loc.connected ? 'success' : 'error');
+      return {
+        name: loc.name,
+        connectionText: loc.connected ? 'Verbunden' : 'Nicht verbunden',
+        connectedSince: loc.since,
+        badgeBg: lb.bg,
+        badgeFg: lb.fg,
+        devices: loc.devices.map((d, di) => {
+          const db = this.badge(d.occupied ? 'error' : 'success');
+          const hk = 'dash-' + li + '-' + di;
+          const rows = this.prep(hk, d.history.map(e => ({ ...e, ts: this.ts(e.date) })), [],
+            { date: num('ts'), user: txt('user'), duration: txt('duration'), price: num('price') });
+          return {
+            name: d.name,
+            sortDate: this.sortBy(hk, 'date'),
+            sortUser: this.sortBy(hk, 'user'),
+            sortDuration: this.sortBy(hk, 'duration'),
+            sortPrice: this.sortBy(hk, 'price'),
+            arrDate: this.arrow(hk, 'date'),
+            arrUser: this.arrow(hk, 'user'),
+            arrDuration: this.arrow(hk, 'duration'),
+            arrPrice: this.arrow(hk, 'price'),
+            statusText: d.occupied ? 'Besetzt' : 'Frei',
+            statusColor: !d.enabled ? '#aaaaaa' : d.occupied ? '#f1666e' : '#94d966',
+            badgeBg: db.bg,
+            badgeFg: db.fg,
+            running: !!d.running,
+            disabled: !d.enabled,
+            runProgram: d.runProgram || '-',
+            runUser: d.runUser || '-',
+            runRemaining: d.runRemaining || '-',
+            runProgressWidth: (d.runProgress || 0) + '%',
+            historyCount: d.history.length + (d.history.length === 1 ? ' Eintrag' : ' Einträge'),
+            history: rows.map((e, i) => ({
+              date: e.date,
+              user: e.user,
+              duration: e.duration,
+              price: this.fmt(e.price),
+              bg: e.live ? 'rgba(83,162,45,0.10)' : this.rowBg(i)
+            }))
+          };
+        })
+      };
+    });
+
+    const askConfirm = (title, text) => () => this.setState({ dialog: 'confirm', confirm: { title, text }, menu: false });
+
+    const portal = s.portal || this.props.portal || 'admin';
+    const bookings = this.prep('bookings',
+      this.bookingsData.map(b => ({ ...b, ts: this.ts(b.date) })), ['text'],
+      { date: num('ts'), amount: num('amount'), text: txt('text') })
+      .map((b, i) => ({
+      date: b.date,
+      amount: (b.amount > 0 ? '+' : '') + this.fmt(b.amount),
+      color: b.amount < 0 ? '#b02417' : '#3f7f22',
+      text: b.text,
+      bg: this.rowBg(i)
+    }));
+
+    return {
+      isLogin: screen === 'login',
+      isPortal: screen === 'portal',
+      isAdminPortal: portal === 'admin',
+      isUserPortal: portal === 'user',
+      isOverview: portal === 'user',
+      goOverview: () => this.setState({ menu: false }),
+      bookings,
+      bookingsFilter: s.filter.bookings || '',
+      setBookingsFilter: this.setFilter('bookings'),
+      sortBookingsDate: this.sortBy('bookings', 'date'),
+      sortBookingsAmount: this.sortBy('bookings', 'amount'),
+      sortBookingsText: this.sortBy('bookings', 'text'),
+      arrBookingsDate: this.arrow('bookings', 'date'),
+      arrBookingsAmount: this.arrow('bookings', 'amount'),
+      arrBookingsText: this.arrow('bookings', 'text'),
+      ownCredit: this.fmt(12.5),
+      ownLastInpayment: '24. Juli 2026',
+      doLoginAsUser: () => this.setState({ screen: 'portal', portal: 'user' }),
+      isSettingsDialog: s.dialog === 'settings',
+      isPasswordDialog: s.dialog === 'password',
+      isHistoryDialog: s.dialog === 'history',
+      openSettingsDialog: () => this.setState({ dialog: 'settings', menu: false }),
+      openPasswordDialog: () => this.setState({ dialog: 'password', menu: false }),
+      openHistoryDialog: () => this.setState({ dialog: 'history' }),
+      saveSettings: () => {
+        this.setState({ dialog: null });
+        this.toast('Die Einstellungen wurden gespeichert.', 'success');
+      },
+      savePassword: () => {
+        this.setState({ dialog: null });
+        this.toast('Passwort wurde erfolgreich ge\u00e4ndert.', 'success');
+      },
+      drawerOpen: s.narrow ? s.drawer : true,
+      showDrawerToggle: s.narrow,
+      menuOpen: s.menu,
+
+      isDashboard: portal === 'admin' && view === 'dashboard',
+      isUsers: portal === 'admin' && view === 'users',
+      isGroups: portal === 'admin' && view === 'groups',
+      isPrograms: portal === 'admin' && view === 'programs',
+      isDevices: portal === 'admin' && view === 'devices',
+      isLocations: portal === 'admin' && view === 'locations',
+      isIncidents: portal === 'admin' && view === 'incidents',
+
+      navDashboard: this.navStyle('dashboard'),
+      navUsers: this.navStyle('users'),
+      navGroups: this.navStyle('groups'),
+      navPrograms: this.navStyle('programs'),
+      navDevices: this.navStyle('devices'),
+      navLocations: this.navStyle('locations'),
+      navIncidents: this.navStyle('incidents'),
+
+      goDashboard: this.go('dashboard'),
+      goUsers: this.go('users'),
+      goGroups: this.go('groups'),
+      goPrograms: this.go('programs'),
+      goDevices: this.go('devices'),
+      goLocations: this.go('locations'),
+      goIncidents: this.go('incidents'),
+
+      viewLabel: portal === 'user' ? 'Übersicht' : ({
+        dashboard: 'Dashboard', users: 'Benutzer', groups: 'Benutzergruppen', programs: 'Programme',
+        devices: 'Geräte', locations: 'Standorte', incidents: 'Offline-Vorfälle'
+      })[view],
+      userName: portal === 'user' ? 'Anna Brandt' : 'Martina Kessler',
+      userInitials: portal === 'user' ? 'AB' : 'MK',
+      userRole: portal === 'user' ? 'Benutzerin' : 'Administratorin',
+      userMenuBg: s.menu ? 'rgba(255,255,255,0.22)' : 'transparent',
+      toggleDrawer: () => this.setState({ drawer: !s.drawer }),
+      toggleMenu: () => this.setState({ menu: !s.menu }),
+      closeMenu: () => this.setState({ menu: false }),
+      doLogout: () => this.setState({ screen: 'login', menu: false, dialog: null }),
+      doLogin: () => this.setState({ screen: 'portal', portal: 'admin', view: 'dashboard' }),
+
+      incidentBannerVisible: bannerOn && openCount > 0,
+      incidentBannerText: openCount === 1
+        ? '1 offener Offline-Vorfall - bitte sichten und quittieren: '
+        : openCount + ' offene Offline-Vorf\u00e4lle - bitte sichten und quittieren: ',
+
+      dashboardLocations,
+
+      usersFilter: s.filter.users || '',
+      setUsersFilter: this.setFilter('users'),
+      sortUsersName: this.sortBy('users', 'name'),
+      sortUsersUsername: this.sortBy('users', 'username'),
+      sortUsersGroup: this.sortBy('users', 'group'),
+      sortUsersCredit: this.sortBy('users', 'credit'),
+      arrUsersName: this.arrow('users', 'name'),
+      arrUsersUsername: this.arrow('users', 'username'),
+      arrUsersGroup: this.arrow('users', 'group'),
+      arrUsersCredit: this.arrow('users', 'credit'),
+
+      groupsFilter: s.filter.groups || '',
+      setGroupsFilter: this.setFilter('groups'),
+      sortGroupsName: this.sortBy('groups', 'name'),
+      arrGroupsName: this.arrow('groups', 'name'),
+
+      programsFilter: s.filter.programs || '',
+      setProgramsFilter: this.setFilter('programs'),
+      sortProgramsName: this.sortBy('programs', 'name'),
+      sortProgramsType: this.sortBy('programs', 'type'),
+      arrProgramsName: this.arrow('programs', 'name'),
+      arrProgramsType: this.arrow('programs', 'type'),
+
+      devicesFilter: s.filter.devices || '',
+      setDevicesFilter: this.setFilter('devices'),
+      sortDevicesPosition: this.sortBy('devices', 'position'),
+      sortDevicesName: this.sortBy('devices', 'name'),
+      sortDevicesLocation: this.sortBy('devices', 'location'),
+      arrDevicesPosition: this.arrow('devices', 'position'),
+      arrDevicesName: this.arrow('devices', 'name'),
+      arrDevicesLocation: this.arrow('devices', 'location'),
+
+      locationsFilter: s.filter.locations || '',
+      setLocationsFilter: this.setFilter('locations'),
+      sortLocationsName: this.sortBy('locations', 'name'),
+      arrLocationsName: this.arrow('locations', 'name'),
+
+      incidentsFilter: s.filter.incidents || '',
+      setIncidentsFilter: this.setFilter('incidents'),
+      sortIncidentsOccurred: this.sortBy('incidents', 'occurred'),
+      sortIncidentsReported: this.sortBy('incidents', 'reported'),
+      sortIncidentsLocation: this.sortBy('incidents', 'location'),
+      sortIncidentsKind: this.sortBy('incidents', 'kind'),
+      arrIncidentsOccurred: this.arrow('incidents', 'occurred'),
+      arrIncidentsReported: this.arrow('incidents', 'reported'),
+      arrIncidentsLocation: this.arrow('incidents', 'location'),
+      arrIncidentsKind: this.arrow('incidents', 'kind'),
+
+      users: this.prep('users', this.usersData, ['name', 'username', 'group', 'cards'],
+        { name: txt('name'), username: txt('username'), group: txt('group'), credit: num('credit') })
+        .map((u, i) => {
+        const b = this.badge(u.blocked ? 'error' : 'success');
+        return {
+          ...u,
+          bg: this.rowBg(i),
+          credit: this.fmt(u.credit),
+          status: u.blocked ? 'Gesperrt' : 'Aktiv',
+          badgeBg: b.bg,
+          badgeFg: b.fg
+        };
+      }),
+      groups: this.prep('groups', this.groupsData, ['name', 'discount'], { name: txt('name') })
+        .map((g, i) => ({ ...g, bg: this.rowBg(i) })),
+      programs: this.prep('programs', this.programsData, ['name', 'type', 'price'],
+        { name: txt('name'), type: txt('type') })
+        .map((p, i) => ({ ...p, bg: this.rowBg(i) })),
+      deviceRows: this.prep('devices', this.devicesData, ['name', 'location'],
+        { position: num('position'), name: txt('name'), location: txt('location') })
+        .map((d, i) => {
+        const b = this.badge(d.enabled ? 'success' : 'contrast');
+        return {
+          ...d,
+          bg: this.rowBg(i),
+          status: d.enabled ? 'Aktiviert' : 'Deaktiviert',
+          badgeBg: b.bg,
+          badgeFg: b.fg
+        };
+      }),
+      locationRows: this.prep('locations', this.locationsData, ['name'], { name: txt('name') })
+        .map((l, i) => ({
+        name: l.name,
+        groups: l.groups,
+        offline: l.offline + ' min',
+        bg: this.rowBg(i)
+      })),
+
+      incidents,
+      showAcknowledged: showAck,
+      toggleAck: () => this.setState({ showAck: !showAck }),
+      openCountText: openCount === 0 ? 'Keine offenen Vorf\u00e4lle'
+        : openCount === 1 ? '1 offener Vorfall' : openCount + ' offene Vorf\u00e4lle',
+      openCountBg: openBadge.bg,
+      openCountFg: openBadge.fg,
+
+      dialogOpen: !!s.dialog,
+      isDeviceDialog: s.dialog === 'device',
+      isUserDialog: s.dialog === 'user',
+      isCreditDialog: s.dialog === 'credit',
+      isConfirmDialog: s.dialog === 'confirm',
+      isLogDialog: s.dialog === 'log',
+      confirmTitle: s.confirm ? s.confirm.title : '',
+      confirmText: s.confirm ? s.confirm.text : '',
+      logText: this.logText,
+
+      isProgramDialog: s.dialog === 'program',
+      isGroupDialog: s.dialog === 'group',
+      isLocationDialog: s.dialog === 'location',
+      isExpiredDialog: s.dialog === 'expired',
+      isForgotDialog: s.dialog === 'forgot',
+      openFormDialog: () => this.setState({
+        dialog: view === 'programs' ? 'program' : view === 'groups' ? 'group' : 'location'
+      }),
+      openExpiredDialog: () => this.setState({ dialog: 'expired' }),
+      openForgotDialog: () => this.setState({ dialog: 'forgot' }),
+      programStatic: !(s.programType === 'dynamic'),
+      segStatic: s.programType === 'dynamic'
+        ? { bg: 'transparent', fg: '#667085', sh: 'none' }
+        : { bg: '#ffffff', fg: '#101828', sh: '0 1px 2px rgba(16,24,40,0.1)' },
+      segDynamic: s.programType === 'dynamic'
+        ? { bg: '#ffffff', fg: '#101828', sh: '0 1px 2px rgba(16,24,40,0.1)' }
+        : { bg: 'transparent', fg: '#667085', sh: 'none' },
+      programDynamic: s.programType === 'dynamic',
+      setProgramStatic: () => this.setState({ programType: 'static' }),
+      setProgramDynamic: () => this.setState({ programType: 'dynamic' }),
+      discountNone: s.discountType === 'none',
+      discountFix: s.discountType === 'fix',
+      discountFactor: !s.discountType || s.discountType === 'factor',
+      setDiscountNone: () => this.setState({ discountType: 'none' }),
+      setDiscountFix: () => this.setState({ discountType: 'fix' }),
+      setDiscountFactor: () => this.setState({ discountType: 'factor' }),
+      expiredExecutions: this.expiredData.map((x, i) => ({
+        start: x.start,
+        device: x.device,
+        program: x.program,
+        price: this.fmt(x.price),
+        bg: this.rowBg(i)
+      })),
+      finishExecution: () => {
+        this.setState({ dialog: null });
+        this.toast('Die Ausf\u00fchrung wurde abgerechnet.', 'success');
+      },
+      finishAllExecutions: () => {
+        this.setState({ dialog: null });
+        this.toast('Alle Ausf\u00fchrungen wurden abgerechnet.', 'success');
+      },
+      openDeleteExecution: askConfirm('Ausf\u00fchrung l\u00f6schen',
+        'M\u00f6chten Sie diesen nicht abgerechneten Ausf\u00fchrungsauftrag wirklich l\u00f6schen?'),
+      saveProgram: () => {
+        this.setState({ dialog: null });
+        this.toast('Das Programm wurde gespeichert.', 'success');
+      },
+      saveGroup: () => {
+        this.setState({ dialog: null });
+        this.toast('Die Benutzergruppe wurde gespeichert.', 'success');
+      },
+      saveLocation: () => {
+        this.setState({ dialog: null });
+        this.toast('Der Standort wurde gespeichert.', 'success');
+      },
+      sendReset: () => {
+        this.setState({ dialog: null });
+        this.toast('Falls ein Konto zu dieser Adresse existiert, wurde eine Email versandt.', 'success');
+      },
+      openDeviceDialog: () => this.setState({ dialog: 'device' }),
+      openUserDialog: () => this.setState({ dialog: 'user' }),
+      openCreditDialog: () => this.setState({ dialog: 'credit' }),
+      showLog: () => this.setState({ dialog: 'log' }),
+      restartTerminal: askConfirm('Terminal neu starten',
+        'M\u00f6chten Sie das Terminal dieses Standorts wirklich neu starten?'),
+      openDeleteUser: askConfirm('Benutzer l\u00f6schen',
+        'M\u00f6chten Sie diesen Benutzer wirklich l\u00f6schen? Anna Brandt'),
+      openDeleteGroup: askConfirm('Benutzergruppe l\u00f6schen',
+        'M\u00f6chten Sie diese Benutzergruppe wirklich l\u00f6schen? Standard Benutzern, denen die Gruppe derzeit zugewiesen ist, wird eine andere Gruppe zugewiesen.'),
+      openDeleteProgram: askConfirm('Programm l\u00f6schen',
+        'M\u00f6chten Sie dieses Programm wirklich l\u00f6schen? Waschen 30\u00b0'),
+      openDeleteDevice: askConfirm('Ger\u00e4t l\u00f6schen',
+        'M\u00f6chten Sie dieses Ger\u00e4t wirklich l\u00f6schen? Waschmaschine 1'),
+      openDeleteLocation: askConfirm('Standort l\u00f6schen',
+        'M\u00f6chten Sie diesen Standort wirklich l\u00f6schen? Waschk\u00fcche Haus A'),
+      openAcknowledge: askConfirm('Vorfall quittieren',
+        'M\u00f6chten Sie diesen Vorfall wirklich als zur Kenntnis genommen quittieren? Betroffener Betrag: 1,10 \u20ac. Der Betriebsalarm endet damit; der Vorfall bleibt als Beleg erhalten.'),
+
+      closeDialog: () => this.setState({ dialog: null, confirm: null }),
+      stop: (e) => e.stopPropagation(),
+      confirmAction: () => {
+        this.setState({ dialog: null, confirm: null });
+        this.toast('Aktion ausgef\u00fchrt.', 'success');
+      },
+      saveDevice: () => {
+        this.setState({ dialog: null });
+        this.toast('Das Ger\u00e4t wurde gespeichert.', 'success');
+      },
+      saveUser: () => {
+        this.setState({ dialog: null });
+        this.toast('Der Benutzer wurde gespeichert.', 'success');
+      },
+      bookCredit: () => {
+        this.setState({ dialog: null });
+        this.toast('Die Buchung wurde ausgef\u00fchrt.', 'success');
+      },
+
+      toastVisible: !!s.toast,
+      toastText: s.toast ? s.toast.text : '',
+      toastBg: s.toast && s.toast.kind === 'success' ? '#53a22d'
+        : s.toast && s.toast.kind === 'error' ? '#c82a1c' : '#2f3d44'
+    };
+  }
+}
+</script>
+</body>
+</html>

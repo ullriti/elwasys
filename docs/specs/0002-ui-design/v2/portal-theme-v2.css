@@ -1,0 +1,318 @@
+/*
+ * elwasys-Portal-Design v2 - Modernisierung des bestehenden portal-theme.css.
+ *
+ * Markenfarben unverändert: Kopfbalken-/Akzentblau #4488dd, Sidebar #222d32.
+ * Geändert wurden Radien, Flächen, Rahmen, Typografie-Farben, Feld- und Grid-Darstellung.
+ *
+ * Einbindung wie bisher: ElwasysAppShell#configurePage hängt die Datei zur Laufzeit als
+ * dokumentweites Inline-Stylesheet ein (kein Vaadin-Theme, kein Frontend-Build - Begründung
+ * siehe Javadoc dort). Alle Selektoren arbeiten weiterhin nur über Lumo-Custom-Properties,
+ * ::part() und die Light-DOM-Klassen der Views; Texte und Struktur bleiben unberührt.
+ */
+
+html {
+  /* --- Marke: unverändert ------------------------------------------------ */
+  --lumo-primary-color: #4488dd;
+  --lumo-primary-color-50pct: rgba(68, 136, 221, 0.5);
+  --lumo-primary-color-10pct: rgba(68, 136, 221, 0.12);
+  --lumo-primary-text-color: #2f6fbf;
+
+  --lumo-success-color: #53a22d;
+  --lumo-success-text-color: #3f7f22;
+  --lumo-error-color: #c82a1c;
+  --lumo-error-text-color: #b02417;
+
+  /* --- v2: weichere Radien (v1: 2/3/3px) --------------------------------- */
+  --lumo-border-radius-s: 6px;
+  --lumo-border-radius-m: 8px;
+  --lumo-border-radius-l: 12px;
+
+  /* --- v2: neutrale Textskala statt Lumo-Graustufen ---------------------- */
+  --lumo-header-text-color: #101828;
+  --lumo-body-text-color: #1f2429;
+  --lumo-secondary-text-color: #667085;
+  --lumo-tertiary-text-color: #98a2b3;
+
+  /* --- v2: ruhigere Flächen ---------------------------------------------- */
+  --lumo-base-color: #ffffff;
+  --lumo-contrast-5pct: #f8fafc;
+  --lumo-contrast-10pct: #f2f4f7;
+  --lumo-contrast-20pct: #e6e8ec;
+
+  /* --- v2: größere Bedienelemente ---------------------------------------- */
+  --lumo-size-s: 2rem;
+  --lumo-size-m: 2.5rem;
+  --lumo-size-l: 2.75rem;
+
+  /* --- v2: flachere, weitere Schatten ------------------------------------ */
+  --lumo-box-shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --lumo-box-shadow-s: 0 4px 10px -4px rgba(16, 24, 40, 0.12);
+  --lumo-box-shadow-m: 0 12px 28px -8px rgba(16, 24, 40, 0.24);
+  --lumo-box-shadow-l: 0 24px 48px -12px rgba(16, 24, 40, 0.28);
+
+  /* --- v2: outlined statt gefüllte Eingabefelder -------------------------- */
+  --vaadin-input-field-background: #ffffff;
+  --vaadin-input-field-border-width: 1px;
+  --vaadin-input-field-border-color: #d0d5dd;
+  --vaadin-input-field-border-radius: 8px;
+  --vaadin-input-field-height: 2.5rem;
+
+  --vaadin-button-border-radius: 10px;
+  --vaadin-button-font-weight: 600;
+
+  /* --- Eigene Variablen -------------------------------------------------- */
+  --elwa-header-blue: #4488dd;
+  --elwa-sidebar-dark: #222d32;      /* unverändert */
+  --elwa-sidebar-active: #4488dd;    /* v1: #1e282c + blauer Balken */
+  --elwa-sidebar-hover: #1a2429;
+  --elwa-sidebar-text: #b8c7ce;      /* unverändert */
+  --elwa-content-bg: #f4f6f9;        /* v1: #ecf0f5 */
+  --elwa-box-border: #e6e8ec;        /* v1: #d2d6de */
+  --elwa-row-hover: #f8fafc;
+
+  --elwa-status-free: #94d966;
+  --elwa-status-occupied: #f1666e;
+  --elwa-status-disabled: #aaaaaa;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Kopfbalken - höher (64px), Trennlinie statt Schlagschatten.
+ * ------------------------------------------------------------------ */
+vaadin-app-layout::part(navbar) {
+  background-color: var(--elwa-header-blue);
+  color: #ffffff;
+  border-bottom: none;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.16);
+  min-height: 64px;
+  padding-inline: 1.25rem;
+}
+
+.admin-layout-title,
+.user-layout-title {
+  color: #ffffff;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  margin: 0 0 0 0.25rem;
+  white-space: nowrap;
+}
+
+vaadin-app-layout::part(navbar) vaadin-drawer-toggle {
+  color: #ffffff;
+}
+
+.user-menu-bar {
+  margin-left: auto;
+  --lumo-primary-text-color: #ffffff;
+  --lumo-body-text-color: #ffffff;
+  --lumo-primary-color-10pct: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Sidebar - Farbe unverändert, Einträge als abgerundete Pillen, aktiver
+ *  Punkt in Markenblau statt dunkler Fläche mit linkem Balken.
+ * ------------------------------------------------------------------ */
+vaadin-app-layout::part(drawer) {
+  background-color: var(--elwa-sidebar-dark);
+  border-right: none;
+  padding: 0.75rem 0;
+
+  --lumo-body-text-color: var(--elwa-sidebar-text);
+  --lumo-contrast-90pct: #ffffff;
+  --lumo-contrast-60pct: var(--elwa-sidebar-text);
+  --lumo-contrast-5pct: var(--elwa-sidebar-hover);
+  --lumo-primary-color: var(--elwa-sidebar-active);
+  --lumo-primary-text-color: #ffffff;
+  --lumo-primary-color-10pct: var(--elwa-sidebar-active);
+}
+
+vaadin-app-layout::part(drawer) vaadin-side-nav {
+  width: 100%;
+  padding: 0;
+}
+
+vaadin-side-nav-item::part(link) {
+  margin: 0.15rem 0.6rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 9px;
+  gap: 0.75rem;
+  font-weight: 500;
+}
+
+vaadin-side-nav-item:hover::part(link) {
+  background-color: var(--elwa-sidebar-hover);
+}
+
+vaadin-side-nav-item[current]::part(link) {
+  color: #ffffff;
+  background-color: var(--elwa-sidebar-active);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Inhaltsbereich - hellerer Grund, mehr Luft, kräftigere Überschriften.
+ * ------------------------------------------------------------------ */
+vaadin-app-layout > :not([slot]) {
+  background-color: var(--elwa-content-bg);
+  padding: 1.75rem 2rem;
+}
+
+vaadin-app-layout > :not([slot]) h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #101828;
+  margin-top: 0;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Grid - weißer Kopf mit Versalien-Labels, keine Zebra-Streifen, keine
+ *  senkrechten Zelltrenner, Hover-Hervorhebung der Zeile.
+ * ------------------------------------------------------------------ */
+vaadin-grid {
+  border: 1px solid var(--elwa-box-border);
+  border-radius: 10px;
+  background-color: #ffffff;
+  box-shadow: var(--lumo-box-shadow-xs);
+}
+
+vaadin-grid::part(header-cell) {
+  background-color: #ffffff;
+  border-bottom: 1px solid var(--elwa-box-border);
+  color: #667085;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+vaadin-grid::part(cell) {
+  border-inline-end: none;
+  padding-block: 0.35rem;
+}
+
+vaadin-grid::part(even-row-cell) {
+  background-color: #ffffff;
+}
+
+vaadin-grid::part(row):hover > [part~="body-cell"] {
+  background-color: var(--elwa-row-hover);
+}
+
+/* ------------------------------------------------------------------ *
+ *  Karten (Dashboard-Geräte, Spark-Kacheln des Benutzerbereichs).
+ * ------------------------------------------------------------------ */
+.dashboard-device-panel,
+.dashboard-spark {
+  background-color: #ffffff;
+  border: 1px solid var(--elwa-box-border);
+  border-radius: 12px;
+  box-shadow: var(--lumo-box-shadow-xs);
+  box-sizing: border-box;
+}
+
+/* v2: die Spark-Kacheln tragen keinen blauen Oberrand mehr - der farbige
+   Oberrand bleibt den Gerätekarten als Statusanzeige vorbehalten. */
+.dashboard-device-panel {
+  border-top: 4px solid var(--elwa-header-blue);
+  flex: 1 1 calc(50% - 0.5rem);
+  min-width: 26em;
+  padding: 1rem 1.15rem;
+}
+
+.dashboard-device-list {
+  width: 100%;
+}
+
+.dashboard-device-panel.device-status-free {
+  border-top-color: var(--elwa-status-free);
+}
+
+.dashboard-device-panel.device-status-occupied {
+  border-top-color: var(--elwa-status-occupied);
+}
+
+.dashboard-device-panel.device-status-disabled {
+  border-top-color: var(--elwa-status-disabled);
+}
+
+.dashboard-location-header h3 {
+  color: var(--elwa-header-blue);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Hinweisstreifen und Schadensbetrag (Offline-Vorfälle).
+ * ------------------------------------------------------------------ */
+.dashboard-incident-banner {
+  background-color: #fef3f2;
+  border: 1px solid #fbd5d1;
+  border-radius: 10px;
+  color: #912018;
+  padding: 0.85rem 1.1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.admin-offline-incidents-view .incident-amount {
+  color: var(--lumo-error-text-color);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Dialoge - runder, tieferer Schatten, abgedunkelter Hintergrund.
+ * ------------------------------------------------------------------ */
+vaadin-dialog-overlay::part(overlay),
+vaadin-confirm-dialog-overlay::part(overlay) {
+  border-radius: 16px;
+  box-shadow: var(--lumo-box-shadow-l);
+}
+
+vaadin-dialog-overlay::part(backdrop),
+vaadin-confirm-dialog-overlay::part(backdrop) {
+  background-color: rgba(16, 24, 40, 0.5);
+  backdrop-filter: blur(3px);
+}
+
+vaadin-dialog-overlay::part(header) {
+  padding: 1.5rem 1.5rem 0.25rem 1.5rem;
+}
+
+vaadin-dialog-overlay::part(header-content) {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #101828;
+}
+
+vaadin-dialog-overlay::part(footer) {
+  border-top: 1px solid #eef0f4;
+  background-color: #fcfcfd;
+  padding: 1.1rem 1.5rem;
+  gap: 0.75rem;
+}
+
+/* ------------------------------------------------------------------ *
+ *  Login - zweigeteilter Bildschirm: Markenfläche in der Sidebar-Farbe,
+ *  Formular auf Weiß (statt Karte auf grauem Grund).
+ * ------------------------------------------------------------------ */
+.login-view {
+  background-color: #ffffff;
+  padding: 0;
+}
+
+.login-view vaadin-login-form,
+.login-view vaadin-login-form-wrapper {
+  background-color: #ffffff;
+  border-top: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.reset-password-view {
+  background-color: #ffffff;
+}
