@@ -119,6 +119,12 @@ Arbeiten darunter – siehe [`docs/agent-setup.md`](docs/agent-setup.md)).
   „add …", nicht „added …". Commit-Messages auf Englisch.
 - Jede Session arbeitet auf ihrem eigenen Branch (`claude/…`); kein direkter Push /
   Force-Push auf `master` ohne Freigabe.
+- **Der PR-Titel folgt derselben Konvention wie ein Commit-Subject** (englisch,
+  mit Typ) – beim Squash-Merge *wird* er die Commit-Message.
+- PR-Beschreibung: nach [`.github/pull_request_template.md`](.github/pull_request_template.md)
+  – Was, Warum, nutzersichtbare Änderungen, wie getestet, Review-Gate, Sicherheit,
+  offene Punkte. Eine Suite, die nicht laufen konnte, wird **ausdrücklich benannt**,
+  nie stillschweigend ausgelassen.
 
 **Code-Stil**
 
@@ -159,6 +165,7 @@ Arbeiten darunter – siehe [`docs/agent-setup.md`](docs/agent-setup.md)).
 | `docs/architecture/` | Architecture Decision Records (ADRs) – *warum* |
 | `CHANGELOG.md` | Nennenswerte Änderungen (Keep a Changelog) |
 | `scripts/` | `bootstrap.sh` (Setup), `check-ai-docs.sh` (Doku-Audit) |
+| `.github/` | PR-Template und CI-Workflows (`ci.yml`, `maven-publish.yml`) |
 | `.claude/commands/` | Slash-Commands (`adapt-baseline`, `review`, `audit-ai-docs`) |
 | `.claude/agents/` | Subagenten (`orchestrator`, `code-reviewer`, `backend`, `terminal`, `portal`, `devops`) |
 | `.claude/` | Claude-Code-Konfiguration (settings, commands, agents, skills, SessionStart-Hook) |
