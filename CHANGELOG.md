@@ -13,6 +13,10 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Added
+- Freitext-Filter über jeder Portal-Liste sowie zusätzliche sortierbare Spalten (Guthaben,
+  Buchungen, Offline-Vorfälle, Dashboard-Historie).
+- Die Gerätekarten des Dashboards zeigen Programm, Nutzer und Restzeit als Kennzahlen-Panel
+  mit Fortschrittsbalken.
 - Versionierung über GitVersion: die Version wird aus Tags und Conventional Commits berechnet
   statt von Hand vergeben (`GitVersion.yml`, Reihe startet bei 1.0.0).
 - Automatische Vorab-Releases bei jedem relevanten Merge auf `master` (als Pre-Release
@@ -35,6 +39,9 @@ im [Worklog](docs/worklog/README.md).
   Änderungen und Sicherheitsbereichen; PR-Titel folgen den Conventional Commits.
 
 ### Changed
+- Portal im überarbeiteten Design (UI-Redesign v2): höherer Kopfbalken mit Ansichtsname und
+  Benutzer-Chip, Pillen-Navigation, ruhigere Tabellen, gegliederte Dialoge, zweigeteilter
+  Login. Funktionen, Felder und Meldungen bleiben unverändert.
 - Das Terminal meldet jetzt in jedem Build seine echte Version (aus dem Jar-Manifest) statt
   dauerhaft `0.0.0-local-development` außerhalb von Releases.
 - Pushes auf `master`, die weder Code noch Paket verändern (`docs:`, `chore:`, `style:`,

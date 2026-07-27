@@ -26,3 +26,4 @@ ergänzen die ADRs sauber:
 | Nr. | Titel | Status |
 |-----|-------|--------|
 | [0001](0001-finale-review.md) | Finale Review vor dem Feldeinsatz | Draft |
+| [0002](0002-ui-design/v2/README.md) | UI-Design des Waschportals (vom Auftraggeber geliefert: Prototyp + `MAPPING.md`/`TOKENS.md`, [v1](0002-ui-design/v1/README.md) und [v2](0002-ui-design/v2/README.md)) | v2 implementiert ([Worklog](../worklog/2026-07-27-ui-redesign-v2.md)) |

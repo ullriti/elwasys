@@ -757,9 +757,21 @@ Testsuite ist nicht betroffen (erzwingt `vaadin.productionMode=true` für alle T
   (`@RolesAllowed("USER")`) zeigt Guthaben/Übersicht.
 - `ResetPasswordView` (Route `/reset-password?key=<token>`, `@AnonymousAllowed`) – Setzen des neuen
   Passworts.
-- `component/UserMenuBar` – gemeinsame Kopfzeile (Name des angemeldeten Benutzers +
-  aufklappbares Menü „Einstellungen“/„Passwort ändern“/„Logout“, `AuthenticationContext#logout()`).
-- `component/PlaceholderView` – gemeinsame Basis von Platzhalter-Views.
+- `component/UserMenuBar` – Benutzer-Chip im Kopfbalken (Initialen-`Avatar` + Name) mit
+  aufklappbarem Menü „Einstellungen“/„Passwort ändern“/„Logout“ (`AuthenticationContext#logout()`).
+- `component/NavbarViewName` – Name der gerade angezeigten Ansicht im Kopfbalken. Leitet ihn
+  als `AfterNavigationObserver` aus der **vorhandenen** `@PageTitle`-Annotation des
+  Navigationsziels ab (Suffix „ - Waschportal“ abgeschnitten), statt ihn in jeder View zu
+  duplizieren; `HasDynamicTitle` wäre der falsche Hebel, weil Vaadin es nur am
+  Navigationsziel selbst auswertet und es die `@PageTitle`-Werte ersetzen statt lesen würde.
+  **Folge für Tests**: jeder Ansichtsname steht damit zweimal im DOM – siehe
+  [06-ui-tests.md](06-ui-tests.md), Selektor-Strategie.
+- `component/ListFilterField<T>` – das Freitext-Suchfeld über den Portal-Tabellen
+  (`AbstractAdminListView`, `AdminOfflineIncidentsView`, `UserDashboardView`). Genau eine
+  Ausstattung und genau eine Suchsemantik für alle drei; gefiltert wird clientnah auf dem
+  bereits geladenen `ListDataProvider` (alle drei Aufrufstellen laden ihre Zeilen eager).
+  Normalisiert die geschützten Leerzeichen der Währungs-/Zahlenformate (U+00A0, U+202F),
+  damit „1,50 €“ auch mit der normalen Leertaste gefunden wird.
 
 **Security-Integration** (`backend/.../auth/SecurityConfig`): statt `formLogin` jetzt
 `http.with(VaadinSecurityConfigurer.vaadin(), c -> c.loginView(LoginView.class).anyRequest(...authenticated))`.
@@ -994,6 +1006,12 @@ nur die abstrakten Basisklassen `AbstractBackendIT`/`AbstractApiIT`).
 
 ## Historie
 
+- **2026-07-27** — UI-Redesign v2 des Portals: `NavbarViewName` und `ListFilterField` neu,
+  `UserMenuBar` als Benutzer-Chip mit Initialen-Avatar, `PlaceholderView` entfallen; Dialoge
+  in Abschnitte gegliedert, Gerätekarten mit Kennzahlen-Panel und Restzeit-Fortschrittsbalken,
+  Listen mit Filter und zusätzlichen sortierbaren Spalten
+  ([Worklog](../worklog/2026-07-27-ui-redesign-v2.md) ·
+  [Spec v2](../specs/0002-ui-design/v2/README.md)).
 - **2026-07-23** — Betriebs-Health-Indicators (`/actuator/health/operational` neben
   `liveness`/`readiness`) und `IdempotencyKeyRetentionScheduler` ergänzt
   ([Worklog AP6](../worklog/2026-07-23-ap6-deployment-betrieb-cutover.md)).
