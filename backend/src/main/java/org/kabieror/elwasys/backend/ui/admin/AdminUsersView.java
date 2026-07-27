@@ -141,12 +141,20 @@ public class AdminUsersView extends AbstractAdminListView<UserEntity> {
     @Override
     protected String filterableText(UserEntity user) {
         String group = user.getGroup() == null ? "" : user.getGroup().getName();
-        return String.join(" ", user.getName(), user.getUsername(), group, formatCardIds(user),
-                user.isBlocked() ? "Gesperrt" : "Aktiv");
+        return String.join(" ", user.getName(), user.getUsername(), group, formatCardIds(user), statusLabel(user));
+    }
+
+    /**
+     * Beschriftung der Status-Spalte. Eigene Methode, damit Badge-Text und Suchtext
+     * ({@link #filterableText}) dieselbe Quelle haben - sonst fände der Filter eine später
+     * geänderte Beschriftung nicht mehr, ohne dass es auffiele.
+     */
+    private static String statusLabel(UserEntity user) {
+        return user.isBlocked() ? "Gesperrt" : "Aktiv";
     }
 
     private Span statusBadge(UserEntity user) {
-        Span badge = new Span(user.isBlocked() ? "Gesperrt" : "Aktiv");
+        Span badge = new Span(statusLabel(user));
         badge.getElement().getThemeList().add("badge" + (user.isBlocked() ? " error" : " success"));
         return badge;
     }

@@ -11,15 +11,11 @@ import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.component.textfield.TextField;
-import com.vaadin.flow.data.provider.DataProvider;
-import com.vaadin.flow.data.provider.ListDataProvider;
-import com.vaadin.flow.data.value.ValueChangeMode;
 import com.vaadin.flow.shared.Registration;
 import java.util.List;
-import java.util.Locale;
 import org.kabieror.elwasys.backend.exception.EntityInUseException;
 import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
+import org.kabieror.elwasys.backend.ui.component.ListFilterField;
 import org.kabieror.elwasys.backend.ui.component.Notifications;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
@@ -36,11 +32,10 @@ import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
  *
  * <p><b>Seit UI-Redesign v2 AP4</b> (siehe docs/kb/05-migration-plan.md und
  * docs/specs/0002-ui-design/v2/MAPPING.md, Abschnitt "Listen"): die Toolbar trägt zusätzlich ein
- * clientseitiges Filterfeld ({@link #filterField}), das über {@link ListDataProvider#setFilter}
- * auf den bereits geladenen Zeilen filtert - alle Unterklassen laden ihre Daten eager
- * ({@link #findAll()} liefert eine vollständige {@link List}), ein serverseitiges Nachreichen des
- * Filters in eine Query entfällt deshalb. Wonach gefiltert wird, legt jede Unterklasse über
- * {@link #filterableText(Object)} fest.
+ * clientseitiges Filterfeld ({@link ListFilterField}), das auf den bereits geladenen Zeilen
+ * filtert - alle Unterklassen laden ihre Daten eager ({@link #findAll()} liefert eine
+ * vollständige {@link List}), ein serverseitiges Nachreichen des Filters in eine Query entfällt
+ * deshalb. Wonach gefiltert wird, legt jede Unterklasse über {@link #filterableText(Object)} fest.
  *
  * @param <T> Der Entitätstyp, den die Ansicht auflistet.
  */
@@ -50,7 +45,7 @@ public abstract class AbstractAdminListView<T> extends VerticalLayout {
 
     private final Grid<T> grid = new Grid<>();
 
-    private final TextField filterField = new TextField();
+    private final ListFilterField<T> filterField;
 
     private Registration broadcasterRegistration;
 
@@ -70,15 +65,10 @@ public abstract class AbstractAdminListView<T> extends VerticalLayout {
 
         H2 heading = new H2(title);
 
-        // Filterfeld (UI-Redesign v2 AP4): LAZY, damit nicht bei jedem Tastendruck gefiltert wird,
-        // aber ohne Server-Roundtrip - applyFilter() arbeitet auf dem bereits geladenen
-        // ListDataProvider.
-        this.filterField.addClassName("list-filter");
-        this.filterField.setPlaceholder("Suchen");
-        this.filterField.setPrefixComponent(new Icon(VaadinIcon.SEARCH));
-        this.filterField.setClearButtonVisible(true);
-        this.filterField.setValueChangeMode(ValueChangeMode.LAZY);
-        this.filterField.addValueChangeListener(e -> applyFilter());
+        // Die zugängliche Beschriftung aus dem Titel ableiten: der ist in jeder Listenansicht der
+        // Plural der aufgelisteten Sache ("Geräte" -> "Geräte filtern"), ein eigener
+        // Konstruktor-Parameter wäre in allen fünf Unterklassen nur dessen Wiederholung.
+        this.filterField = new ListFilterField<>(title + " filtern");
 
         HorizontalLayout toolbar = new HorizontalLayout(heading, this.filterField);
         toolbar.addClassName("list-toolbar");
@@ -105,6 +95,9 @@ public abstract class AbstractAdminListView<T> extends VerticalLayout {
     protected void initGrid() {
         configureColumns(this.grid);
         this.grid.addComponentColumn(this::actionButtons).setHeader("").setFlexGrow(0).setWidth(actionColumnWidth());
+        // Erst binden, dann laden: setGridItems() legt den Filter danach auf jeden neuen
+        // Datenbestand.
+        this.filterField.bindTo(this.grid, this::filterableText);
         loadData();
     }
 
@@ -150,41 +143,7 @@ public abstract class AbstractAdminListView<T> extends VerticalLayout {
      */
     protected void setGridItems(List<T> items) {
         this.grid.setItems(items);
-        applyFilter();
-    }
-
-    /**
-     * Wendet {@link #filterField} auf den aktuell geladenen {@link ListDataProvider} an. Leerer
-     * Filtertext (auch nach Trimmen) löscht einen zuvor gesetzten Filter wieder.
-     */
-    private void applyFilter() {
-        ListDataProvider<T> dataProvider = listDataProvider();
-        if (dataProvider == null) {
-            return;
-        }
-        String term = normalizedFilterTerm();
-        if (term.isEmpty()) {
-            dataProvider.clearFilters();
-        } else {
-            dataProvider.setFilter(item -> filterableText(item).toLowerCase(Locale.GERMANY).contains(term));
-        }
-    }
-
-    private String normalizedFilterTerm() {
-        String value = this.filterField.getValue();
-        return value == null ? "" : value.trim().toLowerCase(Locale.GERMANY);
-    }
-
-    @SuppressWarnings("unchecked")
-    private ListDataProvider<T> listDataProvider() {
-        // Der Parametertyp ist wegen Typlöschung nicht prüfbar (kein "instanceof
-        // ListDataProvider<T>") - deshalb Prüfung auf den Rohtyp und anschließend ungeprüfter
-        // Cast, wie überall sonst im Umgang mit Vaadins generischen DataProvider-Typen üblich.
-        DataProvider<T, ?> dataProvider = this.grid.getDataProvider();
-        if (dataProvider instanceof ListDataProvider) {
-            return (ListDataProvider<T>) dataProvider;
-        }
-        return null;
+        this.filterField.reapply();
     }
 
     protected Grid<T> getGrid() {
@@ -202,10 +161,12 @@ public abstract class AbstractAdminListView<T> extends VerticalLayout {
     protected abstract List<T> findAll();
 
     /**
-     * Durchsuchbarer Text einer Zeile für {@link #filterField} (UI-Redesign v2 AP4, siehe
+     * Durchsuchbarer Text einer Zeile für das Filterfeld (UI-Redesign v2 AP4, siehe
      * docs/specs/0002-ui-design/v2/MAPPING.md, Abschnitt "Listen"): deckt die sichtbaren
      * Textspalten der jeweiligen Ansicht ab. Groß-/Kleinschreibung und Leerraum spielen keine
-     * Rolle - {@link #applyFilter()} normalisiert beide Seiten des Vergleichs bereits.
+     * Rolle - {@link ListFilterField} normalisiert beide Seiten des Vergleichs bereits. Damit
+     * Spaltentext und Suchtext nicht auseinanderdriften, sollen beide dieselbe Beschriftungs-
+     * bzw. Formatierungsmethode rufen (siehe {@code AdminDevicesView#statusLabel}).
      */
     protected abstract String filterableText(T item);
 

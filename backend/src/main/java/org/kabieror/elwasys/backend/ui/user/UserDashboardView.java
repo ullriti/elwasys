@@ -3,17 +3,12 @@ package org.kabieror.elwasys.backend.ui.user;
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.grid.Grid;
-import com.vaadin.flow.component.grid.dataview.GridListDataView;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
-import com.vaadin.flow.component.icon.Icon;
-import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
-import com.vaadin.flow.component.textfield.TextField;
-import com.vaadin.flow.data.value.ValueChangeMode;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.shared.Registration;
@@ -31,6 +26,7 @@ import org.kabieror.elwasys.backend.events.DomainEvent;
 import org.kabieror.elwasys.backend.events.ExecutionChangedEvent;
 import org.kabieror.elwasys.backend.service.CreditService;
 import org.kabieror.elwasys.backend.service.UserService;
+import org.kabieror.elwasys.backend.ui.component.ListFilterField;
 import org.kabieror.elwasys.backend.ui.component.PortalFormats;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
@@ -75,15 +71,14 @@ public class UserDashboardView extends VerticalLayout {
     private final Span lastInpaymentValueLabel = new Span();
     private final Grid<CreditAccountingEntryEntity> grid = new Grid<>();
 
-    /** Freitextfilter über der Buchungstabelle (UI-Redesign v2, siehe {@link #applyFilter()}). */
-    private final TextField filterField = new TextField();
-
     /**
-     * Die Datensicht des Grids - {@link #refresh()} ersetzt bei jedem Live-Update die Items und
-     * damit auch diese Sicht, deshalb als Feld statt als lokale Variable: der eingegebene Filter
-     * muss danach erneut angelegt werden.
+     * Freitextfilter über der Buchungstabelle (UI-Redesign v2): eine Buchungshistorie wächst mit
+     * jeder Einzahlung und jedem Waschgang, gesucht wird darin aber fast immer nach einem
+     * konkreten Datum, Betrag oder Buchungstext. Es ist dieselbe Komponente wie über den
+     * Admin-Listen - ein Portal, ein Suchfeld mit einer Suchsemantik.
      */
-    private GridListDataView<CreditAccountingEntryEntity> gridDataView;
+    private final ListFilterField<CreditAccountingEntryEntity> filterField =
+            new ListFilterField<>("Buchungen filtern");
 
     private Registration broadcasterRegistration;
 
@@ -117,7 +112,7 @@ public class UserDashboardView extends VerticalLayout {
         // Admin-Listen (AbstractAdminListView), damit das Portal an beiden Stellen gleich zu
         // bedienen ist.
         H3 bookingsHeading = new H3("Buchungen");
-        HorizontalLayout bookingsToolbar = new HorizontalLayout(bookingsHeading, buildFilterField());
+        HorizontalLayout bookingsToolbar = new HorizontalLayout(bookingsHeading, this.filterField);
         bookingsToolbar.addClassName("list-toolbar");
         bookingsToolbar.setWidthFull();
         bookingsToolbar.setFlexGrow(1, bookingsHeading);
@@ -143,57 +138,21 @@ public class UserDashboardView extends VerticalLayout {
         add(this.grid);
         setFlexGrow(1, this.grid);
 
+        // Erst binden, dann laden: refresh() legt den Filter danach auf jeden neuen Datenbestand.
+        this.filterField.bindTo(this.grid, UserDashboardView::filterableText);
+
         refresh();
     }
 
     /**
-     * Freitextfilter über der Buchungstabelle (UI-Redesign v2): eine Buchungshistorie wächst mit
-     * jeder Einzahlung und jedem Waschgang, gesucht wird darin aber fast immer nach einem
-     * konkreten Datum, Betrag oder Buchungstext. Der Filter arbeitet auf den ANGEZEIGTEN Texten,
-     * damit das Eingetippte genau das trifft, was der Benutzer vor sich sieht.
+     * Suchtext einer Buchung für das Filterfeld (UI-Redesign v2): die drei angezeigten Spalten,
+     * jeweils über dieselbe Formatierung wie die Zelle selbst - gesucht wird damit genau das, was
+     * der Benutzer vor sich sieht.
      */
-    private TextField buildFilterField() {
-        // Dieselbe Klasse und dieselbe Beschriftung wie die Filterfelder der Admin-Listen
-        // (AbstractAdminListView): ein Portal, ein Suchfeld - unterschiedliche Breiten oder
-        // Platzhalter wären dem Benutzer nur als Unsauberkeit aufgefallen.
-        this.filterField.addClassName("list-filter");
-        this.filterField.setPlaceholder("Suchen");
-        this.filterField.setAriaLabel("Buchungen filtern");
-        this.filterField.setPrefixComponent(new Icon(VaadinIcon.SEARCH));
-        this.filterField.setClearButtonVisible(true);
-        // LAZY statt EAGER: filtert erst nach einer kurzen Tippause, statt bei jedem Zeichen eine
-        // Serverrunde auszulösen.
-        this.filterField.setValueChangeMode(ValueChangeMode.LAZY);
-        this.filterField.addValueChangeListener(e -> applyFilter());
-        return this.filterField;
-    }
-
-    /**
-     * Legt den aktuellen Filterbegriff auf die Datensicht - nach jeder Eingabe UND nach jedem
-     * {@link #refresh()}, weil dieses die Datensicht ersetzt.
-     */
-    private void applyFilter() {
-        if (this.gridDataView == null) {
-            return;
-        }
-        String term = this.filterField.getValue() == null ? "" : this.filterField.getValue().trim();
-        if (term.isEmpty()) {
-            this.gridDataView.removeFilters();
-            return;
-        }
-        String needle = term.toLowerCase(Locale.GERMANY);
-        this.gridDataView.setFilter(entry -> matches(entry, needle));
-    }
-
-    /** Trifft der (bereits kleingeschriebene) Suchbegriff eine der drei angezeigten Spalten? */
-    private static boolean matches(CreditAccountingEntryEntity entry, String needle) {
-        return contains(PortalFormats.dateTime(entry.getDate()), needle)
-                || contains(PortalFormats.currency(entry.getAmount()), needle)
-                || contains(entry.getDescription(), needle);
-    }
-
-    private static boolean contains(String value, String needle) {
-        return value != null && value.toLowerCase(Locale.GERMANY).contains(needle);
+    private static String filterableText(CreditAccountingEntryEntity entry) {
+        return String.join(" ", PortalFormats.dateTime(entry.getDate()),
+                PortalFormats.currency(entry.getAmount()),
+                entry.getDescription() == null ? "" : entry.getDescription());
     }
 
     @Override
@@ -237,10 +196,10 @@ public class UserDashboardView extends VerticalLayout {
         this.creditValueLabel.setText(PortalFormats.currency(this.creditService.getCredit(this.user)));
         this.lastInpaymentValueLabel.setText(
                 this.creditService.getLastInpayment(this.user).map(e -> e.getDate().format(DATE_FORMAT)).orElse("-"));
-        this.gridDataView = this.grid.setItems(this.creditService.getAccountingEntries(this.user));
+        this.grid.setItems(this.creditService.getAccountingEntries(this.user));
         // Ein Live-Update darf einen gesetzten Filter nicht stillschweigend fallen lassen - sonst
         // stünde plötzlich wieder die volle Historie da, während im Feld noch der Suchbegriff steht.
-        applyFilter();
+        this.filterField.reapply();
     }
 
     private static VerticalLayout buildSparkTile(String caption, Span valueLabel) {
