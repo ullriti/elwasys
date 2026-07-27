@@ -3,6 +3,8 @@ package org.kabieror.elwasys.backend.ui.admin;
 import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.grid.Grid;
+import com.vaadin.flow.component.grid.GridSortOrder;
+import com.vaadin.flow.component.grid.GridVariant;
 import com.vaadin.flow.component.html.Div;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Span;
@@ -10,6 +12,9 @@ import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.FlexLayout;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.progressbar.ProgressBar;
+import com.vaadin.flow.data.provider.QuerySortOrder;
+import com.vaadin.flow.data.provider.SortDirection;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.router.RouterLink;
@@ -17,10 +22,13 @@ import com.vaadin.flow.shared.Registration;
 import jakarta.annotation.security.RolesAllowed;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
+import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.events.DeviceChangedEvent;
 import org.kabieror.elwasys.backend.events.DomainEvent;
 import org.kabieror.elwasys.backend.events.ExecutionChangedEvent;
@@ -71,6 +79,13 @@ import org.springframework.data.domain.Sort;
  * <p><b>Seit Issue #89</b>: über den Standort-Panels ein Hinweisstreifen auf offene
  * Offline-Vorfälle mit Link in {@link AdminOfflineIncidentsView} (siehe
  * {@link #refreshIncidentBanner()}) - ohne offene Vorfälle bleibt er unsichtbar.
+ *
+ * <p><b>Seit dem UI-Redesign v2</b> (docs/specs/0002-ui-design/v2/MAPPING.md, "Dashboard-
+ * Gerätekarten", siehe docs/kb/05-migration-plan.md): die Gerätekarte zeigt dieselben Daten in
+ * neuer Anordnung - Statuspunkt und "Deaktiviert"-Chip in der Kopfzeile, die laufende Ausführung
+ * als Kennzahlen-Panel mit Fortschrittsbalken der Restzeit und die Historie kompakt unter einer
+ * "Verlauf"-Überschrift mit Eintragszahl, deren Spalten sortierbar sind (die Sortierung geht in
+ * die Datenbankabfrage, siehe {@link #toHistorySort}).
  */
 @Route(value = "admin", layout = AdminLayout.class)
 @PageTitle("Dashboard - Waschportal")
@@ -241,41 +256,156 @@ public class AdminDashboardView extends VerticalLayout {
         devicePanel.addClassName(statusClass);
 
         HorizontalLayout header = new HorizontalLayout();
+        header.addClassName("device-header");
         header.setWidthFull();
+        header.setAlignItems(FlexComponent.Alignment.CENTER);
         header.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
+
+        // UI-Redesign v2: derselbe Status noch einmal als farbiger Punkt direkt vor dem Namen.
+        // Der farbige obere Kartenrand allein verlangt, den Blick an den Rand der Karte zu
+        // führen - der Punkt bringt die Information dahin, wo ohnehin gelesen wird. Er trägt
+        // dieselbe Statusklasse wie die Karte, die Farbe kommt also aus derselben Palette.
+        Span statusDot = new Span();
+        statusDot.addClassNames("device-status-dot", statusClass);
+
         Span nameLabel = new Span(deviceStatus.device().getName());
         nameLabel.addClassName("device-name");
         Span statusBadge = new Span(deviceStatus.isOccupied() ? "Besetzt" : "Frei");
         statusBadge.getElement().getThemeList().add("badge" + (deviceStatus.isOccupied() ? " error" : " success"));
-        header.add(nameLabel, statusBadge);
+
+        header.add(statusDot, nameLabel);
+        // Der Name füllt die Lücke zwischen Punkt und Abzeichen, damit Chip und Abzeichen
+        // unabhängig von der Namenslänge immer bündig rechts stehen.
+        header.setFlexGrow(1, nameLabel);
+        if (!deviceStatus.device().isEnabled()) {
+            // Ein deaktiviertes Gerät ist weder "Frei" noch "Besetzt" nutzbar - bisher sagte das
+            // nur der graue Kartenrand, jetzt zusätzlich ein Chip in Worten (UI-Redesign v2).
+            Span disabledChip = new Span("Deaktiviert");
+            disabledChip.getElement().getThemeList().add("badge contrast small");
+            header.add(disabledChip);
+        }
+        header.add(statusBadge);
         devicePanel.add(header);
 
         deviceStatus.runningExecution().ifPresent(execution -> devicePanel.add(buildRunningInfo(execution,
                 deviceStatus.remainingTime())));
 
-        devicePanel.add(buildHistoryGrid(deviceStatus));
+        devicePanel.add(buildHistoryHeader(deviceStatus.device()), buildHistoryGrid(deviceStatus));
     }
 
-    private Span buildRunningInfo(ExecutionEntity execution, Duration remainingTime) {
+    /**
+     * Die laufende Ausführung als Kennzahlen-Panel (UI-Redesign v2, siehe Klassen-Javadoc):
+     * dieselben drei Werte wie bisher (Programm, Nutzer, Restzeit) und dieselbe Formatierung,
+     * nur als beschriftete Kennzahlen nebeneinander statt als eine mit "·" getrennte Textzeile.
+     * Die bisherige CSS-Klasse bleibt zusätzlich gesetzt, damit auf das Panel weiterhin unter
+     * ihrem Namen gezielt werden kann.
+     */
+    private static Div buildRunningInfo(ExecutionEntity execution, Duration remainingTime) {
         String user = execution.getUser() == null ? "-" : execution.getUser().getName();
         String program = execution.getProgram() == null ? "-" : execution.getProgram().getName();
-        Span info = new Span(
-                "Programm: " + program + " · Nutzer: " + user + " · Restzeit: " + formatDuration(remainingTime));
-        info.addClassName("dashboard-device-running-info");
+
+        Div info = new Div();
+        info.addClassNames("device-metrics", "dashboard-device-running-info");
+        info.add(buildMetric("Programm", program, false), buildMetric("Nutzer", user, false),
+                buildMetric("Restzeit", formatDuration(remainingTime), true), buildRemainingProgress(execution));
         return info;
+    }
+
+    /**
+     * Ein Label/Wert-Paar des Kennzahlen-Panels. {@code numeric} setzt tabellarische Ziffern -
+     * die Restzeit zählt sekündlich herunter und würde sonst bei jedem Live-Update leicht
+     * springen, weil die Ziffern unterschiedlich breit sind.
+     */
+    private static Div buildMetric(String label, String value, boolean numeric) {
+        Div metric = new Div();
+        metric.addClassName("device-metric");
+        Span labelSpan = new Span(label);
+        labelSpan.addClassName("device-metric-label");
+        Span valueSpan = new Span(value);
+        valueSpan.addClassName("device-metric-value");
+        if (numeric) {
+            valueSpan.addClassName("tabular-nums");
+        }
+        metric.add(labelSpan, valueSpan);
+        return metric;
+    }
+
+    /**
+     * Fortschrittsbalken der laufenden Ausführung (UI-Redesign v2, ausdrücklicher Wunsch des
+     * Auftraggebers): verstrichene Zeit im Verhältnis zur Höchstdauer des Programms - die
+     * Restzeit daneben als Zahl, hier als Fläche. Er wird nicht eigenständig fortgeschrieben,
+     * sondern lebt vom bestehenden Live-Update: {@link #refreshDevice} baut das gesamte
+     * Geräte-Panel neu auf, der Balken bekommt seinen Wert dabei genauso frisch wie die Restzeit.
+     *
+     * <p>Randfälle: ohne Programm oder mit Höchstdauer 0 gibt es keinen Bezugspunkt für einen
+     * Fortschritt (und {@code min == max} wäre eine Division durch Null in der Web-Komponente) -
+     * ein Nenner von mindestens einer Sekunde zeigt den Balken dann voll, passend zur Restzeit
+     * 00:00:00 daneben. Läuft eine Ausführung über ihre Höchstdauer hinaus (verspätete
+     * Endmeldung eines Terminals), bleibt der Balken bei 100% stehen statt überzulaufen -
+     * dieselbe Deckelung, die {@code ExecutionService#getPrice} für die Abrechnung vornimmt.
+     * Eine Ausführung ohne Startzeitpunkt liefert über {@link #elapsedOf} 0 und damit einen
+     * leeren Balken.
+     */
+    private static ProgressBar buildRemainingProgress(ExecutionEntity execution) {
+        ProgramEntity program = execution.getProgram();
+        long maxSeconds = Math.max(1L, program == null ? 0L : program.getMaxDurationSeconds());
+        long elapsedSeconds = Math.min(maxSeconds, Math.max(0L, elapsedOf(execution).getSeconds()));
+
+        ProgressBar progress = new ProgressBar();
+        progress.addClassName("device-progress");
+        progress.setMin(0);
+        progress.setMax(maxSeconds);
+        progress.setValue(elapsedSeconds);
+        return progress;
+    }
+
+    /**
+     * Überschrift "Verlauf" mit der Anzahl der Einträge über der Historie (UI-Redesign v2). Die
+     * Zahl kommt aus derselben Zählmethode, die das lazy geladene Grid ohnehin für seine
+     * Bildlaufhöhe abfragt ({@link ExecutionService#countExecutions}) - sie sagt dem
+     * Administrator, wie viel unterhalb des sichtbaren Ausschnitts noch folgt.
+     */
+    private Div buildHistoryHeader(DeviceEntity device) {
+        long count = this.executionService.countExecutions(device);
+        Div header = new Div();
+        header.addClassName("history-header");
+        Span title = new Span("Verlauf");
+        title.addClassName("history-title");
+        Span countLabel = new Span(count == 1 ? "1 Eintrag" : count + " Einträge");
+        countLabel.addClassName("history-count");
+        header.add(title, countLabel);
+        return header;
     }
 
     private Grid<ExecutionEntity> buildHistoryGrid(DeviceStatus deviceStatus) {
         DeviceEntity device = deviceStatus.device();
         Grid<ExecutionEntity> grid = new Grid<>();
         grid.addClassName("dashboard-device-history");
+        // UI-Redesign v2: kompakte Zeilen, damit unter der Gerätekarte mehr Verlauf in dieselbe
+        // Höhe passt.
+        grid.addThemeVariants(GridVariant.LUMO_COMPACT);
         grid.setHeight("14em");
         grid.setWidthFull();
 
-        grid.addColumn(e -> PortalFormats.dateTime(e.getStart())).setHeader("Datum");
-        grid.addColumn(e -> e.getUser() == null ? "-" : e.getUser().getName()).setHeader("Benutzer");
-        grid.addColumn(e -> formatDuration(elapsedOf(e))).setHeader("Dauer");
-        grid.addColumn(e -> PortalFormats.currency(this.executionService.getPrice(e))).setHeader("Preis");
+        // Sortierbar sind genau die Spalten, die die Datenbank auch wirklich sortieren kann
+        // (UI-Redesign v2): das Grid lädt seitenweise (siehe unten), eine Sortierung muss also
+        // in die Abfrage gehen. "Dauer" und "Preis" stehen in keiner Spalte der Tabelle - die
+        // Dauer ergibt sich aus start/stop bzw. der laufenden Uhr, der Preis wird je Zeile aus
+        // Programm, Benutzergruppe und Dauer berechnet (ExecutionService#getPrice). Sie bleiben
+        // deshalb bewusst unsortierbar, statt eine Sortierung vorzutäuschen, die nur die gerade
+        // geladene Seite ordnet.
+        Grid.Column<ExecutionEntity> dateColumn = grid.addColumn(e -> PortalFormats.dateTime(e.getStart()))
+                .setHeader("Datum").setSortable(true).setSortProperty("start");
+        grid.addColumn(e -> e.getUser() == null ? "-" : e.getUser().getName()).setHeader("Benutzer").setSortable(true)
+                .setSortProperty("user.name");
+        // Tabellarische Ziffern auf Dauer und Preis, damit die Zahlen spaltenweise untereinander
+        // stehen. setClassNameGenerator ist in Vaadin 24.10 zugunsten von Shadow-DOM-Parts als
+        // veraltet markiert - hier bewusst weiter verwendet, weil das Portal-Theme die Zellen
+        // (die als Light-DOM-Elemente vorliegen) über CSS-Klassen anspricht, nicht über ::part.
+        grid.addColumn(e -> formatDuration(elapsedOf(e))).setHeader("Dauer")
+                .setClassNameGenerator(e -> "tabular-nums");
+        grid.addColumn(e -> PortalFormats.currency(this.executionService.getPrice(e))).setHeader("Preis")
+                .setClassNameGenerator(e -> "tabular-nums");
 
         grid.setPartNameGenerator(e -> {
             if (!e.isFinished() && e.getStart() != null) {
@@ -287,17 +417,41 @@ public class AdminDashboardView extends VerticalLayout {
         // Issue #30 (Pre-Launch AP5): lazy, seitenweise geladene Historie (neueste zuerst) statt
         // der vollständigen Liste. Der Preis (N+1 über lazy program/user/group) wird damit nur
         // noch für die tatsächlich sichtbaren Zeilen berechnet, nicht für die gesamte Historie.
-        //
-        // Stabiler Zweit-Sortierschlüssel (id DESC): Bei Lazy-Pagination stellt der Callback pro
-        // Seite eine eigene SQL-Abfrage. Teilten sich zwei Ausführungen denselben start-Zeitstempel
-        // (realistisch bei importierten/Demo-Daten), könnte Postgres sie über die Seiten hinweg in
-        // unterschiedlicher Reihenfolge liefern - eine Zeile erschiene sonst doppelt oder gar nicht.
-        Sort newestFirst = Sort.by(Sort.Direction.DESC, "start").and(Sort.by(Sort.Direction.DESC, "id"));
         grid.setItems(
                 query -> this.executionService.getExecutions(device,
-                        PageRequest.of(query.getPage(), query.getPageSize(), newestFirst)).stream(),
+                        PageRequest.of(query.getPage(), query.getPageSize(),
+                                toHistorySort(query.getSortOrders()))).stream(),
                 query -> (int) this.executionService.countExecutions(device));
+        // Anfangszustand: neueste zuerst - wie bisher, nur jetzt auch als Pfeil im Spaltenkopf
+        // sichtbar und damit umkehrbar.
+        grid.sort(List.of(new GridSortOrder<>(dateColumn, SortDirection.DESCENDING)));
         return grid;
+    }
+
+    /**
+     * Übersetzt die Sortierung der Spaltenköpfe (UI-Redesign v2) in eine Spring-Data-Sortierung
+     * für die seitenweise Abfrage. Ohne angeklickten Spaltenkopf bleibt es bei der bisherigen
+     * Voreinstellung "neueste zuerst".
+     *
+     * <p>Stabiler Zweit-Sortierschlüssel (id DESC, seit Issue #30): Bei Lazy-Pagination stellt der
+     * Callback pro Seite eine eigene SQL-Abfrage. Teilten sich zwei Ausführungen denselben
+     * Sortierwert (realistisch bei importierten/Demo-Daten oder beim Sortieren nach Benutzer),
+     * könnte Postgres sie über die Seiten hinweg in unterschiedlicher Reihenfolge liefern - eine
+     * Zeile erschiene sonst doppelt oder gar nicht. Er hängt deshalb an JEDER Sortierung, nicht
+     * nur an der Voreinstellung.
+     */
+    private static Sort toHistorySort(List<QuerySortOrder> sortOrders) {
+        List<Sort.Order> orders = new ArrayList<>();
+        for (QuerySortOrder sortOrder : sortOrders) {
+            orders.add(new Sort.Order(
+                    sortOrder.getDirection() == SortDirection.DESCENDING ? Sort.Direction.DESC : Sort.Direction.ASC,
+                    sortOrder.getSorted()));
+        }
+        if (orders.isEmpty()) {
+            orders.add(new Sort.Order(Sort.Direction.DESC, "start"));
+        }
+        orders.add(new Sort.Order(Sort.Direction.DESC, "id"));
+        return Sort.by(orders);
     }
 
     private static Duration elapsedOf(ExecutionEntity execution) {
