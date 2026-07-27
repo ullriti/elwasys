@@ -8,12 +8,43 @@ Wartungs-WebSocket-Verbindung (`backend.url`/`backend.token` in
 `elwasys.properties`) statt Direkt-DB-Zugriff (seit Phase 4).
 
 **Scope**: die Skripte `upgrade-jre.sh` (AP3) und `update.sh` (AP4) + dieses
-Runbook + der zum Supervisor umgebaute `run.sh`-Generator in `Client-Raspi/setup.sh`.
+Runbook + der `run.sh`-Generator [`run-sh.lib.sh`](run-sh.lib.sh), den sich
+`Client-Raspi/setup.sh` und `update.sh` teilen (Issue #101).
 Die echten apt-/X-Schritte laufen NUR auf dem Gerät (armhf, Raspberry Pi OS) und
 wurden hier lediglich **trocken/syntaktisch** verifiziert (`bash -n` +
 Funktions-/Ablauf-Trockentests, siehe Änderungslog in docs/kb/05). Das optionale
 Auto-Update mit Rollback folgt in Phase 6 AP5 und baut auf dem hier eingeführten
 `latest`/`previous`-Jar-Layout auf.
+
+## Woher die Skripte aufs Gerät kommen
+
+Seit Issue #101 liefert jedes Release die Betriebsskripte als eigenes Asset
+**`elwasys-terminal-scripts-<version>.tar.gz`** (+ `.sha256`) mit – vorher war nur das
+Jar im Release und die Skripte mussten aus einem Repo-Checkout kopiert werden. Damit
+driftete das, was ein Terminal *ausführt*, unkontrolliert von dem, was es *ausrollt*;
+und seit `update.sh` die gemeinsame `run-sh.lib.sh` braucht, ist eine unvollständige
+Kopie ein harter Fehler statt einer stillen Alterung.
+
+```bash
+VERSION=1.4.0
+base="https://github.com/ullriti/elwasys/releases/download/${VERSION}"
+wget "${base}/elwasys-terminal-scripts-${VERSION}.tar.gz"
+wget "${base}/elwasys-terminal-scripts-${VERSION}.tar.gz.sha256"
+sha256sum -c "elwasys-terminal-scripts-${VERSION}.tar.gz.sha256"   # Gate: erst danach auspacken
+tar xzf "elwasys-terminal-scripts-${VERSION}.tar.gz"
+sudo mkdir -p /opt/elwasys/bin
+sudo cp elwasys-terminal-scripts/*.sh elwasys-terminal-scripts/VERSION /opt/elwasys/bin/
+sudo chmod +x /opt/elwasys/bin/*.sh
+```
+
+`update.sh`, `auto-update-watchdog.sh`, `upgrade-jre.sh` und `run-sh.lib.sh` gehören
+**zusammen in dasselbe Verzeichnis** – `update.sh` sucht `run-sh.lib.sh` neben sich
+(überschreibbar per `ELWA_RUN_SH_LIB`) und bricht mit klarer Meldung ab, wenn sie fehlt.
+`cat /opt/elwasys/bin/VERSION` verrät jederzeit, welcher Skript-Stand auf dem Gerät liegt.
+
+Die Skripte aktualisieren sich bewusst **nicht selbst**: ein fehlerhaftes `update.sh`,
+das sich selbst ausrollt, träfe die ganze Flotte auf einmal. Ein neuer Skript-Stand
+wird wie oben eingespielt.
 
 ## Zwei Fälle unterscheiden
 
@@ -92,8 +123,18 @@ kein externes `logrotate` auf dem Gerät nötig.
 
 `deploy/terminal/update.sh` hebt ein **bereits provisioniertes** Terminal auf ein
 neues Client-fat-jar, **ohne** das interaktive `setup.sh` erneut zu fahren –
-`elwasys.properties`, `logback.xml`, `run.sh` und `~/.xsession` bleiben
-unangetastet.
+`elwasys.properties`, `logback.xml` und `~/.xsession` bleiben unangetastet, weil
+sie lokalen Zustand tragen.
+
+**`run.sh` ist seit Issue #101 ausdrücklich keine Ausnahme mehr.** Sie trägt
+keinen lokalen Zustand, sondern den Supervisor-Vertrag und den Startbefehl der
+JVM, und wird vollständig aus [`run-sh.lib.sh`](run-sh.lib.sh) erzeugt – derselben
+Quelle, die auch `setup.sh` nutzt. Solange `update.sh` sie ausließ, erreichte jede
+Änderung am Startbefehl (JVM-Flags, Heap-Grenzen, Logback-Pfad, die
+Supervisor-Schleife selbst) ausschließlich frisch aufgesetzte Geräte; Bestandsgeräte
+liefen still mit dem Startbefehl von damals weiter. `update.sh` bringt `run.sh` jetzt
+bei Bedarf auf den aktuellen Vertrag und sichert die bisherige Fassung als
+`run.sh.v<n>.bak`.
 
 **Aufruf** (genau eine Bezugsquelle):
 
@@ -128,10 +169,46 @@ darauf auf):
    nach `ELWA_ROOT` kopieren) → `raspi-client-<version>.jar`.
 2. Bisheriges `latest`-Ziel als `previous` merken (Rollback-Ziel).
 3. `latest` auf das neue Jar zeigen.
-4. **Neustart gemäß Supervisor-Vertrag**: läuft eine JVM, wird sie beendet – die
+4. **`run.sh` auf den aktuellen Vertrag bringen** (siehe unten), falls sie älter ist.
+5. **Neustart gemäß Supervisor-Vertrag**: läuft eine JVM, wird sie beendet – die
    `run.sh`-Loop liest das Symlink-Ziel neu und startet das neue Jar. Läuft keine
    JVM (Terminal/Display aus), sauberer Hinweis statt Fehler; der Supervisor
    startet beim nächsten Lauf ohnehin das jetzt verlinkte Jar.
+
+### Altbestand ohne Supervisor-Schleife (Exit 4)
+
+Die **ursprüngliche** `run.sh` – die Fassung, die vor Phase 6 AP3 von `setup.sh`
+erzeugt wurde und heute noch auf den Feldgeräten läuft – ist ein **Einmalstart ohne
+Schleife**. Auf so einem Gerät wäre der Neustart-Trigger fatal: `killall java`
+beendet die JVM, die `run.sh` läuft danach aus, `~/.xsession` endet – und **niemand
+startet neu**. Das Terminal bleibt dunkel, bis jemand vor Ort ist.
+
+`update.sh` erkennt das an der fehlenden Schleife und **löst in diesem Fall keinen
+Neustart aus**. Stattdessen: Jar ausrollen, `run.sh` erneuern, den Marker
+`${ELWA_ROOT}/.run-sh-pending-restart` setzen und mit **Exit 4** plus Anleitung
+beenden. Einmalig von Hand nachziehen:
+
+```bash
+sudo systemctl restart lightdm     # bzw. das Display-Manager-Unit des Geräts
+# oder, wenn unklar:
+sudo reboot
+```
+
+Die neue `run.sh` löscht den Marker als erste Amtshandlung – sein Verschwinden ist
+die Quittung, dass der neue Supervisor wirklich läuft. Solange er liegt, unterlässt
+`update.sh` den Kill weiter (auch bei jedem Folgelauf): dass die *Datei* aktuell ist,
+heißt nicht, dass der *laufende Prozess* es ist. Danach laufen Updates wieder
+unbeaufsichtigt.
+
+Der Watchdog behandelt Exit 4 bewusst **weder als Rollback- noch als
+Fehlschlag-Fall** – das Ziel-Jar ist korrekt verlinkt, es fehlt nur ein manueller
+Schritt –, alarmiert aber bei jedem Lauf, bis er erledigt ist.
+
+**Truststore:** Das ursprüngliche `setup.sh` richtete einen eigenen Truststore mit
+generiertem Passwort ein und reichte ihn per `-Djavax.net.ssl.*` an die JVM; das
+heutige tut das nicht mehr. `update.sh` übernimmt vorhandene Truststore-Flags beim
+Erneuern in die neue `run.sh` – sonst verlöre ein Gerät mit privater CA still das
+Vertrauen zum Backend (`backend.url` ist seit Issue #35 https-Pflicht).
 
 **Idempotenz:** Zeigt `latest` bereits auf das neue Jar, hängt das Skript nichts
 um (`previous` bleibt unangetastet, damit das Rollback-Ziel nicht überschrieben

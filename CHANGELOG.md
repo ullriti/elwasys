@@ -13,6 +13,8 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Added
+- Terminal-Betriebsskripte liegen jedem Release als Asset `elwasys-terminal-scripts-<version>.tar.gz`
+  (+ `.sha256`) bei – bisher enthielt das Release nur das Client-Jar.
 - Freitext-Filter über jeder Portal-Liste sowie zusätzliche sortierbare Spalten (Guthaben,
   Buchungen, Offline-Vorfälle, Dashboard-Historie).
 - Die Gerätekarten des Dashboards zeigen Programm, Nutzer und Restzeit als Kennzahlen-Panel
@@ -73,6 +75,12 @@ im [Worklog](docs/worklog/README.md).
 - Portal-Design an das Terminal angeglichen (gemeinsame Palette, responsive Dashboard-Karten).
 
 ### Fixed
+- Terminal-Update auf Bestandsgeräten (#101): `update.sh` erneuert jetzt auch den Supervisor
+  `run.sh` – Änderungen am Startbefehl erreichten bisher nur frisch aufgesetzte Geräte. Auf
+  Geräten mit dem alten Einmalstart ohne Schleife unterbleibt der Neustart bewusst (Exit 4 mit
+  Anleitung), statt das Terminal dunkel zurückzulassen.
+- Datums- und Preisanzeige am Terminal hing an drei Stellen weiter an der Locale des
+  Pi-Images (#100) – sie folgen jetzt durchgängig `FormatUtilities.DISPLAY_LOCALE`.
 - Cutover-Preflight (#85): `verify-cutover-migration.sh` leitet die erwartete Flyway-Historie aus
   dem Migrationsordner ab (bisher hart bis V10), ein CI-Selbsttest hält beides in Sync.
 - Passwort-Reset-Links in Produktion (#86): `ELWASYS_PORTAL_BASE_URL` wird in Compose und Helm
