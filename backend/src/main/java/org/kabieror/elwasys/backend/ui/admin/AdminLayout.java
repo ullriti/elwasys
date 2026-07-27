@@ -57,10 +57,6 @@ public class AdminLayout extends AppLayout {
         addToNavbar(toggle, logoMark, title, new NavbarViewName(),
                 new UserMenuBar(authenticationContext, userService, passwordService));
 
-        // Auf dem Desktop bleibt die Seitenleiste sichtbar; unterhalb der CSS-Schwelle von
-        // 900px führt die AppLayout sie weiterhin als Overlay über den DrawerToggle.
-        setDrawerOpened(true);
-
         SideNav nav = new SideNav();
         nav.addItem(new SideNavItem("Dashboard", AdminDashboardView.class, VaadinIcon.DASHBOARD.create()));
         nav.addItem(new SideNavItem("Benutzer", AdminUsersView.class, VaadinIcon.USER.create()));

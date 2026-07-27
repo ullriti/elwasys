@@ -119,9 +119,11 @@ vaadin-drawer-toggle {
 }
 
 /*
- * v2: die Seitenleiste steht auf dem Desktop dauerhaft offen (AppLayout#setDrawerOpened(true)),
- * der Umschalter ist dort überflüssig und wird ausgeblendet. Unterhalb von 900px bleibt er
- * sichtbar, weil die AppLayout die Leiste dann als Overlay führt.
+ * v2: die Seitenleiste steht auf dem Desktop dauerhaft offen (Vorgabe der AppLayout, sobald sie
+ * nicht im Overlay-Modus ist - ein ausdrückliches setDrawerOpened(true) wäre dort wirkungslos
+ * und WÜRDE auf schmalen Fenstern die Overlay-Leiste beim Laden über den Inhalt legen). Der
+ * Umschalter ist auf dem Desktop überflüssig und wird ausgeblendet; unterhalb von 900px bleibt
+ * er sichtbar, weil die AppLayout die Leiste dann als Overlay führt.
  */
 @media (min-width: 900px) {
   vaadin-drawer-toggle {
@@ -367,11 +369,24 @@ vaadin-grid::part(cell) {
   padding-block: 0.35rem;
 }
 
-vaadin-grid::part(even-row-cell) {
+/*
+ * Grund- und Hover-Farbe liegen auf der ZEILE, nicht auf den Zellen: nach der
+ * CSS-Shadow-Parts-Spezifikation darf auf ::part() kein Kombinator in den Shadow-Baum hinein
+ * folgen. Eine Regel der Art "::part(row):hover > [part~=body-cell]" verwirft der Browser
+ * schon beim Parsen - im Chromium dieser Umgebung nachgemessen, die Zeile blieb ohne
+ * Hervorhebung. Die Zellen werden deshalb durchsichtig, damit die Zeilenfarbe durchscheint;
+ * bewusst nur die body-Zellen/-Zeilen, damit Kopf- und Fußzeile unberührt bleiben (die
+ * Kopfzeile hat ihre eigene Regel oben und darf nicht mit-hovern).
+ */
+vaadin-grid::part(body-cell) {
+  background-color: transparent;
+}
+
+vaadin-grid::part(body-row) {
   background-color: #ffffff;
 }
 
-vaadin-grid::part(row):hover > [part~="body-cell"] {
+vaadin-grid::part(body-row):hover {
   background-color: var(--elwa-row-hover);
 }
 
@@ -449,14 +464,23 @@ vaadin-grid::part(row):hover > [part~="body-cell"] {
 }
 
 /* ------------------------------------------------------------------ *
- *  Gerätekarte v2 - Statuspunkt, Kennzahlen-Panel, Fortschrittsbalken,
- *  Verlaufs-Überschrift. Die Farbe des Punktes (und des Balkens) kommt über
- *  die zusätzlich am SELBEN Element gesetzte device-status-*-Klasse.
+ *  Gerätekarte v2 - Statuspunkt, Gerätename, Kennzahlen-Panel,
+ *  Fortschrittsbalken, Verlaufs-Überschrift. Die Farbe des Statuspunktes kommt
+ *  über die zusätzlich am SELBEN Element gesetzte device-status-*-Klasse.
  * ------------------------------------------------------------------ */
 .device-header {
   align-items: center;
   gap: 0.6rem;
   width: 100%;
+}
+
+/* Der Gerätename ist die Überschrift der Karte und im Entwurf entsprechend größer
+   als der übrige Kartentext (docs/specs/0002-ui-design/v2/, "Dashboard-Gerätekarten"). */
+.device-name {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--lumo-header-text-color);
 }
 
 .device-status-dot {
@@ -536,21 +560,12 @@ vaadin-grid::part(row):hover > [part~="body-cell"] {
   background-color: var(--elwa-inner-border);
 }
 
+/* Eine Statusfärbung des Balkens gibt es bewusst nicht: er erscheint nur, solange eine
+   Ausführung läuft, das Gerät ist dann immer "besetzt" - eine Fallunterscheidung nach
+   Status hätte also nur einen einzigen Fall. */
 .device-progress::part(value) {
   border-radius: 999px;
   background-color: var(--lumo-primary-color);
-}
-
-.device-progress.device-status-free::part(value) {
-  background-color: var(--elwa-status-free);
-}
-
-.device-progress.device-status-occupied::part(value) {
-  background-color: var(--elwa-status-occupied);
-}
-
-.device-progress.device-status-disabled::part(value) {
-  background-color: var(--elwa-status-disabled);
 }
 
 /* Überschrift "Verlauf" mit Anzahl. Die Typografie steht auf .history-header,
@@ -734,6 +749,16 @@ vaadin-dialog-overlay:has(.dialog-body)::part(content) {
   margin: 0;
   opacity: 0;
   cursor: pointer;
+}
+
+/* Weil sowohl der Radio-Punkt (auf dem Vaadin bei [focus-ring] seinen Fokusring zeichnet)
+   als auch das Eingabefeld unsichtbar sind, wäre sonst nirgends zu sehen, wo der Fokus
+   steht - Tastaturbedienung ohne sichtbaren Fokus (WCAG 2.4.7). Der Ring gehört deshalb an
+   den Segmentknopf selbst; :focus-within, weil das fokussierte Element das eingebettete
+   input ist. */
+.segmented-control vaadin-radio-button:focus-within {
+  outline: 2px solid var(--lumo-primary-color);
+  outline-offset: 2px;
 }
 
 .segmented-control vaadin-radio-button[checked] {

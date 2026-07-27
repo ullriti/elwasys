@@ -83,7 +83,11 @@ public abstract class AbstractFormDialog extends Dialog {
         btnClose.addClassName("dialog-close");
         // Ein Knopf ohne Beschriftung hat keinen zugänglichen Namen - ohne aria-label wäre er
         // weder mit dem Screenreader noch aus der Playwright-Suite heraus adressierbar.
-        btnClose.setAriaLabel("Schließen");
+        // Bewusst NICHT "Schließen": der LogViewerDialog trägt in seiner Fußzeile eine
+        // Schaltfläche genau dieses Namens, es gäbe dann zwei gleichnamige Bedienelemente im
+        // selben Dialog - für den Screenreader nicht unterscheidbar, für eine Suche nach dem
+        // Namen mehrdeutig.
+        btnClose.setAriaLabel("Dialog schließen");
         dialog.getHeader().add(btnClose);
     }
 

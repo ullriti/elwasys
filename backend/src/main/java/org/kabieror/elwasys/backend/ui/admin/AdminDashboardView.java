@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import org.kabieror.elwasys.backend.domain.DeviceEntity;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
-import org.kabieror.elwasys.backend.domain.ProgramEntity;
 import org.kabieror.elwasys.backend.events.DeviceChangedEvent;
 import org.kabieror.elwasys.backend.events.DomainEvent;
 import org.kabieror.elwasys.backend.events.ExecutionChangedEvent;
@@ -255,11 +254,28 @@ public class AdminDashboardView extends VerticalLayout {
                 : deviceStatus.isOccupied() ? "device-status-occupied" : "device-status-free";
         devicePanel.addClassName(statusClass);
 
+        devicePanel.add(buildDeviceHeader(deviceStatus, statusClass));
+
+        deviceStatus.runningExecution().ifPresent(execution -> devicePanel.add(buildRunningInfo(execution,
+                deviceStatus.remainingTime())));
+
+        // Die Anzahl der Verlaufseinträge wird EINMAL ermittelt und an beide Stellen gereicht,
+        // die sie brauchen (Überschrift und Bildlaufhöhe des lazy geladenen Grids). Sie kostet
+        // ein COUNT(*) auf der größten Tabelle des Systems (Issue #30), und dieser Panel-Aufbau
+        // läuft bei jedem Live-Update eines Geräts erneut.
+        long historyCount = this.executionService.countExecutions(deviceStatus.device());
+        devicePanel.add(buildHistoryHeader(historyCount), buildHistoryGrid(deviceStatus, historyCount));
+    }
+
+    /**
+     * Die Kopfzeile der Gerätekarte (UI-Redesign v2): Statuspunkt, Gerätename und rechtsbündig
+     * der "Deaktiviert"-Chip sowie das Frei/Besetzt-Abzeichen.
+     */
+    private static HorizontalLayout buildDeviceHeader(DeviceStatus deviceStatus, String statusClass) {
         HorizontalLayout header = new HorizontalLayout();
         header.addClassName("device-header");
         header.setWidthFull();
         header.setAlignItems(FlexComponent.Alignment.CENTER);
-        header.setJustifyContentMode(FlexComponent.JustifyContentMode.BETWEEN);
 
         // UI-Redesign v2: derselbe Status noch einmal als farbiger Punkt direkt vor dem Namen.
         // Der farbige obere Kartenrand allein verlangt, den Blick an den Rand der Karte zu
@@ -275,7 +291,9 @@ public class AdminDashboardView extends VerticalLayout {
 
         header.add(statusDot, nameLabel);
         // Der Name füllt die Lücke zwischen Punkt und Abzeichen, damit Chip und Abzeichen
-        // unabhängig von der Namenslänge immer bündig rechts stehen.
+        // unabhängig von der Namenslänge immer bündig rechts stehen. Ein zusätzliches
+        // JustifyContentMode.BETWEEN wäre wirkungslos: der wachsende Name lässt gar keinen
+        // freien Platz mehr übrig, den es zu verteilen gäbe.
         header.setFlexGrow(1, nameLabel);
         if (!deviceStatus.device().isEnabled()) {
             // Ein deaktiviertes Gerät ist weder "Frei" noch "Besetzt" nutzbar - bisher sagte das
@@ -285,12 +303,7 @@ public class AdminDashboardView extends VerticalLayout {
             header.add(disabledChip);
         }
         header.add(statusBadge);
-        devicePanel.add(header);
-
-        deviceStatus.runningExecution().ifPresent(execution -> devicePanel.add(buildRunningInfo(execution,
-                deviceStatus.remainingTime())));
-
-        devicePanel.add(buildHistoryHeader(deviceStatus.device()), buildHistoryGrid(deviceStatus));
+        return header;
     }
 
     /**
@@ -307,7 +320,8 @@ public class AdminDashboardView extends VerticalLayout {
         Div info = new Div();
         info.addClassNames("device-metrics", "dashboard-device-running-info");
         info.add(buildMetric("Programm", program, false), buildMetric("Nutzer", user, false),
-                buildMetric("Restzeit", formatDuration(remainingTime), true), buildRemainingProgress(execution));
+                buildMetric("Restzeit", formatDuration(remainingTime), true),
+                buildRemainingProgress(execution, remainingTime));
         return info;
     }
 
@@ -337,47 +351,67 @@ public class AdminDashboardView extends VerticalLayout {
      * sondern lebt vom bestehenden Live-Update: {@link #refreshDevice} baut das gesamte
      * Geräte-Panel neu auf, der Balken bekommt seinen Wert dabei genauso frisch wie die Restzeit.
      *
-     * <p>Randfälle: ohne Programm oder mit Höchstdauer 0 gibt es keinen Bezugspunkt für einen
-     * Fortschritt (und {@code min == max} wäre eine Division durch Null in der Web-Komponente) -
-     * ein Nenner von mindestens einer Sekunde zeigt den Balken dann voll, passend zur Restzeit
-     * 00:00:00 daneben. Läuft eine Ausführung über ihre Höchstdauer hinaus (verspätete
-     * Endmeldung eines Terminals), bleibt der Balken bei 100% stehen statt überzulaufen -
-     * dieselbe Deckelung, die {@code ExecutionService#getPrice} für die Abrechnung vornimmt.
-     * Eine Ausführung ohne Startzeitpunkt liefert über {@link #elapsedOf} 0 und damit einen
-     * leeren Balken.
+     * <p>Das Programm wird ohne Null-Prüfung ausgelesen: eine laufende Ausführung hat immer
+     * eines - {@link DashboardService#getDeviceStatus} greift für die Restzeit, die hier
+     * daneben steht, bereits ungeschützt darauf zu. Ein defensiver Zweig wäre unerreichbar.
+     *
+     * <p>Zugänglichkeit: die Web-Komponente meldet sich als {@code role="progressbar"} mit einem
+     * {@code aria-valuenow} - ohne Namen und Klartext läse ein Screenreader nur eine kontextlose
+     * Zahl vor. Der Name steht deshalb im {@code aria-label}, und {@code aria-valuetext} nennt
+     * dieselbe Restzeit im selben Format wie die sichtbare Kennzahl daneben. Beides ist nicht
+     * sichtbar, der angezeigte Text ändert sich dadurch nicht.
      */
-    private static ProgressBar buildRemainingProgress(ExecutionEntity execution) {
-        ProgramEntity program = execution.getProgram();
-        long maxSeconds = Math.max(1L, program == null ? 0L : program.getMaxDurationSeconds());
-        long elapsedSeconds = Math.min(maxSeconds, Math.max(0L, elapsedOf(execution).getSeconds()));
-
+    private static ProgressBar buildRemainingProgress(ExecutionEntity execution, Duration remainingTime) {
         ProgressBar progress = new ProgressBar();
         progress.addClassName("device-progress");
-        progress.setMin(0);
-        progress.setMax(maxSeconds);
-        progress.setValue(elapsedSeconds);
+        progress.setValue(progressOf(elapsedOf(execution).getSeconds(),
+                execution.getProgram().getMaxDurationSeconds()));
+        progress.getElement().setAttribute("aria-label", "Fortschritt");
+        progress.getElement().setAttribute("aria-valuetext", "Restzeit " + formatDuration(remainingTime));
         return progress;
     }
 
     /**
-     * Überschrift "Verlauf" mit der Anzahl der Einträge über der Historie (UI-Redesign v2). Die
-     * Zahl kommt aus derselben Zählmethode, die das lazy geladene Grid ohnehin für seine
-     * Bildlaufhöhe abfragt ({@link ExecutionService#countExecutions}) - sie sagt dem
-     * Administrator, wie viel unterhalb des sichtbaren Ausschnitts noch folgt.
+     * Der Füllgrad des Fortschrittsbalkens: verstrichene Zeit im Verhältnis zur Höchstdauer des
+     * Programms, als Anteil zwischen 0 und 1 (der Wertebereich, den {@link ProgressBar} ohne
+     * gesetztes Minimum/Maximum erwartet).
+     *
+     * <p>Randfälle: Läuft eine Ausführung über ihre Höchstdauer hinaus (verspätete Endmeldung
+     * eines Terminals), bleibt der Balken bei 100% stehen statt überzulaufen - dieselbe
+     * Deckelung, die {@code ExecutionService#getPrice} für die Abrechnung vornimmt. Ohne
+     * Höchstdauer (0) gibt es keinen Bezugspunkt für einen Fortschritt; der Balken steht dann
+     * voll, passend zur Restzeit 00:00:00 daneben. Eine Ausführung ohne Startzeitpunkt liefert
+     * über {@link #elapsedOf} 0 und damit einen leeren Balken.
+     *
+     * <p>Als reine Funktion herausgezogen (paketsichtbar), damit die Klemmlogik ohne UI testbar
+     * ist - dasselbe Muster wie {@code AbstractFormDialog#failureText}.
      */
-    private Div buildHistoryHeader(DeviceEntity device) {
-        long count = this.executionService.countExecutions(device);
+    static double progressOf(long elapsedSeconds, int maxDurationSeconds) {
+        if (maxDurationSeconds <= 0) {
+            return 1.0;
+        }
+        return Math.clamp((double) elapsedSeconds / maxDurationSeconds, 0.0, 1.0);
+    }
+
+    /**
+     * Überschrift "Verlauf" mit der Anzahl der Einträge über der Historie (UI-Redesign v2). Die
+     * Zahl ist dieselbe, die das lazy geladene Grid für seine Bildlaufhöhe braucht (siehe
+     * {@link #populateDevicePanel}) - sie sagt dem Administrator, wie viel unterhalb des
+     * sichtbaren Ausschnitts noch folgt.
+     */
+    private static Div buildHistoryHeader(long count) {
         Div header = new Div();
         header.addClassName("history-header");
+        // Die Typografie der Überschrift steht auf .history-header (siehe portal-theme.css),
+        // das Label braucht deshalb keine eigene Klasse.
         Span title = new Span("Verlauf");
-        title.addClassName("history-title");
         Span countLabel = new Span(count == 1 ? "1 Eintrag" : count + " Einträge");
         countLabel.addClassName("history-count");
         header.add(title, countLabel);
         return header;
     }
 
-    private Grid<ExecutionEntity> buildHistoryGrid(DeviceStatus deviceStatus) {
+    private Grid<ExecutionEntity> buildHistoryGrid(DeviceStatus deviceStatus, long historyCount) {
         DeviceEntity device = deviceStatus.device();
         Grid<ExecutionEntity> grid = new Grid<>();
         grid.addClassName("dashboard-device-history");
@@ -417,11 +451,14 @@ public class AdminDashboardView extends VerticalLayout {
         // Issue #30 (Pre-Launch AP5): lazy, seitenweise geladene Historie (neueste zuerst) statt
         // der vollständigen Liste. Der Preis (N+1 über lazy program/user/group) wird damit nur
         // noch für die tatsächlich sichtbaren Zeilen berechnet, nicht für die gesamte Historie.
+        // Die Gesamtzahl ist die beim Panel-Aufbau bereits ermittelte (siehe
+        // populateDevicePanel); sie bleibt aktuell, weil jedes Ereignis am Gerät das ganze
+        // Panel samt Grid neu aufbaut.
         grid.setItems(
                 query -> this.executionService.getExecutions(device,
                         PageRequest.of(query.getPage(), query.getPageSize(),
                                 toHistorySort(query.getSortOrders()))).stream(),
-                query -> (int) this.executionService.countExecutions(device));
+                query -> (int) historyCount);
         // Anfangszustand: neueste zuerst - wie bisher, nur jetzt auch als Pfeil im Spaltenkopf
         // sichtbar und damit umkehrbar.
         grid.sort(List.of(new GridSortOrder<>(dateColumn, SortDirection.DESCENDING)));
@@ -439,8 +476,11 @@ public class AdminDashboardView extends VerticalLayout {
      * könnte Postgres sie über die Seiten hinweg in unterschiedlicher Reihenfolge liefern - eine
      * Zeile erschiene sonst doppelt oder gar nicht. Er hängt deshalb an JEDER Sortierung, nicht
      * nur an der Voreinstellung.
+     *
+     * <p>Paketsichtbar, damit die Übersetzung ohne UI testbar ist - dasselbe Muster wie
+     * {@code AbstractFormDialog#failureText}.
      */
-    private static Sort toHistorySort(List<QuerySortOrder> sortOrders) {
+    static Sort toHistorySort(List<QuerySortOrder> sortOrders) {
         List<Sort.Order> orders = new ArrayList<>();
         for (QuerySortOrder sortOrder : sortOrders) {
             orders.add(new Sort.Order(

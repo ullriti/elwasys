@@ -23,7 +23,8 @@ public class LogViewerDialog extends Dialog {
         // UI-Redesign v2: dasselbe Schließen-Kreuz wie in den Formular-Dialogen (dieser Dialog
         // erbt bewusst nicht von AbstractFormDialog, siehe dortiges Klassen-Javadoc). Der
         // "Schließen"-Knopf der Fußzeile bleibt daneben bestehen - er ist die vertraute
-        // Bedienung aus dem Alt-Portal.
+        // Bedienung aus dem Alt-Portal. Damit die beiden nicht gleich heißen, trägt das Kreuz
+        // den Namen "Dialog schließen" (siehe AbstractFormDialog#addCloseButton).
         AbstractFormDialog.addCloseButton(this);
 
         TextArea logArea = new TextArea();
