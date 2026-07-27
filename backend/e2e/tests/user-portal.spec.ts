@@ -17,7 +17,9 @@ test('a non-admin user reaches the user dashboard without admin access (P15/P18)
   // Seit dem UI-Redesign v2 steht der Name der aktuellen Ansicht auch im Kopfbalken
   // (NavbarViewName), "Übersicht" kommt also zweimal vor - ein getByText() würde am
   // Strict-Mode scheitern. Geprüft wird ohnehin der Menüpunkt, deshalb direkt auf ihn.
-  await expect(page.locator('vaadin-side-nav-item[path="user"]')).toBeVisible();
+  // toContainText, nicht toHaveText: vaadin-side-nav-item führt zusätzlich ein verstecktes
+  // "Toggle child items"-Label mit (siehe dieselbe Begründung in admin.spec.ts).
+  await expect(page.locator('vaadin-side-nav-item[path="user"]')).toContainText('Übersicht');
 
   // Admin-only sections must not be available to a normal user (P18) - neither the side-nav
   // caption nor the route itself (NavigationAccessControl, see AdminLayout Javadoc).
