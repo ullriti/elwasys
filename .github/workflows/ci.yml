@@ -350,6 +350,7 @@ jobs:
           set -euo pipefail
           bash -n deploy/terminal/auto-update-watchdog.sh
           bash -n deploy/terminal/update.sh
+          bash -n deploy/terminal/run-sh.lib.sh
           bash -n deploy/terminal/auto-update-selftest.sh
           bash -n Client-Raspi/setup.sh
 

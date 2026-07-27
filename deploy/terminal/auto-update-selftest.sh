@@ -230,6 +230,151 @@ else
 fi
 
 # ============================================================================
+# #101 – Supervisor-run.sh beim Update erneuern (und Altbestand nicht dunkel machen)
+# ============================================================================
+echo
+echo "=== #101: run.sh-Erneuerung / Altbestand-Schutz ==="
+
+ROOT101="${WORK}/root101"
+NEWJAR="${WORK}/raspi-client-3.0.0.jar"
+echo "jar-3.0.0" > "${NEWJAR}"
+
+# Der Altbestand-Startbefehl aus dem urspruenglichen setup.sh: EINMALSTART, keine
+# Schleife - genau die Fassung, die heute auf den Feldgeraeten laeuft. Inklusive der
+# Truststore-Flags, die dieses setup.sh noch setzte.
+write_legacy_run_sh() {
+    cat > "$1/run.sh" <<'EOF'
+#!/bin/bash
+
+sudo killall java 2> /dev/null
+
+java -Djavafx.platform=gtk -Dlogback.configurationFile=/opt/elwasys/logback.xml \
+        -Djavax.net.ssl.trustStore=/opt/elwasys/.truststore -Djavax.net.ssl.trustStorePassword=s3cret \
+        -jar raspi-client.latest.jar -verbose > log/stdout 2> log/errout
+EOF
+    chmod +x "$1/run.sh"
+}
+
+# Vertrag v1: der Supervisor aus Phase 6 AP3 - hat die Schleife, aber noch keinen Marker.
+write_v1_run_sh() {
+    cat > "$1/run.sh" <<'EOF'
+#!/bin/bash
+# elwasys Terminal-Supervisor
+cd /opt/elwasys
+sudo killall java 2> /dev/null
+while true; do
+    java -Djavafx.platform=gtk -jar raspi-client.latest.jar -verbose >> log/stdout 2>> log/errout
+    sleep 2
+done
+EOF
+    chmod +x "$1/run.sh"
+}
+
+run_update_jar() {
+    local root="$1"
+    ELWA_ROOT="${root}" \
+    ELWA_RESTART_CMD="${BIN}/fake-restart.sh" \
+    ELWA_JAVA_PGREP="true" \
+    bash "${UPDATE_SH}" --jar "${NEWJAR}" > "${WORK}/upd101.out" 2>&1
+    return $?
+}
+
+# --- #101-A: Altbestand -> ausrollen, run.sh erneuern, aber NICHT killen
+make_root "${ROOT101}"; write_legacy_run_sh "${ROOT101}"; reset_logs
+run_update_jar "${ROOT101}"; rc=$?
+if [[ "${rc}" -eq 4 ]]; then
+    ok "#101-A Altbestand ohne Supervisor-Schleife -> update.sh meldet Exit 4 (Aktion noetig)"
+else
+    bad "#101-A erwartet Exit 4 bei Altbestand-run.sh, bekam ${rc}"
+fi
+if [[ ! -s "${WORK}/restart.log" ]]; then
+    ok "#101-A KEIN Neustart-Trigger ausgeloest (Terminal waere sonst dunkel geblieben)"
+else
+    bad "#101-A Neustart-Trigger wurde ausgeloest - das killt ein Altbestand-Terminal dauerhaft"
+fi
+if [[ "$(link_of "${ROOT101}/raspi-client.latest.jar")" == "raspi-client-3.0.0.jar" ]]; then
+    ok "#101-A das neue Jar ist trotzdem verlinkt (latest -> 3.0.0)"
+else
+    bad "#101-A latest zeigt nicht auf das neue Jar"
+fi
+if grep -qE '^[[:space:]]*while[[:space:]]+true[[:space:]]*;[[:space:]]*do' "${ROOT101}/run.sh"; then
+    ok "#101-A run.sh wurde auf den Supervisor-Vertrag erneuert (Schleife vorhanden)"
+else
+    bad "#101-A run.sh traegt nach dem Update immer noch keine Supervisor-Schleife"
+fi
+if [[ -e "${ROOT101}/.run-sh-pending-restart" ]]; then
+    ok "#101-A Pending-Marker gesetzt (laufender Prozess ist noch der alte Startbefehl)"
+else
+    bad "#101-A Pending-Marker fehlt"
+fi
+if [[ -f "${ROOT101}/run.sh.v0.bak" ]]; then
+    ok "#101-A bisherige run.sh als run.sh.v0.bak gesichert"
+else
+    bad "#101-A keine Sicherung der bisherigen run.sh angelegt"
+fi
+
+# --- #101-B: Truststore-Flags des Altbestands wandern mit
+# Ohne diese Uebernahme verloere ein Geraet mit privater CA beim Update still das
+# Vertrauen zum Backend - backend.url ist seit Issue #35 https-Pflicht.
+if grep -q 'Djavax.net.ssl.trustStore=/opt/elwasys/.truststore' "${ROOT101}/run.sh" \
+   && grep -q 'Djavax.net.ssl.trustStorePassword=s3cret' "${ROOT101}/run.sh"; then
+    ok "#101-B Truststore-Flags wurden in die erneuerte run.sh uebernommen"
+else
+    bad "#101-B Truststore-Flags gingen beim Erneuern verloren"
+fi
+
+# --- #101-C: zweiter Lauf bei liegendem Pending-Marker -> weiterhin KEIN Kill
+# Kern-Regressionstest: nach dem ersten Lauf traegt run.sh den aktuellen Vertrag. Wer
+# nur darauf schaut, haelt das Geraet fuer geheilt und killt beim naechsten Cron-Lauf
+# doch - obwohl der LAUFENDE Prozess weiter der schleifenlose Altbestand ist.
+reset_logs
+run_update_jar "${ROOT101}"; rc=$?
+if [[ "${rc}" -eq 4 && ! -s "${WORK}/restart.log" ]]; then
+    ok "#101-C zweiter Lauf bei liegendem Marker -> weiterhin Exit 4, weiterhin kein Kill"
+else
+    bad "#101-C zweiter Lauf killte doch (Exit ${rc}, restart.log=$(wc -c < "${WORK}/restart.log"))"
+fi
+
+# --- #101-D: die erneuerte run.sh quittiert den Marker VOR der Schleife
+# Nur dann verschwindet er, wenn der neue Supervisor wirklich laeuft (und nicht schon,
+# wenn die Datei bloss existiert). Strukturell geprueft statt per Laufzeit, weil die
+# Schleife nicht terminiert.
+rm_line="$(grep -n 'rm -f .*\.run-sh-pending-restart' "${ROOT101}/run.sh" | head -1 | cut -d: -f1)"
+loop_line="$(grep -nE '^[[:space:]]*while[[:space:]]+true' "${ROOT101}/run.sh" | head -1 | cut -d: -f1)"
+if [[ -n "${rm_line}" && -n "${loop_line}" && "${rm_line}" -lt "${loop_line}" ]]; then
+    ok "#101-D run.sh loescht den Pending-Marker beim Start (Zeile ${rm_line} vor Schleife ${loop_line})"
+else
+    bad "#101-D run.sh quittiert den Pending-Marker nicht vor der Schleife (rm=${rm_line:-keine}, loop=${loop_line:-keine})"
+fi
+
+# --- #101-E: Vertrag v1 (Schleife vorhanden) -> erneuern UND normal neustarten
+# Positiv-Kontrolle: der Altbestand-Schutz darf nicht jedes Update ausbremsen.
+make_root "${ROOT101}"; write_v1_run_sh "${ROOT101}"; reset_logs
+run_update_jar "${ROOT101}"; rc=$?
+if [[ "${rc}" -eq 0 && -s "${WORK}/restart.log" ]]; then
+    ok "#101-E v1-Supervisor -> Exit 0 und Neustart wie gewohnt ausgeloest"
+else
+    bad "#101-E v1-Supervisor: erwartet Exit 0 mit Neustart, bekam ${rc} (restart.log=$(wc -c < "${WORK}/restart.log"))"
+fi
+if [[ ! -e "${ROOT101}/.run-sh-pending-restart" ]] \
+   && grep -q 'elwasys-run-sh-contract: 2' "${ROOT101}/run.sh"; then
+    ok "#101-E run.sh auf v2 gehoben, kein Pending-Marker (die laufende Schleife relauncht selbst)"
+else
+    bad "#101-E v1-Pfad: run.sh nicht auf v2 oder faelschlich Pending-Marker gesetzt"
+fi
+
+# --- #101-F: bereits aktueller Vertrag -> run.sh unangetastet (idempotent)
+reset_logs
+before="$(sha256sum "${ROOT101}/run.sh" | awk '{print $1}')"
+run_update_jar "${ROOT101}"; rc=$?
+after="$(sha256sum "${ROOT101}/run.sh" | awk '{print $1}')"
+if [[ "${rc}" -eq 0 && "${before}" == "${after}" && ! -f "${ROOT101}/run.sh.v2.bak" ]]; then
+    ok "#101-F run.sh auf aktuellem Vertrag wird nicht erneut geschrieben (idempotent)"
+else
+    bad "#101-F run.sh wurde trotz aktuellem Vertrag angefasst (Exit ${rc})"
+fi
+
+# ============================================================================
 echo
 echo "================================================================"
 echo "Ergebnis: ${PASS} bestanden, ${FAIL} fehlgeschlagen."
