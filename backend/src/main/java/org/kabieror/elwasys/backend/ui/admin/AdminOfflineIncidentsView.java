@@ -8,15 +8,22 @@ import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Paragraph;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.icon.Icon;
+import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.FlexComponent;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
+import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.data.provider.DataProvider;
+import com.vaadin.flow.data.provider.ListDataProvider;
+import com.vaadin.flow.data.value.ValueChangeMode;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.spring.security.AuthenticationContext;
 import jakarta.annotation.security.RolesAllowed;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import org.kabieror.elwasys.backend.ui.component.Notifications;
 import org.kabieror.elwasys.backend.auth.ElwasysUserPrincipal;
 import org.kabieror.elwasys.backend.domain.TerminalOfflineIncidentEntity;
@@ -47,6 +54,13 @@ import org.kabieror.elwasys.backend.ui.component.PortalFormats;
  * kein {@code DomainEvent}, sie treffen asynchron über den WebSocket ein. Der Alarmpfad ist der
  * Health-Endpunkt, nicht das offene Browserfenster; die Liste ist beim Seitenaufruf und nach
  * jeder Quittierung aktuell.
+ *
+ * <p><b>Seit UI-Redesign v2 AP4</b> (siehe docs/kb/05-migration-plan.md und
+ * docs/specs/0002-ui-design/v2/MAPPING.md, Abschnitt "Listen"): ein Filterfeld
+ * ({@link #filterField}) sowie sortierbare Spaltenköpfe für Aufgetreten/Gemeldet/Standort/Art -
+ * diese Ansicht erbt NICHT von {@link AbstractAdminListView} (kein "Neu"-Knopf, eigener
+ * Umschalter für quittierte Vorfälle), deshalb sind Filter und Sortier-Vergleicher hier lokal
+ * nachgebaut statt von dort geerbt.
  */
 @Route(value = "admin/offline-incidents", layout = AdminLayout.class)
 @PageTitle("Offline-Vorfälle - Waschportal")
@@ -59,6 +73,7 @@ public class AdminOfflineIncidentsView extends VerticalLayout {
     private final Grid<TerminalOfflineIncidentEntity> grid = new Grid<>();
     private final Checkbox showAcknowledged = new Checkbox("Auch quittierte Vorfälle anzeigen");
     private final Span openCountBadge = new Span();
+    private final TextField filterField = new TextField();
 
     public AdminOfflineIncidentsView(TerminalOfflineIncidentService incidentService,
             AuthenticationContext authenticationContext) {
@@ -74,7 +89,18 @@ public class AdminOfflineIncidentsView extends VerticalLayout {
         H2 title = new H2("Offline-Vorfälle");
         this.showAcknowledged.addValueChangeListener(e -> loadData());
 
-        HorizontalLayout toolbar = new HorizontalLayout(title, this.openCountBadge, this.showAcknowledged);
+        // Filterfeld (UI-Redesign v2 AP4): dieselbe Ausstattung/Reihenfolge wie in
+        // AbstractAdminListView bzw. dem Prototyp (Titel, Badge, Filter, Umschalter).
+        this.filterField.addClassName("list-filter");
+        this.filterField.setPlaceholder("Suchen");
+        this.filterField.setPrefixComponent(new Icon(VaadinIcon.SEARCH));
+        this.filterField.setClearButtonVisible(true);
+        this.filterField.setValueChangeMode(ValueChangeMode.LAZY);
+        this.filterField.addValueChangeListener(e -> applyFilter());
+
+        HorizontalLayout toolbar = new HorizontalLayout(title, this.openCountBadge, this.filterField,
+                this.showAcknowledged);
+        toolbar.addClassName("list-toolbar");
         toolbar.setWidthFull();
         toolbar.setFlexGrow(1, title);
         toolbar.setAlignItems(FlexComponent.Alignment.CENTER);
@@ -103,12 +129,20 @@ public class AdminOfflineIncidentsView extends VerticalLayout {
     private void configureGrid() {
         this.grid.setSizeFull();
 
+        // UI-Redesign v2 AP4: Aufgetreten/Gemeldet/Standort/Art sind laut Prototyp sortierbar;
+        // Benutzer/Betrag/Grund/Status bleiben es nicht (siehe MAPPING.md). Für die Zeitspalten
+        // muss der Vergleicher auf dem echten LocalDateTime arbeiten statt auf dem formatierten
+        // Text, sonst sortiert Vaadin alphabetisch statt chronologisch.
         this.grid.addColumn(i -> PortalFormats.dateTime(i.getOccurredAt())).setHeader("Aufgetreten").setFlexGrow(0)
-                .setWidth("10em");
+                .setWidth("10em").setSortable(true)
+                .setComparator(Comparator.comparing(TerminalOfflineIncidentEntity::getOccurredAt,
+                        Comparator.nullsFirst(Comparator.naturalOrder())));
         this.grid.addColumn(i -> PortalFormats.dateTime(i.getReportedAt())).setHeader("Gemeldet").setFlexGrow(0)
-                .setWidth("10em");
-        this.grid.addColumn(i -> i.getLocation().getName()).setHeader("Standort").setFlexGrow(0).setWidth("9em");
-        this.grid.addColumn(i -> kindLabel(i.getKind())).setHeader("Art").setFlexGrow(0).setWidth("11em");
+                .setWidth("10em").setSortable(true).setComparator(TerminalOfflineIncidentEntity::getReportedAt);
+        this.grid.addColumn(i -> i.getLocation().getName()).setHeader("Standort").setFlexGrow(0).setWidth("9em")
+                .setSortable(true).setComparator(i -> i.getLocation().getName());
+        this.grid.addColumn(i -> kindLabel(i.getKind())).setHeader("Art").setFlexGrow(0).setWidth("11em")
+                .setSortable(true).setComparator(i -> kindLabel(i.getKind()));
         // Der Nutzer ist informativ und kann fehlen (nie gemeldet oder zwischenzeitlich gelöscht -
         // der Vorfall bleibt trotzdem bestehen, siehe TerminalOfflineIncidentService#report).
         this.grid.addColumn(i -> i.getUser() == null ? "-" : i.getUser().getName()).setHeader("Benutzer")
@@ -205,6 +239,9 @@ public class AdminOfflineIncidentsView extends VerticalLayout {
             incidents = this.incidentService.findOpen();
         }
         this.grid.setItems(incidents);
+        // Filtertext nach jedem Neuladen erneut anwenden (UI-Redesign v2 AP4) - grid.setItems(...)
+        // legt einen neuen ListDataProvider an, der sonst ungefiltert wäre.
+        applyFilter();
 
         // Ohne den Umschalter enthält die Liste genau die offenen Vorfälle - dann ist eine
         // zusätzliche Zählabfrage überflüssig.
@@ -213,5 +250,42 @@ public class AdminOfflineIncidentsView extends VerticalLayout {
                 : openCount == 1 ? "1 offener Vorfall" : openCount + " offene Vorfälle");
         this.openCountBadge.getElement().getThemeList().clear();
         this.openCountBadge.getElement().getThemeList().add(openCount == 0 ? "badge success" : "badge error");
+    }
+
+    /**
+     * Wendet {@link #filterField} auf den aktuell geladenen {@link ListDataProvider} an - analog
+     * zu {@code AbstractAdminListView#applyFilter} (kein gemeinsamer Code, da diese Ansicht nicht
+     * von {@link AbstractAdminListView} erbt).
+     */
+    @SuppressWarnings("unchecked")
+    private void applyFilter() {
+        // Wie in AbstractAdminListView#listDataProvider: der Parametertyp ist wegen Typlöschung
+        // nicht prüfbar, deshalb Prüfung auf den Rohtyp und anschließend ungeprüfter Cast.
+        DataProvider<TerminalOfflineIncidentEntity, ?> dataProvider = this.grid.getDataProvider();
+        if (!(dataProvider instanceof ListDataProvider)) {
+            return;
+        }
+        ListDataProvider<TerminalOfflineIncidentEntity> listDataProvider =
+                (ListDataProvider<TerminalOfflineIncidentEntity>) dataProvider;
+        String value = this.filterField.getValue();
+        String term = value == null ? "" : value.trim().toLowerCase(Locale.GERMANY);
+        if (term.isEmpty()) {
+            listDataProvider.clearFilters();
+        } else {
+            listDataProvider.setFilter(i -> filterableText(i).toLowerCase(Locale.GERMANY).contains(term));
+        }
+    }
+
+    /**
+     * Suchtext einer Zeile für das Filterfeld (UI-Redesign v2 AP4): deckt alle sichtbaren
+     * Textspalten ab, siehe {@link #configureGrid}.
+     */
+    private static String filterableText(TerminalOfflineIncidentEntity incident) {
+        return String.join(" ", PortalFormats.dateTime(incident.getOccurredAt()),
+                PortalFormats.dateTime(incident.getReportedAt()), incident.getLocation().getName(),
+                kindLabel(incident.getKind()), incident.getUser() == null ? "" : incident.getUser().getName(),
+                PortalFormats.currency(incident.getChargedPrice()),
+                incident.getReason() == null ? "" : incident.getReason(),
+                incident.isAcknowledged() ? "Quittiert" : "Offen");
     }
 }

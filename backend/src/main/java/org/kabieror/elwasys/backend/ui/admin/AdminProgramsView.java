@@ -68,6 +68,13 @@ public class AdminProgramsView extends AbstractAdminListView<ProgramEntity> {
         return this.programService.findAll();
     }
 
+    /** Suchtext für das Filterfeld (UI-Redesign v2 AP4): Name, Typ und formatierter Preis. */
+    @Override
+    protected String filterableText(ProgramEntity program) {
+        String type = program.getType() == ProgramType.DYNAMIC ? "Dynamisch" : "Statisch";
+        return program.getName() + " " + type + " " + formatPrice(program);
+    }
+
     @Override
     protected boolean isRelevantChange(Object event) {
         return event instanceof ProgramChangedEvent;

@@ -53,6 +53,16 @@ public class AdminLocationsView extends AbstractAdminListView<LocationEntity> {
         return this.locationService.findAll();
     }
 
+    /**
+     * Suchtext für das Filterfeld (UI-Redesign v2 AP4): Name, Anzahl Benutzergruppen und
+     * Offline-Maximaldauer - dieselben Spalten wie {@link #configureColumns}.
+     */
+    @Override
+    protected String filterableText(LocationEntity location) {
+        return location.getName() + " " + location.getValidUserGroups().size() + " "
+                + location.getOfflineMaxDurationMinutes() + " min";
+    }
+
     @Override
     protected boolean isRelevantChange(Object event) {
         return event instanceof LocationChangedEvent;

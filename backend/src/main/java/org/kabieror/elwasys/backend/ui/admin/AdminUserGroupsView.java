@@ -70,6 +70,12 @@ public class AdminUserGroupsView extends AbstractAdminListView<UserGroupEntity> 
         return this.userGroupService.findAll();
     }
 
+    /** Suchtext für das Filterfeld (UI-Redesign v2 AP4): Name und formatierter Rabatt. */
+    @Override
+    protected String filterableText(UserGroupEntity group) {
+        return group.getName() + " " + formatDiscount(group);
+    }
+
     @Override
     protected boolean isRelevantChange(Object event) {
         return event instanceof UserGroupChangedEvent;

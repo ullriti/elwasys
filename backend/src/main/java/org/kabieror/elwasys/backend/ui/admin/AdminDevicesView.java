@@ -66,6 +66,13 @@ public class AdminDevicesView extends AbstractAdminListView<DeviceEntity> {
         return this.deviceService.findAll();
     }
 
+    /** Suchtext für das Filterfeld (UI-Redesign v2 AP4): Position, Name, Standort und Status. */
+    @Override
+    protected String filterableText(DeviceEntity device) {
+        return device.getPosition() + " " + device.getName() + " " + device.getLocation().getName() + " " + (
+                device.isEnabled() ? "Aktiviert" : "Deaktiviert");
+    }
+
     @Override
     protected boolean isRelevantChange(Object event) {
         return event instanceof DeviceChangedEvent;
