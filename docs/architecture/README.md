@@ -29,3 +29,4 @@ Herleitung der Einzelentscheidungen findet sich im Modernisierungsplan
 | [0020](0020-kb-ist-zustand-und-historie-footer.md) | KB-Artikel: Ist-Zustand im Body, Historie als Pointer-Footer | accepted |
 | [0021](0021-offline-replay-haertung-ii.md) | Offline-Replay-Härtung II: Replay-Zeitstempel-Pflicht, Geister-Execution-Kompensation, Dead-Letter-Datenintegrität | accepted |
 | [0022](0022-dead-letter-sichtbarkeit.md) | Dead-Letter-Sichtbarkeit: Vorfalls-Meldung über den Terminal-WebSocket + Quittierung im Portal | accepted |
+| [0023](0023-gitversion-und-paketbereitstellung.md) | Versionierung mit GitVersion und Paketbereitstellung über GHCR/GitHub-Releases | accepted |

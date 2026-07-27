@@ -13,11 +13,14 @@
 replicaCount: 1
 
 image:
-  # GHCR-Image aus dem Release-Workflow (.github/workflows/maven-publish.yml veröffentlicht
-  # nach ghcr.io/<owner>/elwasys-backend). Kanonisches Repo: ullriti/elwasys (Issue #64).
+  # GHCR-Image aus dem Release-Workflow (.github/workflows/release.yml veröffentlicht nach
+  # ghcr.io/<owner>/elwasys-backend). Kanonisches Repo: ullriti/elwasys (Issue #64).
   repository: ghcr.io/ullriti/elwasys-backend
-  # Leer = Chart.appVersion (siehe Chart.yaml). Explizit setzen, um von der Chart-Version
-  # unabhängig ein bestimmtes Image zu pinnen (empfohlen für Produktion statt "latest").
+  # Leer = Chart.appVersion (siehe Chart.yaml) - beim veröffentlichten Chart ist das die
+  # Release-Version, aus dem Checkout heraus der Sentinel (dann greift der imageTag-Guard).
+  # Verfügbare Tags eines freigegebenen Standes: "1.4.2" (exakt), "1.4"/"1" (nimmt Patches
+  # bzw. Minor-Stände mit), "latest", "sha-<commit>". Vorabstände tragen ihre rc-Version und
+  # "edge" - fürs Produktivsystem eine exakte Version pinnen.
   tag: ""
   pullPolicy: IfNotPresent
 

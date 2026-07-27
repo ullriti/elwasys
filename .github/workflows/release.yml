@@ -1,0 +1,373 @@
+name: Release
+
+# Paketbereitstellung für beide Auslieferungswege (siehe
+# docs/architecture/0016-gitversion-und-paketbereitstellung.md):
+#
+#   Backend  -> Container-Image in GHCR (ghcr.io/<owner>/elwasys-backend)
+#               + Helm-Chart als OCI-Artefakt (ghcr.io/<owner>/charts/elwasys-backend)
+#   Terminal -> fat-jar + SHA-256-Prüfsumme als GitHub-Release-Asset; genau dort holen
+#               setup.sh und der Auto-Update-Watchdog es ab (deploy/terminal/).
+#
+# Zwei Kanäle, ein Workflow:
+#
+#   push auf master      -> VORAB-Release "0.5.0-rc.7" (GitHub-Release als Pre-Release
+#                           markiert, Image-Tags <version> + edge, KEIN :latest).
+#                           GitHub liefert bei /releases/latest niemals ein Pre-Release aus -
+#                           die Terminals im Feld sehen diese Pakete deshalb nicht und
+#                           aktualisieren nicht darauf. Ein Test-Terminal kann sie gezielt
+#                           über ${ELWA_ROOT}/.update-target ziehen (deploy/terminal/README.md).
+#   workflow_dispatch    -> STABILES Release "0.5.0" (Tag, :latest, Terminal-Rollout).
+#
+# Vorab-Releases entstehen nur für Commits, die tatsächlich Code oder Paket verändern -
+# reine docs:/chore:/style:/test:/ci:-Commits werden übersprungen (Job "guard",
+# scripts/commit-triggers-build.sh).
+#
+# Die Version berechnet GitVersion aus Tags + Conventional Commits (GitVersion.yml); sie wird
+# NICHT ins Repo zurückgeschrieben, sondern nur im Arbeitsbaum dieses Laufs gesetzt
+# (mvn versions:set / helm package --version). Der Tag am Release ist die Aufzeichnung.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version des stabilen Releases (leer = von GitVersion berechnete Version, z.B. 0.5.0)'
+        required: false
+        type: string
+
+# Releases nie parallel: zwei gleichzeitige Läufe würden um Tags, :latest und den
+# Chart-Push konkurrieren. Laufende Läufe werden bewusst NICHT abgebrochen.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # Tag + GitHub-Release anlegen
+  packages: write   # GHCR (Image + Helm-Chart)
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Guard – gleiche Regel wie in ci.yml: ein Push auf master, der weder Code noch Paket
+  # verändert, erzeugt kein Paket. Ein manuell ausgelöstes Release läuft immer.
+  # ---------------------------------------------------------------------------
+  guard:
+    name: Release-Relevanz
+    runs-on: ubuntu-24.04
+    # Dieser Job liest nur - die Schreibrechte der Workflow-Ebene braucht erst der Release-Job.
+    permissions:
+      contents: read
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Release-Relevanz bestimmen
+        id: decide
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [[ "${EVENT_NAME}" != "push" ]]; then
+            echo "Manuell ausgelöst (${EVENT_NAME}) - Release wird gebaut."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Commit-Messages über die Event-Datei lesen, nicht per ${{ }} interpolieren
+          # (Fremdtext -> Script-Injection). NUL-getrennt, weil Messages mehrzeilig sind.
+          run=false
+          # Eine Zeile je Commit, base64-kodiert: Commit-Messages sind mehrzeilig, und jq
+          # kann keine NUL-Bytes ausgeben - base64 ist das einzige Trennverfahren, das
+          # beliebige Message-Inhalte unbeschadet durch die Schleife bringt.
+          while IFS= read -r encoded; do
+            msg="$(printf '%s' "${encoded}" | base64 -d)"
+            if bash scripts/commit-triggers-build.sh "${msg}"; then
+              echo "Relevant: $(printf '%s' "${msg}" | head -n1)"
+              run=true
+            else
+              echo "Überspringbar: $(printf '%s' "${msg}" | head -n1)"
+            fi
+          done < <(jq -r '.commits[]?.message | @base64' "$GITHUB_EVENT_PATH")
+          echo "run=${run}" >> "$GITHUB_OUTPUT"
+          if [[ "${run}" != "true" ]]; then
+            echo "::notice::Kein Vorab-Release: dieser Push ändert weder Code noch Paket."
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Release – baut und veröffentlicht alle Pakete eines Standes.
+  #
+  # Reihenfolge mit Absicht: erst Image und Chart nach GHCR, GANZ ZUM SCHLUSS das
+  # GitHub-Release. Das Release ist der Schalter, an dem die Terminals ein Update
+  # erkennen - es soll erst umlegen, wenn die Backend-Pakete wirklich liegen.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Pakete bauen & veröffentlichen
+    runs-on: ubuntu-24.04
+    needs: guard
+    if: needs.guard.outputs.run == 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # GitVersion braucht die vollständige Historie inkl. Tags.
+          fetch-depth: 0
+
+      - name: Stabiles Release nur von master
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" != "refs/heads/master" ]]; then
+            echo "FEHLER: Ein stabiles Release wird nur aus master gebaut (hier: ${GITHUB_REF})." >&2
+            exit 1
+          fi
+
+      - name: Set up GitVersion
+        uses: gittools/actions/gitversion/setup@v4.7.0
+        with:
+          versionSpec: '6.3.x'
+
+      - name: Determine version
+        id: gitversion
+        uses: gittools/actions/gitversion/execute@v4.7.0
+
+      - name: Version und Kanal festlegen
+        id: ver
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          # Vorab: die fortlaufende Vorabversion (0.5.0-rc.7). Stabil: nur der SemVer-Kern
+          # (0.5.0) - die Vorabkennung wäre für ein freigegebenes Paket falsch.
+          FULL_SEM_VER: ${{ steps.gitversion.outputs.fullSemVer }}
+          MAJOR_MINOR_PATCH: ${{ steps.gitversion.outputs.majorMinorPatch }}
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            version="${VERSION_INPUT:-${MAJOR_MINOR_PATCH}}"
+            channel="stable"
+            prerelease="false"
+          else
+            version="${FULL_SEM_VER}"
+            channel="prerelease"
+            prerelease="true"
+          fi
+
+          # Die Version wird zu Maven-Version, Jar-Dateiname, Git-Tag, Image-Tag und
+          # Chart-Version zugleich - hier einmal streng prüfen, statt es später in fünf
+          # Werkzeugen halb zu bemerken. "+"-Build-Metadata ist in einem Docker-Tag nicht
+          # erlaubt und wird von GitVersion.yml auch nicht erzeugt.
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "FEHLER: '${version}' ist keine für Tag/Image/Jar brauchbare SemVer-Version." >&2
+            exit 1
+          fi
+
+          if git rev-parse -q --verify "refs/tags/${version}" >/dev/null; then
+            echo "FEHLER: Tag '${version}' existiert bereits - ein Release wird nicht überschrieben." >&2
+            exit 1
+          fi
+
+          {
+            echo "version=${version}"
+            echo "channel=${channel}"
+            echo "prerelease=${prerelease}"
+            echo "major=$(echo "${version}" | cut -d. -f1)"
+            echo "minor=$(echo "${version}" | cut -d. -f2)"
+          } >> "$GITHUB_OUTPUT"
+          echo "Version: ${version} (${channel})"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'liberica'
+          cache: maven
+
+      - name: Version in die POMs setzen
+        # Setzt Parent-POM und beide Module konsistent (kein sed über mehrere POMs). Die
+        # Änderung bleibt im Arbeitsbaum dieses Laufs - nichts wird ins Repo zurückgeschrieben.
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: mvn -B versions:set -DnewVersion="${VERSION}" -DgenerateBackupPoms=false
+
+      - name: Terminal-fat-jar bauen
+        # Reactor-Build von der Wurzel, damit die (neu versionierte) Parent-POM mit ins lokale
+        # Repo installiert wird - ein Modul-Build allein täte das nicht.
+        #
+        # -DskipTests: dieser Job PAKETIERT nur. Getestet wird in ci.yml (jeder PR + jeder
+        # relevante Push auf master); die TestFX-/E2E-Suiten des Terminals brauchen Xvfb,
+        # PostgreSQL und ein laufendes Backend, was hier bewusst nicht aufgebaut wird.
+        run: mvn -B install -pl Client-Raspi -am -DskipTests
+
+      - name: Jar-Version gegen das Manifest prüfen
+        # Seit der Umstellung von Utilities.APP_VERSION auf die Manifest-Version hängt die
+        # vom Terminal gemeldete clientVersion an diesem Manifest-Eintrag. Hier wird direkt am
+        # gebauten Artefakt geprüft, dass die Kette versions:set -> Manifest wirklich greift;
+        # ein stiller Rückfall auf den Sentinel würde sonst erst im Feld auffallen.
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          jar="Client-Raspi/target/raspi-client-${VERSION}-jar-with-dependencies.jar"
+          actual="$(unzip -p "${jar}" META-INF/MANIFEST.MF | awk -F': ' '/^Implementation-Version:/ {print $2}' | tr -d '\r')"
+          echo "Manifest-Version: '${actual}'"
+          if [[ "${actual}" != "${VERSION}" ]]; then
+            echo "FEHLER: Manifest meldet '${actual}', erwartet '${VERSION}'." >&2
+            exit 1
+          fi
+
+      - name: SHA-256-Prüfsumme erzeugen
+        # Issue #62 (Jar-Integrität): update.sh/setup.sh verifizieren den Download vor dem
+        # Deploy. Die Prüfzeile trägt bewusst den ASSET-Namen (raspi-client-<version>.jar),
+        # nicht den Build-Namen - auf dem Terminal heißt die Datei so, wie sie
+        # heruntergeladen wird, sonst schlüge "sha256sum -c" am Dateinamen fehl.
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          jar="Client-Raspi/target/raspi-client-${VERSION}-jar-with-dependencies.jar"
+          asset="raspi-client-${VERSION}.jar"
+          cp "${jar}" "${asset}"
+          hash="$(sha256sum "${asset}" | awk '{print $1}')"
+          # coreutils-Format "<hash>  <datei>" (zwei Leerzeichen), damit "sha256sum -c" greift.
+          printf '%s  %s\n' "${hash}" "${asset}" > "${asset}.sha256"
+          cat "${asset}.sha256"
+
+      # -----------------------------------------------------------------------
+      # Backend-Container-Image
+      # -----------------------------------------------------------------------
+      - name: Image-Namen und Tags bestimmen
+        id: image
+        env:
+          OWNER: ${{ github.repository_owner }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          CHANNEL: ${{ steps.ver.outputs.channel }}
+          MAJOR: ${{ steps.ver.outputs.major }}
+          MINOR: ${{ steps.ver.outputs.minor }}
+        run: |
+          set -euo pipefail
+          # GHCR verlangt einen durchgängig kleingeschriebenen Pfad; github.repository_owner
+          # übernimmt die tatsächliche Schreibweise des Kontos.
+          owner_lc="$(echo "${OWNER}" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/${owner_lc}/elwasys-backend"
+          charts="oci://ghcr.io/${owner_lc}/charts"
+
+          # Tag-Leiter: die exakte Version immer, dazu der Commit (sha-…) für die Rückverfolgung.
+          tags="${image}:${VERSION}"
+          tags="${tags}"$'\n'"${image}:sha-${GITHUB_SHA::7}"
+          if [[ "${CHANNEL}" == "stable" ]]; then
+            # Bewegliche Tags nur für freigegebene Stände: darauf darf ein Deployment zeigen,
+            # das automatisch Patches mitnehmen soll (image.tag im Helm-Chart).
+            tags="${tags}"$'\n'"${image}:${MAJOR}.${MINOR}"
+            tags="${tags}"$'\n'"${image}:${MAJOR}"
+            tags="${tags}"$'\n'"${image}:latest"
+          else
+            # Vorabstände sammeln sich unter "edge" - nie unter "latest", sonst zöge ein
+            # Deployment mit :latest ungeprüfte Stände.
+            tags="${tags}"$'\n'"${image}:edge"
+          fi
+
+          {
+            echo "image=${image}"
+            echo "charts=${charts}"
+            echo "tags<<EOF"
+            echo "${tags}"
+            echo "EOF"
+            echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
+          echo "Image-Tags:"; echo "${tags}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Backend-Image bauen & pushen
+        uses: docker/build-push-action@v6
+        with:
+          # Kontext ist die Repo-Wurzel (siehe Kopf von backend/Dockerfile) - derselbe, bereits
+          # per versions:set gehobene Arbeitsbaum, damit Jar-Version und Image-Tag übereinstimmen.
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: ${{ steps.image.outputs.tags }}
+          # OCI-Labels: "docker inspect" bzw. die GHCR-Oberfläche verraten damit, welcher
+          # Commit und welche Version im Image stecken - ohne das Image auszupacken.
+          labels: |
+            org.opencontainers.image.title=elwasys-backend
+            org.opencontainers.image.description=elwasys backend (Spring Boot) with the built-in admin portal
+            org.opencontainers.image.version=${{ steps.ver.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.created=${{ steps.image.outputs.created }}
+          # Lieferketten-Nachweis: SBOM (was steckt drin) + Provenance (wie/woraus gebaut).
+          # Beides landet als Attestation neben dem Image in GHCR.
+          sbom: true
+          provenance: mode=max
+
+      # -----------------------------------------------------------------------
+      # Helm-Chart als OCI-Artefakt
+      # -----------------------------------------------------------------------
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Helm-Chart paketieren & pushen
+        # Chart-Version und appVersion werden hier auf die Release-Version gesetzt, statt
+        # Chart.yaml im Repo zu verändern: Chart und Backend werden immer gemeinsam
+        # ausgeliefert, damit ist "Chart 1.4.2 deployt Backend 1.4.2" die einfachste
+        # nachvollziehbare Zusage. Im Repo bleibt der 0.0.0-local-development-Sentinel stehen -
+        # der imageTag-Guard des Charts (templates/_helpers.tpl, Issue #89) fängt damit
+        # weiterhin ein versehentliches Deployment aus dem Checkout ohne --set image.tag ab.
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          CHARTS: ${{ steps.image.outputs.charts }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "${GH_TOKEN}" | helm registry login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          helm package deploy/helm/elwasys-backend \
+            --version "${VERSION}" --app-version "${VERSION}" --destination dist-chart
+          helm push "dist-chart/elwasys-backend-${VERSION}.tgz" "${CHARTS}"
+
+      # -----------------------------------------------------------------------
+      # GitHub-Release (zuletzt: erst hiermit sehen die Terminals den neuen Stand)
+      # -----------------------------------------------------------------------
+      - name: GitHub-Release anlegen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.version }}
+          name: ${{ steps.ver.outputs.version }}
+          # Vorabstände als Pre-Release: /releases/latest überspringt sie, damit ziehen die
+          # Terminals im Feld sie nicht (deploy/terminal/auto-update-watchdog.sh).
+          prerelease: ${{ steps.ver.outputs.prerelease }}
+          generate_release_notes: true
+          files: |
+            raspi-client-${{ steps.ver.outputs.version }}.jar
+            raspi-client-${{ steps.ver.outputs.version }}.jar.sha256
+
+      - name: Zusammenfassung
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          CHANNEL: ${{ steps.ver.outputs.channel }}
+          IMAGE: ${{ steps.image.outputs.image }}
+          TAGS: ${{ steps.image.outputs.tags }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Release ${VERSION} (${CHANNEL})"
+            echo ""
+            echo "| Paket | Bezug |"
+            echo "|---|---|"
+            echo "| Backend-Image | \`${IMAGE}:${VERSION}\` |"
+            echo "| Helm-Chart | \`oci://${IMAGE%/*}/charts/elwasys-backend\` Version \`${VERSION}\` |"
+            echo "| Terminal-Jar | Release-Asset \`raspi-client-${VERSION}.jar\` (+ \`.sha256\`) |"
+            echo ""
+            echo "Image-Tags:"
+            echo ""
+            echo '```'
+            echo "${TAGS}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

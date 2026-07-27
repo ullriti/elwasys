@@ -208,6 +208,32 @@ Aufruf: hat sich das Ziel **nicht** geändert, war es ein reiner No-op-Fehlschla
 `latest` tatsächlich umgehängt wurde, der Marker danach aber nicht vorrückt, gilt
 es als echter fehlgeschlagener Deploy und der Rollback-Pfad greift.
 
+### Vorab- und Freigabekanal (GitVersion-Release-Umbau)
+
+Seit der Umstellung auf GitVersion veröffentlicht
+[`.github/workflows/release.yml`](../../.github/workflows/release.yml) **zwei Arten** von
+Releases – ohne dass am Watchdog irgendetwas zu konfigurieren wäre:
+
+| Kanal | Entsteht bei | Version | Auf GitHub | Wirkung auf Terminals |
+|---|---|---|---|---|
+| **Vorab** | jedem relevanten Push auf `master` | `0.5.0-rc.7` | als **Pre-Release** markiert | **keine** – `/releases/latest` liefert nie ein Pre-Release aus |
+| **Freigabe** | manuellem Start des Release-Workflows | `0.5.0` | normales Release | wird beim nächsten Cron-Lauf ausgerollt |
+
+Das ist genau der Hebel für einen **Testkanal**: Ein Vorab-Release liegt vollständig
+bereit (Jar + `.sha256` als Asset), aber der `ELWA_LATEST_VERSION_CMD`-Poll der
+Terminals im Feld sieht es nicht. Ein einzelnes **Test-Terminal** zieht es gezielt über
+die weiter unten beschriebene `.update-target`-Datei:
+
+```bash
+# Auf dem Test-Terminal: gezielt eine Vorabversion holen (Beispiel)
+echo "0.5.0-rc.7" > /opt/elwasys/.update-target
+# nächster Cron-Lauf des Watchdogs rollt genau diese Version aus;
+# schlägt der Start fehl, greifen Rollback und .update-failed-Sperre wie sonst auch.
+```
+
+Alle Sicherungen (SHA-256-Prüfung des Downloads, Readiness-Marker-Deadline, Rollback,
+Fehlschlag-Sperre, Leerlauf-Gate) gelten für Vorabversionen unverändert.
+
 ### Fehlschlag-Sperre gegen Endlosschleife (`.update-failed`, Issue #34)
 
 **Problem:** Nach einem echten Rollback (neue Version kam nicht hoch) meldet GitHub

@@ -13,6 +13,13 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Added
+- Versionierung über GitVersion: die Version wird aus Tags und Conventional Commits berechnet
+  statt von Hand vergeben (`GitVersion.yml`, Reihe startet bei 1.0.0).
+- Automatische Vorab-Releases bei jedem relevanten Merge auf `master` (als Pre-Release
+  markiert) – dadurch ein Testkanal für einzelne Terminals, ohne die Geräte im Feld zu
+  berühren; freigegebene Releases werden weiterhin bewusst manuell ausgelöst.
+- Backend-Pakete vollständiger: Container-Image mit Tag-Leiter (`1.4.2`/`1.4`/`1`/`latest`),
+  OCI-Labels, SBOM und Provenance; Helm-Chart wird als OCI-Artefakt nach GHCR veröffentlicht.
 - Offline-Vorfälle der Terminals im Portal sichtbar und quittierbar (#89) – die Quittierung
   beendet den Betriebsalarm, der Vorfall bleibt als Beleg.
 - Betriebs-Alerting mitgeliefert (#83): `deploy/monitoring/` überwacht Betriebs-Health,
@@ -28,6 +35,10 @@ im [Worklog](docs/worklog/README.md).
   Änderungen und Sicherheitsbereichen; PR-Titel folgen den Conventional Commits.
 
 ### Changed
+- Das Terminal meldet jetzt in jedem Build seine echte Version (aus dem Jar-Manifest) statt
+  dauerhaft `0.0.0-local-development` außerhalb von Releases.
+- Pushes auf `master`, die weder Code noch Paket verändern (`docs:`, `chore:`, `style:`,
+  `test:`, `ci:`), lösen keinen CI- und keinen Release-Lauf mehr aus.
 - Aufräum-Refactorings aus der finalen Review (FR-4, #90/#91/#92), ohne Verhaltensänderung:
   Backend (`SnapshotService`, `ExecutionStartGuard`, entdoppelte Gruppen-Zuordnung), Terminal
   (`TerminalDataService`, `CardLoginOutcome`, Gerätekachel als Zustandstabelle) und Portal

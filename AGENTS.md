@@ -70,7 +70,9 @@ cd backend/e2e && npm test
 
 Es gibt keinen separaten Lint-/Format-Schritt; maßgeblich ist der Compiler
 (`-Werror` wo gesetzt) plus die Test-Suiten. CI (`.github/workflows/ci.yml`) baut/testet
-Client-Raspi (inkl. Cross-Component) und Backend (JUnit + Playwright-E2E) bei jedem PR.
+Client-Raspi (inkl. Cross-Component) und Backend (JUnit + Playwright-E2E) bei jedem PR; auf
+`master` entscheidet zusätzlich der Commit-Typ, ob gebaut und ein Paket veröffentlicht wird
+(`.github/workflows/release.yml`, [ADR 0023](docs/architecture/0023-gitversion-und-paketbereitstellung.md)).
 
 ## 4. Arbeitsregeln (für Menschen wie Agenten)
 
@@ -115,6 +117,12 @@ Arbeiten darunter – siehe [`docs/agent-setup.md`](docs/agent-setup.md)).
 **Commits & Branches**
 
 - **Conventional Commits**: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:` …
+  **Der Typ hat Wirkung** (seit dem GitVersion-Umbau, siehe
+  [ADR 0023](docs/architecture/0023-gitversion-und-paketbereitstellung.md)): er bestimmt den
+  Versionssprung (`feat:` → minor, `fix:`/`perf:`/`refactor:` → patch, `!` bzw.
+  `BREAKING CHANGE:` → major) und darüber, ob ein Push auf `master` überhaupt CI und
+  Paketbereitstellung auslöst (`docs:`/`style:`/`chore:`/`test:`/`ci:` → nein). Weil per
+  Squash gemerged wird, zählt dafür der **PR-Titel**.
 - Ein Commit = eine logische, einzeln baubare Änderung. Imperativ, Präsens:
   „add …", nicht „added …". Commit-Messages auf Englisch.
 - Jede Session arbeitet auf ihrem eigenen Branch (`claude/…`); kein direkter Push /
@@ -164,8 +172,8 @@ Arbeiten darunter – siehe [`docs/agent-setup.md`](docs/agent-setup.md)).
 | `docs/specs/` | Spezifikationen – *was* gebaut wird (vor der Implementierung) |
 | `docs/architecture/` | Architecture Decision Records (ADRs) – *warum* |
 | `CHANGELOG.md` | Nennenswerte Änderungen (Keep a Changelog) |
-| `scripts/` | `bootstrap.sh` (Setup), `check-ai-docs.sh` (Doku-Audit) |
-| `.github/` | PR-Template und CI-Workflows (`ci.yml`, `maven-publish.yml`) |
+| `scripts/` | `bootstrap.sh` (Setup), `check-ai-docs.sh` (Doku-Audit), `commit-triggers-build.sh` (+ Selbsttest: entscheidet, ob ein master-Push CI/Release auslöst) |
+| `.github/` | PR-Template und Workflows (`ci.yml`, `release.yml`) |
 | `.claude/commands/` | Slash-Commands (`adapt-baseline`, `review`, `audit-ai-docs`) |
 | `.claude/agents/` | Subagenten (`orchestrator`, `code-reviewer`, `backend`, `terminal`, `portal`, `devops`) |
 | `.claude/` | Claude-Code-Konfiguration (settings, commands, agents, skills, SessionStart-Hook) |

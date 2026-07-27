@@ -219,7 +219,7 @@ if [[ "${MODE}" == "version" ]]; then
         # dann atomar an den Zielnamen ruecken - ein abgebrochener/kaputter Download hinterlaesst
         # so kein halbes/ungeprüftes Ziel-Jar und wird verworfen (kein Deploy).
         # Bekannte Einschränkung (#62): Ein Release MUSS ein raspi-client-<tag>.jar.sha256-Asset
-        # mitliefern (maven-publish.yml erzeugt es seit AP6 automatisch). Fehlt es - z.B. bei einem
+        # mitliefern (release.yml erzeugt es für jedes Release automatisch). Fehlt es - z.B. bei einem
         # Alt-Release von vor AP6 - schlaegt der zweite wget unter `set -e` fehl; das ist bewusst
         # (kein ungeprüftes Jar), macht solche Alt-Releases aber nicht per Auto-Update ausrollbar.
         wget -O "${new_jar}.part" "${url}"
