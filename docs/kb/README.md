@@ -182,6 +182,11 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   Issue #97 (Readiness-Gates des Testharness scheiterten still). Neue Vorhaben vorab als Spec
   in [`../specs/`](../specs/README.md) und Entscheidungen als ADR festhalten.
   Die Detail-Roadmap/Restpunkte stehen in [05-migration-plan.md](05-migration-plan.md).
+- **Prozess:** PRs folgen seit 2026-07-27 dem
+  [PR-Template](../../.github/pull_request_template.md) (Was · Warum ·
+  nutzersichtbare Änderungen · wie getestet · Review-Gate · Sicherheit · offene
+  Punkte); der PR-**Titel** folgt derselben Conventional-Commits-Konvention wie
+  ein Commit-Subject.
 - **Details:** siehe den jeweils letzten Eintrag im [Worklog](../worklog/README.md).
 
 ## Regeln für die KB
