@@ -59,11 +59,25 @@ async function settled(page: Page) {
     .toBe('rgb(68, 136, 221)');
 }
 
-/** Öffnet einen Dialog, fotografiert ihn und schließt ihn wieder. */
-async function captureDialog(page: Page, name: string, open: () => Promise<void>) {
+/**
+ * Öffnet einen Dialog, fotografiert ihn und schließt ihn wieder.
+ *
+ * `optional` für Dialoge, die von etwas abhängen, das es in der Screenshot-Umgebung nicht gibt -
+ * der Log-Viewer etwa braucht ein verbundenes Terminal und zeigt sonst nur eine Fehlermeldung.
+ * Solche Fälle werden festgehalten (der Bildschirm wird trotzdem fotografiert), sollen den
+ * Durchlauf aber nicht abbrechen: er ist ein Abnahmewerkzeug, kein Regressionstest.
+ */
+async function captureDialog(page: Page, name: string, open: () => Promise<void>, optional = false) {
   await open();
   const win = dialog(page);
-  await expect(win).toBeVisible({ timeout: 10000 });
+  try {
+    await expect(win).toBeVisible({ timeout: optional ? 4000 : 10000 });
+  } catch (error) {
+    if (!optional) throw error;
+    console.log(`[shots] ${name}: kein Dialog erschienen - Bildschirm wird so fotografiert`);
+    await shot(page, `${name}-nicht-verfuegbar`);
+    return;
+  }
   await shot(page, name);
   await page.keyboard.press('Escape');
   await expect(page.locator('vaadin-dialog-overlay')).toHaveCount(0, { timeout: 10000 });
@@ -82,17 +96,17 @@ function seed() {
     DELETE FROM user_groups WHERE name='${GROUP}';
 
     INSERT INTO user_groups (name) VALUES ('${GROUP}');
-    INSERT INTO locations (name, offline_max_duration) VALUES ('${LOCATION}', 120);
+    INSERT INTO locations (name, offline_max_duration_minutes) VALUES ('${LOCATION}', 120);
 
     INSERT INTO programs (name, type, max_duration, free_duration, flagfall, rate, time_unit,
         auto_end, earliest_auto_end, enabled)
       VALUES ('${PROGRAM}', 'FIXED', 5400, 0, 2.50, NULL, NULL, TRUE, 1200, TRUE);
     INSERT INTO programs (name, type, max_duration, free_duration, flagfall, rate, time_unit,
         auto_end, earliest_auto_end, enabled)
-      VALUES ('${PROGRAM_DYN}', 'DYNAMIC', 3600, 300, 0.50, 0.10, 600, FALSE, 0, TRUE);
+      VALUES ('${PROGRAM_DYN}', 'DYNAMIC', 3600, 300, 0.50, 0.10, 'MINUTES', FALSE, 0, TRUE);
 
     -- Kartennummer am bestehenden Benutzer, damit die Spalte in der Liste nicht leer bleibt.
-    UPDATE users SET card_ids = '{04A1B2C3}' WHERE username='${USERNAME}';
+    UPDATE users SET card_ids = '04A1B2C3' WHERE username='${USERNAME}';
 
     INSERT INTO devices (name, position, location_id, fhem_name, fhem_switch_name, fhem_power_name,
         deconz_uuid, auto_end_power_threshold, auto_end_wait_time, enabled) VALUES
@@ -155,7 +169,7 @@ function cleanup() {
     DELETE FROM terminal_offline_incidents WHERE incident_key LIKE '${PREFIX}-%';
     DELETE FROM devices WHERE name LIKE '${PREFIX}-%';
     DELETE FROM programs WHERE name LIKE '${PREFIX}-%';
-    UPDATE users SET card_ids = '{}' WHERE username='${USERNAME}';
+    UPDATE users SET card_ids = '' WHERE username='${USERNAME}';
     DELETE FROM locations WHERE name='${LOCATION}';
     DELETE FROM user_groups WHERE name='${GROUP}';
   `,
@@ -200,24 +214,33 @@ test('Admin-Bereich', async ({ page }) => {
   await page.waitForTimeout(1200);
   await shot(page, 'dashboard');
 
-  await captureDialog(page, 'dialog-log-viewer', async () => {
-    await page.locator('.dashboard-location-header').first()
-      .getByRole('button', { name: 'Log anzeigen' }).click();
-  });
+  await captureDialog(
+    page,
+    'dialog-log-viewer',
+    async () => {
+      await page.locator('.dashboard-location-header').first()
+        .getByRole('button', { name: 'Log anzeigen' }).click();
+    },
+    // Braucht ein verbundenes Terminal - in dieser Umgebung ist keines da.
+    true,
+  );
 
   // --- Benutzer ------------------------------------------------------------
   await openAdminSection(page, 'admin/users');
   await settled(page);
   await shot(page, 'liste-benutzer');
 
-  // Filter in Aktion.
-  const filter = page.locator('.list-filter').first();
-  await filter.click();
-  await filter.fill('Maria');
-  await page.waitForTimeout(900);
+  // Filter in Aktion. Feld über sein Aria-Label, Zeilen über die ARIA-Rolle zählen -
+  // vaadin-grid hält einen Pool wiederverwendeter <tr>, die ausgefiltert trotzdem im DOM
+  // stehen (dieselbe Begründung wie in tests/list-filter-sort.spec.ts).
+  const filter = page.getByLabel('Benutzer filtern', { exact: true });
+  const rows = page.locator('.admin-users-view vaadin-grid').getByRole('row');
+  const unfiltered = await rows.count();
+  await filter.fill('Portal');
+  await expect(rows).toHaveCount(2); // Kopfzeile + der eine Treffer
   await shot(page, 'liste-benutzer-gefiltert');
   await filter.fill('');
-  await page.waitForTimeout(900);
+  await expect(rows).toHaveCount(unfiltered);
 
   await captureDialog(page, 'dialog-benutzer-erstellen', async () => {
     await page.getByRole('button', { name: 'Neu' }).click();
@@ -231,9 +254,14 @@ test('Admin-Bereich', async ({ page }) => {
   await captureDialog(page, 'dialog-umsaetze', async () => {
     (await rowActionButton(page, new RegExp(USER), 2)).click();
   });
-  await captureDialog(page, 'dialog-loeschen-bestaetigen', async () => {
-    (await rowActionButton(page, new RegExp(USER), 3)).click();
-  });
+  // Die Löschabfrage ist ein Vaadin ConfirmDialog und rendert als eigenes Element
+  // (vaadin-confirm-dialog-overlay), nicht als vaadin-dialog-overlay - deshalb von Hand
+  // statt über captureDialog. Beendet wird sie mit "Nein", damit nichts gelöscht wird.
+  (await rowActionButton(page, new RegExp(USER), 3)).click();
+  await expect(page.locator('vaadin-confirm-dialog-overlay')).toBeVisible();
+  await shot(page, 'dialog-loeschen-bestaetigen');
+  await page.getByRole('button', { name: 'Nein', exact: true }).click();
+  await expect(page.locator('vaadin-confirm-dialog-overlay')).toHaveCount(0);
 
   // --- Benutzergruppen -----------------------------------------------------
   await openAdminSection(page, 'admin/user-groups');

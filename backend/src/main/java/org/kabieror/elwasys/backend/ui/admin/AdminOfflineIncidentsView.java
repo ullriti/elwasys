@@ -125,23 +125,25 @@ public class AdminOfflineIncidentsView extends VerticalLayout {
         // ValueProvider-Überladung: sie ist null-sicher (ein nie gemeldetes "Aufgetreten" ist
         // erlaubt, siehe TerminalOfflineIncidentEntity#occurredAt) und ordnet leere Werte in allen
         // Spalten gleich ein - ein eigener nullsFirst-Vergleicher hätte hier gegenläufig sortiert.
+        // Breiten in rem, nicht em - Begruendung siehe portal-theme.css (Versalien-Kopf in
+        // 0.75rem wuerde em-Breiten im Kopf anders aufloesen als im Koerper).
         this.grid.addColumn(i -> PortalFormats.dateTime(i.getOccurredAt())).setHeader("Aufgetreten").setFlexGrow(0)
-                .setWidth("10em").setSortable(true).setComparator(TerminalOfflineIncidentEntity::getOccurredAt);
+                .setWidth("10rem").setSortable(true).setComparator(TerminalOfflineIncidentEntity::getOccurredAt);
         this.grid.addColumn(i -> PortalFormats.dateTime(i.getReportedAt())).setHeader("Gemeldet").setFlexGrow(0)
-                .setWidth("10em").setSortable(true).setComparator(TerminalOfflineIncidentEntity::getReportedAt);
-        this.grid.addColumn(i -> i.getLocation().getName()).setHeader("Standort").setFlexGrow(0).setWidth("9em")
+                .setWidth("10rem").setSortable(true).setComparator(TerminalOfflineIncidentEntity::getReportedAt);
+        this.grid.addColumn(i -> i.getLocation().getName()).setHeader("Standort").setFlexGrow(0).setWidth("9rem")
                 .setSortable(true).setComparator(i -> i.getLocation().getName());
-        this.grid.addColumn(i -> kindLabel(i.getKind())).setHeader("Art").setFlexGrow(0).setWidth("11em")
+        this.grid.addColumn(i -> kindLabel(i.getKind())).setHeader("Art").setFlexGrow(0).setWidth("11rem")
                 .setSortable(true).setComparator(i -> kindLabel(i.getKind()));
         // Der Nutzer ist informativ und kann fehlen (nie gemeldet oder zwischenzeitlich gelöscht -
         // der Vorfall bleibt trotzdem bestehen, siehe TerminalOfflineIncidentService#report).
         this.grid.addColumn(i -> i.getUser() == null ? "-" : i.getUser().getName()).setHeader("Benutzer")
-                .setFlexGrow(0).setWidth("11em");
+                .setFlexGrow(0).setWidth("11rem");
         this.grid.addComponentColumn(AdminOfflineIncidentsView::amountLabel).setHeader("Betrag").setFlexGrow(0)
-                .setWidth("7em");
+                .setWidth("7rem");
         this.grid.addColumn(TerminalOfflineIncidentEntity::getReason).setHeader("Grund");
         this.grid.addComponentColumn(AdminOfflineIncidentsView::statusBadge).setHeader("Status").setFlexGrow(0)
-                .setWidth("9em");
+                .setWidth("9rem");
         this.grid.addComponentColumn(this::actionButtons).setHeader("").setFlexGrow(0).setWidth("120px");
     }
 

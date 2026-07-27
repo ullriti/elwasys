@@ -349,11 +349,22 @@ vaadin-app-layout > :not([slot]) h2 {
  * ------------------------------------------------------------------ */
 vaadin-grid {
   border: 1px solid var(--elwa-box-border);
-  border-radius: 10px;
+  border-radius: 12px;
   background-color: #ffffff;
   box-shadow: var(--lumo-box-shadow-xs);
+  /* Ohne dieses overflow blieben die runden Ecken unsichtbar: die weiße Kopfzeile und die
+     Zeilenflächen malen bis in die Ecken und überdecken den Radius, die Tabelle wirkt eckig. */
+  overflow: hidden;
 }
 
+/*
+ * ACHTUNG bei Spaltenbreiten: der Versalien-Kopf steht in 0.75rem, die Datenzellen in 1rem.
+ * Eine in "em" angegebene Spaltenbreite löst sich gegen die Schriftgröße der JEWEILIGEN Zelle
+ * auf - 12em wären im Kopf 144px und im Körper 192px, die Kopfzeile liefe also gegenüber ihren
+ * Daten nach links weg (genau davor warnt docs/specs/0002-ui-design/v1/MAPPING.md). Deshalb
+ * geben die Views ihre Spaltenbreiten in "rem" an, das an der Wurzel-Schriftgröße hängt und in
+ * Kopf wie Körper denselben Wert ergibt.
+ */
 vaadin-grid::part(header-cell) {
   background-color: #ffffff;
   border-bottom: 1px solid var(--elwa-box-border);

@@ -30,8 +30,11 @@ public class CreditHistoryDialog extends Dialog {
 
         Grid<CreditAccountingEntryEntity> grid = new Grid<>();
         grid.setSizeFull();
-        grid.addColumn(e -> PortalFormats.dateTime(e.getDate())).setHeader("Datum").setFlexGrow(0).setWidth("12em");
-        grid.addColumn(e -> PortalFormats.currency(e.getAmount())).setHeader("Betrag").setFlexGrow(0).setWidth("8em");
+        // Breiten in rem, nicht em: der Versalien-Kopf des Designs v2 steht in 0.75rem, eine
+        // em-Breite ergaebe dort schmalere Spalten als im Koerper und die Kopfzeile liefe
+        // gegenueber ihren Daten weg (siehe Kommentar in portal-theme.css).
+        grid.addColumn(e -> PortalFormats.dateTime(e.getDate())).setHeader("Datum").setFlexGrow(0).setWidth("12rem");
+        grid.addColumn(e -> PortalFormats.currency(e.getAmount())).setHeader("Betrag").setFlexGrow(0).setWidth("8rem");
         grid.addColumn(CreditAccountingEntryEntity::getDescription).setHeader("Buchungstext");
         grid.setItems(creditService.getAccountingEntries(user));
 

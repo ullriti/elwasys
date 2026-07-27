@@ -123,14 +123,16 @@ public class UserDashboardView extends VerticalLayout {
         // damit weder chronologisch noch numerisch sortieren. Deshalb je Spalte der Vergleich
         // auf dem Rohwert.
         this.grid.addColumn(e -> PortalFormats.dateTime(e.getDate())).setHeader("Datum").setFlexGrow(0)
-                .setWidth("12em").setComparator(CreditAccountingEntryEntity::getDate).setSortable(true);
+                .setWidth("12rem").setComparator(CreditAccountingEntryEntity::getDate).setSortable(true);
         // Tabellarische Ziffern auf der Betragsspalte (setClassNameGenerator ist in Vaadin 24.10
         // zugunsten von Shadow-DOM-Parts als veraltet markiert - hier bewusst weiter verwendet,
         // weil das Portal-Theme die Zellen über CSS-Klassen anspricht, nicht über ::part).
         this.grid.addColumn(e -> PortalFormats.currency(e.getAmount())).setHeader("Betrag").setFlexGrow(0)
-                // 9em statt 8em: die Kopfzeilen stehen seit dem UI-Redesign v2 in Versalien mit
-                // Sperrung, "BETRAG" passte sonst nicht mehr und wurde zu "BETR..." gekürzt.
-                .setWidth("9em").setComparator(CreditAccountingEntryEntity::getAmount).setSortable(true)
+                // Breiten in rem, nicht em, und 9 statt 8: der Versalien-Kopf des Designs v2
+                // steht in 0.75rem - eine em-Breite ergäbe im Kopf schmalere Spalten als im
+                // Körper (siehe Kommentar in portal-theme.css), und "BETRAG" braucht etwas
+                // mehr Platz als die vorherige Normalschrift.
+                .setWidth("9rem").setComparator(CreditAccountingEntryEntity::getAmount).setSortable(true)
                 .setClassNameGenerator(e -> "tabular-nums");
         this.grid.addColumn(CreditAccountingEntryEntity::getDescription).setHeader("Buchungstext")
                 .setComparator(CreditAccountingEntryEntity::getDescription).setSortable(true);
