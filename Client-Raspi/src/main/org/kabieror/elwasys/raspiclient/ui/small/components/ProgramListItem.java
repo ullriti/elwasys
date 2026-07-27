@@ -5,10 +5,9 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
 import javafx.scene.layout.GridPane;
 
+import org.kabieror.elwasys.common.FormatUtilities;
 import org.kabieror.elwasys.raspiclient.model.ClientProgram;
 import org.kabieror.elwasys.raspiclient.ui.Icons;
-
-import java.text.NumberFormat;
 
 /**
  * Diese Klasse stellt einen Eintrag in der Liste der verfügbaren Programme
@@ -61,7 +60,7 @@ public class ProgramListItem extends ListCell<ClientProgram> {
     private void updateContents(ClientProgram program) {
         this.icon.setText(Icons.ICON_SLIDERS);
         this.caption.setText(program.getName());
-        this.price.setText(NumberFormat.getCurrencyInstance().format(program.getPriceAtMaxDuration()));
+        this.price.setText(FormatUtilities.formatCurrency(program.getPriceAtMaxDuration()));
     }
 
     /**
