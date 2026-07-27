@@ -174,6 +174,20 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   `code-reviewer`-Gate lief über den gesamten Branch; seine Befunde (fehlende Tests für die
   Fehlermeldung des Dialog-Gerüsts und für die Fernwartungs-Kopfzeile, Detailtext vor dem
   Login) sind behoben. Suiten: **Backend 315/315, Client 106/106, Portal-E2E 27/27** (vor diesem Arbeitspaket: 287 / 88 / 26).
+- **Versionierung & Pakete (seit 2026-07-27):** Die Version berechnet **GitVersion** aus Tags
+  und Conventional Commits (`GitVersion.yml`); die Reihe startet bei **1.0.0** (letzter
+  veröffentlichter Stand vor dem Umbau: 0.4.2), Tags tragen kein `v`-Präfix.
+  `.github/workflows/release.yml` (ersetzt `maven-publish.yml`) bedient zwei Kanäle: jeder
+  **relevante** Merge auf `master` erzeugt ein **Vorab-Release** (als Pre-Release markiert –
+  `/releases/latest` liefert es nicht aus, die Terminals im Feld sehen es also nicht; ein
+  Test-Terminal zieht es über `.update-target`), ein **stabiles Release** wird bewusst manuell
+  ausgelöst. Veröffentlicht werden Terminal-fat-jar + `.sha256` als Release-Asset, das
+  Backend-Image nach GHCR (Tag-Leiter, OCI-Labels, SBOM, Provenance) und der Helm-Chart als
+  OCI-Artefakt. `Utilities.APP_VERSION` kommt jetzt aus dem Jar-Manifest statt aus einem
+  `sed`-Eingriff, und reine `docs:`/`chore:`/`style:`/`test:`/`ci:`-Pushes auf `master` lösen
+  weder CI noch Release aus (`scripts/commit-triggers-build.sh`). Siehe
+  [ADR 0023](../architecture/0023-gitversion-und-paketbereitstellung.md) und
+  [04-build-and-run.md](04-build-and-run.md).
 - **Nächster Schritt:** **Generalprobe nach [Spec 0001](../specs/0001-finale-review.md)**
   (Cutover-Probelauf, Migrations-Dry-Run mit Produktivdaten-Kopie, Backup-Restore-Probe,
   Ausfall-Drills, Alarm-Probe beider Stufen, Soak-Test, Vor-Ort-Kalibrierung), dann Pilotphase

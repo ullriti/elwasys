@@ -439,6 +439,13 @@ gebündelt in **`deploy/CUTOVER-RUNBOOK.md`, Kap. 7 „Dauerbetrieb"**:
 
 `.github/workflows/ci.yml`:
 - Trigger: jeder Pull Request + Pushes auf `master`
+- **Vorgeschalteter `guard`-Job**: bei einem Push auf `master` entscheidet
+  `scripts/commit-triggers-build.sh` anhand der Commit-Message, ob die übrigen Jobs überhaupt
+  laufen (`docs:`/`style:`/`chore:`/`test:`/`ci:` → nein; alles andere sowie jeder
+  Breaking-Change-Marker → ja; unbekanntes Format → ja, fail-safe). Bei Pull Requests läuft
+  immer alles – dieser PR-Lauf ist die Absicherung, auf die sich der Skip stützt (jeder
+  master-Commit kam über einen PR). Derselbe Job führt GitVersion aus (Konfigurations-Gate)
+  und schreibt die berechnete Version in die Job-Summary.
 - 3 parallele Jobs: **client** (inkl. Cross-Component-Suite P21/P22) / **backend-e2e** /
   **backend** – Build + Tests, spiegeln die lokalen Runner-Skripte (`run-ui-tests.sh` etc.,
   siehe docs/kb/06) bzw. für Backend `backend/run-backend-tests.sh` als lokales Analogon. Die
@@ -464,22 +471,74 @@ gebündelt in **`deploy/CUTOVER-RUNBOOK.md`, Kap. 7 „Dauerbetrieb"**:
   ist (kann in dieser daemonlosen Sandbox nicht direkt verifiziert werden, siehe
   docs/kb/07-cloud-init.md).
 
-`.github/workflows/maven-publish.yml` (Release):
-- Trigger: **nur** bei `release: created`
-- **JDK 21** (Liberica) – aus demselben Grund wie oben (`mvn install -pl
-  Client-Raspi -am` verlangt Sprachlevel 21)
-- `mvn versions:set -DnewVersion=<tag>` im Root setzt die Version in Parent-POM
-  **und** beiden Modulen konsistent (kein sed-Hack über mehrere POMs);
-  `Utilities.APP_VERSION` ist eine reine Java-Konstante und bleibt per
-  `sed -i -E` gesetzt
-- Reactor-Build `mvn install -pl Client-Raspi -am` (installiert dabei
-  auch die neu versionierte Parent-POM), lädt das fat-jar als Release-Asset hoch
-- **Backend-Image-Veröffentlichung**: baut zusätzlich `backend/Dockerfile` (derselbe, bereits
-  per `versions:set` versionierte Arbeitsbaum als Build-Kontext) und pusht es nach GHCR
-  (`ghcr.io/<owner>/elwasys-backend:<tag>` + `:latest`) - Anmeldung über den eingebauten
-  `GITHUB_TOKEN` (`packages: write` ist gesetzt, kein zusätzliches Secret nötig). Andere
-  Registries (z. B. Docker Hub) würden ein separates, hier bewusst nicht angelegtes Secret
-  brauchen - offener Punkt für eine spätere Phase, falls gewünscht.
+## Versionierung (GitVersion)
+
+Die Version wird **nicht** im Repo gepflegt, sondern von **GitVersion** (`GitVersion.yml`,
+Werkzeug 6.3.x über `gittools/actions`) aus Tags + Commit-Historie berechnet. Entscheidung
+und Begründung: [ADR 0023](../architecture/0023-gitversion-und-paketbereitstellung.md).
+
+| Wo | Ergebnis |
+|---|---|
+| `master` | fortlaufende Vorabversion, z. B. `1.1.0-rc.7` |
+| `claude/*`, `feature/*` | `1.1.0-alpha.3` |
+| Pull Request | `1.1.0-PullRequest0107.2` |
+| Freigabe (Tag) | `1.1.0` |
+
+- **Bump aus Conventional Commits**: `feat:` → minor, `fix:`/`perf:`/`refactor:` → patch,
+  `!` bzw. `BREAKING CHANGE:` → major; `+semver: major|minor|patch` als Notausgang. Weil per
+  Squash gemerged wird, ist der **PR-Titel** die maßgebliche Commit-Message.
+- **Tags ohne `v`-Präfix** – damit gilt durchgängig Tag == SemVer == Jar-Dateiname ==
+  Image-Tag == Chart-Version.
+- **Startpunkt** `next-version: 1.0.0` (letzter veröffentlichter Stand vor dem Umbau: 0.4.2).
+  Wirkungslos, sobald der Tag `1.0.0` existiert.
+- Die berechnete Version wird nur im Arbeitsbaum des Laufs gesetzt (`mvn versions:set`,
+  `helm package --version`) – **nichts wird ins Repo zurückgeschrieben**. Der Tag am Release
+  ist die Aufzeichnung.
+- `Utilities.APP_VERSION` liest die Version zur Laufzeit aus `Implementation-Version` im
+  Jar-Manifest (Maven füllt es aus `${project.version}`), Sentinel
+  `0.0.0-local-development` als Fallback ohne Jar. Der frühere `sed`-Eingriff in die
+  Java-Quelldatei ist entfallen; der Release-Workflow prüft die Kette stattdessen am
+  gebauten Artefakt.
+
+## Release & Paketbereitstellung
+
+`.github/workflows/release.yml` – ein Workflow, zwei Kanäle:
+
+| Kanal | Auslöser | Version | GitHub-Release | Image-Tags | Terminals |
+|---|---|---|---|---|---|
+| **Vorab** | Push auf `master` (nur relevante Commits, s. `guard` oben) | `1.1.0-rc.7` | als **Pre-Release** | `<version>`, `edge` | sehen es **nicht** |
+| **Freigabe** | `workflow_dispatch` (optionale Versions-Eingabe) | `1.1.0` | normal | `<version>`, `<major>.<minor>`, `<major>`, `latest`, `sha-<commit>` | rollen beim nächsten Cron-Lauf aus |
+
+Der Testkanal entsteht dabei ohne eigenen Mechanismus: `/releases/latest` – die Quelle, aus
+der `setup.sh` und `auto-update-watchdog.sh` ihre Zielversion ableiten – liefert **nie** ein
+Pre-Release aus. Ein Test-Terminal zieht eine Vorabversion gezielt über
+`${ELWA_ROOT}/.update-target` (siehe `deploy/terminal/README.md`).
+
+Was ein Lauf veröffentlicht:
+
+- **Terminal**: fat-jar + `.sha256` als Release-Asset (`raspi-client-<version>.jar`) – der
+  Bezugsweg, den `setup.sh`/`update.sh` erwarten. Ein Schritt verifiziert vor der
+  Veröffentlichung, dass die Manifest-Version des gebauten Jars der Release-Version
+  entspricht.
+- **Backend**: Container-Image nach GHCR (`ghcr.io/<owner>/elwasys-backend`) mit Tag-Leiter,
+  `org.opencontainers.image.*`-Labels (Version, Commit, Quelle, Zeitpunkt), **SBOM** und
+  **Provenance**-Attestation. Anmeldung über den eingebauten `GITHUB_TOKEN`
+  (`packages: write`, kein zusätzliches Secret). Nur `linux/amd64` – Multi-Arch bewusst nicht
+  beauftragt (nachrüstbar über `platforms:`).
+- **Helm-Chart** als OCI-Artefakt nach `ghcr.io/<owner>/charts/elwasys-backend`; Chart-Version
+  und `appVersion` werden beim Paketieren an die Release-Version gekoppelt:
+  ```bash
+  helm upgrade --install elwasys oci://ghcr.io/ullriti/charts/elwasys-backend \
+      --version 1.1.0 --set secret.password=… --set passwordReset.baseUrl=…
+  ```
+  Im Repo bleiben Chart-Version/`appVersion` auf dem Platzhalter, damit ein Deployment aus
+  dem Checkout ohne `--set image.tag` weiterhin am imageTag-Guard scheitert (Issue #89).
+
+Reihenfolge im Job mit Absicht: erst Image und Chart nach GHCR, **zuletzt** das
+GitHub-Release – es ist der Schalter, an dem die Terminals ein Update erkennen.
+
+Andere Registries (z. B. Docker Hub) bräuchten ein separates, hier bewusst nicht angelegtes
+Secret – weiterhin offener Punkt.
 
 ## Bekannte Build-Risiken
 
