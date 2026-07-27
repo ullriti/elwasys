@@ -4,6 +4,7 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.textfield.TextArea;
 import java.util.List;
+import org.kabieror.elwasys.backend.ui.component.AbstractFormDialog;
 
 /**
  * Dialog "Log" (Phase 3 AP4, siehe docs/kb/05-migration-plan.md) - fachlicher Nachfolger von
@@ -19,6 +20,11 @@ public class LogViewerDialog extends Dialog {
         setResizable(true);
         setWidth("70em");
         setHeight("40em");
+        // UI-Redesign v2: dasselbe Schließen-Kreuz wie in den Formular-Dialogen (dieser Dialog
+        // erbt bewusst nicht von AbstractFormDialog, siehe dortiges Klassen-Javadoc). Der
+        // "Schließen"-Knopf der Fußzeile bleibt daneben bestehen - er ist die vertraute
+        // Bedienung aus dem Alt-Portal.
+        AbstractFormDialog.addCloseButton(this);
 
         TextArea logArea = new TextArea();
         logArea.setSizeFull();

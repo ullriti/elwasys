@@ -5,7 +5,7 @@ import com.vaadin.flow.component.checkbox.Checkbox;
 import com.vaadin.flow.component.combobox.ComboBox;
 import com.vaadin.flow.component.combobox.MultiSelectComboBox;
 import com.vaadin.flow.component.formlayout.FormLayout;
-import com.vaadin.flow.component.html.H3;
+import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
 import com.vaadin.flow.component.textfield.BigDecimalField;
@@ -29,6 +29,10 @@ import org.kabieror.elwasys.backend.ui.component.FormValidation;
  * Alt-Fenster: Name, Aktiviert, Typ (Statisch=FIXED/Dynamisch=DYNAMIC) mit den jeweiligen
  * Preisfeldern (Preis bzw. Grundgebühr+Zeitpreis+Abrechnungsintervall), Maximaldauer, Freie
  * Zeit, Auto-Ende, Frühester Abbruch, freigegebene Benutzergruppen.
+ *
+ * <p>UI-Redesign v2 (siehe docs/specs/0002-ui-design/v2/MAPPING.md und
+ * docs/kb/05-migration-plan.md): derselbe Feldsatz, nur in die vier Abschnitte Stammdaten /
+ * Preis / Laufzeit / Zuordnung gegliedert, der Typ-Umschalter als Segmented Control.
  */
 public class ProgramFormDialog extends AbstractFormDialog {
 
@@ -67,10 +71,19 @@ public class ProgramFormDialog extends AbstractFormDialog {
         this.rgType.setItemLabelGenerator(v -> STATIC.equals(v) ? "Statisch" : "Dynamisch");
         this.rgType.setValue(STATIC);
         this.rgType.addValueChangeListener(e -> updateTypeFieldVisibility());
+        // UI-Redesign v2: optisch ein Segmented Control, technisch weiter eine
+        // RadioButtonGroup - Bindung, Validierung und die Rolle "radio" bleiben damit
+        // unverändert, das Aussehen macht allein das Theme (siehe portal-theme.css).
+        this.rgType.addClassName("segmented-control");
 
         this.bfPrice.setWidthFull();
         this.bfFlagfall.setWidthFull();
         this.bfRate.setWidthFull();
+        // UI-Redesign v2: Währungszeichen als Feld-Suffix statt im Label - die Feldlabels
+        // ("Preis", "Grundgebühr", "Zeitpreis") bleiben dadurch unverändert.
+        this.bfPrice.setSuffixComponent(new Span("€"));
+        this.bfFlagfall.setSuffixComponent(new Span("€"));
+        this.bfRate.setSuffixComponent(new Span("€"));
 
         this.cbTimeUnit.setItems(TimeUnitType.values());
         this.cbTimeUnit.setItemLabelGenerator(ProgramFormDialog::timeUnitLabel);
@@ -87,12 +100,28 @@ public class ProgramFormDialog extends AbstractFormDialog {
         this.selGroups.setItemLabelGenerator(UserGroupEntity::getName);
         this.selGroups.setWidthFull();
 
-        FormLayout form = new FormLayout(this.tfName, this.cbEnabled, this.rgType, this.bfPrice, this.bfFlagfall,
-                this.bfRate, this.cbTimeUnit, this.maxDuration, this.freeDuration, this.cbAutoEnd,
-                this.earliestAutoEnd);
-        form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1), new FormLayout.ResponsiveStep("30em", 2));
+        // UI-Redesign v2: derselbe Feldsatz in vier thematischen Abschnitten. Der Typ-Umschalter
+        // sitzt im Preis-Abschnitt und bleibt IMMER sichtbar - deshalb kann dieser Abschnitt
+        // trotz der typabhängigen Felder nie leer laufen und braucht kein eigenes Aus-/Einblenden
+        // (siehe updateTypeFieldVisibility). Für die anderen drei Abschnitte gilt dasselbe: dort
+        // ist kein Feld typabhängig.
+        FormLayout masterData = addSection("Stammdaten");
+        masterData.add(this.tfName, this.cbEnabled);
+        masterData.setColspan(this.cbEnabled, 2);
 
-        add(form, new H3("Benutzergruppen"), this.selGroups);
+        FormLayout price = addSection("Preis");
+        price.add(this.rgType, this.bfPrice, this.bfFlagfall, this.bfRate, this.cbTimeUnit);
+        price.setColspan(this.rgType, 2);
+
+        FormLayout runtime = addSection("Laufzeit");
+        runtime.add(this.maxDuration, this.freeDuration, this.earliestAutoEnd, this.cbAutoEnd);
+        runtime.setColspan(this.cbAutoEnd, 2);
+
+        // Die Mehrfachauswahl braucht die volle Breite (Chips laufen sonst um); ihr eigenes
+        // Feldlabel ersetzt die frühere H3-Zwischenüberschrift.
+        FormLayout assignment = addSection("Zuordnung");
+        assignment.add(this.selGroups);
+        assignment.setColspan(this.selGroups, 2);
 
         if (editMode) {
             this.tfName.setValue(programToEdit.getName());

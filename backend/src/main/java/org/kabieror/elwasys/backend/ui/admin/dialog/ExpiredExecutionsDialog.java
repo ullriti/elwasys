@@ -12,6 +12,7 @@ import java.util.List;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.service.ExecutionService;
+import org.kabieror.elwasys.backend.ui.component.AbstractFormDialog;
 import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
 import org.kabieror.elwasys.backend.ui.component.PortalFormats;
 
@@ -44,6 +45,9 @@ public class ExpiredExecutionsDialog extends Dialog {
         setHeaderTitle("Verfallene Ausführungsaufträge von " + user.getName());
         setModal(true);
         setWidth("60em");
+        // UI-Redesign v2: dasselbe Schließen-Kreuz wie in den Formular-Dialogen (dieser Dialog
+        // erbt bewusst nicht von AbstractFormDialog, siehe dortiges Klassen-Javadoc).
+        AbstractFormDialog.addCloseButton(this);
 
         Paragraph explanation = new Paragraph(
                 "Diese Ausführungsaufträge wurden gestartet, jedoch nie beendet, möglicherweise durch einen Fehler "

@@ -78,7 +78,7 @@ public class UserFormDialog extends AbstractFormDialog {
         FormLayout form = new FormLayout(this.tfName, this.tfUsername, this.tfEmail, this.tfCardIds,
                 this.cbUserGroup, this.cbBlocked, this.cbSendPassword);
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
-        add(form);
+        addToBody(form);
 
         if (editMode) {
             this.tfName.setValue(userToEdit.getName());

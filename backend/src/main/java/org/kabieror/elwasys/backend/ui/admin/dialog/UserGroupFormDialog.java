@@ -2,7 +2,6 @@ package org.kabieror.elwasys.backend.ui.admin.dialog;
 
 import com.vaadin.flow.component.combobox.MultiSelectComboBox;
 import com.vaadin.flow.component.formlayout.FormLayout;
-import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
 import com.vaadin.flow.component.textfield.NumberField;
 import com.vaadin.flow.component.textfield.TextField;
@@ -28,6 +27,10 @@ import org.kabieror.elwasys.backend.ui.component.FormValidation;
  * Funktion (Mehrfachauswahl), moderneres Bedienelement (siehe docs/kb/05-migration-plan.md,
  * "Entscheidungen", Gestaltungsrahmen Portal-Neubau: UX-Verbesserungen sind erwünscht,
  * solange die Struktur wiedererkennbar bleibt).
+ *
+ * <p>UI-Redesign v2 (siehe docs/specs/0002-ui-design/v2/MAPPING.md und
+ * docs/kb/05-migration-plan.md): unveränderter Feldsatz, die drei Zwischenüberschriften sind
+ * jetzt Abschnittslabels wie im Geräte- und Programm-Dialog.
  */
 public class UserGroupFormDialog extends AbstractFormDialog {
 
@@ -89,9 +92,14 @@ public class UserGroupFormDialog extends AbstractFormDialog {
         FormLayout form = new FormLayout(this.tfName, this.rgDiscountType, this.nfDiscountFix,
                 this.nfDiscountFactorPercent);
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
+        addToBody(form);
 
-        add(form, new H3("Standorte"), this.selLocations, new H3("Geräte"), this.selDevices, new H3("Programme"),
-                this.selPrograms);
+        // UI-Redesign v2: die drei Zwischenüberschriften des Alt-Dialogs sind jetzt
+        // Abschnittslabels (gleicher Text, gleiche Reihenfolge, gleicher Feldsatz) - damit
+        // gliedert sich dieser Dialog wie der Geräte- und der Programm-Dialog.
+        addFullWidthSection("Standorte", this.selLocations);
+        addFullWidthSection("Geräte", this.selDevices);
+        addFullWidthSection("Programme", this.selPrograms);
 
         if (editMode) {
             this.tfName.setValue(groupToEdit.getName());
@@ -113,6 +121,16 @@ public class UserGroupFormDialog extends AbstractFormDialog {
         updateDiscountFieldVisibility();
 
         addFooterActions(saveCaption(editMode), () -> save(onSaved));
+    }
+
+    /**
+     * Ein Abschnitt, der aus genau einer Mehrfachauswahl über die volle Breite besteht - die
+     * Chips einer {@link MultiSelectComboBox} laufen in einer halben Spalte sonst um.
+     */
+    private void addFullWidthSection(String title, MultiSelectComboBox<?> field) {
+        FormLayout section = addSection(title);
+        section.add(field);
+        section.setColspan(field, 2);
     }
 
     private void updateDiscountFieldVisibility() {
