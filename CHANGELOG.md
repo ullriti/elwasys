@@ -24,6 +24,8 @@ im [Worklog](docs/worklog/README.md).
   `backend/run-demo.sh`) legt einen idempotenten Beispielbestand an.
 - agentic-baseline-Setup: `AGENTS.md` als Single Source of Truth, `docs/`-Wissenssystem
   (Worklog/Specs/ADRs) und `.claude/`-Commands/-Agenten.
+- PR-Template (`.github/pull_request_template.md`) mit Review-Gate, nutzersichtbaren
+  Änderungen und Sicherheitsbereichen; PR-Titel folgen den Conventional Commits.
 
 ### Changed
 - Aufräum-Refactorings aus der finalen Review (FR-4, #90/#91/#92), ohne Verhaltensänderung:
