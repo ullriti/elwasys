@@ -106,6 +106,13 @@ class OfflineIncidentOutboxTest {
         outbox.report(incident("f1"));
 
         assertEquals(1, outbox.readAll().size());
+        // Den senderlosen Zustellversuch aus report() abwarten, BEVOR der Sender verdrahtet wird:
+        // er liegt zu diesem Zeitpunkt nur in der Warteschlange des Zustell-Threads. Läuft er
+        // erst nach setSender() an (ausgelasteter CI-Läufer), sendet er zusätzlich zum flush() -
+        // der Test sah dann zwei Zustellungen statt einer. Im Betrieb ist diese Doppelung
+        // harmlos (das Backend dedupliziert über den incidentKey), hier macht sie den Test flaky.
+        assertTrue(outbox.awaitDeliveries(5000), "pending delivery attempt finished");
+
         RecordingSender sender = new RecordingSender(true);
         outbox.setSender(sender);
         assertTrue(outbox.awaitDeliveries(5000), "delivery thread finished");
