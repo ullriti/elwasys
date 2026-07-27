@@ -73,8 +73,10 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Commit-Messages über die Event-Datei lesen, nicht per ${{ }} interpolieren
-          # (Fremdtext -> Script-Injection). NUL-getrennt, weil Messages mehrzeilig sind.
+          # Commit-Messages über die Event-Datei lesen, nicht als Actions-Ausdruck
+          # interpolieren (Fremdtext -> Script-Injection). Die Ausdrucks-Klammern dürfen dabei
+          # auch im Kommentar nicht ausgeschrieben werden - GitHub wertet sie in jeder Zeile
+          # aus, und ein leeres Klammerpaar macht die Workflow-Datei ungültig.
           run=false
           # Eine Zeile je Commit, base64-kodiert: Commit-Messages sind mehrzeilig, und jq
           # kann keine NUL-Bytes ausgeben - base64 ist das einzige Trennverfahren, das

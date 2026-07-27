@@ -56,6 +56,17 @@ jobs:
           # Standard-Shallow-Clone (fetch-depth 1) findet es keine Versionsquelle.
           fetch-depth: 0
 
+      - name: Workflow-Dateien prüfen (actionlint)
+        # Ein reiner YAML-Parse reicht als Gate NICHT: GitHub wertet die Ausdrucks-Klammern
+        # in jeder Zeile aus - auch in einem Shell-Kommentar -, und ein leeres Klammerpaar
+        # macht die Datei ungültig. Solche Fehler erzeugen keinen roten Job, sondern gar
+        # keinen Lauf (Lauf 30253568316), fallen also ohne diesen Schritt erst in Produktion
+        # auf. actionlint prüft zusätzlich Ausdrücke, Kontexte und `needs`-Bezüge.
+        run: |
+          set -euo pipefail
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          "$(go env GOPATH)/bin/actionlint" -shellcheck= -pyflakes=
+
       - name: Selbsttest der Guard-Regel
         run: bash scripts/commit-triggers-build-selftest.sh
 
@@ -70,9 +81,13 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Die Commit-Messages werden ÜBER DIE EVENT-DATEI gelesen, nicht per ${{ }}
-          # interpoliert: eine Commit-Message ist Fremdtext und würde als ${{ }}-Ausdruck
-          # direkt in die Shell-Zeile eingesetzt (Script-Injection).
+          # Die Commit-Messages werden ÜBER DIE EVENT-DATEI gelesen und NICHT als
+          # Actions-Ausdruck interpoliert: eine Commit-Message ist Fremdtext und würde
+          # sonst direkt in diese Shell-Zeile eingesetzt (Script-Injection).
+          #
+          # Hinweis: Die Ausdrucks-Klammern dürfen hier auch als Beispiel nicht ausgeschrieben
+          # werden - GitHub wertet sie in JEDER Zeile aus, auch in einem Shell-Kommentar, und
+          # ein leeres Klammerpaar macht die ganze Workflow-Datei ungültig (Lauf 30253568316).
           run=false
           # Eine Zeile je Commit, base64-kodiert: Commit-Messages sind mehrzeilig, und jq
           # kann keine NUL-Bytes ausgeben - base64 ist das einzige Trennverfahren, das

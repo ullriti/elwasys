@@ -446,6 +446,11 @@ gebündelt in **`deploy/CUTOVER-RUNBOOK.md`, Kap. 7 „Dauerbetrieb"**:
   immer alles – dieser PR-Lauf ist die Absicherung, auf die sich der Skip stützt (jeder
   master-Commit kam über einen PR). Derselbe Job führt GitVersion aus (Konfigurations-Gate)
   und schreibt die berechnete Version in die Job-Summary.
+- **`actionlint` im `guard`-Job**: prüft beide Workflow-Dateien. Ein reiner YAML-Parse genügt
+  als Gate **nicht** – GitHub wertet die Actions-Ausdrucks-Klammern in *jeder* Zeile aus, auch
+  in einem Shell-Kommentar, und ein leeres Klammerpaar macht die Datei ungültig. Solche Fehler
+  erzeugen keinen roten Job, sondern **gar keinen Lauf**, fallen ohne dieses Gate also erst in
+  Produktion auf (so geschehen bei Lauf 30253568316).
 - 3 parallele Jobs: **client** (inkl. Cross-Component-Suite P21/P22) / **backend-e2e** /
   **backend** – Build + Tests, spiegeln die lokalen Runner-Skripte (`run-ui-tests.sh` etc.,
   siehe docs/kb/06) bzw. für Backend `backend/run-backend-tests.sh` als lokales Analogon. Die
