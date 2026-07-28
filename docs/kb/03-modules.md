@@ -366,11 +366,18 @@ Package `backend/.../auth/terminal/`:
   für den WebSocket-Handshake) statt eines proprietären Headers.
 - **Speicherung/Rotation**: nur der SHA-256-Hash landet in der DB; pro Standort sind beliebig
   viele aktive Tokens gleichzeitig gültig – Rotation ohne Ausfallfenster.
-- **Verwaltungspfad**: `TerminalTokenCliRunner` (`@Profile("token-cli")`, siehe
-  `application-token-cli.yml`) – Kommandos siehe [04-build-and-run.md](04-build-and-run.md); das
-  Klartext-Token wird genau einmal auf `stdout` ausgegeben.
+- **Verwaltungspfade**, beide über denselben `TerminalTokenService`:
+  - **Admin-Portal** (Regelfall): `TerminalTokenDialog`, geöffnet über eine Zeilenaktion der
+    Standortliste – auflisten, erzeugen, widerrufen. `findByLocation` liefert die Tokens eines
+    Standorts (neueste zuerst, widerrufene bleiben sichtbar).
+  - **CLI**: `TerminalTokenCliRunner` (`@Profile("token-cli")`, siehe
+    `application-token-cli.yml`) für Erstinbetriebnahme/Cutover und Automatisierung – Kommandos
+    siehe [04-build-and-run.md](04-build-and-run.md).
 
-Siehe [ADR 0008](../architecture/0008-api-auth-standort-token-und-admin-session.md).
+  Auf beiden Wegen wird das Klartext-Token **genau einmal** ausgegeben und nirgends gespeichert.
+
+Siehe [ADR 0008](../architecture/0008-api-auth-standort-token-und-admin-session.md) und
+[ADR 0024](../architecture/0024-standort-token-verwaltung-im-portal.md).
 
 #### REST-API v1 (`/api/v1/**`, Package `backend/.../api/`)
 
@@ -868,6 +875,15 @@ fachliche Nachfolger der Alt-`components/*Window`: `UserFormDialog`, `UserGroupF
 `DeviceFormDialog`, `ProgramFormDialog`, `LocationFormDialog`. Die gemeinsame Komponente
 `ui/component/ConfirmDeleteDialog` nutzt Vaadins `ConfirmDialog` mit „Ja“/„Nein“. Mehrfachauswahlen
 (Standorte/Geräte/Programme/Benutzergruppen) sind als `MultiSelectComboBox` umgesetzt.
+
+Einzelne Views tragen darüber hinaus eigene Zeilen-Aktionen mit rein lesenden bzw.
+Sonder-Dialogen: `AdminUsersView` (Guthaben aufladen, Umsätze, abgelaufene Ausführungen) und
+`AdminLocationsView` (**Terminal-Tokens verwalten**, `TerminalTokenDialog` – Tokens des
+Standorts auflisten, ein neues erzeugen und widerrufen). Der Token-Dialog zeigt das
+Klartext-Token **genau einmal** in einem schreibgeschützten Feld und leert dessen Wert beim
+Schließen wieder; der `token_hash` wird nie angezeigt. Der Zugriffsschutz kommt – wie bei allen
+Dialogen – über die `@RolesAllowed("ADMIN")`-Route, aus der heraus er geöffnet wird
+([ADR 0024](../architecture/0024-standort-token-verwaltung-im-portal.md)).
 
 **Services** (jeweils mit den Alt-Fenstern als fachlicher Referenz):
 - `UserService` – Anlegen/Bearbeiten/weiches Löschen. Löschen entspricht 1:1

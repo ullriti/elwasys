@@ -103,8 +103,13 @@ Offline-Modus statt in `ERROR`, siehe docs/kb/03-modules.md „Offline-Robusthei
 | P26 | P3 | Öffentlicher Reset-Link lehnt ungültigen Key ab (#50) | Reset-Seite rendert, ungültiger Key abgewiesen · `user-portal.spec.ts` (~Z. 57) |
 | P27 | P2 | Offline-Vorfall quittieren (#89) | Vorfall mit Art/Nutzer/Betrag sichtbar; Quittierung (mit Bestätigung) nimmt ihn aus der offenen Liste und markiert ihn als „Quittiert" · `offline-incidents.spec.ts` |
 | P28 | P3 | Quittierte Vorfälle bleiben Beleg (#89) | Umschalter zeigt quittierte Vorfälle; Dashboard-Hinweis verlinkt in die Vorfallsliste · `offline-incidents.spec.ts` |
+| P29 | P3 | Freitext-Filter über einer Liste | Liste zeigt nur die Treffer; Leeren stellt sie wieder her · `list-filter-sort.spec.ts` |
+| P30 | P3 | Sortierung nach Rohwert statt Anzeigetext | Guthaben-Spalte sortiert nach Betrag, nicht nach „10,00 €"/„9,00 €" · `list-filter-sort.spec.ts` |
+| P31 | P3 | Filter überlebt Live-Update | Eine gefilterte Liste bleibt gefiltert, wenn eine andere Session die Daten ändert · `list-filter-sort.spec.ts` |
+| P32 | P2 | Standort-Token im Portal erzeugen (ADR 0024) | Klartext-Token wird genau einmal angezeigt, erscheint nach dem Schließen nirgends mehr; Token steht in der Liste · `terminal-tokens.spec.ts` |
+| P33 | P2 | Standort-Token widerrufen (ADR 0024) | Status wechselt auf widerrufen, die Zeile bleibt als Beleg, ein zweites Token bleibt aktiv · `terminal-tokens.spec.ts` |
 
-P1–P20 und P23–P28 laufen in der Playwright-Suite `backend/e2e/tests/` (P15/P18 teilen sich ein
+P1–P20 und P23–P33 laufen in der Playwright-Suite `backend/e2e/tests/` (P15/P18 teilen sich ein
 `test()`). P14 nutzt einen eigenen „Standorte"-Menüpunkt statt des früheren Dashboard-Dialogs,
 P16 prüft (wegen Argon2id) nur den erneuten Login mit neuem Passwort – fachliche Verortung:
 docs/kb/05-migration-plan.md „Entscheidungen".
@@ -151,14 +156,17 @@ Am Code gezählt:
 - **Client** (TestFX/JUnit): **88 `@Test`** in 34 Testklassen (46 Testdateien) – C1–C16, die
   C15-Offline-Nachfolger sowie infrastrukturfreie Unit-Tests (Offline-Replay, Uhren-Plausibilität,
   API-Fehlerbilder, Kartenmaskierung, deCONZ-WS-Reconnect).
-- **Portal-E2E** (Playwright): **27 `test()`** in `backend/e2e/tests/` (login 2 / admin 3 /
-  admin-crud 13 / dashboard 1 / offline-incidents 3 / user-portal 5) zzgl. **4**
-  READ-ONLY-Smoke-`test()` in `tests-smoke/`.
+- **Portal-E2E** (Playwright): **32 `test()`** in `backend/e2e/tests/` (login 2 / admin 3 /
+  admin-crud 13 / dashboard 1 / list-filter-sort 3 / offline-incidents 3 / terminal-tokens 2 /
+  user-portal 5) zzgl. **4** READ-ONLY-Smoke-`test()` in `tests-smoke/`.
 
 Backend-JUnit-Zahlen (nur als Querverweis): 06-ui-tests.md „Test-Inventar".
 
 ## Historie
 
+- **2026-07-28** — Standort-Token-Verwaltung im Portal ([ADR 0024](../architecture/0024-standort-token-verwaltung-im-portal.md)):
+  Portal-Fälle P32/P33 ergänzt, die im Redesign-Testpaket entstandenen P29–P31 nachgetragen;
+  Portal-E2E damit 32 `test()` ([Worklog](../worklog/2026-07-28-standort-token-portal-ui.md)).
 - **2026-07-26** — FR-3/FR-5 (#87/#88/#93): Umfang neu am Code gezählt (Client 88 `@Test`,
   Portal-E2E 27 `test()` + 4 Smoke). Neu: Regressionstest deCONZ-WS-Reconnect (#87),
   DYNAMIC-Programmanlage im Portal (#88); `InactivitySchedulerTest` und
