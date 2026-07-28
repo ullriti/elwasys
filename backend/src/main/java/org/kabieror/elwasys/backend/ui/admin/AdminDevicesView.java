@@ -66,7 +66,7 @@ public class AdminDevicesView extends AbstractAdminListView<DeviceEntity> {
 
     private Span statusBadge(DeviceEntity device) {
         Span badge = new Span(statusLabel(device));
-        badge.getElement().getThemeList().add("badge" + (device.isEnabled() ? " success" : "contrast"));
+        badge.getElement().getThemeList().add("badge" + (device.isEnabled() ? " success" : " contrast"));
         return badge;
     }
 
