@@ -235,6 +235,18 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   `setDisableOnClick` blieben nach dem Klick tot (Guthaben „Buchen", Abrechnen der verfallenen
   Ausführungen) – die Regel dazu steht jetzt in [03-modules.md](03-modules.md), Portal-UI.
   Details: [Worklog](../worklog/2026-07-28-standort-token-portal-ui.md).
+- **GoLive-Testplan (seit 2026-07-28):** Für den Tag nach der Produktivumschaltung liegt eine
+  abhakbare manuelle Tagescheckliste bereit:
+  [`deploy/GOLIVE-TESTPLAN.md`](../../deploy/GOLIVE-TESTPLAN.md) – zugeschnitten auf **eine
+  Installation mit zwei Terminals**, mit Tagesplan, Vorbereitung/Testdaten, Portal-Admin,
+  Terminal-Normalbetrieb, Grenz-/Fehlerfällen, Ausfall- und Offline-Szenarien, Fernwartung,
+  Alarm-Probe, Benachrichtigungen, Benutzerportal und Aufräumen. Zwei Entwurfsentscheidungen:
+  **kein Rollback-Üben** (nur Abbruchkriterien, die auf Runbook Kap. 4 verweisen) und
+  **kurze Wartezeiten** – kurzlebige Testprogramme (Maximaldauer 4–6 min) plus der Kniff, die
+  Maschine für das Auto-Ende am eigenen Schalter auszuschalten, halten jede Wartezeit unter
+  ~10 Minuten. Ergänzt [08-test-plan.md](08-test-plan.md) (automatisierte Suiten) und
+  [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md) (die Umstellung selbst).
+  Details: [Worklog](../worklog/2026-07-28-golive-testplan.md).
 - **Nächster Schritt:** **Generalprobe nach [Spec 0001](../specs/0001-finale-review.md)**
   (Cutover-Probelauf, Migrations-Dry-Run mit Produktivdaten-Kopie, Backup-Restore-Probe,
   Ausfall-Drills, Alarm-Probe beider Stufen, Soak-Test, Vor-Ort-Kalibrierung), dann Pilotphase

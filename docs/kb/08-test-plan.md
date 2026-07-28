@@ -1,7 +1,11 @@
 # 08 – Testplan: Frontend-Tests
 
-Dieser Plan beschreibt den Umfang der UI-/E2E-Tests beider Frontends. Die Infrastruktur ist in
-[06-ui-tests.md](06-ui-tests.md) dokumentiert:
+Dieser Plan beschreibt den Umfang der **automatisierten** UI-/E2E-Tests beider Frontends. Der
+**manuelle Abnahmelauf nach der Produktivumschaltung** – alles, was nur mit echter Hardware,
+echten Karten und echtem Geld prüfbar ist – steht dagegen in
+[`deploy/GOLIVE-TESTPLAN.md`](../../deploy/GOLIVE-TESTPLAN.md).
+
+Die Infrastruktur ist in [06-ui-tests.md](06-ui-tests.md) dokumentiert:
 - **Client**: TestFX + Xvfb, echte App über `Main`, `FhemSimulator`/`DeconzSimulator` als
   Gateways, echtes Test-Backend über die REST-API, Test-DB.
 - **Portal**: Playwright (Node/TS), echtes Vaadin-Flow-Portal im Backend (`backend/e2e/`),
