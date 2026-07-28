@@ -39,7 +39,11 @@ function sql(script: string) {
   runSql(DB_NAME, script);
 }
 
-/** Entfernt Tokens VOR dem Standort - terminal_tokens.location_id verweist auf locations. */
+/**
+ * Räumt Tokens und Standort ab. Die Tokens ausdrücklich mitzunehmen ist nicht nötig
+ * (terminal_tokens.location_id ist ON DELETE CASCADE, siehe V3), aber es hält das Aufräumen
+ * unabhängig davon, was eine spätere Migration an der Fremdschlüssel-Regel ändert.
+ */
 function cleanup() {
   sql(`
     DELETE FROM terminal_tokens
@@ -105,6 +109,11 @@ test('admin can issue a terminal token and its plaintext is shown exactly once (
   // Status(4), Aktionen(5) - der gespeicherte Hash steht bewusst in KEINER Spalte.
   // Das Grid im Dialog liegt über dem Standort-Grid dahinter - beide vergeben dieselben
   // Slot-Namen, deshalb MUSS die Suche auf den Dialog eingegrenzt werden (siehe helpers.ts).
+  // Nirgends im Dialog steht der gespeicherte Hash (SHA-256, also 64 Hex-Zeichen). Bisher stand
+  // diese Zusicherung nur als Kommentar im Dialog-Quelltext ("bewusst OHNE token_hash") - eine
+  // versehentlich hinzugefügte Spalte fiele sonst niemandem auf.
+  await expect(win).not.toContainText(/[0-9a-f]{64}/);
+
   const cells = await gridRowCells(page, REVEAL_LABEL, win);
   expect(cells).toHaveLength(6);
   await expect(cells[1]).toHaveText(REVEAL_LABEL);
