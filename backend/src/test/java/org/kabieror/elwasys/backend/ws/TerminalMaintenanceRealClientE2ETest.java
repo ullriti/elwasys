@@ -203,8 +203,15 @@ class TerminalMaintenanceRealClientE2ETest {
 
         assertThat(lines).as("das Log eines gesprächigen Terminals muss weiterhin abrufbar sein").isNotEmpty();
         assertThat(lines.get(0)).as("die Kürzung muss im Log sichtbar sein").startsWith("--- gekürzt:");
-        assertThat(lines).as("es soll das ENDE des Logs geliefert werden")
-                .last().asString().endsWith("filler line 5000");
+        assertThat(lines).as("die Antwort muss auf die letzten 1000 Zeilen (plus Hinweiszeile) gedeckelt sein")
+                .hasSizeLessThanOrEqualTo(1001);
+        // Bewusst NICHT auf die letzte Zeile geprüft: der echte Client loggt nebenher weiter
+        // (Heartbeat/Offline-Abgleich), es kann also nach dem Anhängen noch eine eigene Zeile
+        // dazukommen. Geprüft wird stattdessen, dass das ENDE geliefert wurde und nicht der Anfang.
+        assertThat(lines).as("das Ende des Logs muss enthalten sein")
+                .anyMatch(line -> line.endsWith("filler line 5000"));
+        assertThat(lines).as("der Anfang des Logs muss weggekürzt sein")
+                .noneMatch(line -> line.endsWith("filler line 1"));
         assertThat(this.maintenanceService.isConnected(this.locationId))
                 .as("die Fernwartungsverbindung darf über der Log-Anfrage nicht abreißen").isTrue();
     }

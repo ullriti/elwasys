@@ -32,6 +32,8 @@ class UtilitiesLogTailTest {
         // 1000 Logzeilen + Hinweiszeile.
         assertEquals(1001, lines.size());
         assertTrue(lines.get(0).startsWith("--- gekürzt:"), "Eine Kürzung muss sichtbar sein: " + lines.get(0));
+        // Die Hinweiszeile nennt die Dateigröße - der Admin soll sehen, wie viel er NICHT sieht.
+        assertTrue(lines.get(0).contains("Logdatei"), "Die Hinweiszeile soll die Dateigröße nennen: " + lines.get(0));
         assertEquals("line 4001", lines.get(1), "Es soll das ENDE des Logs geliefert werden");
         assertEquals("line 5000", lines.get(lines.size() - 1));
     }

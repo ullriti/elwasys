@@ -174,20 +174,22 @@ public class Utilities {
             return new ArrayList<>();
         }
         final long size = Files.size(path);
-        final long from = Math.max(0, size - maxBytes);
+        final long from = Math.max(0, size - Math.min(maxBytes, Integer.MAX_VALUE));
 
         final byte[] buffer = new byte[(int) (size - from)];
+        final ByteBuffer target = ByteBuffer.wrap(buffer);
         try (SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ)) {
             channel.position(from);
-            ByteBuffer target = ByteBuffer.wrap(buffer);
             while (target.hasRemaining() && channel.read(target) > 0) {
                 // Bis der Puffer voll ist bzw. die Datei endet - ein einzelnes read() muss den
                 // angeforderten Bereich nicht vollständig liefern.
             }
         }
 
-        final List<String> lines =
-                new ArrayList<>(Arrays.asList(new String(buffer, StandardCharsets.UTF_8).split("\n", -1)));
+        // Nur den tatsächlich gelesenen Teil dekodieren: rollt logback die Datei genau zwischen
+        // Größenabfrage und Lesen weg, ist der Puffer nicht voll - der Rest wären NUL-Bytes.
+        final List<String> lines = new ArrayList<>(
+                Arrays.asList(new String(buffer, 0, target.position(), StandardCharsets.UTF_8).split("\n", -1)));
         // Ein Sprung mitten in die Datei trifft fast nie eine Zeilengrenze - die angeschnittene
         // erste Zeile wird verworfen, statt sie halbiert auszuliefern.
         boolean truncated = from > 0;
@@ -204,8 +206,10 @@ public class Utilities {
             lines.subList(0, lines.size() - maxLines).clear();
         }
         if (truncated) {
-            lines.add(0, String.format("--- gekürzt: nur das Ende der Logdatei (letzte %d Zeilen, max. %d KiB von "
-                    + "%d KiB) ---", maxLines, maxBytes / 1024, size / 1024));
+            // Bewusst die Dateigröße nennen: der Admin soll sehen, WIE viel er nicht sieht. Die
+            // Grenzen stehen dahinter, damit erkennbar ist, warum gekürzt wurde.
+            lines.add(0, String.format("--- gekürzt: Logdatei %d KiB, gezeigt werden die letzten %d Zeilen "
+                    + "(höchstens %d KiB) ---", size / 1024, maxLines, maxBytes / 1024));
         }
         return lines;
     }
