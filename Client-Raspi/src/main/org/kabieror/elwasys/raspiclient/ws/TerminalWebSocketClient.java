@@ -106,8 +106,9 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
     /**
      * Frame-Grenze dieser Verbindung, bewusst weit über der gedeckelten {@code LOG_RESPONSE}
      * (siehe oben) - der JSR-356-Default von 8 KiB ist für dieses Protokoll zu knapp. Die
-     * Gegenstelle setzt denselben Wert ({@code backend.ws.TerminalWebSocketConfig}); beide
-     * Seiten müssen zueinander passen, weil jede Seite nur ihren EIGENEN Empfangspuffer prüft.
+     * Gegenstelle setzt denselben Wert je Session ({@code backend.ws.TerminalWebSocketHandler});
+     * beide Seiten müssen zueinander passen, weil jede Seite nur ihren EIGENEN Empfangspuffer
+     * prüft.
      */
     private static final int MAX_TEXT_MESSAGE_BUFFER_BYTES = 1024 * 1024;
 

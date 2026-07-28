@@ -582,8 +582,8 @@ authentifizierten `TerminalPrincipal` aus dem `SecurityContext` in die
 | `ERROR` | beide Richtungen | Protokoll-/Verarbeitungsfehler, `payload.reason` (`malformed-message`/`not-implemented`) |
 
 **Frame-Grenze**: beide Seiten heben den JSR-356-Default von 8 KiB auf **1 MiB** an (Terminal über
-einen konfigurierten `WebSocketContainer` im `TerminalWebSocketClient`, Backend über ein
-`ServletServerContainerFactoryBean` in `TerminalWebSocketConfig`). Die Werte müssen zueinander
+einen konfigurierten `WebSocketContainer` im `TerminalWebSocketClient`, Backend je Session in
+`TerminalWebSocketHandler#afterConnectionEstablished`). Die Werte müssen zueinander
 passen, weil jede Seite nur ihren EIGENEN Empfangspuffer prüft. Mit dem Default schloss Tomcat die
 Verbindung bei jeder `LOG_RESPONSE` eines länger laufenden Terminals mit `1009` – und riss damit
 auch Status/Neustart/Vorfallsmeldungen bis zum Reconnect mit ab

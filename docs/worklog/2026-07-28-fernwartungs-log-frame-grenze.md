@@ -60,9 +60,9 @@ unvollständiges Log wäre schlimmer als ein kurzes.
 ### Frame-Grenze beidseitig auf 1 MiB (Sicherheitsnetz)
 
 Terminal über einen explizit konfigurierten `WebSocketContainer` für den
-`StandardWebSocketClient`, Backend über ein `ServletServerContainerFactoryBean` in
-`TerminalWebSocketConfig`. Beide Konstanten verweisen aufeinander, weil jede Seite nur ihren
-**eigenen** Empfangspuffer prüft.
+`StandardWebSocketClient`, Backend **je Session** in
+`TerminalWebSocketHandler#afterConnectionEstablished`. Beide Konstanten verweisen aufeinander,
+weil jede Seite nur ihren **eigenen** Empfangspuffer prüft.
 
 Die Deckelung allein hätte nicht gereicht: auch 128 KiB liegen über den 8 KiB des Defaults.
 
@@ -91,7 +91,31 @@ gemeldeten Fehlerbild durch (`CloseStatus[code=1009 …]` im Backend-Log,
 Das ist der Beleg für die oben beschriebene Kaskade: eine Log-Anfrage nimmt die ganze
 Fernwartung mit.
 
-Suiten grün: `UtilitiesLogTailTest` (6/6), `run-cross-component-e2e.sh` (4/4).
+Suiten grün: **Backend 334/334**, **Client 116/116**, Cross-Component 4/4.
+
+## Review-Gate
+
+Das blockierende Gate fand vier Punkte, alle behoben:
+
+1. **Kontext-Killer im Backend (schwer).** Die Frame-Grenze lag zuerst als
+   `ServletServerContainerFactoryBean` in `TerminalWebSocketConfig` – container-weit, und die
+   Bean verlangt einen **echten** Servlet-Container. In den Backend-Tests mit
+   `@SpringBootTest(webEnvironment=MOCK)` gibt es keinen: `Attribute
+   'jakarta.websocket.server.ServerContainer' not found in ServletContext`, **196 Fehler**. Die
+   Cross-Component-Suite hatte das nicht gezeigt, weil sie mit `RANDOM_PORT` gegen echtes Tomcat
+   läuft. Jetzt je Session im Handler – funktioniert in jeder Umgebung und gilt genau für diesen
+   Endpunkt statt für jede WebSocket-Verbindung der Anwendung.
+2. **Selbst eingebaute Flakiness im E2E (mittel).** Der Test prüfte, ob die **letzte** gelieferte
+   Zeile die zuletzt angehängte Füllzeile ist. Der echte Client loggt aber nebenher weiter
+   (Heartbeat, Offline-Abgleich) – zwischen Anhängen und Log-Anfrage kann eine eigene Zeile
+   dazukommen. Ersetzt durch „Ende enthalten, Anfang weggekürzt, Größe gedeckelt": deterministisch
+   und beweist dasselbe.
+3. **Rollover-Kante beim Tail-Lesen (klein).** Rollt logback die Datei genau zwischen
+   Größenabfrage und Lesen weg, bleibt der Puffer teilweise ungefüllt – der Rest wäre als
+   NUL-Zeichen dekodiert worden. Jetzt wird nur der tatsächlich gelesene Teil dekodiert.
+4. **Irreführende Hinweiszeile (klein, nutzersichtbar).** Sie las sich „max. 128 KiB von
+   100 KiB", wenn nicht der Byte-Deckel, sondern das Zeilenlimit gegriffen hatte. Jetzt nennt sie
+   zuerst die Dateigröße, dann die angewandten Grenzen.
 
 ## Offen / Nicht angefasst
 

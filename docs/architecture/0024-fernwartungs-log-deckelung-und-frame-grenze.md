@@ -62,12 +62,19 @@ Beides zusammen – die Deckelung allein genügt nicht, weil auch ein gekürztes
    Schlüsse ziehen.
 
 3. **Frame-Grenze beidseitig auf 1 MiB** – Terminal über einen explizit konfigurierten
-   `WebSocketContainer` für den `StandardWebSocketClient`, Backend über ein
-   `ServletServerContainerFactoryBean`. Das ist das **Sicherheitsnetz**, nicht der eigentliche
-   Fix: Es hält Abstand zur gedeckelten Nutzlast und deckt künftige Nachrichtentypen ab, statt
-   das Protokoll dauerhaft einen einzigen Frame vor dem Abriss zu betreiben.
+   `WebSocketContainer` für den `StandardWebSocketClient`, Backend **je Session** in
+   `TerminalWebSocketHandler#afterConnectionEstablished`. Das ist das **Sicherheitsnetz**, nicht
+   der eigentliche Fix: Es hält Abstand zur gedeckelten Nutzlast und deckt künftige
+   Nachrichtentypen ab, statt das Protokoll dauerhaft einen einzigen Frame vor dem Abriss zu
+   betreiben.
    - Beide Werte müssen zusammenpassen, weil **jede Seite nur ihren eigenen Empfangspuffer
      prüft** – deshalb stehen sie in beiden Klassen mit gegenseitigem Verweis.
+   - **Warum je Session und nicht per `ServletServerContainerFactoryBean`** (der naheliegende,
+     zuerst umgesetzte Weg): Diese Bean gilt container-weit und verlangt einen **echten**
+     Servlet-Container. In den Backend-Tests mit `@SpringBootTest(webEnvironment=MOCK)` gibt es
+     keinen – dort scheiterte bereits die Kontext-Initialisierung (196 Fehler, vom Review-Gate
+     gefunden). Die Grenze je Session ist zudem präziser: sie gilt genau für diesen Endpunkt,
+     nicht für jede WebSocket-Verbindung der Anwendung.
    - Nur Text-Frames; dieses Protokoll kennt keine Binär-Frames.
 
 ## Konsequenzen
