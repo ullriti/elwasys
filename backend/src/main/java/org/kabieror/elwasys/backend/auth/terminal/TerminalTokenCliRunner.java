@@ -16,6 +16,12 @@ import org.springframework.stereotype.Component;
  * none} setzt, damit dieser einmalige CLI-Aufruf keinen Webserver hochfährt und der Prozess
  * nach Abschluss von selbst beendet).
  *
+ * <p><b>Nicht mehr der einzige Weg</b>: dieselben Vorgänge (auflisten, erzeugen, widerrufen)
+ * gibt es inzwischen auch im Admin-Portal (siehe {@code ui/admin/dialog/TerminalTokenDialog} -
+ * der Auftraggeber hat die frühere Festlegung "kein Admin-UI" revidiert). Dieser Runner bleibt
+ * bewusst bestehen: er ist der Ops-Weg für die Erstinbetriebnahme/den Cutover, wenn noch niemand
+ * am Portal angemeldet ist ({@code deploy/cutover/02-issue-terminal-tokens.sh} nutzt ihn).
+ *
  * <p><b>Anlegen</b> (siehe docs/kb/04-build-and-run.md für das vollständige Kommando):
  * <pre>
  * java -jar backend/target/elwasys-backend.jar \

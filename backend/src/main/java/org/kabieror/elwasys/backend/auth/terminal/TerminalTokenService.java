@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Optional;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.TerminalTokenEntity;
@@ -78,6 +79,21 @@ public class TerminalTokenService {
         String hash = hash(rawToken);
         TerminalTokenEntity entity = this.terminalTokenRepository.save(new TerminalTokenEntity(location, hash, label));
         return new IssuedTerminalToken(rawToken, entity);
+    }
+
+    /**
+     * Alle Tokens eines Standorts, neueste zuerst - AKTIVE wie WIDERRUFENE (ein widerrufenes
+     * Token wird nie gelöscht, siehe {@link TerminalTokenEntity#revoke()}, es bleibt als
+     * Audit-Spur bestehen).
+     *
+     * <p>Rein lesend für die Token-Verwaltung im Admin-Portal (siehe
+     * {@code ui/admin/dialog/TerminalTokenDialog}). Liefert die Entitäten samt
+     * {@link TerminalTokenEntity#getTokenHash()} - der ist NICHT zur Anzeige bestimmt (die
+     * Portal-Ansicht zeigt ihn bewusst nicht, siehe dort).
+     */
+    @Transactional(readOnly = true)
+    public List<TerminalTokenEntity> findByLocation(LocationEntity location) {
+        return this.terminalTokenRepository.findByLocation_IdOrderByCreatedAtDesc(location.getId());
     }
 
     /**

@@ -86,6 +86,47 @@ class TerminalTokenServiceTest extends AbstractBackendIT {
         assertThat(this.terminalTokenService.revoke(-987654)).isFalse();
     }
 
+    /**
+     * Lesepfad der Token-Verwaltung im Admin-Portal (siehe
+     * {@code ui/admin/dialog/TerminalTokenDialog}): genau die Tokens DIESES Standorts, neueste
+     * zuerst - so wie die Liste sie anzeigt.
+     */
+    @Test
+    void findByLocationListsOnlyThatLocationsTokensNewestFirst() {
+        LocationEntity location = newLocation();
+        LocationEntity otherLocation = newLocation();
+        IssuedTerminalToken older = this.terminalTokenService.createToken(location, "older");
+        IssuedTerminalToken newer = this.terminalTokenService.createToken(location, "newer");
+        IssuedTerminalToken foreign = this.terminalTokenService.createToken(otherLocation, "foreign");
+
+        assertThat(this.terminalTokenService.findByLocation(location)).extracting(TerminalTokenEntity::getId)
+                .containsExactly(newer.entity().getId(), older.entity().getId());
+        assertThat(this.terminalTokenService.findByLocation(otherLocation))
+                .extracting(TerminalTokenEntity::getId).containsExactly(foreign.entity().getId());
+    }
+
+    /**
+     * Ein Widerruf löscht nicht - das widerrufene Token muss in der Liste bleiben (Nachweis,
+     * welches Token wann außer Kraft gesetzt wurde).
+     */
+    @Test
+    void findByLocationKeepsRevokedTokensAsAudit() {
+        LocationEntity location = newLocation();
+        IssuedTerminalToken issued = this.terminalTokenService.createToken(location, "to-be-revoked");
+        this.terminalTokenService.revoke(issued.entity().getId());
+
+        var tokens = this.terminalTokenService.findByLocation(location);
+
+        assertThat(tokens).hasSize(1);
+        assertThat(tokens.get(0).isActive()).isFalse();
+        assertThat(tokens.get(0).getRevokedAt()).isNotNull();
+    }
+
+    @Test
+    void findByLocationIsEmptyForALocationWithoutTokens() {
+        assertThat(this.terminalTokenService.findByLocation(newLocation())).isEmpty();
+    }
+
     @Test
     void locationCanHaveMultipleActiveTokensForRotationWithoutDowntime() {
         LocationEntity location = newLocation();
