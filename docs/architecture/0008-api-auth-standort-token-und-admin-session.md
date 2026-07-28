@@ -29,7 +29,7 @@ Portal.
 > (verpflichtendes `revoked_at` beim Gerätetausch). Der Blast-Radius eines geleakten Tokens
 > bleibt ein bewusst akzeptiertes Restrisiko.
 >
-> **Gültig ab 2026-07-28 ([ADR 0024](0024-standort-token-verwaltung-im-portal.md)):** Der
+> **Gültig ab 2026-07-28 ([ADR 0025](0025-standort-token-verwaltung-im-portal.md)):** Der
 > Auftraggeber hat die Streichung revidiert — das Admin-UI **ist gebaut**. Tokens werden im
 > Portal aufgelistet, erzeugt (Klartext genau einmal sichtbar) und widerrufen; die CLI bleibt
 > für Erstinbetriebnahme/Cutover daneben bestehen. Speicher- und Hash-Modell unverändert.

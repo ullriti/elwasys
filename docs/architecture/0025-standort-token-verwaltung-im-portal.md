@@ -1,4 +1,4 @@
-# 24. Standort-Token-Verwaltung im Admin-Portal (revidiert ADR 0018, #43)
+# 25. Standort-Token-Verwaltung im Admin-Portal (revidiert ADR 0018, #43)
 
 - **Status:** accepted
 - **Datum:** 2026-07-28

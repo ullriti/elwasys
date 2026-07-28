@@ -33,6 +33,9 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
 
     private static final Logger LOG = LoggerFactory.getLogger(TerminalWebSocketHandler.class);
 
+    /** Frame-Grenze je Terminal-Verbindung, siehe {@link #afterConnectionEstablished} (ADR 0024). */
+    static final int MAX_TEXT_MESSAGE_BUFFER_BYTES = 1024 * 1024;
+
     private final TerminalConnectionRegistry connectionRegistry;
 
     private final ObjectMapper objectMapper;
@@ -54,6 +57,19 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
         Integer locationId = locationId(session);
         LOG.info("Terminal WebSocket connected: location {} ({}), session {}.", locationId, locationName(session),
                 session.getId());
+        // Frame-Grenze DIESER Verbindung anheben (ADR 0024). Der JSR-356-Default von 8 KiB ist
+        // für dieses Protokoll zu knapp: eine LOG_RESPONSE überschritt ihn schon nach wenigen
+        // Minuten Terminal-Betrieb, woraufhin Tomcat die Verbindung mit 1009 schloss und damit
+        // auch Status/Neustart/Vorfallsmeldungen bis zum Reconnect mit abriss. Das Terminal
+        // deckelt seine Log-Antwort zusätzlich an der Quelle (TerminalWebSocketClient) - dieser
+        // Wert ist das Sicherheitsnetz und muss zu dem der Gegenstelle passen, weil jede Seite
+        // nur ihren EIGENEN Empfangspuffer prüft.
+        //
+        // Bewusst je Session statt über ein ServletServerContainerFactoryBean: das gälte
+        // container-weit und verlangt einen ECHTEN Servlet-Container - in Tests mit
+        // @SpringBootTest(webEnvironment=MOCK) gibt es keinen, dort scheiterte die
+        // Kontext-Initialisierung.
+        session.setTextMessageSizeLimit(MAX_TEXT_MESSAGE_BUFFER_BYTES);
         this.connectionRegistry.register(locationId, session);
     }
 

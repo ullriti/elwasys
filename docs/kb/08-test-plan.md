@@ -106,8 +106,8 @@ Offline-Modus statt in `ERROR`, siehe docs/kb/03-modules.md „Offline-Robusthei
 | P29 | P3 | Freitext-Filter über einer Liste | Liste zeigt nur die Treffer; Leeren stellt sie wieder her · `list-filter-sort.spec.ts` |
 | P30 | P3 | Sortierung nach Rohwert statt Anzeigetext | Guthaben-Spalte sortiert nach Betrag, nicht nach „10,00 €"/„9,00 €" · `list-filter-sort.spec.ts` |
 | P31 | P3 | Filter überlebt Live-Update | Eine gefilterte Liste bleibt gefiltert, wenn eine andere Session die Daten ändert · `list-filter-sort.spec.ts` |
-| P32 | P2 | Standort-Token im Portal erzeugen (ADR 0024) | Klartext-Token wird genau einmal angezeigt, erscheint nach dem Schließen nirgends mehr; Token steht in der Liste · `terminal-tokens.spec.ts` |
-| P33 | P2 | Standort-Token widerrufen (ADR 0024) | Status wechselt auf widerrufen, die Zeile bleibt als Beleg, ein zweites Token bleibt aktiv · `terminal-tokens.spec.ts` |
+| P32 | P2 | Standort-Token im Portal erzeugen (ADR 0025) | Klartext-Token wird genau einmal angezeigt, erscheint nach dem Schließen nirgends mehr; Token steht in der Liste · `terminal-tokens.spec.ts` |
+| P33 | P2 | Standort-Token widerrufen (ADR 0025) | Status wechselt auf widerrufen, die Zeile bleibt als Beleg, ein zweites Token bleibt aktiv · `terminal-tokens.spec.ts` |
 
 P1–P20 und P23–P33 laufen in der Playwright-Suite `backend/e2e/tests/` (P15/P18 teilen sich ein
 `test()`). P14 nutzt einen eigenen „Standorte"-Menüpunkt statt des früheren Dashboard-Dialogs,
@@ -164,7 +164,7 @@ Backend-JUnit-Zahlen (nur als Querverweis): 06-ui-tests.md „Test-Inventar".
 
 ## Historie
 
-- **2026-07-28** — Standort-Token-Verwaltung im Portal ([ADR 0024](../architecture/0024-standort-token-verwaltung-im-portal.md)):
+- **2026-07-28** — Standort-Token-Verwaltung im Portal ([ADR 0025](../architecture/0025-standort-token-verwaltung-im-portal.md)):
   Portal-Fälle P32/P33 ergänzt, die im Redesign-Testpaket entstandenen P29–P31 nachgetragen;
   Portal-E2E damit 32 `test()` ([Worklog](../worklog/2026-07-28-standort-token-portal-ui.md)).
 - **2026-07-26** — FR-3/FR-5 (#87/#88/#93): Umfang neu am Code gezählt (Client 88 `@Test`,

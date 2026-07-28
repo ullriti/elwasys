@@ -134,7 +134,7 @@ oben. Details zur Selektor-/Screenshot-Strategie: docs/kb/06-ui-tests.md.
 **Standort-Tokens erzeugen/widerrufen** – im Regelfall **im Admin-Portal**: Standorte →
 Zeilenaktion „Terminal-Tokens verwalten" (Schlüssel-Symbol). Dort lassen sich die Tokens eines
 Standorts einsehen, ein neues erzeugen (der Klartext wird **genau einmal** angezeigt) und
-bestehende widerrufen (siehe [ADR 0024](../architecture/0024-standort-token-verwaltung-im-portal.md)).
+bestehende widerrufen (siehe [ADR 0025](../architecture/0025-standort-token-verwaltung-im-portal.md)).
 
 Der CLI-Weg bleibt daneben bestehen – für die Erstinbetriebnahme/den Cutover, bevor ein
 Admin-Login existiert, und für automatisierte Abläufe – über das Profil `token-cli`

@@ -209,12 +209,22 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   CI). Kein ADR nötig: Umsetzung einer gelieferten Design-Spezifikation, die tragenden
   Entscheidungen stehen in ADR 0003/0019. Details:
   [Worklog](../worklog/2026-07-27-ui-redesign-v2.md).
+- **Fernwartungs-Log (seit 2026-07-28):** „Log anzeigen" im Portal riss bisher die
+  WebSocket-Verbindung des Terminals ab, sobald dessen Logdatei über 8 KiB wuchs (also nach
+  wenigen Minuten Betrieb): das Terminal schickte die **komplette** Datei als einen Text-Frame,
+  und beide Seiten fuhren den JSR-356-Default von 8 KiB – Tomcat schloss mit `1009` und nahm
+  Status/Neustart/Vorfallsmeldungen bis zum Reconnect mit. Das Terminal überträgt jetzt nur noch
+  das **Ende** des Logs (letzte 1000 Zeilen / 128 KiB, `Utilities#readLogTail`, Kürzung sichtbar
+  in der ersten Zeile), und die Frame-Grenze liegt beidseitig bei **1 MiB**
+  ([ADR 0024](../architecture/0024-fernwartungs-log-deckelung-und-frame-grenze.md),
+  [Worklog](../worklog/2026-07-28-fernwartungs-log-frame-grenze.md)). Gefunden beim Aufsetzen
+  einer lokalen Entwicklungsumgebung, betraf aber jedes Feldgerät.
 - **Standort-Token-Verwaltung im Portal (seit 2026-07-28):** Terminal-Tokens lassen sich jetzt
   im Admin-Portal verwalten – Standorte → Zeilenaktion „Terminal-Tokens verwalten" öffnet
   `TerminalTokenDialog` (auflisten, neu erzeugen mit einmaliger Klartext-Anzeige, widerrufen).
   Damit ist die Festlegung aus [ADR 0018](../architecture/0018-ap4-auth-security-entscheidungen.md)
   (#43: „kein Admin-UI, CLI genügt") auf Auftraggeber-Entscheidung **revidiert**
-  ([ADR 0024](../architecture/0024-standort-token-verwaltung-im-portal.md)) – Anlass war die
+  ([ADR 0025](../architecture/0025-standort-token-verwaltung-im-portal.md)) – Anlass war die
   Inbetriebnahme eines weiteren Terminals, für die der CLI-Weg Server-Zugriff verlangt hätte.
   Token-Design unverändert (nur SHA-256-Hash in der DB, kein `expires_at`, gleicher
   Blast-Radius); die CLI (`TerminalTokenCliRunner`, `deploy/cutover/02-issue-terminal-tokens.sh`)

@@ -77,6 +77,10 @@ im [Worklog](docs/worklog/README.md).
 - Portal-Design an das Terminal angeglichen (gemeinsame Palette, responsive Dashboard-Karten).
 
 ### Fixed
+- „Log anzeigen“ im Portal riss die Fernwartungsverbindung des Terminals ab, sobald dessen
+  Logdatei über 8 KiB wuchs (also nach wenigen Minuten Betrieb) – das Terminal überträgt jetzt
+  nur noch das Ende des Logs (letzte 1000 Zeilen, sichtbar gekennzeichnet), und die
+  WebSocket-Frame-Grenze liegt beidseitig bei 1 MiB.
 - Portal-Knöpfe mit Doppelklick-Schutz bleiben nach einem Klick bedienbar: „Buchen“ (Guthaben)
   war nach einer abgelehnten Eingabe tot, „Abrechnen“/„Alle abrechnen“ nach dem ersten Klick.
 - Fehlgeschlagene Token-Aktionen im Portal werden gemeldet, statt unbemerkt zu bleiben; nach

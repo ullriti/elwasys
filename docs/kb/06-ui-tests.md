@@ -452,7 +452,7 @@ Am Code gezählt:
   Browser hinzu (`TerminalTokenDialogTest`, `CreditTopUpDialogTest` – Bauprinzip siehe
   03-modules.md, Portal-Tests). Inventar auf Backend **341** / Portal-E2E **32** gezogen
   ([Worklog](../worklog/2026-07-28-standort-token-portal-ui.md) ·
-  [ADR 0024](../architecture/0024-standort-token-verwaltung-im-portal.md)).
+  [ADR 0025](../architecture/0025-standort-token-verwaltung-im-portal.md)).
 - **2026-07-27** — UI-Redesign v2: Portal-Design-Abschnitt auf v2 gehoben, zwei neue
   Selektor-Regeln (Ansichtsname steht seit `NavbarViewName` zweimal im DOM → Strict Mode;
   `vaadin-side-nav-item` führt ein verstecktes „Toggle child items"-Label →

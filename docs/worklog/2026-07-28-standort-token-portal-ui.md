@@ -97,7 +97,7 @@ wartet der Helfer auf die neue Zeile über deren Accessible Name — ohne `waitF
 
 ## Entscheidungen
 
-- **ADR 0018 (#43) revidiert** ([ADR 0024](../architecture/0024-standort-token-verwaltung-im-portal.md)):
+- **ADR 0018 (#43) revidiert** ([ADR 0025](../architecture/0025-standort-token-verwaltung-im-portal.md)):
   Auftraggeber-Entscheidung vom 2026-07-28. Geändert wird ausschließlich die
   **Verwaltbarkeit**, nicht das Token-Design — weiterhin nur SHA-256-Hash in der DB, kein
   `expires_at`, unveränderter Blast-Radius eines geleakten Tokens. Ebenfalls unverändert
@@ -131,7 +131,7 @@ blieben (siehe oben).
 
 ## Referenzen
 
-- [ADR 0024](../architecture/0024-standort-token-verwaltung-im-portal.md) (revidiert
+- [ADR 0025](../architecture/0025-standort-token-verwaltung-im-portal.md) (revidiert
   [ADR 0018](../architecture/0018-ap4-auth-security-entscheidungen.md) #43, stellt
   [ADR 0008](../architecture/0008-api-auth-standort-token-und-admin-session.md) wieder her)
 - [`docs/kb/03-modules.md`](../kb/03-modules.md) (Verwaltungspfade, Portal-Dialoge),

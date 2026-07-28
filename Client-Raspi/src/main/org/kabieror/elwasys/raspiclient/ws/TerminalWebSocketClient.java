@@ -3,6 +3,8 @@ package org.kabieror.elwasys.raspiclient.ws;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
+import jakarta.websocket.ContainerProvider;
+import jakarta.websocket.WebSocketContainer;
 import org.kabieror.elwasys.common.Utilities;
 import org.kabieror.elwasys.raspiclient.application.ElwaManager;
 import org.kabieror.elwasys.raspiclient.application.ICloseListener;
@@ -19,9 +21,7 @@ import org.springframework.web.socket.client.WebSocketClient;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-import java.io.File;
 import java.net.URI;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -69,9 +69,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *         Startzeit, Ids der aktuell laufenden Ausführungen (rein lokal aus
  *         {@link ElwaManager#getExecutionManager()}, kein Netzwerkzugriff nötig) - fachlicher
  *         Nachfolger von {@code GetStatusRequest}/{@code GetStatusResponse}.</li>
- *     <li>{@code LOG_REQUEST}: aktueller Inhalt der Logdatei - fachlicher Nachfolger von
+ *     <li>{@code LOG_REQUEST}: das ENDE der Logdatei - fachlicher Nachfolger von
  *         {@code GetLogRequest}/{@code GetLogResponse} (identische Quelle,
- *         {@code Utilities#getCurrentLogFile()}).</li>
+ *         {@code Utilities#getCurrentLogFile()}), gedeckelt auf {@link #LOG_MAX_LINES} Zeilen
+ *         bzw. {@link #LOG_MAX_BYTES} (ADR 0024 - die ganze Datei sprengte die Frame-Grenze und
+ *         riss die Verbindung ab).</li>
  *     <li>{@code RESTART_REQUEST}: Neustart der Anwendung
  *         ({@link ElwaManager#restart()}) - anders als das Alt-Protokoll (dort
  *         "fire-and-forget") bestätigt dieser Client den Empfang zuerst mit
@@ -92,6 +94,24 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
     private static final int INITIAL_RECONNECT_DELAY_SECONDS = 5;
     private static final int MAX_RECONNECT_DELAY_SECONDS = 300;
 
+    /**
+     * Obergrenzen der {@code LOG_RESPONSE}-Nutzlast (ADR 0024). Die Antwort geht als EIN
+     * Text-Frame zum Backend; ohne Deckelung wächst sie mit der Logdatei, bis sie die
+     * Frame-Grenze sprengt und die Verbindung mit {@code 1009} abreißt (vor diesem Fix: schon
+     * nach wenigen Minuten Terminal-Betrieb, weil logback nur täglich rollt).
+     */
+    private static final int LOG_MAX_LINES = 1000;
+    private static final long LOG_MAX_BYTES = 128L * 1024;
+
+    /**
+     * Frame-Grenze dieser Verbindung, bewusst weit über der gedeckelten {@code LOG_RESPONSE}
+     * (siehe oben) - der JSR-356-Default von 8 KiB ist für dieses Protokoll zu knapp. Die
+     * Gegenstelle setzt denselben Wert je Session ({@code backend.ws.TerminalWebSocketHandler});
+     * beide Seiten müssen zueinander passen, weil jede Seite nur ihren EIGENEN Empfangspuffer
+     * prüft.
+     */
+    private static final int MAX_TEXT_MESSAGE_BUFFER_BYTES = 1024 * 1024;
+
     private final Logger logger = LoggerFactory.getLogger(getClass());
     private final ElwaManager manager;
     private final URI wsUri;
@@ -100,7 +120,7 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
     private final OfflineIncidentOutbox incidentOutbox;
     private final Gson gson = new GsonBuilder().create();
 
-    private final WebSocketClient client = new StandardWebSocketClient();
+    private final WebSocketClient client = createClient();
     private final ScheduledExecutorService reconnectScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "TerminalWebSocketClient-reconnect");
         t.setDaemon(true);
@@ -124,6 +144,17 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
         this.token = token;
         this.clientUid = clientUid;
         this.incidentOutbox = incidentOutbox;
+    }
+
+    /**
+     * {@link StandardWebSocketClient} mit angehobener Frame-Grenze (siehe
+     * {@link #MAX_TEXT_MESSAGE_BUFFER_BYTES}). Der parameterlose Konstruktor nähme den
+     * JSR-356-Container mit dessen Default-Puffer (8 KiB) - zu klein für dieses Protokoll.
+     */
+    private static WebSocketClient createClient() {
+        final WebSocketContainer container = ContainerProvider.getWebSocketContainer();
+        container.setDefaultMaxTextMessageBufferSize(MAX_TEXT_MESSAGE_BUFFER_BYTES);
+        return new StandardWebSocketClient(container);
     }
 
     private static URI toWsUri(String backendUrl) {
@@ -281,8 +312,7 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
     private Map<String, Object> buildLogPayload() {
         List<String> lines;
         try {
-            String logFileName = Utilities.getCurrentLogFile();
-            lines = logFileName == null ? new ArrayList<>() : Files.readAllLines(new File(logFileName).toPath());
+            lines = Utilities.readLogTail(Utilities.getCurrentLogFile(), LOG_MAX_LINES, LOG_MAX_BYTES);
         } catch (final Exception e) {
             this.logger.error("Could not read the log file.", e);
             lines = new ArrayList<>();

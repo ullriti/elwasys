@@ -1,7 +1,7 @@
 # 18. Pre-Launch AP4 (Auth & Security): Reset-Enumeration, Passwort-Mindestlänge, Standort-Token-Restrisiko
 
 - **Status:** accepted (Punkt #43 teilweise überholt durch
-  [ADR 0024](0024-standort-token-verwaltung-im-portal.md))
+  [ADR 0025](0025-standort-token-verwaltung-im-portal.md))
 - **Datum:** 2026-07-22
 
 > **Namens-Hinweis:** „AP4" meint hier das Arbeitspaket **AP4 der Pre-Launch-Review
@@ -81,7 +81,7 @@ Vom Auftraggeber am **2026-07-22** festgelegt (siehe auch
   Rotation/Widerruf-Disziplin. `expires_at` und ein Admin-UI bleiben mögliche spätere
   Ausbaustufen, falls sich der Betrieb anders entscheidet.
 
-  > **Nachtrag 2026-07-28 ([ADR 0024](0024-standort-token-verwaltung-im-portal.md)):** Genau
+  > **Nachtrag 2026-07-28 ([ADR 0025](0025-standort-token-verwaltung-im-portal.md)):** Genau
   > dieser Fall ist eingetreten. Bei der Inbetriebnahme eines weiteren Terminals hat sich der
   > CLI-only-Weg als betrieblich untragbar erwiesen; der Auftraggeber hat das **Admin-UI
   > beauftragt**. Es ist gebaut. Unverändert verworfen bleiben `expires_at`, der reduzierte
