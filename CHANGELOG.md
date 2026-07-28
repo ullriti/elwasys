@@ -75,6 +75,10 @@ im [Worklog](docs/worklog/README.md).
 - Portal-Design an das Terminal angeglichen (gemeinsame Palette, responsive Dashboard-Karten).
 
 ### Fixed
+- „Log anzeigen“ im Portal riss die Fernwartungsverbindung des Terminals ab, sobald dessen
+  Logdatei über 8 KiB wuchs (also nach wenigen Minuten Betrieb) – das Terminal überträgt jetzt
+  nur noch das Ende des Logs (letzte 1000 Zeilen, sichtbar gekennzeichnet), und die
+  WebSocket-Frame-Grenze liegt beidseitig bei 1 MiB.
 - Terminal-Update auf Bestandsgeräten (#101): `update.sh` erneuert jetzt auch den Supervisor
   `run.sh` – Änderungen am Startbefehl erreichten bisher nur frisch aufgesetzte Geräte. Auf
   Geräten mit dem alten Einmalstart ohne Schleife unterbleibt der Neustart bewusst (Exit 4 mit

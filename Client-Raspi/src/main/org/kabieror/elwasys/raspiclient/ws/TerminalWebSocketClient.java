@@ -69,9 +69,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *         Startzeit, Ids der aktuell laufenden Ausführungen (rein lokal aus
  *         {@link ElwaManager#getExecutionManager()}, kein Netzwerkzugriff nötig) - fachlicher
  *         Nachfolger von {@code GetStatusRequest}/{@code GetStatusResponse}.</li>
- *     <li>{@code LOG_REQUEST}: aktueller Inhalt der Logdatei - fachlicher Nachfolger von
+ *     <li>{@code LOG_REQUEST}: das ENDE der Logdatei - fachlicher Nachfolger von
  *         {@code GetLogRequest}/{@code GetLogResponse} (identische Quelle,
- *         {@code Utilities#getCurrentLogFile()}).</li>
+ *         {@code Utilities#getCurrentLogFile()}), gedeckelt auf {@link #LOG_MAX_LINES} Zeilen
+ *         bzw. {@link #LOG_MAX_BYTES} (ADR 0024 - die ganze Datei sprengte die Frame-Grenze und
+ *         riss die Verbindung ab).</li>
  *     <li>{@code RESTART_REQUEST}: Neustart der Anwendung
  *         ({@link ElwaManager#restart()}) - anders als das Alt-Protokoll (dort
  *         "fire-and-forget") bestätigt dieser Client den Empfang zuerst mit

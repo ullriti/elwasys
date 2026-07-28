@@ -209,6 +209,16 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   CI). Kein ADR nötig: Umsetzung einer gelieferten Design-Spezifikation, die tragenden
   Entscheidungen stehen in ADR 0003/0019. Details:
   [Worklog](../worklog/2026-07-27-ui-redesign-v2.md).
+- **Fernwartungs-Log (seit 2026-07-28):** „Log anzeigen" im Portal riss bisher die
+  WebSocket-Verbindung des Terminals ab, sobald dessen Logdatei über 8 KiB wuchs (also nach
+  wenigen Minuten Betrieb): das Terminal schickte die **komplette** Datei als einen Text-Frame,
+  und beide Seiten fuhren den JSR-356-Default von 8 KiB – Tomcat schloss mit `1009` und nahm
+  Status/Neustart/Vorfallsmeldungen bis zum Reconnect mit. Das Terminal überträgt jetzt nur noch
+  das **Ende** des Logs (letzte 1000 Zeilen / 128 KiB, `Utilities#readLogTail`, Kürzung sichtbar
+  in der ersten Zeile), und die Frame-Grenze liegt beidseitig bei **1 MiB**
+  ([ADR 0024](../architecture/0024-fernwartungs-log-deckelung-und-frame-grenze.md),
+  [Worklog](../worklog/2026-07-28-fernwartungs-log-frame-grenze.md)). Gefunden beim Aufsetzen
+  einer lokalen Entwicklungsumgebung, betraf aber jedes Feldgerät.
 - **Nächster Schritt:** **Generalprobe nach [Spec 0001](../specs/0001-finale-review.md)**
   (Cutover-Probelauf, Migrations-Dry-Run mit Produktivdaten-Kopie, Backup-Restore-Probe,
   Ausfall-Drills, Alarm-Probe beider Stufen, Soak-Test, Vor-Ort-Kalibrierung), dann Pilotphase
