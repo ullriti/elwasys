@@ -299,6 +299,11 @@ Plattform, DB über Backup/Reverse-DDL, Terminals einzeln über das vorherige Ja
 
 ## 5. Post-Cutover
 
+> **Der ausführliche manuelle Abnahmelauf für den Tag danach steht in
+> [`GOLIVE-TESTPLAN.md`](GOLIVE-TESTPLAN.md)** – eine abhakbare Tagescheckliste über
+> Normalbetrieb, Grenz-/Fehlerfälle, Ausfall- und Offline-Szenarien, Fernwartung, Alarmierung
+> und Benachrichtigungen. Die Punkte unten sind die Kurzform davon.
+
 - [ ] **Abschluss-Verifikation:** `post-deploy-smoke.sh` grün; alle Terminal-Chargen erreichen
       `SELECT_DEVICE` und sind bedienbar; ein **echter Testwaschgang** (Karten-Login → Gerät
       buchen → Programm starten → Ende/Abrechnung) über ein umgestelltes Terminal.

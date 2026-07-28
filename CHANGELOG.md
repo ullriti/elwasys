@@ -13,6 +13,9 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Added
+- GoLive-Testplan (`deploy/GOLIVE-TESTPLAN.md`): abhakbare Tagescheckliste für die manuelle
+  Abnahme nach der Produktivumschaltung – Normalbetrieb, Grenz- und Fehlerfälle, Ausfall- und
+  Offline-Szenarien, Alarm-Probe und Aufräumen.
 - Standort-Tokens lassen sich im Admin-Portal verwalten: auflisten, neu erzeugen (Klartext
   genau einmal sichtbar) und widerrufen – bisher ging das nur über die Kommandozeile.
 - Terminal-Betriebsskripte liegen jedem Release als Asset `elwasys-terminal-scripts-<version>.tar.gz`
