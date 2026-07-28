@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.TerminalTokenEntity;
@@ -103,6 +106,25 @@ class TerminalTokenServiceTest extends AbstractBackendIT {
                 .containsExactly(newer.entity().getId(), older.entity().getId());
         assertThat(this.terminalTokenService.findByLocation(otherLocation))
                 .extracting(TerminalTokenEntity::getId).containsExactly(foreign.entity().getId());
+    }
+
+    /**
+     * Zwei unmittelbar nacheinander erzeugte Tokens - im Portal der Regelfall beim Umstellen
+     * eines Terminals - müssen sicher in der richtigen Reihenfolge stehen. {@code created_at}
+     * kommt aus {@code LocalDateTime.now()} und kann dabei für beide identisch ausfallen; ohne
+     * den Zweitschlüssel {@code id DESC} wäre die Reihenfolge dann unbestimmt.
+     */
+    @Test
+    void tokensCreatedWithinTheSameTimestampKeepTheirOrder() {
+        LocationEntity location = newLocation();
+        List<Integer> createdIds = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            createdIds.add(this.terminalTokenService.createToken(location, "rotation-" + i).entity().getId());
+        }
+        Collections.reverse(createdIds);
+
+        assertThat(this.terminalTokenService.findByLocation(location)).extracting(TerminalTokenEntity::getId)
+                .containsExactlyElementsOf(createdIds);
     }
 
     /**

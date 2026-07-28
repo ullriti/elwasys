@@ -93,7 +93,7 @@ public class TerminalTokenService {
      */
     @Transactional(readOnly = true)
     public List<TerminalTokenEntity> findByLocation(LocationEntity location) {
-        return this.terminalTokenRepository.findByLocation_IdOrderByCreatedAtDesc(location.getId());
+        return this.terminalTokenRepository.findByLocation_IdOrderByCreatedAtDescIdDesc(location.getId());
     }
 
     /**

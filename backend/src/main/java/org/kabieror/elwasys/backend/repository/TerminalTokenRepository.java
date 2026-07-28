@@ -9,5 +9,12 @@ public interface TerminalTokenRepository extends JpaRepository<TerminalTokenEnti
 
     Optional<TerminalTokenEntity> findByTokenHash(String tokenHash);
 
-    List<TerminalTokenEntity> findByLocation_IdOrderByCreatedAtDesc(Integer locationId);
+    /**
+     * Die Tokens eines Standorts, neueste zuerst. Der Zweitschlüssel {@code id DESC} ist nicht
+     * kosmetisch: {@code created_at} kommt aus {@code LocalDateTime.now()} beim Anlegen der
+     * Entität und hat damit die Auflösung der Systemuhr - zwei unmittelbar nacheinander erzeugte
+     * Tokens (im Portal ein Klick nach dem anderen) können denselben Zeitstempel tragen, und die
+     * Reihenfolge gleicher Werte ist in SQL sonst unbestimmt.
+     */
+    List<TerminalTokenEntity> findByLocation_IdOrderByCreatedAtDescIdDesc(Integer locationId);
 }
