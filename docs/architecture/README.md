@@ -30,3 +30,4 @@ Herleitung der Einzelentscheidungen findet sich im Modernisierungsplan
 | [0021](0021-offline-replay-haertung-ii.md) | Offline-Replay-Härtung II: Replay-Zeitstempel-Pflicht, Geister-Execution-Kompensation, Dead-Letter-Datenintegrität | accepted |
 | [0022](0022-dead-letter-sichtbarkeit.md) | Dead-Letter-Sichtbarkeit: Vorfalls-Meldung über den Terminal-WebSocket + Quittierung im Portal | accepted |
 | [0023](0023-gitversion-und-paketbereitstellung.md) | Versionierung mit GitVersion und Paketbereitstellung über GHCR/GitHub-Releases | accepted |
+| [0024](0024-standort-token-verwaltung-im-portal.md) | Standort-Token-Verwaltung im Admin-Portal (revidiert ADR 0018, #43) | accepted |

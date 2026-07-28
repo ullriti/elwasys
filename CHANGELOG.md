@@ -13,6 +13,8 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Added
+- Standort-Tokens lassen sich im Admin-Portal verwalten: auflisten, neu erzeugen (Klartext
+  genau einmal sichtbar) und widerrufen – bisher ging das nur über die Kommandozeile.
 - Terminal-Betriebsskripte liegen jedem Release als Asset `elwasys-terminal-scripts-<version>.tar.gz`
   (+ `.sha256`) bei – bisher enthielt das Release nur das Client-Jar.
 - Freitext-Filter über jeder Portal-Liste sowie zusätzliche sortierbare Spalten (Guthaben,
