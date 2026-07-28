@@ -143,16 +143,30 @@ public abstract class AbstractFormDialog extends Dialog {
     /**
      * Baut die Fußzeile: links "Abbrechen" (schließt den Dialog ohne Wirkung), rechts die
      * hervorgehobene Primäraktion.
-     *
-     * @return Die Schaltfläche der Primäraktion - für Dialoge, die sie noch nachjustieren (z. B.
-     *         Doppelklick-Schutz auf geldbewegenden Aktionen, Issue #49).
      */
-    protected Button addFooterActions(String submitCaption, Runnable onSubmit) {
+    protected void addFooterActions(String submitCaption, Runnable onSubmit) {
+        addFooterActions(submitCaption, onSubmit, false);
+    }
+
+    /**
+     * Wie {@link #addFooterActions(String, Runnable)}, mit optionalem Doppelklick-Schutz auf der
+     * Primäraktion (Issue #49, für die geldbewegenden Dialoge).
+     *
+     * @param guardAgainstDoubleClick Ob die Primäraktion während des Server-Roundtrips gesperrt
+     *                                sein soll. Das Zurücksetzen danach übernimmt
+     *                                {@link PortalButtons#onAction} - Vaadin tut es NICHT von
+     *                                allein, siehe dort.
+     */
+    protected void addFooterActions(String submitCaption, Runnable onSubmit, boolean guardAgainstDoubleClick) {
         Button btnCancel = new Button("Abbrechen", e -> close());
-        Button btnSubmit = new Button(submitCaption, e -> onSubmit.run());
+        Button btnSubmit = new Button(submitCaption);
+        if (guardAgainstDoubleClick) {
+            PortalButtons.onAction(btnSubmit, onSubmit);
+        } else {
+            btnSubmit.addClickListener(e -> onSubmit.run());
+        }
         btnSubmit.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         getFooter().add(new HorizontalLayout(btnCancel, btnSubmit));
-        return btnSubmit;
     }
 
     /**

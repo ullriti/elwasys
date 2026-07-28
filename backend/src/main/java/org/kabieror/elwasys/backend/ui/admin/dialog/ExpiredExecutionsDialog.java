@@ -14,6 +14,7 @@ import org.kabieror.elwasys.backend.domain.UserEntity;
 import org.kabieror.elwasys.backend.service.ExecutionService;
 import org.kabieror.elwasys.backend.ui.component.AbstractFormDialog;
 import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
+import org.kabieror.elwasys.backend.ui.component.PortalButtons;
 import org.kabieror.elwasys.backend.ui.component.PortalFormats;
 
 /**
@@ -56,10 +57,11 @@ public class ExpiredExecutionsDialog extends Dialog {
                         + "korrekt beendete Ausführungen kein Eintrag im Guthaben-Konto eines Benutzers.");
         explanation.addClassName("small");
 
-        Button btnFinishAll = new Button("Alle abrechnen", e -> finishAll());
-        // Issue #49: Doppelklick-Schutz auf dem geldbewegenden Primär-Button (deaktiviert bis
-        // zum Server-Roundtrip, danach automatisch wieder aktiv).
-        btnFinishAll.setDisableOnClick(true);
+        // Issue #49: Doppelklick-Schutz auf dem geldbewegenden Primär-Button. Wieder aktiv nach
+        // dem Roundtrip - der Dialog bleibt offen (er schließt bewusst auch bei leerer Liste
+        // nicht, siehe loadData), und ohne das Zurücksetzen wäre der Knopf nach dem ersten Klick
+        // bis zum Neuöffnen tot (siehe PortalButtons).
+        Button btnFinishAll = PortalButtons.onAction(new Button("Alle abrechnen"), this::finishAll);
 
         this.grid.setHeight("22em");
         this.grid.setWidthFull();
@@ -77,10 +79,10 @@ public class ExpiredExecutionsDialog extends Dialog {
     }
 
     private HorizontalLayout rowButtons(ExecutionEntity execution) {
-        Button btnFinish = new Button("Abrechnen", e -> finish(execution));
+        // Issue #49: Doppelklick-Schutz auf dem geldbewegenden "Abrechnen"-Knopf (samt
+        // Zurücksetzen danach, siehe PortalButtons).
+        Button btnFinish = PortalButtons.onAction(new Button("Abrechnen"), () -> finish(execution));
         btnFinish.addThemeVariants(ButtonVariant.LUMO_SMALL);
-        // Issue #49: Doppelklick-Schutz auf dem geldbewegenden "Abrechnen"-Knopf.
-        btnFinish.setDisableOnClick(true);
 
         Button btnDelete = new Button(new Icon(VaadinIcon.TRASH), e -> confirmDelete(execution));
         btnDelete.addThemeVariants(ButtonVariant.LUMO_SMALL, ButtonVariant.LUMO_ERROR, ButtonVariant.LUMO_TERTIARY);
