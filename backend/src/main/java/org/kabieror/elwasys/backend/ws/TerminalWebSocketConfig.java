@@ -10,6 +10,7 @@ import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
+import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
 
 /**
  * Registriert den Terminal-WebSocket-Endpunkt unter {@code /api/v1/terminal-ws} (AP4, siehe
@@ -37,6 +38,17 @@ public class TerminalWebSocketConfig implements WebSocketConfigurer {
 
     public static final String TERMINAL_WS_PATH = "/api/v1/terminal-ws";
 
+    /**
+     * Frame-Grenze dieses Endpunkts (ADR 0024). Der JSR-356-Default von 8 KiB ist für dieses
+     * Protokoll zu knapp: eine {@code LOG_RESPONSE} überschritt ihn schon nach wenigen Minuten
+     * Terminal-Betrieb, woraufhin Tomcat die Verbindung mit {@code 1009} schloss und damit auch
+     * Status/Neustart/Vorfallsmeldungen bis zum Reconnect mit abriss. Das Terminal deckelt seine
+     * Log-Antwort seitdem zusätzlich an der Quelle ({@code TerminalWebSocketClient}) - dieser
+     * Wert ist das Sicherheitsnetz und muss zu dem der Gegenstelle passen, weil jede Seite nur
+     * ihren EIGENEN Empfangspuffer prüft.
+     */
+    private static final int MAX_TEXT_MESSAGE_BUFFER_BYTES = 1024 * 1024;
+
     private final TerminalConnectionRegistry connectionRegistry;
 
     private final ObjectMapper objectMapper;
@@ -57,6 +69,18 @@ public class TerminalWebSocketConfig implements WebSocketConfigurer {
     public WebSocketHandler terminalWebSocketHandler() {
         return new TerminalWebSocketHandler(this.connectionRegistry, this.objectMapper, this.maintenanceService,
                 this.incidentService);
+    }
+
+    /**
+     * Hebt die Empfangs-Frame-Grenze des eingebetteten Servlet-Containers an (siehe
+     * {@link #MAX_TEXT_MESSAGE_BUFFER_BYTES}). Betrifft nur Text-Frames - dieses Protokoll
+     * kennt keine Binär-Frames.
+     */
+    @Bean
+    public ServletServerContainerFactoryBean terminalWebSocketContainer() {
+        ServletServerContainerFactoryBean container = new ServletServerContainerFactoryBean();
+        container.setMaxTextMessageBufferSize(MAX_TEXT_MESSAGE_BUFFER_BYTES);
+        return container;
     }
 
     @Override

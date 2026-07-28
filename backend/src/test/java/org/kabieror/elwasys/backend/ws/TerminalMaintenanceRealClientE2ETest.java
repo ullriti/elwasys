@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -168,8 +169,48 @@ class TerminalMaintenanceRealClientE2ETest {
         assertThat(lines).as("the real client's log file should contain its startup log lines").isNotEmpty();
     }
 
+    /**
+     * Regressionstest zu ADR 0024: vor dem Fix schickte das Terminal seine KOMPLETTE Logdatei
+     * als ein Text-Frame. Überschritt sie die Frame-Grenze (JSR-356-Default: 8 KiB, in der
+     * Praxis nach wenigen Minuten Terminal-Betrieb erreicht, weil logback nur täglich rollt),
+     * schloss Tomcat die Verbindung mit {@code 1009} - die Log-Anfrage lief in den Timeout UND
+     * die Fernwartung war bis zum Reconnect komplett tot (auch Status/Neustart/Vorfälle).
+     *
+     * <p>Der Test bläst die Logdatei des laufenden echten Clients weit über diese Grenze auf und
+     * fordert das Log dann an. Die Datei wird über das Arbeitsverzeichnis des Subprozesses
+     * gefunden statt über den Datumsanteil ihres Namens konstruiert (keine Datumslogik im Test);
+     * angehängt wird extern, was gefahrlos ist, weil logbacks {@code FileAppender} die Datei im
+     * Append-Modus offen hält.
+     */
     @Test
     @Order(3)
+    void thePortalCanFetchTheLogOfAVerboseClientWithoutLosingTheConnection() throws Exception {
+        Path logFile;
+        try (var files = Files.list(this.workDir.resolve("log"))) {
+            logFile = files.filter(Files::isRegularFile).findFirst()
+                    .orElseThrow(() -> new IllegalStateException(
+                            "der echte Client sollte im Arbeitsverzeichnis eine Logdatei angelegt haben"));
+        }
+        // Deutlich über der alten 8-KiB-Grenze und über dem Byte-Deckel der Antwort (128 KiB),
+        // damit sowohl die Kürzung als auch die angehobene Frame-Grenze belastet werden.
+        StringBuilder filler = new StringBuilder();
+        for (int i = 1; i <= 5000; i++) {
+            filler.append("2026-01-01 00:00:00,000 INFO  e2e.LogInflater - filler line ").append(i).append('\n');
+        }
+        Files.writeString(logFile, filler.toString(), StandardOpenOption.APPEND);
+
+        List<String> lines = this.maintenanceService.requestLog(this.locationId);
+
+        assertThat(lines).as("das Log eines gesprächigen Terminals muss weiterhin abrufbar sein").isNotEmpty();
+        assertThat(lines.get(0)).as("die Kürzung muss im Log sichtbar sein").startsWith("--- gekürzt:");
+        assertThat(lines).as("es soll das ENDE des Logs geliefert werden")
+                .last().asString().endsWith("filler line 5000");
+        assertThat(this.maintenanceService.isConnected(this.locationId))
+                .as("die Fernwartungsverbindung darf über der Log-Anfrage nicht abreißen").isTrue();
+    }
+
+    @Test
+    @Order(4)
     void thePortalCanRestartTheRealClient() throws InterruptedException {
         // Does not throw if the real client acknowledged the restart with a RESTART_RESPONSE
         // (see the class Javadoc for the exact scope of what "restart" is verified here).
