@@ -17,6 +17,8 @@ import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.TerminalTokenEntity;
 import org.kabieror.elwasys.backend.ui.component.AbstractFormDialog;
 import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
+import org.kabieror.elwasys.backend.ui.component.Notifications;
+import org.kabieror.elwasys.backend.ui.component.PortalButtons;
 import org.kabieror.elwasys.backend.ui.component.PortalFormats;
 
 /**
@@ -46,6 +48,9 @@ import org.kabieror.elwasys.backend.ui.component.PortalFormats;
  * die Seite, aus der dieser Dialog erreichbar ist.
  */
 public class TerminalTokenDialog extends Dialog {
+
+    /** Obergrenze der Beschriftung - {@code terminal_tokens.label} ist {@code VARCHAR(100)}. */
+    private static final int LABEL_MAX_LENGTH = 100;
 
     private final TerminalTokenService tokenService;
     private final LocationEntity location;
@@ -78,9 +83,12 @@ public class TerminalTokenDialog extends Dialog {
         add(buildExplanation(), buildCreateRow(), buildIssuedTokenBox(), buildGrid());
 
         // Das Klartext-Token soll den geschlossenen Dialog nicht überleben - auch nicht
-        // serverseitig im Feldwert. Vaadin hält eine geschlossene Dialog-Instanz bis zum
-        // Verlassen der Ansicht am UI-Baum; ohne dieses Aufräumen läge das Credential dort
-        // weiter herum, obwohl es niemand mehr sehen kann.
+        // serverseitig im Feldwert. Vaadin nimmt den geschlossenen Dialog zwar selbst wieder vom
+        // UI-Baum (OverlayAutoAddController#handleClose ruft removeFromParent), gibt die Instanz
+        // damit aber nur der Garbage Collection frei: solange irgendetwas sie noch hält, hielte
+        // sie das Credential mit. Defense in Depth - der Wert verschwindet beim Schließen, nicht
+        // irgendwann. Greift für JEDEN Schließweg (Kreuz, ESC, Klick daneben), weil alle drei
+        // über das opened-Property und damit über dieses Ereignis laufen.
         addOpenedChangeListener(e -> {
             if (!e.isOpened()) {
                 this.tfIssuedToken.clear();
@@ -106,26 +114,19 @@ public class TerminalTokenDialog extends Dialog {
         this.tfLabel.setPlaceholder("z. B. Terminal Waschküche");
         this.tfLabel.setHelperText("Nur zur Wiedererkennung in dieser Liste.");
         this.tfLabel.setWidthFull();
+        // Wie in den Formular-Dialogen die Obergrenze der Spalte (terminal_tokens.label ist
+        // VARCHAR(100)): schon der Browser lässt nichts Längeres zu, statt den Fehler erst als
+        // DataIntegrityViolationException aus dem Speichern zurückkommen zu lassen.
+        this.tfLabel.setMaxLength(LABEL_MAX_LENGTH);
 
         Button btnCreate = new Button("Token erzeugen");
         btnCreate.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         // Doppelklick-Schutz wie auf den direkt handelnden Knöpfen des Portals (Issue #49):
         // ohne ihn entstünden aus einem Doppelklick zwei gültige Terminal-Credentials, von denen
-        // der Bediener nur das zuletzt angezeigte kennt.
-        btnCreate.setDisableOnClick(true);
-        btnCreate.addClickListener(e -> {
-            try {
-                createToken();
-            } finally {
-                // MUSS von Hand zurückgesetzt werden: setDisableOnClick hängt lediglich einen
-                // eigenen Klick-Listener ein, der den Knopf serverseitig auf disabled setzt
-                // (Vaadins DisableOnClickController) - es reaktiviert ihn NICHT nach dem
-                // Roundtrip. Ohne dieses Zurücksetzen ließe sich je Dialog nur ein einziges
-                // Token erzeugen, danach wäre der Knopf bis zum Schließen tot (nachgewiesen in
-                // terminal-tokens.spec.ts, P33 legt zwei Tokens hintereinander an).
-                btnCreate.setEnabled(true);
-            }
-        });
+        // der Bediener nur das zuletzt angezeigte kennt. Der Knopf ist nach dem Roundtrip wieder
+        // bedienbar - sonst ließe sich je Dialog nur ein einziges Token erzeugen (siehe
+        // PortalButtons; P33 legt zwei Tokens hintereinander an).
+        PortalButtons.onAction(btnCreate, this::createToken);
 
         HorizontalLayout row = new HorizontalLayout(this.tfLabel, btnCreate);
         row.setWidthFull();
@@ -219,7 +220,18 @@ public class TerminalTokenDialog extends Dialog {
     }
 
     private void revoke(TerminalTokenEntity token) {
-        this.tokenService.revoke(token.getId());
+        boolean revoked;
+        try {
+            revoked = this.tokenService.revoke(token.getId());
+        } catch (RuntimeException e) {
+            Notifications.showFailure(getClass(), "Das Token konnte nicht widerrufen werden.", e);
+            return;
+        }
+        if (!revoked) {
+            // Das Token ist zwischenzeitlich verschwunden (parallele Sitzung). Ohne Meldung
+            // verschwände nur die Zeile - der Bediener hielte das für den vollzogenen Widerruf.
+            Notifications.showError("Dieses Token existiert nicht mehr - die Liste wurde aktualisiert.");
+        }
         loadData();
     }
 
@@ -227,7 +239,16 @@ public class TerminalTokenDialog extends Dialog {
         String label = this.tfLabel.getValue() == null || this.tfLabel.getValue().isBlank() ? null
                 : this.tfLabel.getValue().trim();
 
-        IssuedTerminalToken issued = this.tokenService.createToken(this.location, label);
+        IssuedTerminalToken issued;
+        try {
+            issued = this.tokenService.createToken(this.location, label);
+        } catch (RuntimeException e) {
+            // Die Anzeige bleibt unangetastet: stünde dort noch das zuvor erzeugte Token, hielte
+            // der Bediener es sonst für das gerade fehlgeschlagene und nähme ein Token in
+            // Betrieb, von dem er glaubt, es sei ein anderes.
+            Notifications.showFailure(getClass(), "Das Token konnte nicht erzeugt werden.", e);
+            return;
+        }
 
         // Das Klartext-Token geht ausschließlich in dieses Feld - nicht ins Log und nicht in
         // eine Notification (siehe Klassen-Javadoc).
