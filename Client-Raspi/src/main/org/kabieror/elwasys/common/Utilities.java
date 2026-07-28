@@ -8,7 +8,17 @@ import org.apache.commons.lang3.RandomStringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * Diese Klasse stellt häufig gebrauchte Funktionalitäten zur Verfügung.
@@ -135,5 +145,72 @@ public class Utilities {
             }
         }
         return firstFileAppender;
+    }
+
+    /**
+     * Liest das ENDE einer Logdatei für die Fernwartung ({@code LOG_REQUEST}). Bewusst nicht die
+     * ganze Datei: die Antwort geht als EIN WebSocket-Text-Frame zum Backend, und die
+     * logback-Konfiguration der Terminals rollt nur täglich ohne Größenlimit (siehe
+     * {@code setup.sh}) - ein Tageslog sprengte jede vernünftige Frame-Grenze und riss damit die
+     * gesamte Fernwartungsverbindung ab (siehe ADR 0024). Für die Diagnose zählt ohnehin das
+     * Ende des Logs.
+     * <p>
+     * Gelesen wird nur der Datei-Schwanz (Sprung ans Ende statt {@code readAllLines}), damit eine
+     * sehr große Logdatei nicht komplett in den Speicher wandert. Wurde gekürzt, ist die erste
+     * gelieferte Zeile ein Hinweis darauf - der Admin im Portal soll nicht stillschweigend ein
+     * unvollständiges Log sehen.
+     *
+     * @param fileName Pfad der Logdatei, {@code null} erlaubt (dann leere Liste)
+     * @param maxLines Höchstzahl gelieferter Logzeilen (ohne Hinweiszeile)
+     * @param maxBytes Höchstzahl vom Dateiende gelesener Bytes - deckelt auch eine Datei mit
+     *                 wenigen, dafür sehr langen Zeilen
+     */
+    public static List<String> readLogTail(String fileName, int maxLines, long maxBytes) throws IOException {
+        if (fileName == null) {
+            return new ArrayList<>();
+        }
+        final Path path = Path.of(fileName);
+        if (!Files.isReadable(path)) {
+            return new ArrayList<>();
+        }
+        final long size = Files.size(path);
+        final long from = Math.max(0, size - Math.min(maxBytes, Integer.MAX_VALUE));
+
+        final byte[] buffer = new byte[(int) (size - from)];
+        final ByteBuffer target = ByteBuffer.wrap(buffer);
+        try (SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ)) {
+            channel.position(from);
+            while (target.hasRemaining() && channel.read(target) > 0) {
+                // Bis der Puffer voll ist bzw. die Datei endet - ein einzelnes read() muss den
+                // angeforderten Bereich nicht vollständig liefern.
+            }
+        }
+
+        // Nur den tatsächlich gelesenen Teil dekodieren: rollt logback die Datei genau zwischen
+        // Größenabfrage und Lesen weg, ist der Puffer nicht voll - der Rest wären NUL-Bytes.
+        final List<String> lines = new ArrayList<>(
+                Arrays.asList(new String(buffer, 0, target.position(), StandardCharsets.UTF_8).split("\n", -1)));
+        // Ein Sprung mitten in die Datei trifft fast nie eine Zeilengrenze - die angeschnittene
+        // erste Zeile wird verworfen, statt sie halbiert auszuliefern.
+        boolean truncated = from > 0;
+        if (truncated && !lines.isEmpty()) {
+            lines.remove(0);
+        }
+        // Endet die Datei mit einem Zeilenumbruch (der Normalfall), liefert split() ein leeres
+        // Schlusselement - das ist keine Logzeile.
+        if (!lines.isEmpty() && lines.get(lines.size() - 1).isEmpty()) {
+            lines.remove(lines.size() - 1);
+        }
+        if (lines.size() > maxLines) {
+            truncated = true;
+            lines.subList(0, lines.size() - maxLines).clear();
+        }
+        if (truncated) {
+            // Bewusst die Dateigröße nennen: der Admin soll sehen, WIE viel er nicht sieht. Die
+            // Grenzen stehen dahinter, damit erkennbar ist, warum gekürzt wurde.
+            lines.add(0, String.format("--- gekürzt: Logdatei %d KiB, gezeigt werden die letzten %d Zeilen "
+                    + "(höchstens %d KiB) ---", size / 1024, maxLines, maxBytes / 1024));
+        }
+        return lines;
     }
 }

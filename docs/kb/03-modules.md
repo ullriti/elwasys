@@ -105,8 +105,10 @@ dieselbe Richtung wie die REST-API v1, NAT-/Firewall-freundlich (siehe
   - `STATUS_REQUEST`: Antwort enthält `clientVersion`, `startupTime` und die Ids aller aktuell
     laufenden Ausführungen (rein lokal aus `ExecutionManager#getRunningExecutions()`, kein
     Netzwerkzugriff).
-  - `LOG_REQUEST`: aktueller Inhalt der Logdatei (`Utilities#getCurrentLogFile()`, der
-    INFO-Appender `"FILE"`).
+  - `LOG_REQUEST`: das ENDE der Logdatei (`Utilities#getCurrentLogFile()`, der INFO-Appender
+    `"FILE"`) – gedeckelt auf die letzten 1000 Zeilen bzw. 128 KiB
+    (`Utilities#readLogTail`, [ADR 0024](../architecture/0024-fernwartungs-log-deckelung-und-frame-grenze.md)).
+    Vorher ging die ganze Datei als ein Frame und riss die Verbindung ab.
   - `RESTART_REQUEST`: `ElwaManager#restart()`; der Client bestätigt den Empfang zuerst mit
     `RESTART_RESPONSE`, bevor der Neustart ausgeführt wird.
 
@@ -574,10 +576,18 @@ authentifizierten `TerminalPrincipal` aus dem `SecurityContext` in die
 | `STATUS_REQUEST` | beide Richtungen | Portal-initiiert (Backend → Terminal, `TerminalMaintenanceService#requestStatus`): Antwort vom Terminal mit `clientVersion`/`startupTime`/`runningExecutionIds`. Terminal → Backend: Server antwortet SELBST `STATUS_RESPONSE` (`locationId`, `locationName`, `connectedSince`, `serverTime`) als reiner Verbindungsbeweis |
 | `STATUS_RESPONSE` | beide Richtungen | Antwort des Terminals auf ein portal-initiiertes `STATUS_REQUEST` – über die Korrelations-`id` an die wartende Anfrage zurückgeroutet |
 | `LOG_REQUEST` | Backend → Terminal | Portal-initiierte Anfrage (`TerminalMaintenanceService#requestLog`, Admin-Dashboard „Log anzeigen“), kein Payload |
-| `LOG_RESPONSE` | Terminal → Backend | Antwort auf `LOG_REQUEST`, Payload `{"lines": [...]}`; über die Korrelations-`id` zurückgeroutet |
+| `LOG_RESPONSE` | Terminal → Backend | Antwort auf `LOG_REQUEST`, Payload `{"lines": [...]}`; über die Korrelations-`id` zurückgeroutet. **Gedeckelt** auf die letzten 1000 Zeilen/128 KiB; bei Kürzung ist die erste Zeile ein Hinweis darauf (ADR 0024) |
 | `RESTART_REQUEST` | Backend → Terminal | Portal-initiierte Anfrage (`TerminalMaintenanceService#requestRestart`, Admin-Dashboard „Neustart“), kein Payload |
 | `RESTART_RESPONSE` | Terminal → Backend | Bestätigung von `RESTART_REQUEST` – der Admin erfährt zuverlässig, ob der Befehl ankam |
 | `ERROR` | beide Richtungen | Protokoll-/Verarbeitungsfehler, `payload.reason` (`malformed-message`/`not-implemented`) |
+
+**Frame-Grenze**: beide Seiten heben den JSR-356-Default von 8 KiB auf **1 MiB** an (Terminal über
+einen konfigurierten `WebSocketContainer` im `TerminalWebSocketClient`, Backend je Session in
+`TerminalWebSocketHandler#afterConnectionEstablished`). Die Werte müssen zueinander
+passen, weil jede Seite nur ihren EIGENEN Empfangspuffer prüft. Mit dem Default schloss Tomcat die
+Verbindung bei jeder `LOG_RESPONSE` eines länger laufenden Terminals mit `1009` – und riss damit
+auch Status/Neustart/Vorfallsmeldungen bis zum Reconnect mit ab
+([ADR 0024](../architecture/0024-fernwartungs-log-deckelung-und-frame-grenze.md)).
 
 **Fernwartungs-Vermittlung**: `TerminalMaintenanceService` (Package `ws`) ist die Portal-seitige
 Vermittlung für `STATUS_REQUEST`/`LOG_REQUEST`/`RESTART_REQUEST` – sendet mit einer selbst
@@ -1006,6 +1016,11 @@ nur die abstrakten Basisklassen `AbstractBackendIT`/`AbstractApiIT`).
 
 ## Historie
 
+- **2026-07-28** — Fernwartungs-Log gedeckelt (letzte 1000 Zeilen / 128 KiB statt der ganzen
+  Datei) und WebSocket-Frame-Grenze beidseitig auf 1 MiB angehoben; vorher riss jede
+  `LOG_RESPONSE` eines länger laufenden Terminals die Verbindung mit `1009` ab
+  ([Worklog](../worklog/2026-07-28-fernwartungs-log-frame-grenze.md) ·
+  [ADR 0024](../architecture/0024-fernwartungs-log-deckelung-und-frame-grenze.md)).
 - **2026-07-27** — UI-Redesign v2 des Portals: `NavbarViewName` und `ListFilterField` neu,
   `UserMenuBar` als Benutzer-Chip mit Initialen-Avatar, `PlaceholderView` entfallen; Dialoge
   in Abschnitte gegliedert, Gerätekarten mit Kennzahlen-Panel und Restzeit-Fortschrittsbalken,
