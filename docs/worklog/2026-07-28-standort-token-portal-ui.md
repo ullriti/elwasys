@@ -57,8 +57,18 @@ Der `code-reviewer` hat das Gate zunächst **nicht** freigegeben. Behoben:
   Dialog, öffnete neu und prüfte, dass keine Reveal-Box da ist — der Dialog wird aber pro
   Klick neu instanziiert, der Test wäre also auch ohne das Aufräumen grün geblieben. Genau
   die Behauptung aus Javadoc und KB war damit ungedeckt.
+  Er hat jetzt einen echten Test — `TerminalTokenDialogTest` prüft **beide** Schließwege
+  (`close()` und den Client-Weg per `deferredUpdateFromClient("opened", false)`, also ESC/
+  Außenklick) und fällt ohne den `addOpenedChangeListener` um.
 - Fehlender Sortier-Tiebreaker, verworfener `revoke()`-Rückgabewert, ein sachlich falsches
   „Warum" im Kommentar und zwei falsche Kommentare in E2E/Spec.
+
+Beim Zentralisieren der Fehlermeldung sind `showFailure`/`failureText` von
+`AbstractFormDialog` nach `Notifications` gewandert (statisch, meldende Klasse als
+Logger-Name) — sonst wäre hier die dritte Kopie derselben Log-plus-Notification-Logik
+entstanden. Die neun Formular-Dialoge bleiben über Delegates unberührt.
+
+**Suiten am Ende:** Backend **341/341** grün (vorher 337), Portal-E2E **32/32** grün.
 
 ## Zwei Vaadin-Fallen und zwei Bestandsbugs, die daraus fielen
 
@@ -70,7 +80,9 @@ Der `code-reviewer` hat das Gate zunächst **nicht** freigegeben. Behoben:
    `CreditTopUpDialog`s „Buchen" war nach einer **fehlgeschlagenen Validierung** tot — der
    Admin konnte den Betrag nicht mehr korrigieren und erneut absenden —, und
    `ExpiredExecutionsDialog`s „Abrechnen" nach einem Klick bis zum Neuöffnen. Beides mit
-   behoben.
+   behoben — und zwar über `ui/component/PortalButtons#onAction`, das Schutz und Zurücksetzen
+   aneinanderkoppelt, statt die Korrektur ein viertes Mal von Hand zu schreiben. Der
+   `CreditTopUpDialog`-Fall hat einen Regressionstest, der ohne den Fix umfällt.
 2. **`vaadin-grid`-Slot-Namen sind pro Grid eindeutig, nicht pro Dokument.**
    `vaadin-grid-cell-content-19` existiert einmal in *jedem* Grid der Seite. Solange eine
    Seite ein Grid zeigt, ist das harmlos; ein Grid **im Dialog** liegt aber über dem

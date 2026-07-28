@@ -445,14 +445,13 @@ Am Code gezählt:
 
 ## Historie
 
-- **2026-07-28** — Review-Nachlauf zur Token-Verwaltung: Dialog-Komponententests ohne Browser
-  (`TerminalTokenDialogTest`, `CreditTopUpDialogTest` – siehe 03-modules.md, Portal-Tests),
-  P32 sichert zusätzlich zu, dass der Token-Hash nirgends im Dialog steht; Inventar Backend
-  337 → **341**.
-- **2026-07-28** — Standort-Token-Verwaltung im Portal: Portal-Fälle P32/P33, neue
-  Selektor-Regel (Grid-Slot-Namen sind pro Grid eindeutig → `scope` in den Grid-Helfern) und
-  die im Redesign-Testpaket entstandenen Fälle P29–P31 nachgetragen; Inventar auf Backend 337
-  / Portal-E2E 32 gezogen ([Worklog](../worklog/2026-07-28-standort-token-portal-ui.md) ·
+- **2026-07-28** — Standort-Token-Verwaltung im Portal: Portal-Fälle P32/P33 (P32 sichert auch
+  zu, dass der Token-Hash nirgends im Dialog steht), neue Selektor-Regel (Grid-Slot-Namen sind
+  pro Grid eindeutig → `scope` in den Grid-Helfern) und die im Redesign-Testpaket entstandenen
+  Fälle P29–P31 nachgetragen. Aus dem Review-Nachlauf kamen die Dialog-Komponententests ohne
+  Browser hinzu (`TerminalTokenDialogTest`, `CreditTopUpDialogTest` – Bauprinzip siehe
+  03-modules.md, Portal-Tests). Inventar auf Backend **341** / Portal-E2E **32** gezogen
+  ([Worklog](../worklog/2026-07-28-standort-token-portal-ui.md) ·
   [ADR 0024](../architecture/0024-standort-token-verwaltung-im-portal.md)).
 - **2026-07-27** — UI-Redesign v2: Portal-Design-Abschnitt auf v2 gehoben, zwei neue
   Selektor-Regeln (Ansichtsname steht seit `NavbarViewName` zweimal im DOM → Strict Mode;
