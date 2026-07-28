@@ -11,7 +11,6 @@ import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.Icon;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
-import org.slf4j.LoggerFactory;
 
 /**
  * Das gemeinsame Gerüst der Formular-Dialoge des Portals (Anlegen/Bearbeiten von Benutzern,
@@ -144,16 +143,30 @@ public abstract class AbstractFormDialog extends Dialog {
     /**
      * Baut die Fußzeile: links "Abbrechen" (schließt den Dialog ohne Wirkung), rechts die
      * hervorgehobene Primäraktion.
-     *
-     * @return Die Schaltfläche der Primäraktion - für Dialoge, die sie noch nachjustieren (z. B.
-     *         Doppelklick-Schutz auf geldbewegenden Aktionen, Issue #49).
      */
-    protected Button addFooterActions(String submitCaption, Runnable onSubmit) {
+    protected void addFooterActions(String submitCaption, Runnable onSubmit) {
+        addFooterActions(submitCaption, onSubmit, false);
+    }
+
+    /**
+     * Wie {@link #addFooterActions(String, Runnable)}, mit optionalem Doppelklick-Schutz auf der
+     * Primäraktion (Issue #49, für die geldbewegenden Dialoge).
+     *
+     * @param guardAgainstDoubleClick Ob die Primäraktion während des Server-Roundtrips gesperrt
+     *                                sein soll. Das Zurücksetzen danach übernimmt
+     *                                {@link PortalButtons#onAction} - Vaadin tut es NICHT von
+     *                                allein, siehe dort.
+     */
+    protected void addFooterActions(String submitCaption, Runnable onSubmit, boolean guardAgainstDoubleClick) {
         Button btnCancel = new Button("Abbrechen", e -> close());
-        Button btnSubmit = new Button(submitCaption, e -> onSubmit.run());
+        Button btnSubmit = new Button(submitCaption);
+        if (guardAgainstDoubleClick) {
+            PortalButtons.onAction(btnSubmit, onSubmit);
+        } else {
+            btnSubmit.addClickListener(e -> onSubmit.run());
+        }
         btnSubmit.addThemeVariants(ButtonVariant.LUMO_PRIMARY);
         getFooter().add(new HorizontalLayout(btnCancel, btnSubmit));
-        return btnSubmit;
     }
 
     /**
@@ -169,41 +182,20 @@ public abstract class AbstractFormDialog extends Dialog {
     }
 
     /**
-     * Meldet einen unerwarteten Fehler beim Ausführen der Dialog-Aktion.
-     *
-     * <p>Warum nicht einfach {@code e.getMessage()} anhängen (finale Review R3c, Issue #92): die
-     * breiten {@code catch (RuntimeException)}-Zweige fangen neben den fachlich erwarteten
-     * Ausnahmen auch Programmierfehler ab. Eine {@code NullPointerException} hat typischerweise
-     * gar keine Meldung - der Administrator sah dann "... null" oder einen abgeschnittenen Satz
-     * und der Auslöser war nirgends festgehalten. Deshalb: Ausnahme immer ins Server-Log (dort
-     * steht der Stacktrace), im Portal die fachliche Meldung plus Detailtext nur, wenn es einen
-     * gibt.
+     * Meldet einen unerwarteten Fehler beim Ausführen der Dialog-Aktion - siehe
+     * {@link Notifications#showFailure(Class, String, RuntimeException)}, dort steht auch die
+     * Begründung. {@code getClass()} ist die konkrete Dialogklasse: im Server-Log steht damit,
+     * WO der Fehler auftrat.
      */
     protected void showFailure(String message, RuntimeException cause) {
-        showFailure(message, cause, true);
+        Notifications.showFailure(getClass(), message, cause);
     }
 
     /**
-     * Wie {@link #showFailure(String, RuntimeException)}, aber OHNE den Detailtext der Ausnahme.
-     * Für Dialoge VOR dem Login ({@code PasswordForgotDialog}): dort säße sonst ein anonymer
-     * Besucher vor der rohen Ausnahmemeldung und erführe je nach Fehler Mailserver-Namen oder
-     * Datenbank-Constraints (finale Review R3c, Issue #92).
+     * Wie {@link #showFailure(String, RuntimeException)}, aber OHNE den Detailtext der Ausnahme -
+     * siehe {@link Notifications#showFailure(Class, String, RuntimeException, boolean)}.
      */
     protected void showFailure(String message, RuntimeException cause, boolean withDetail) {
-        // Logger je konkreter Dialogklasse (nicht der Basisklasse), damit im Log steht, WO der
-        // Fehler auftrat; Log-Text englisch wie im übrigen Backend.
-        LoggerFactory.getLogger(getClass()).error("Dialog action failed: {}", message, cause);
-        Notifications.showError(withDetail ? failureText(message, cause.getMessage())
-                : failureText(message, null));
-    }
-
-    /**
-     * Setzt die anzuzeigende Meldung zusammen. Als reine Funktion herausgezogen, damit der
-     * Fallback-Fall ohne UI testbar ist.
-     */
-    static String failureText(String message, String detail) {
-        return detail == null || detail.isBlank()
-                ? message + " Unerwarteter Fehler - Details stehen im Server-Log."
-                : message + " " + detail;
+        Notifications.showFailure(getClass(), message, cause, withDetail);
     }
 }

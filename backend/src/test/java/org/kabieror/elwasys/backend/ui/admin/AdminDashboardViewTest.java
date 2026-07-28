@@ -14,7 +14,7 @@ import org.springframework.data.domain.Sort;
  * ({@link AdminDashboardView#progressOf}) und die Übersetzung angeklickter Spaltenköpfe in die
  * Datenbank-Sortierung der Verlaufstabelle ({@link AdminDashboardView#toHistorySort}). Beide sind
  * genau dafür als reine Funktionen paketsichtbar herausgezogen (Muster
- * {@code AbstractFormDialog#failureText}) - kein Spring, keine UI, kein Browser.
+ * {@code Notifications#failureText}) - kein Spring, keine UI, kein Browser.
  */
 class AdminDashboardViewTest {
 

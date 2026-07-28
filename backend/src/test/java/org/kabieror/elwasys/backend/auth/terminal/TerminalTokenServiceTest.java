@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.domain.TerminalTokenEntity;
@@ -84,6 +87,66 @@ class TerminalTokenServiceTest extends AbstractBackendIT {
     @Test
     void revokingAnUnknownTokenIdReturnsFalse() {
         assertThat(this.terminalTokenService.revoke(-987654)).isFalse();
+    }
+
+    /**
+     * Lesepfad der Token-Verwaltung im Admin-Portal (siehe
+     * {@code ui/admin/dialog/TerminalTokenDialog}): genau die Tokens DIESES Standorts, neueste
+     * zuerst - so wie die Liste sie anzeigt.
+     */
+    @Test
+    void findByLocationListsOnlyThatLocationsTokensNewestFirst() {
+        LocationEntity location = newLocation();
+        LocationEntity otherLocation = newLocation();
+        IssuedTerminalToken older = this.terminalTokenService.createToken(location, "older");
+        IssuedTerminalToken newer = this.terminalTokenService.createToken(location, "newer");
+        IssuedTerminalToken foreign = this.terminalTokenService.createToken(otherLocation, "foreign");
+
+        assertThat(this.terminalTokenService.findByLocation(location)).extracting(TerminalTokenEntity::getId)
+                .containsExactly(newer.entity().getId(), older.entity().getId());
+        assertThat(this.terminalTokenService.findByLocation(otherLocation))
+                .extracting(TerminalTokenEntity::getId).containsExactly(foreign.entity().getId());
+    }
+
+    /**
+     * Zwei unmittelbar nacheinander erzeugte Tokens - im Portal der Regelfall beim Umstellen
+     * eines Terminals - müssen sicher in der richtigen Reihenfolge stehen. {@code created_at}
+     * kommt aus {@code LocalDateTime.now()} und kann dabei für beide identisch ausfallen; ohne
+     * den Zweitschlüssel {@code id DESC} wäre die Reihenfolge dann unbestimmt.
+     */
+    @Test
+    void tokensCreatedWithinTheSameTimestampKeepTheirOrder() {
+        LocationEntity location = newLocation();
+        List<Integer> createdIds = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            createdIds.add(this.terminalTokenService.createToken(location, "rotation-" + i).entity().getId());
+        }
+        Collections.reverse(createdIds);
+
+        assertThat(this.terminalTokenService.findByLocation(location)).extracting(TerminalTokenEntity::getId)
+                .containsExactlyElementsOf(createdIds);
+    }
+
+    /**
+     * Ein Widerruf löscht nicht - das widerrufene Token muss in der Liste bleiben (Nachweis,
+     * welches Token wann außer Kraft gesetzt wurde).
+     */
+    @Test
+    void findByLocationKeepsRevokedTokensAsAudit() {
+        LocationEntity location = newLocation();
+        IssuedTerminalToken issued = this.terminalTokenService.createToken(location, "to-be-revoked");
+        this.terminalTokenService.revoke(issued.entity().getId());
+
+        var tokens = this.terminalTokenService.findByLocation(location);
+
+        assertThat(tokens).hasSize(1);
+        assertThat(tokens.get(0).isActive()).isFalse();
+        assertThat(tokens.get(0).getRevokedAt()).isNotNull();
+    }
+
+    @Test
+    void findByLocationIsEmptyForALocationWithoutTokens() {
+        assertThat(this.terminalTokenService.findByLocation(newLocation())).isEmpty();
     }
 
     @Test

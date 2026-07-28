@@ -307,6 +307,14 @@ Die maßgebliche Portal-E2E-Suite läuft gegen das ins Backend eingebettete Vaad
   Zeilen einmalig einsammeln und vergleichen, sondern positionsbezogen und auto-wiederholend
   zusichern (`tr[aria-rowindex="…"]` + `toHaveAccessibleName`) – deterministisch, ohne
   `waitForTimeout`. Muster: `dataRow()` in `list-filter-sort.spec.ts`.
+- **Die Slot-Namen von `vaadin-grid` sind pro Grid eindeutig, nicht pro Dokument**:
+  `vaadin-grid-cell-content-19` existiert einmal in *jedem* Grid der Seite. Solange nur ein
+  Grid sichtbar ist, fällt das nicht auf – ein Grid **in einem Dialog** liegt aber über dem
+  Listen-Grid dahinter, und die globale Neu-Lokalisierung der Zelle trifft dann zwei Elemente
+  (Strict Mode). Die Helfer `gridRowCells`/`gridRowActions`/`rowActionButton` nehmen deshalb
+  einen optionalen `scope` (z.B. `dialog(page)`), der Zeilensuche **und** Zell-Lokalisierung
+  eingrenzt; überall dort mitgeben, wo mehr als ein Grid im DOM stehen kann. Aufgetreten beim
+  Token-Dialog (P32).
 - **Notification in Position `MIDDLE` ist modal** (Issue #89): sie blockiert bis zu ihrem Ablauf
   JEDE Eingabe – auch einen `{ force: true }`-Klick, der dann still ins Leere geht (Symptom:
   „Clicking the checkbox did not change its state"). Nach einer Aktion, die eine solche
@@ -343,10 +351,11 @@ allerdings **nicht** die `playwright.config.ts` des Projekts, Browser-Pfad, `bas
 umstellen und gegen einen bereits laufenden Server mit `E2E_NO_WEBSERVER=1` fahren). Der
 Ablageort der Bilder steht in `SHOT_DIR` (Default `/tmp/portal-shots`).
 
-### Testfall-Übersicht (P1–P28)
+### Testfall-Übersicht (P1–P33)
 
-`backend/e2e/tests/` enthält **25 `test()`** (login 2 / admin 3 / admin-crud 12 / dashboard 1 /
-offline-incidents 2 / user-portal 5); P15/P18 teilen sich ein `test()`.
+`backend/e2e/tests/` enthält **32 `test()`** (login 2 / admin 3 / admin-crud 13 / dashboard 1 /
+list-filter-sort 3 / offline-incidents 3 / terminal-tokens 2 / user-portal 5); P15/P18 teilen
+sich ein `test()`.
 
 | ID | Datei | Testgegenstand |
 |----|-------|----------------|
@@ -376,6 +385,11 @@ offline-incidents 2 / user-portal 5); P15/P18 teilen sich ein `test()`.
 | P26 | user-portal.spec.ts (~Z. 57) | Öffentlicher Reset-Link lehnt ungültigen Key ab (#50) |
 | P27 | offline-incidents.spec.ts | Offline-Vorfall sichtbar (Art/Nutzer/Betrag) → quittieren (mit Bestätigung) → weg aus der offenen Liste, als „Quittiert" belegt (#89) |
 | P28 | offline-incidents.spec.ts | Quittierte Vorfälle bleiben über den Umschalter einsehbar; Dashboard-Hinweis verlinkt in die Vorfallsliste (#89) |
+| P29 | list-filter-sort.spec.ts | Freitext-Filter grenzt die Liste auf die Treffer ein, Leeren stellt sie wieder her |
+| P30 | list-filter-sort.spec.ts | Sortierung der Guthaben-Spalte geht über den Betrag, nicht über den formatierten Text |
+| P31 | list-filter-sort.spec.ts | Eine gefilterte Liste bleibt gefiltert, wenn eine andere Session die Daten ändert |
+| P32 | terminal-tokens.spec.ts | Standort-Token im Portal erzeugen → Klartext wird genau einmal angezeigt und erscheint danach nirgends mehr; der gespeicherte Hash erreicht den Browser nie |
+| P33 | terminal-tokens.spec.ts | Standort-Token widerrufen → Status wechselt, die Zeile bleibt als Beleg, ein zweites Token bleibt aktiv |
 
 ### Kommandos
 
@@ -420,18 +434,25 @@ läuft – das Rollout-Gate nach einem Deployment (siehe `deploy/smoke/README.md
 
 Am Code gezählt:
 
-- **Backend (JUnit)**: **265 `@Test` in 51 Klassen** (57 Testdateien). Die separat gehaltene
-  `TerminalMaintenanceRealClientE2ETest` (5 `@Test`, per `backend/pom.xml`-Exclude, eigener
-  Harness) läuft nicht in der Standard-Suite → diese umfasst rund **260** Tests
-  (`backend/run-backend-tests.sh`).
-- **Portal-E2E (Playwright)**: **25 `test()`** in `backend/e2e/tests/` (login 2 / admin 3 /
-  admin-crud 12 / dashboard 1 / offline-incidents 2 / user-portal 5) zzgl. **4**
-  READ-ONLY-Smoke-`test()` in `tests-smoke/`.
+- **Backend (JUnit)**: die Standard-Suite (`backend/run-backend-tests.sh`) umfasst **341**
+  Tests. Die separat gehaltene `TerminalMaintenanceRealClientE2ETest` (5 `@Test`, per
+  `backend/pom.xml`-Exclude, eigener Harness) läuft darin nicht mit.
+- **Portal-E2E (Playwright)**: **32 `test()`** in `backend/e2e/tests/` (login 2 / admin 3 /
+  admin-crud 13 / dashboard 1 / list-filter-sort 3 / offline-incidents 3 / terminal-tokens 2 /
+  user-portal 5) zzgl. **4** READ-ONLY-Smoke-`test()` in `tests-smoke/`.
 - **Client (TestFX/JUnit)**: **71 `@Test`** in 28 Testklassen (40 Testdateien inkl.
   Simulatoren/Helfer).
 
 ## Historie
 
+- **2026-07-28** — Standort-Token-Verwaltung im Portal: Portal-Fälle P32/P33 (P32 sichert auch
+  zu, dass der Token-Hash nirgends im Dialog steht), neue Selektor-Regel (Grid-Slot-Namen sind
+  pro Grid eindeutig → `scope` in den Grid-Helfern) und die im Redesign-Testpaket entstandenen
+  Fälle P29–P31 nachgetragen. Aus dem Review-Nachlauf kamen die Dialog-Komponententests ohne
+  Browser hinzu (`TerminalTokenDialogTest`, `CreditTopUpDialogTest` – Bauprinzip siehe
+  03-modules.md, Portal-Tests). Inventar auf Backend **341** / Portal-E2E **32** gezogen
+  ([Worklog](../worklog/2026-07-28-standort-token-portal-ui.md) ·
+  [ADR 0025](../architecture/0025-standort-token-verwaltung-im-portal.md)).
 - **2026-07-27** — UI-Redesign v2: Portal-Design-Abschnitt auf v2 gehoben, zwei neue
   Selektor-Regeln (Ansichtsname steht seit `NavbarViewName` zweimal im DOM → Strict Mode;
   `vaadin-side-nav-item` führt ein verstecktes „Toggle child items"-Label →

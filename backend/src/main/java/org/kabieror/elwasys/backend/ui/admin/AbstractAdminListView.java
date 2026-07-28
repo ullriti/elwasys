@@ -17,6 +17,7 @@ import org.kabieror.elwasys.backend.exception.EntityInUseException;
 import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
 import org.kabieror.elwasys.backend.ui.component.ListFilterField;
 import org.kabieror.elwasys.backend.ui.component.Notifications;
+import org.kabieror.elwasys.backend.ui.component.PortalGrids;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
 /**
@@ -135,11 +136,7 @@ public abstract class AbstractAdminListView<T> extends VerticalLayout {
      * unbemerkt verwerfen (UI-Redesign v2 AP4).
      */
     protected void setGridItems(List<T> items) {
-        this.grid.setItems(items);
-        // autoWidth misst den Zellinhalt, sobald er gerendert ist - die Zeilen kommen aber erst
-        // mit diesem Aufruf. Ohne die Neuvermessung behielte die Aktionsspalte die Breite, die
-        // sie beim leeren Grid hatte.
-        this.grid.recalculateColumnWidths();
+        PortalGrids.setItems(this.grid, items);
         this.filterField.reapply();
     }
 

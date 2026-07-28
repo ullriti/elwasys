@@ -1,16 +1,22 @@
 package org.kabieror.elwasys.backend.ui.admin;
 
+import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.grid.Grid;
+import com.vaadin.flow.component.icon.Icon;
+import com.vaadin.flow.component.icon.VaadinIcon;
+import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.RolesAllowed;
 import java.util.List;
+import org.kabieror.elwasys.backend.auth.terminal.TerminalTokenService;
 import org.kabieror.elwasys.backend.domain.LocationEntity;
 import org.kabieror.elwasys.backend.events.LocationChangedEvent;
 import org.kabieror.elwasys.backend.exception.EntityInUseException;
 import org.kabieror.elwasys.backend.service.LocationService;
 import org.kabieror.elwasys.backend.service.UserGroupService;
 import org.kabieror.elwasys.backend.ui.admin.dialog.LocationFormDialog;
+import org.kabieror.elwasys.backend.ui.admin.dialog.TerminalTokenDialog;
 import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
 
 /**
@@ -24,6 +30,10 @@ import org.kabieror.elwasys.backend.ui.push.UiBroadcaster;
  * die Liste lädt sich über den {@link UiBroadcaster} automatisch neu, wenn irgendeine Session
  * einen Standort anlegt, bearbeitet oder löscht. Gerüst und Lösch-Ablauf kommen aus
  * {@link AbstractAdminListView} (Issue #92).
+ *
+ * <p><b>Terminal-Tokens</b>: je Zeile führt eine eigene Aktion in die Token-Verwaltung des
+ * Standorts ({@link TerminalTokenDialog}) - ein Standort ist genau die Klammer, unter der ein
+ * Terminal-Token gilt, deshalb sitzt die Verwaltung hier statt in einem eigenen Menüpunkt.
  */
 @Route(value = "admin/locations", layout = AdminLayout.class)
 @PageTitle("Standorte - Waschportal")
@@ -32,12 +42,14 @@ public class AdminLocationsView extends AbstractAdminListView<LocationEntity> {
 
     private final LocationService locationService;
     private final UserGroupService userGroupService;
+    private final TerminalTokenService terminalTokenService;
 
     public AdminLocationsView(LocationService locationService, UserGroupService userGroupService,
-            UiBroadcaster broadcaster) {
+            TerminalTokenService terminalTokenService, UiBroadcaster broadcaster) {
         super("Standorte", "admin-locations-view", "Neu", broadcaster);
         this.locationService = locationService;
         this.userGroupService = userGroupService;
+        this.terminalTokenService = terminalTokenService;
         initGrid();
     }
 
@@ -78,6 +90,28 @@ public class AdminLocationsView extends AbstractAdminListView<LocationEntity> {
     @Override
     protected boolean isRelevantChange(Object event) {
         return event instanceof LocationChangedEvent;
+    }
+
+    @Override
+    protected HorizontalLayout actionButtons(LocationEntity location) {
+        HorizontalLayout buttons = super.actionButtons(location);
+
+        Button btnTokens = new Button(new Icon(VaadinIcon.KEY));
+        btnTokens.setTooltipText("Terminal-Tokens verwalten");
+        btnTokens.addClickListener(e -> openTokenDialog(location));
+
+        // Wie in AdminUsersView: die zusätzliche Aktion sitzt zwischen "Bearbeiten" und dem
+        // "Löschen" der Basisklasse, damit die zerstörende Aktion überall ganz rechts steht.
+        buttons.addComponentAtIndex(1, btnTokens);
+        return buttons;
+    }
+
+    /**
+     * Je Klick ein frischer Dialog: das einmalig angezeigte Klartext-Token darf einen einmal
+     * geschlossenen Dialog nicht überleben (siehe {@link TerminalTokenDialog}).
+     */
+    private void openTokenDialog(LocationEntity location) {
+        new TerminalTokenDialog(this.terminalTokenService, location).open();
     }
 
     @Override

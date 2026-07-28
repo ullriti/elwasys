@@ -1,6 +1,7 @@
 # 18. Pre-Launch AP4 (Auth & Security): Reset-Enumeration, Passwort-Mindestlänge, Standort-Token-Restrisiko
 
-- **Status:** accepted
+- **Status:** accepted (Punkt #43 teilweise überholt durch
+  [ADR 0025](0025-standort-token-verwaltung-im-portal.md))
 - **Datum:** 2026-07-22
 
 > **Namens-Hinweis:** „AP4" meint hier das Arbeitspaket **AP4 der Pre-Launch-Review
@@ -79,6 +80,13 @@ Vom Auftraggeber am **2026-07-22** festgelegt (siehe auch
   Riegel gegen einen Token-Leak-Missbrauch außer der physischen Token-Haltung und der
   Rotation/Widerruf-Disziplin. `expires_at` und ein Admin-UI bleiben mögliche spätere
   Ausbaustufen, falls sich der Betrieb anders entscheidet.
+
+  > **Nachtrag 2026-07-28 ([ADR 0025](0025-standort-token-verwaltung-im-portal.md)):** Genau
+  > dieser Fall ist eingetreten. Bei der Inbetriebnahme eines weiteren Terminals hat sich der
+  > CLI-only-Weg als betrieblich untragbar erwiesen; der Auftraggeber hat das **Admin-UI
+  > beauftragt**. Es ist gebaut. Unverändert verworfen bleiben `expires_at`, der reduzierte
+  > Snapshot-Kartendatenumfang und die eingeschränkte Guthabenabfrage — der Blast-Radius
+  > eines geleakten Tokens ist derselbe, nur Rotation und Widerruf sind jetzt praktikabel.
 - **Konsistenz mit dem Brute-Force-Limit (#25):** Damit die Neutralisierung aus #24 nicht an
   anderer Stelle unterlaufen wird, wirft auch die Login-Sperre (#25) bewusst dieselbe
   generische `BadCredentialsException` wie ein normaler Fehlversuch – andernfalls wäre ein

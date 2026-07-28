@@ -219,6 +219,22 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   ([ADR 0024](../architecture/0024-fernwartungs-log-deckelung-und-frame-grenze.md),
   [Worklog](../worklog/2026-07-28-fernwartungs-log-frame-grenze.md)). Gefunden beim Aufsetzen
   einer lokalen Entwicklungsumgebung, betraf aber jedes Feldgerät.
+- **Standort-Token-Verwaltung im Portal (seit 2026-07-28):** Terminal-Tokens lassen sich jetzt
+  im Admin-Portal verwalten – Standorte → Zeilenaktion „Terminal-Tokens verwalten" öffnet
+  `TerminalTokenDialog` (auflisten, neu erzeugen mit einmaliger Klartext-Anzeige, widerrufen).
+  Damit ist die Festlegung aus [ADR 0018](../architecture/0018-ap4-auth-security-entscheidungen.md)
+  (#43: „kein Admin-UI, CLI genügt") auf Auftraggeber-Entscheidung **revidiert**
+  ([ADR 0025](../architecture/0025-standort-token-verwaltung-im-portal.md)) – Anlass war die
+  Inbetriebnahme eines weiteren Terminals, für die der CLI-Weg Server-Zugriff verlangt hätte.
+  Token-Design unverändert (nur SHA-256-Hash in der DB, kein `expires_at`, gleicher
+  Blast-Radius); die CLI (`TerminalTokenCliRunner`, `deploy/cutover/02-issue-terminal-tokens.sh`)
+  bleibt für Erstinbetriebnahme/Cutover bestehen und nutzt denselben `TerminalTokenService`.
+  Suiten: **Backend 341, Portal-E2E 32** (neu: P32/P33). Der Review-Nachlauf ergänzte die
+  Fehlerbehandlung beider Schreibpfade des Dialogs, einen serverseitigen Test für das Leeren
+  der Klartext-Anzeige und zwei Bestandsfixes, die dabei auffielen: Knöpfe mit
+  `setDisableOnClick` blieben nach dem Klick tot (Guthaben „Buchen", Abrechnen der verfallenen
+  Ausführungen) – die Regel dazu steht jetzt in [03-modules.md](03-modules.md), Portal-UI.
+  Details: [Worklog](../worklog/2026-07-28-standort-token-portal-ui.md).
 - **Nächster Schritt:** **Generalprobe nach [Spec 0001](../specs/0001-finale-review.md)**
   (Cutover-Probelauf, Migrations-Dry-Run mit Produktivdaten-Kopie, Backup-Restore-Probe,
   Ausfall-Drills, Alarm-Probe beider Stufen, Soak-Test, Vor-Ort-Kalibrierung), dann Pilotphase

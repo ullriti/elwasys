@@ -368,11 +368,18 @@ Package `backend/.../auth/terminal/`:
   für den WebSocket-Handshake) statt eines proprietären Headers.
 - **Speicherung/Rotation**: nur der SHA-256-Hash landet in der DB; pro Standort sind beliebig
   viele aktive Tokens gleichzeitig gültig – Rotation ohne Ausfallfenster.
-- **Verwaltungspfad**: `TerminalTokenCliRunner` (`@Profile("token-cli")`, siehe
-  `application-token-cli.yml`) – Kommandos siehe [04-build-and-run.md](04-build-and-run.md); das
-  Klartext-Token wird genau einmal auf `stdout` ausgegeben.
+- **Verwaltungspfade**, beide über denselben `TerminalTokenService`:
+  - **Admin-Portal** (Regelfall): `TerminalTokenDialog`, geöffnet über eine Zeilenaktion der
+    Standortliste – auflisten, erzeugen, widerrufen. `findByLocation` liefert die Tokens eines
+    Standorts (neueste zuerst, widerrufene bleiben sichtbar).
+  - **CLI**: `TerminalTokenCliRunner` (`@Profile("token-cli")`, siehe
+    `application-token-cli.yml`) für Erstinbetriebnahme/Cutover und Automatisierung – Kommandos
+    siehe [04-build-and-run.md](04-build-and-run.md).
 
-Siehe [ADR 0008](../architecture/0008-api-auth-standort-token-und-admin-session.md).
+  Auf beiden Wegen wird das Klartext-Token **genau einmal** ausgegeben und nirgends gespeichert.
+
+Siehe [ADR 0008](../architecture/0008-api-auth-standort-token-und-admin-session.md) und
+[ADR 0025](../architecture/0025-standort-token-verwaltung-im-portal.md).
 
 #### REST-API v1 (`/api/v1/**`, Package `backend/.../api/`)
 
@@ -783,6 +790,29 @@ Testsuite ist nicht betroffen (erzwingt `vaadin.productionMode=true` für alle T
   Normalisiert die geschützten Leerzeichen der Währungs-/Zahlenformate (U+00A0, U+202F),
   damit „1,50 €“ auch mit der normalen Leertaste gefunden wird.
 
+**Gemeinsame Bausteine** (`ui/component/`): `AbstractFormDialog` (Gerüst der Formular-Dialoge),
+`FormValidation`, `ConfirmDeleteDialog`, `PortalFormats`, `ListFilterField`, `Notifications`
+(Erfolg/Fehler **und** `showFailure` = Server-Log + rote Meldung), `PortalGrids.setItems`
+(`setItems` + `recalculateColumnWidths`) und `PortalButtons.onAction` (Doppelklick-Schutz).
+
+**Zwei Vaadin-Fallen, die im Portal-Code schon dreimal falsch angenommen wurden** – wer eine
+schreibende Aktion baut, muss beide kennen:
+1. **Es gibt keinen `ErrorHandler`.** Läuft eine Ausnahme aus einem Klick-Listener heraus, fängt
+   sie Vaadins `DefaultErrorHandler`: sie steht im Server-Log, im Browser passiert **sichtbar
+   nichts** (kein Hinweis, kein geschlossener Dialog). Jeder schreibende Pfad fängt seine
+   `RuntimeException` deshalb selbst und meldet sie über `Notifications.showFailure` – und lässt
+   im Fehlerfall die Anzeige unangetastet, statt einen halb aktualisierten Stand stehen zu
+   lassen.
+2. **`setDisableOnClick` reaktiviert NICHT.** Vaadins `DisableOnClickController` setzt am Element
+   das Attribut `disableonclick` (dadurch deaktiviert sich das Web-Component clientseitig sofort
+   beim Klick – das ist der eigentliche Schutz) und hängt einen Klick-Listener ein, der den Knopf
+   auch serverseitig deaktiviert. Zurückgesetzt wird er nie. Bleibt der Dialog/die Ansicht nach
+   der Aktion offen (fehlgeschlagene Validierung, gemeldeter Fehler, wiederholbare Aktion), ist
+   der Knopf bis zum Neuladen tot. `PortalButtons.onAction` kapselt Schutz **und** Zurücksetzen
+   (im `finally`-Zweig); `AbstractFormDialog#addFooterActions` bietet ihn als Parameter an. Ein
+   Knopf, der nur eine Rückfrage öffnet, bekommt ihn bewusst nicht (siehe
+   `AdminOfflineIncidentsView#actionButtons`).
+
 **Security-Integration** (`backend/.../auth/SecurityConfig`): statt `formLogin` jetzt
 `http.with(VaadinSecurityConfigurer.vaadin(), c -> c.loginView(LoginView.class).anyRequest(...authenticated))`.
 Das bindet `LoginView` als Login-Ziel, gibt Login-Route + Vaadin-interne statische Ressourcen für
@@ -865,6 +895,15 @@ Stattdessen:
   eine explizite Absicherung (`@RolesAllowed`/`@PermitAll`), während `@AnonymousAllowed` für neu
   hinzukommende Views verboten ist (abgesehen von `LoginView`/`ResetPasswordView`) – so fällt jede
   künftig versehentlich ungesicherte View automatisch durch.
+- **Dialog-Komponententests** ohne Servlet-Container, aber mit echtem Komponentenbaum
+  (`TerminalTokenDialogTest`, `CreditTopUpDialogTest`): Dialog bauen, öffnen, Knopf klicken,
+  Zustand prüfen. Zwei Regeln dafür: `UI.setCurrent(new UI())` ist Pflicht (`Dialog#open` hängt
+  sich über den `OverlayAutoAddController` an die aktuelle UI), und die UI muss als **Feld**
+  gehalten werden – Vaadins `CurrentInstance` merkt sie sich nur schwach, sonst räumt die GC sie
+  mitten im Test ab. Der Testhelfer `DialogComponents` sucht Knöpfe/Felder über den
+  **Element**-Baum, weil Kopf-/Fußzeile eines Dialogs als virtuelle Kinder hängen und über
+  `Component#getChildren` nicht erreichbar sind. Den clientseitigen Schließweg (ESC/Klick daneben)
+  simuliert `ElementPropertyMap#deferredUpdateFromClient("opened", false)`.
 
 Ein vollständiger, per Browser/JS getriebener Login-Durchstich bleibt der Playwright-E2E-Suite
 vorbehalten (siehe [08-test-plan.md](08-test-plan.md), P18).
@@ -878,6 +917,18 @@ fachliche Nachfolger der Alt-`components/*Window`: `UserFormDialog`, `UserGroupF
 `DeviceFormDialog`, `ProgramFormDialog`, `LocationFormDialog`. Die gemeinsame Komponente
 `ui/component/ConfirmDeleteDialog` nutzt Vaadins `ConfirmDialog` mit „Ja“/„Nein“. Mehrfachauswahlen
 (Standorte/Geräte/Programme/Benutzergruppen) sind als `MultiSelectComboBox` umgesetzt.
+
+Einzelne Views tragen darüber hinaus eigene Zeilen-Aktionen mit rein lesenden bzw.
+Sonder-Dialogen: `AdminUsersView` (Guthaben aufladen, Umsätze, abgelaufene Ausführungen) und
+`AdminLocationsView` (**Terminal-Tokens verwalten**, `TerminalTokenDialog` – Tokens des
+Standorts auflisten, ein neues erzeugen und widerrufen). Der Token-Dialog zeigt das
+Klartext-Token **genau einmal** in einem schreibgeschützten Feld und leert dessen Wert beim
+Schließen wieder – für jeden Schließweg, weil Kreuz, ESC und Klick daneben alle über das
+`opened`-Property laufen (`TerminalTokenDialogTest` prüft beide Wege serverseitig; die
+E2E-Suite kann es nicht, da je Klick eine frische Dialog-Instanz entsteht). Der `token_hash`
+wird nie angezeigt (P32 sichert zu, dass er im Dialog nirgends steht). Der Zugriffsschutz kommt – wie bei allen
+Dialogen – über die `@RolesAllowed("ADMIN")`-Route, aus der heraus er geöffnet wird
+([ADR 0025](../architecture/0025-standort-token-verwaltung-im-portal.md)).
 
 **Services** (jeweils mit den Alt-Fenstern als fachlicher Referenz):
 - `UserService` – Anlegen/Bearbeiten/weiches Löschen. Löschen entspricht 1:1
@@ -996,8 +1047,9 @@ dieselben drei Felder wie im Alt-Fenster, über `UserService#updateOwnSettings`.
 vor Warndreieck) den Dialog mit allen abgelaufenen, nicht abgerechneten Ausführungen
 (`getExpiredExecutions`). Je Zeile „Abrechnen“ (`ExecutionService#finishExecution`) oder „Löschen“
 (`ExecutionService#delete`), zusätzlich „Alle abrechnen“. „Löschen“ verlangt einen
-Bestätigungsdialog; „Abrechnen“/„Alle abrechnen“ tragen `setDisableOnClick(true)`
-(Doppelklick-Schutz gegen Doppelabrechnung).
+Bestätigungsdialog; „Abrechnen“/„Alle abrechnen“ laufen über `PortalButtons.onAction`
+(Doppelklick-Schutz gegen Doppelabrechnung, danach wieder bedienbar – siehe die Vaadin-Fallen
+oben).
 
 **Tests**: `PasswordServiceTest` (inkl. Migration eines SHA1-Bestandshashes beim Ändern),
 `PasswordResetServiceTest` (echter SMTP-Mock GreenMail – Token-Erzeugung/-Gültigkeit/

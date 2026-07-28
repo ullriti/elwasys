@@ -122,7 +122,7 @@ public class ListFilterField<T> extends TextField {
 
     /**
      * Das Filter-Prädikat einer einzelnen Zeile. Als reine Funktion herausgezogen (wie
-     * {@code AbstractFormDialog#failureText}), damit die Suchsemantik des Portals ohne Browser
+     * {@code Notifications#failureText}), damit die Suchsemantik des Portals ohne Browser
      * prüfbar ist - genau dieser Vergleich läuft auch in {@link #reapply()}.
      *
      * @param searchableText  Der rohe Suchtext der Zeile; {@code null} trifft nie.

@@ -85,20 +85,29 @@ export async function pickCombo(page: Page, scope: Locator, label: string, item:
  * `getByRole('row', { name })` DOES work (the accessible name computation follows the
  * flattened tree). The fix: read the slot NAMES off the row's own `<td><slot>` elements (real
  * shadow-DOM descendants of `<tr>`, so `row.locator('td slot')` works), then re-locate the
- * matching `vaadin-grid-cell-content` elements globally by that slot name.
+ * matching `vaadin-grid-cell-content` elements by that slot name.
+ *
+ * SECOND PITFALL (found with the TerminalTokenDialog, P32): the generated slot names are unique
+ * per GRID, not per document - `vaadin-grid-cell-content-19` exists once in every grid on the
+ * page. As long as a page shows a single grid that is harmless, but a grid inside a dialog sits
+ * on top of the list grid behind it, and the global re-location then resolves to two elements
+ * ("strict mode violation"). Pass `scope` (e.g. `dialog(page)`) whenever more than one grid can
+ * be present; the row lookup AND the cell re-location are both confined to it.
  */
-export async function gridRowCells(page: Page, rowName: string | RegExp): Promise<Locator[]> {
-  const row = page.getByRole('row', { name: rowName });
+export async function gridRowCells(page: Page, rowName: string | RegExp, scope?: Locator): Promise<Locator[]> {
+  const root = scope ?? page;
+  const row = root.getByRole('row', { name: rowName });
   await expect(row).toBeVisible();
   const slotNames = await row.locator('td slot').evaluateAll((slots) => slots.map((s) => s.getAttribute('name')));
-  return slotNames.map((name) => page.locator(`vaadin-grid-cell-content[slot="${name}"]`));
+  return slotNames.map((name) => root.locator(`vaadin-grid-cell-content[slot="${name}"]`));
 }
 
 /** The last column of a row - by convention of every admin grid in this portal
- * (AdminUsersView/-DevicesView/-UserGroupsView/-ProgramsView/-LocationsView), the row-action
- * buttons (Bearbeiten/Löschen/...) are always added last. */
-export async function gridRowActions(page: Page, rowName: string | RegExp): Promise<Locator> {
-  const cells = await gridRowCells(page, rowName);
+ * (AdminUsersView/-DevicesView/-UserGroupsView/-ProgramsView/-LocationsView) and of the token
+ * grid in TerminalTokenDialog, the row-action buttons (Bearbeiten/Löschen/...) are always added
+ * last. `scope` as in `gridRowCells`. */
+export async function gridRowActions(page: Page, rowName: string | RegExp, scope?: Locator): Promise<Locator> {
+  const cells = await gridRowCells(page, rowName, scope);
   return cells[cells.length - 1];
 }
 
@@ -110,11 +119,16 @@ export async function gridRowActions(page: Page, rowName: string | RegExp): Prom
  * docs/kb/06-ui-tests.md - so name-based lookup silently finds nothing for these buttons). The order
  * matches each view's `actionButtons()` method 1:1:
  *   - AdminUsersView: Bearbeiten(0), Guthaben aufladen(1), Umsätze ansehen(2), Löschen(3)
- *   - AdminDevicesView / AdminUserGroupsView / AdminProgramsView / AdminLocationsView:
- *     Bearbeiten(0), Löschen(1)
+ *   - AdminLocationsView: Bearbeiten(0), Terminal-Tokens verwalten(1), Löschen(2)
+ *   - AdminDevicesView / AdminUserGroupsView / AdminProgramsView: Bearbeiten(0), Löschen(1)
  */
-export async function rowActionButton(page: Page, rowName: string | RegExp, index: number): Promise<Locator> {
-  const actions = await gridRowActions(page, rowName);
+export async function rowActionButton(
+  page: Page,
+  rowName: string | RegExp,
+  index: number,
+  scope?: Locator,
+): Promise<Locator> {
+  const actions = await gridRowActions(page, rowName, scope);
   return actions.locator('vaadin-button').nth(index);
 }
 

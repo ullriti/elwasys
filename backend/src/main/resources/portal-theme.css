@@ -624,6 +624,35 @@ vaadin-grid::part(body-row):hover {
 }
 
 /* ------------------------------------------------------------------ *
+ *  Einmalige Anzeige eines frisch erzeugten Standort-Tokens
+ *  (TerminalTokenDialog). Warnfarben statt Fehlerrot: es ist kein Fehler,
+ *  aber der Bediener muss den Wert JETZT übernehmen - danach ist er weg.
+ * ------------------------------------------------------------------ */
+.token-reveal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background-color: #fffaeb;
+  border: 1px solid #fedf89;
+  border-radius: 10px;
+  color: #93370d;
+  padding: 0.85rem 1.1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.token-reveal-warning {
+  font-size: var(--lumo-font-size-s);
+  font-weight: 600;
+}
+
+/* Dickengleiche Schrift: ein Token wird abgetippt oder verglichen - da dürfen
+   0/O und 1/l nicht gleich aussehen. */
+.token-reveal-value input {
+  font-family: var(--lumo-font-family-monospace, ui-monospace, monospace);
+}
+
+/* ------------------------------------------------------------------ *
  *  Dialoge - runder, tieferer Schatten, abgedunkelter Hintergrund.
  * ------------------------------------------------------------------ */
 vaadin-dialog-overlay::part(overlay),

@@ -1,6 +1,5 @@
 package org.kabieror.elwasys.backend.ui.admin.dialog;
 
-import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.radiobutton.RadioButtonGroup;
@@ -77,11 +76,12 @@ public class CreditTopUpDialog extends AbstractFormDialog {
         form.setResponsiveSteps(new FormLayout.ResponsiveStep("0", 1));
         addToBody(form);
 
-        Button btnSave = addFooterActions("Buchen", () -> execute(onSaved));
-        // Issue #49: Doppelklick-Schutz auf dem geldbewegenden "Buchen"-Knopf (deaktiviert bis
-        // zum Server-Roundtrip, danach automatisch wieder aktiv - blockiert eine Doppelbuchung
-        // aus zwei Klicks im selben UIDL-Batch bei langsamem Roundtrip).
-        btnSave.setDisableOnClick(true);
+        // Issue #49: Doppelklick-Schutz auf dem geldbewegenden "Buchen"-Knopf - er blockiert eine
+        // Doppelbuchung aus zwei Klicks im selben UIDL-Batch bei langsamem Roundtrip. Das
+        // Zurücksetzen danach ist NICHT selbstverständlich (siehe PortalButtons): ohne es wäre
+        // "Buchen" nach einer fehlgeschlagenen Validierung tot und der Betrag ließe sich nicht
+        // mehr korrigieren - der Dialog bleibt in diesem Fall ja offen.
+        addFooterActions("Buchen", () -> execute(onSaved), true);
 
         focusOnOpen(this.bfAmount);
     }

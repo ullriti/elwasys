@@ -100,6 +100,17 @@ function seed() {
     INSERT INTO user_groups (name) VALUES ('${GROUP}');
     INSERT INTO locations (name, offline_max_duration_minutes) VALUES ('${LOCATION}', 120);
 
+    -- Standort-Tokens fuer den Dialog "Terminal-Tokens": ein benutztes aktives und ein
+    -- widerrufenes, damit beide Status-Badges im Bild stehen. Die Hashes sind Attrappen (zu
+    -- ihnen existiert kein Klartext-Token) - der Dialog zeigt sie ohnehin nie an.
+    INSERT INTO terminal_tokens (location_id, token_hash, label, created_at, last_used_at, revoked_at)
+      VALUES ((SELECT id FROM locations WHERE name='${LOCATION}'),
+              repeat('a', 64), 'Terminal Waschkueche', NOW() - INTERVAL '40 days',
+              NOW() - INTERVAL '12 minutes', NULL),
+             ((SELECT id FROM locations WHERE name='${LOCATION}'),
+              repeat('b', 64), 'Terminal Waschkueche (alt)', NOW() - INTERVAL '400 days',
+              NOW() - INTERVAL '41 days', NOW() - INTERVAL '40 days');
+
     INSERT INTO programs (name, type, max_duration, free_duration, flagfall, rate, time_unit,
         auto_end, earliest_auto_end, enabled)
       VALUES ('${PROGRAM}', 'FIXED', 5400, 0, 2.50, NULL, NULL, TRUE, 1200, TRUE);
@@ -322,6 +333,12 @@ test('Admin-Bereich', async ({ page }) => {
   await shot(page, 'liste-standorte');
   await captureDialog(page, 'dialog-standort', async () => {
     await page.getByRole('button', { name: 'Neu' }).click();
+  });
+  // Token-Verwaltung des geseedeten Standorts (AdminLocationsView#actionButtons:
+  // Bearbeiten(0), Terminal-Tokens(1), Loeschen(2)).
+  await captureDialog(page, 'dialog-standort-tokens', async () => {
+    const tokensButton = await rowActionButton(page, LOCATION, 1);
+    await tokensButton.click();
   });
 
   // --- Offline-Vorfaelle ---------------------------------------------------

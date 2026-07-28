@@ -356,7 +356,7 @@ test('admin can open and save a location from the Standorte section (P14)', asyn
   // underlying assertion (P14's "name prefilled, unchanged save round-trip") is unchanged.
   await openAdminSection(page, 'admin/locations');
 
-  // AdminLocationsView#actionButtons order: Bearbeiten(0), Löschen(1).
+  // AdminLocationsView#actionButtons order: Bearbeiten(0), Terminal-Tokens(1), Löschen(2).
   const openEdit = () => openEditDialog(page, 'Default', 0, 'Standort bearbeiten');
 
   let win = await openEdit();

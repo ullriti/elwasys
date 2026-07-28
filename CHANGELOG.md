@@ -13,6 +13,8 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Added
+- Standort-Tokens lassen sich im Admin-Portal verwalten: auflisten, neu erzeugen (Klartext
+  genau einmal sichtbar) und widerrufen – bisher ging das nur über die Kommandozeile.
 - Terminal-Betriebsskripte liegen jedem Release als Asset `elwasys-terminal-scripts-<version>.tar.gz`
   (+ `.sha256`) bei – bisher enthielt das Release nur das Client-Jar.
 - Freitext-Filter über jeder Portal-Liste sowie zusätzliche sortierbare Spalten (Guthaben,
@@ -79,6 +81,11 @@ im [Worklog](docs/worklog/README.md).
   Logdatei über 8 KiB wuchs (also nach wenigen Minuten Betrieb) – das Terminal überträgt jetzt
   nur noch das Ende des Logs (letzte 1000 Zeilen, sichtbar gekennzeichnet), und die
   WebSocket-Frame-Grenze liegt beidseitig bei 1 MiB.
+- Portal-Knöpfe mit Doppelklick-Schutz bleiben nach einem Klick bedienbar: „Buchen“ (Guthaben)
+  war nach einer abgelehnten Eingabe tot, „Abrechnen“/„Alle abrechnen“ nach dem ersten Klick.
+- Fehlgeschlagene Token-Aktionen im Portal werden gemeldet, statt unbemerkt zu bleiben; nach
+  einem Fehlschlag steht kein altes Token mehr in der Anzeige.
+- Das Statusabzeichen eines deaktivierten Geräts wird wieder formatiert dargestellt.
 - Terminal-Update auf Bestandsgeräten (#101): `update.sh` erneuert jetzt auch den Supervisor
   `run.sh` – Änderungen am Startbefehl erreichten bisher nur frisch aufgesetzte Geräte. Auf
   Geräten mit dem alten Einmalstart ohne Schleife unterbleibt der Neustart bewusst (Exit 4 mit

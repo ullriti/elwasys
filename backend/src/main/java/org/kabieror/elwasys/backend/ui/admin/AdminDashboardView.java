@@ -384,7 +384,7 @@ public class AdminDashboardView extends VerticalLayout {
      * über {@link #elapsedOf} 0 und damit einen leeren Balken.
      *
      * <p>Als reine Funktion herausgezogen (paketsichtbar), damit die Klemmlogik ohne UI testbar
-     * ist - dasselbe Muster wie {@code AbstractFormDialog#failureText}.
+     * ist - dasselbe Muster wie {@code Notifications#failureText}.
      */
     static double progressOf(long elapsedSeconds, int maxDurationSeconds) {
         if (maxDurationSeconds <= 0) {
@@ -478,7 +478,7 @@ public class AdminDashboardView extends VerticalLayout {
      * nur an der Voreinstellung.
      *
      * <p>Paketsichtbar, damit die Übersetzung ohne UI testbar ist - dasselbe Muster wie
-     * {@code AbstractFormDialog#failureText}.
+     * {@code Notifications#failureText}.
      */
     static Sort toHistorySort(List<QuerySortOrder> sortOrders) {
         List<Sort.Order> orders = new ArrayList<>();
