@@ -16,6 +16,7 @@ import org.kabieror.elwasys.backend.ui.component.AbstractFormDialog;
 import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
 import org.kabieror.elwasys.backend.ui.component.PortalButtons;
 import org.kabieror.elwasys.backend.ui.component.PortalFormats;
+import org.kabieror.elwasys.backend.ui.component.PortalGrids;
 
 /**
  * Dialog "Verfallene Ausführungsaufträge" (Phase 3 AP4, siehe docs/kb/05-migration-plan.md) -
@@ -128,8 +129,6 @@ public class ExpiredExecutionsDialog extends Dialog {
         // Bewusst KEIN automatisches Schließen bei leerer Liste (1:1 wie
         // ExpiredExecutionsWindow: die Tabelle bleibt nach dem letzten "Löschen"/"Abrechnen"
         // einfach leer, der Administrator schließt selbst).
-        this.grid.setItems(this.executionService.getExpiredExecutions(this.user));
-        // autoWidth misst erst, wenn Zellinhalt gerendert ist - der kommt aber gerade eben erst.
-        this.grid.recalculateColumnWidths();
+        PortalGrids.setItems(this.grid, this.executionService.getExpiredExecutions(this.user));
     }
 }

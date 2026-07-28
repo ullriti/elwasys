@@ -20,6 +20,7 @@ import org.kabieror.elwasys.backend.ui.component.ConfirmDeleteDialog;
 import org.kabieror.elwasys.backend.ui.component.Notifications;
 import org.kabieror.elwasys.backend.ui.component.PortalButtons;
 import org.kabieror.elwasys.backend.ui.component.PortalFormats;
+import org.kabieror.elwasys.backend.ui.component.PortalGrids;
 
 /**
  * Verwaltung der Standort-Tokens eines Standorts ("Terminal-Tokens"): auflisten, neu erzeugen,
@@ -259,8 +260,6 @@ public class TerminalTokenDialog extends Dialog {
     }
 
     private void loadData() {
-        this.grid.setItems(this.tokenService.findByLocation(this.location));
-        // autoWidth misst erst, wenn Zellinhalt gerendert ist - der kommt aber gerade eben erst.
-        this.grid.recalculateColumnWidths();
+        PortalGrids.setItems(this.grid, this.tokenService.findByLocation(this.location));
     }
 }
