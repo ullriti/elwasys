@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
  * Die Suchsemantik des Portal-Freitextfilters (UI-Redesign v2, siehe
  * docs/specs/0002-ui-design/v2/MAPPING.md, Abschnitt "Listen"). Reiner Unit-Test ohne Browser -
  * {@link ListFilterField#matches} ist genau dafür als reine Funktion herausgezogen (dasselbe
- * Muster wie {@code AbstractFormDialog#failureText}), und derselbe Vergleich läuft in
+ * Muster wie {@code Notifications#failureText}), und derselbe Vergleich läuft in
  * {@code reapply()} auf dem {@code ListDataProvider} des Grids.
  *
  * <p>Warum überhaupt geprüft: das Feld steht über drei Listen (Admin-Listen, Offline-Vorfälle,

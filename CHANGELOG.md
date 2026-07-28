@@ -77,6 +77,11 @@ im [Worklog](docs/worklog/README.md).
 - Portal-Design an das Terminal angeglichen (gemeinsame Palette, responsive Dashboard-Karten).
 
 ### Fixed
+- Portal-Knöpfe mit Doppelklick-Schutz bleiben nach einem Klick bedienbar: „Buchen“ (Guthaben)
+  war nach einer abgelehnten Eingabe tot, „Abrechnen“/„Alle abrechnen“ nach dem ersten Klick.
+- Fehlgeschlagene Token-Aktionen im Portal werden gemeldet, statt unbemerkt zu bleiben; nach
+  einem Fehlschlag steht kein altes Token mehr in der Anzeige.
+- Das Statusabzeichen eines deaktivierten Geräts wird wieder formatiert dargestellt.
 - Terminal-Update auf Bestandsgeräten (#101): `update.sh` erneuert jetzt auch den Supervisor
   `run.sh` – Änderungen am Startbefehl erreichten bisher nur frisch aufgesetzte Geräte. Auf
   Geräten mit dem alten Einmalstart ohne Schleife unterbleibt der Neustart bewusst (Exit 4 mit

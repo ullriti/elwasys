@@ -219,8 +219,12 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   Token-Design unverändert (nur SHA-256-Hash in der DB, kein `expires_at`, gleicher
   Blast-Radius); die CLI (`TerminalTokenCliRunner`, `deploy/cutover/02-issue-terminal-tokens.sh`)
   bleibt für Erstinbetriebnahme/Cutover bestehen und nutzt denselben `TerminalTokenService`.
-  Suiten: **Backend 337, Portal-E2E 32** (neu: P32/P33). Details:
-  [Worklog](../worklog/2026-07-28-standort-token-portal-ui.md).
+  Suiten: **Backend 341, Portal-E2E 32** (neu: P32/P33). Der Review-Nachlauf ergänzte die
+  Fehlerbehandlung beider Schreibpfade des Dialogs, einen serverseitigen Test für das Leeren
+  der Klartext-Anzeige und zwei Bestandsfixes, die dabei auffielen: Knöpfe mit
+  `setDisableOnClick` blieben nach dem Klick tot (Guthaben „Buchen", Abrechnen der verfallenen
+  Ausführungen) – die Regel dazu steht jetzt in [03-modules.md](03-modules.md), Portal-UI.
+  Details: [Worklog](../worklog/2026-07-28-standort-token-portal-ui.md).
 - **Nächster Schritt:** **Generalprobe nach [Spec 0001](../specs/0001-finale-review.md)**
   (Cutover-Probelauf, Migrations-Dry-Run mit Produktivdaten-Kopie, Backup-Restore-Probe,
   Ausfall-Drills, Alarm-Probe beider Stufen, Soak-Test, Vor-Ort-Kalibrierung), dann Pilotphase

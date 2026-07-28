@@ -388,7 +388,7 @@ sich ein `test()`.
 | P29 | list-filter-sort.spec.ts | Freitext-Filter grenzt die Liste auf die Treffer ein, Leeren stellt sie wieder her |
 | P30 | list-filter-sort.spec.ts | Sortierung der Guthaben-Spalte geht über den Betrag, nicht über den formatierten Text |
 | P31 | list-filter-sort.spec.ts | Eine gefilterte Liste bleibt gefiltert, wenn eine andere Session die Daten ändert |
-| P32 | terminal-tokens.spec.ts | Standort-Token im Portal erzeugen → Klartext wird genau einmal angezeigt und erscheint danach nirgends mehr |
+| P32 | terminal-tokens.spec.ts | Standort-Token im Portal erzeugen → Klartext wird genau einmal angezeigt und erscheint danach nirgends mehr; der gespeicherte Hash erreicht den Browser nie |
 | P33 | terminal-tokens.spec.ts | Standort-Token widerrufen → Status wechselt, die Zeile bleibt als Beleg, ein zweites Token bleibt aktiv |
 
 ### Kommandos
@@ -434,7 +434,7 @@ läuft – das Rollout-Gate nach einem Deployment (siehe `deploy/smoke/README.md
 
 Am Code gezählt:
 
-- **Backend (JUnit)**: die Standard-Suite (`backend/run-backend-tests.sh`) umfasst **337**
+- **Backend (JUnit)**: die Standard-Suite (`backend/run-backend-tests.sh`) umfasst **341**
   Tests. Die separat gehaltene `TerminalMaintenanceRealClientE2ETest` (5 `@Test`, per
   `backend/pom.xml`-Exclude, eigener Harness) läuft darin nicht mit.
 - **Portal-E2E (Playwright)**: **32 `test()`** in `backend/e2e/tests/` (login 2 / admin 3 /
@@ -445,6 +445,10 @@ Am Code gezählt:
 
 ## Historie
 
+- **2026-07-28** — Review-Nachlauf zur Token-Verwaltung: Dialog-Komponententests ohne Browser
+  (`TerminalTokenDialogTest`, `CreditTopUpDialogTest` – siehe 03-modules.md, Portal-Tests),
+  P32 sichert zusätzlich zu, dass der Token-Hash nirgends im Dialog steht; Inventar Backend
+  337 → **341**.
 - **2026-07-28** — Standort-Token-Verwaltung im Portal: Portal-Fälle P32/P33, neue
   Selektor-Regel (Grid-Slot-Namen sind pro Grid eindeutig → `scope` in den Grid-Helfern) und
   die im Redesign-Testpaket entstandenen Fälle P29–P31 nachgetragen; Inventar auf Backend 337
