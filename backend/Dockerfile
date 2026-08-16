@@ -46,8 +46,19 @@ FROM deps AS build
 
 COPY backend/src backend/src
 
+# -Pproduction ist PFLICHT, nicht optional: nur dieses Profil fuehrt
+# vaadin-maven-plugin:build-frontend aus und schreibt productionMode=true in die
+# META-INF/VAADIN/config/flow-build-info.json des Jars. Ohne das Profil laeuft aus dem
+# Standard-Build nur prepare-frontend durch, das Jar bleibt ein Development-Build und
+# das Backend startet ueberhaupt nicht - Vaadin bricht beim Context-Start ab mit
+#   IllegalStateException: Running project in development mode with no access to
+#   folder '/build/backend'.
+# (Der Pfad ist WORKDIR /build + Modul backend, also der Build-Container-Pfad, den die
+# Token-Datei konserviert hat.) Das laesst sich zur Laufzeit NICHT nachziehen: die
+# Token-Datei im Jar hat Vorrang vor der Spring-Property, ein gesetztes
+# VAADIN_PRODUCTIONMODE=true aendert nichts.
 RUN --mount=type=cache,target=/root/.m2/repository \
-    mvn -B -f pom.xml package -pl backend -am -DskipTests \
+    mvn -B -f pom.xml package -pl backend -am -DskipTests -Pproduction \
     && cp backend/target/elwasys-backend.jar /build/elwasys-backend.jar
 
 # ---------------------------------------------------------------------------
