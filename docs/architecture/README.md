@@ -33,3 +33,4 @@ Herleitung der Einzelentscheidungen findet sich im Modernisierungsplan
 | [0024](0024-fernwartungs-log-deckelung-und-frame-grenze.md) | Fernwartungs-Log: gedeckelte Übertragung und angehobene WebSocket-Frame-Grenze | accepted |
 | [0025](0025-standort-token-verwaltung-im-portal.md) | Standort-Token-Verwaltung im Admin-Portal (revidiert ADR 0018, #43) | accepted |
 | [0026](0026-client-auf-java-17-wegen-javafx-auf-32-bit-arm.md) | Client-Raspi bleibt auf Java 17: JavaFX 21 gibt es für 32-bit-ARM nur als Monocle, nicht mit GTK | accepted |
+| [0027](0027-n-plus-1-in-der-buchungshistorie.md) | Buchungshistorie: LAZY statt EAGER (N+1), expliziter HikariCP-Pool | accepted |

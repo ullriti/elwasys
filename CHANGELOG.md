@@ -13,6 +13,23 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Fixed
+- **Das Benutzer-Portal hing nach dem Login als Nicht-Admin minutenlang.** Die Buchungshistorie
+  löste eine eigene Datenbankabfrage je Zeile aus; für ein Konto mit 506 Buchungen dauerte der
+  Aufbau rund 20 Minuten, und jede Guthabenänderung stieß ihn erneut an. Betroffen war etwa ein
+  Drittel der Konten — das Administrator-Konto hat null Buchungen, weshalb es beim Testen nicht
+  auffiel. Siehe [ADR 0027](docs/architecture/0027-n-plus-1-in-der-buchungshistorie.md).
+- Die Größe des Datenbank-Verbindungspools wird jetzt explizit gesetzt (vorher der Default von
+  10). Portal und Terminal-API teilen sich einen Pool — blieben mehrere Portal-Anfragen hängen,
+  bekamen auch die Terminals keine Verbindung mehr.
+- Das Portal liefert wieder ein Favicon aus; bisher antwortete `/favicon.ico` mit 404.
+- Die Zeitstempel des Backends laufen durchgängig in der Systemzeitzone. Der zentrale
+  Zeitgeber stand auf UTC, wodurch `terminal_tokens.last_used_at` zwei Stunden zu früh angezeigt
+  wurde, während `created_at` daneben korrekt war.
+- Das Terminal protokolliert nicht mehr jedes fremde fhem-Ereignis als vermeintlichen Fehler.
+  Auf dem fhem-Standort waren dadurch 86 % der Zeilen, die die Fernwartung anzeigt, Rauschen.
+- `deploy/terminal/upgrade-jre.sh` und `Client-Raspi/setup.sh` installieren Java 17 statt 21 —
+  für 32-bit-ARM gibt es kein JavaFX 21 mit Oberfläche, ein so aufgesetztes Terminal bliebe
+  dunkel (ADR 0026).
 - Das Terminal startet auf Raspberry-Pi-Geräten mit 32-bit-Betriebssystem wieder: der
   Client wird jetzt auf **Java 17** gebaut (Backend bleibt auf Java 21). Mit Java 21 blieb
   der Bildschirm dunkel – für 32-bit-ARM veröffentlicht OpenJFX kein JavaFX 21 mit

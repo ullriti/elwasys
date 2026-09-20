@@ -343,6 +343,20 @@
 				<configuration>
 					<systemPropertyVariables>
 						<vaadin.productionMode>true</vaadin.productionMode>
+						<!-- KLEINER Verbindungspool in Tests, bewusst abweichend vom Produktivwert
+						     (src/main/resources/application.yml). Die Suite faehrt viele
+						     Spring-Kontexte hoch und haelt sie im Kontext-Cache offen; jeder bringt
+						     seinen eigenen Pool mit, und das multipliziert sich. Mit dem
+						     Produktivwert lief die Suite gegen PostgreSQLs Standardgrenze von 100
+						     Verbindungen ("FATAL: sorry, too many clients already") - mit dem
+						     Fehlerbild "Failed to load ApplicationContext" in voellig unbeteiligten
+						     Testklassen, das die Ursache gut versteckt.
+
+						     Bewusst HIER und nicht als application.yml unter src/test/resources:
+						     eine gleichnamige Datei im Test-Klassenpfad ERSETZT die aus
+						     src/main/resources vollstaendig, statt sie zu ergaenzen - der Versuch
+						     kostete 204 Folgefehler. -->
+						<spring.datasource.hikari.maximum-pool-size>2</spring.datasource.hikari.maximum-pool-size>
 					</systemPropertyVariables>
 					<!-- TerminalMaintenanceRealClientE2ETest (Phase 4 AP5) needs its own harness
 					     (a packaged Client-Raspi jar + Xvfb, since it launches a real headless
