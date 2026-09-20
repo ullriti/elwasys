@@ -88,17 +88,17 @@
 			     Java 21 runtime (docs/kb/05 "Technologie-Entscheidungen"); JavaFX 24+
 			     requires JDK 22+ and would break the Raspi client. See
 			     docs/kb/05-migration-plan.md, Änderungslog "Phase 4 AP2". -->
-			<version>23.0.2</version>
+			<version>17.0.20</version>
 		</dependency>
 		<dependency>
 			<groupId>org.openjfx</groupId>
 			<artifactId>javafx-fxml</artifactId>
-			<version>23.0.2</version>
+			<version>17.0.20</version>
 		</dependency>
 		<dependency>
 			<groupId>org.openjfx</groupId>
 			<artifactId>javafx-web</artifactId>
-			<version>23.0.2</version>
+			<version>17.0.20</version>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -129,10 +129,16 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.3</version>
+				<!-- 3.3 (2015) kennt <release> noch nicht - das gibt es erst ab 3.6.
+				     Ohne <release> beschraenkt source/target NUR die Bytecode-Version und
+				     laesst javac weiter gegen die API des laufenden JDK linken: die CI
+				     (JDK 21) wuerde dann Klassen erzeugen, die erst auf dem Terminal mit
+				     NoSuchMethodError sterben. -->
+				<version>3.13.0</version>
 				<configuration>
-					<source>21</source>
-					<target>21</target>
+					<!-- Das Terminal laeuft auf Java 17, siehe docs/architecture/0025.
+					     <release> beschraenkt Bytecode UND API-Oberflaeche. -->
+					<release>17</release>
 				</configuration>
 			</plugin>
 			<!-- Modern Surefire so JUnit 5 (Jupiter) tests are discovered/run -->

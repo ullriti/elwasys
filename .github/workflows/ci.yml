@@ -174,6 +174,26 @@ jobs:
       - name: Run Client tests (headless via Xvfb)
         run: bash Client-Raspi/run-ui-tests.sh
 
+      - name: Verify client bytecode targets Java 17
+        # Das Terminal laeuft auf Java 17 (Raspberry Pi 3, armhf - fuer 32-bit-ARM
+        # gibt es JavaFX 21 nur als Monocle, nicht mit GTK-Oberflaeche). Dieser Job
+        # baut aber auf JDK 21, weil die Cross-Component-E2E den Spring-Context des
+        # Backends bootet. Ohne <release>17</release> im Client-POM linkt javac
+        # gegen die Java-21-API und der Fehler faellt erst am Geraet auf.
+        # Class-File-Major 61 = Java 17, 65 = Java 21.
+        run: |
+          set -euo pipefail
+          bad=0
+          while IFS= read -r f; do
+            major=$(od -An -tu1 -j7 -N1 "$f" | tr -d ' ')
+            if [ "$major" != "61" ]; then
+              echo "FEHLER: $f hat Class-File-Major $major (erwartet 61 = Java 17)"
+              bad=1
+            fi
+          done < <(find Client-Raspi/target/classes -name '*.class')
+          [ "$bad" -eq 0 ] || exit 1
+          echo "Alle Client-Klassen auf Class-File-Major 61 (Java 17)."
+
       - name: Run Cross-Component maintenance E2E (headless via Xvfb)
         # Successor of the old P21/P22 suite (Phase 4 AP5, see docs/kb/05-migration-plan.md /
         # docs/kb/06-ui-tests.md): a real, packaged Client-Raspi jar talks to a real backend Spring
