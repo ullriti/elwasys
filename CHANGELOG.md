@@ -12,6 +12,14 @@ im [Worklog](docs/worklog/README.md).
 
 ## [Unreleased]
 
+### Fixed
+- Das Terminal startet auf Raspberry-Pi-Geräten mit 32-bit-Betriebssystem wieder: der
+  Client wird jetzt auf **Java 17** gebaut (Backend bleibt auf Java 21). Mit Java 21 blieb
+  der Bildschirm dunkel – für 32-bit-ARM veröffentlicht OpenJFX kein JavaFX 21 mit
+  GTK-Oberfläche (nur `linux-arm32-monocle`), und die mitgelieferte Runtime meldete
+  irreführend `Minimum GTK version required is 3.8.0`. Siehe
+  [ADR 0026](docs/architecture/0026-client-auf-java-17-wegen-javafx-auf-32-bit-arm.md).
+
 ### Added
 - GoLive-Testplan (`deploy/GOLIVE-TESTPLAN.md`): abhakbare Tagescheckliste für die manuelle
   Abnahme nach der Produktivumschaltung – Normalbetrieb, Grenz- und Fehlerfälle, Ausfall- und
