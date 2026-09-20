@@ -29,6 +29,16 @@
                 </HBox>
             </graphic>
         </Button>
+        <!-- Offline-Hinweis (Befund aus dem Offline-Test am 2026-09-20): Bis dahin gab es KEINE
+             Anzeige des Offline-Zustands - der Bewohner konnte nicht erkennen, dass das Terminal
+             gerade ohne Backend arbeitet. Bewusst neben den Zurueck-Knopf gelegt, der meist
+             unsichtbar ist: so kommt der Hinweis ohne zusaetzliche Hoehe aus (die Kopfzeile ist
+             mit 40 px ohnehin knapp, siehe Backlog-Punkt zur Header-Groesse). -->
+        <HBox fx:id="offlineNotice" alignment="CENTER_LEFT" spacing="10" visible="false"
+              managed="${offlineNotice.visible}">
+            <Label text="" styleClass="icon, icon-medium"/> <!-- fa-chain-broken -->
+            <Label text="Offline" styleClass="text-label"/>
+        </HBox>
     </HBox>
 
     <!-- Center Pane -->

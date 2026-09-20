@@ -44,6 +44,8 @@ public class ToolbarPaneController implements Initializable {
     private HBox locationDisallowedNotice;
     @FXML
     private HBox userInfo;
+    @FXML
+    private HBox offlineNotice;
 
     private StringProperty userName = new SimpleStringProperty(NOT_LOGGED_IN_STRING);
 
@@ -124,6 +126,21 @@ public class ToolbarPaneController implements Initializable {
 
         this.userButton.setVisible(!off);
         this.userButton.setDisable(off || tbs.isUserButtonDisabled());
+    }
+
+    /**
+     * Blendet den Offline-Hinweis ein oder aus.
+     * <p>
+     * Befund aus dem bewussten Offline-Test am Terminal Hilarenhaus (2026-09-20): Das Terminal
+     * arbeitete bei getrenntem Backend fachlich einwandfrei weiter (lokales Journal, spaeterer
+     * Nachtrag ohne Datenverlust) - der Bewohner konnte davon aber NICHTS sehen. Im gesamten
+     * Oberflaechen-Paket kam "offline" bis dahin nur in Kommentaren und in der Ausweichlogik
+     * vor: kein Hinweistext, kein Banner, kein Statuspunkt. Zusammen mit der damaligen Totzeit
+     * von zweimal 10 s (siehe {@code api.ApiClient}) war die wahrscheinlichste Reaktion, die
+     * Karte erneut aufzulegen - genau das, was bei einem gestoerten System am wenigsten hilft.
+     */
+    public void setBackendOffline(boolean offline) {
+        this.offlineNotice.setVisible(offline);
     }
 
     /**

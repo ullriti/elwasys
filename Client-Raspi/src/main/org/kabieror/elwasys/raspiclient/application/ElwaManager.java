@@ -275,6 +275,7 @@ public class ElwaManager {
             // auf den eigenen Standort beschränkt (kommt implizit aus dem
             // Standort-Token) - siehe docs/kb/05-migration-plan.md, Änderungslog "Phase 4
             // AP4" für die Einordnung dieses Befunds.
+            java.util.Set<Integer> deviceIdsWithRunningExecution = new java.util.HashSet<>();
             for (ClientDevice d : this.getManagedDevices()) {
                 DeviceOverviewDto overview = this.terminalDataService.lastOverviewFor(d.getId());
                 if (overview != null && overview.runningExecutionId() != null) {
@@ -296,8 +297,16 @@ public class ElwaManager {
                     ClientExecution execution = ClientExecution.of(execDto, d, program, user);
                     d.onExecutionStarted(execution);
                     this.executionManager.startExecution(execution);
+                    deviceIdsWithRunningExecution.add(d.getId());
                 }
             }
+
+            // Verwaiste Journal-STARTs aufloesen (Neustart-Test 2026-09-20): eine rein lokale
+            // Offline-Ausfuehrung ueberlebt einen Neustart nicht, weil die Schleife oben
+            // ausschliesslich aus dem BACKEND wiederherstellt - ihr START laege sonst fuer immer
+            // im Journal und wuerde bei jedem Replay folgenlos uebersprungen. Muss NACH der
+            // Wiederherstellung laufen, damit die noch laufenden Geraete bekannt sind.
+            this.offlineGateway.resolveOrphanedStarts(deviceIdsWithRunningExecution);
 
             // Periodischer Offline-Abgleich (Phase 4 AP6): Snapshot aktualisieren und ein
             // evtl. ausstehendes Ereignis-Journal nachmelden, sobald das Backend wieder
@@ -310,6 +319,14 @@ public class ElwaManager {
             this.offlineScheduler.scheduleAtFixedRate(() -> {
                 try {
                     this.offlineGateway.refreshSnapshot();
+                    // Offline-Hinweis in der Werkzeugleiste nachfuehren (Befund aus dem
+                    // Offline-Test am 2026-09-20: es gab ueberhaupt keine Anzeige). Bewusst an
+                    // diesen Takt gehaengt statt an jeden fehlgeschlagenen Aufruf: der Abgleich
+                    // laeuft ohnehin alle paar Sekunden, und ein Ausfall dauert Minuten, nicht
+                    // Sekunden - der Hinweis steht also laengst, wenn jemand ans Terminal tritt.
+                    boolean backendOffline = this.apiClient.isBackendUnreachable();
+                    javafx.application.Platform.runLater(
+                            () -> this.mainFormController.setBackendOffline(backendOffline));
                     if (this.offlineGateway.hasPendingJournalEntries()) {
                         this.offlineGateway.replay();
                     }

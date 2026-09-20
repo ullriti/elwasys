@@ -13,6 +13,22 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Fixed
+- **Das Terminal zeigte nicht an, dass es offline arbeitet.** Bei getrenntem Backend lief es
+  fachlich einwandfrei weiter (lokales Journal, späterer Nachtrag ohne Datenverlust) — der
+  Bewohner konnte davon aber nichts sehen: Es gab überhaupt keine Offline-Anzeige. Die
+  Werkzeugleiste zeigt jetzt einen Hinweis.
+- **Jeder Bedienschritt kostete bei getrenntem Backend 10 Sekunden Stillstand.** Das
+  Zeitlimit für Backend-Aufrufe stand fest auf 10 s, und die interaktiven Pfade fragten den
+  längst bekannten Offline-Zustand nicht ab — Karte auflegen und Bestätigen kosteten so
+  zweimal rund 10 s ohne jede Rückmeldung. Aufrufe scheitern jetzt nach 2 s, sobald das
+  Backend als nicht erreichbar gilt; alle 60 s läuft ein Versuch weiterhin mit vollem
+  Zeitlimit, damit ein langsames Backend nicht dauerhaft für ein totes gehalten wird.
+- **Eine offline gebuchte Wäsche konnte spurlos verschwinden.** Eine rein lokale Ausführung
+  überlebt keinen Terminal-Neustart; ihr Journal-Eintrag blieb danach für immer liegen und
+  wurde bei jedem Nachtrag-Versuch folgenlos übersprungen — ohne Ausführung, ohne Abrechnung
+  und ohne Hinweis, dass etwas fehlt. Solche Einträge werden beim Start jetzt aufgelöst und
+  als Vorfall gemeldet. Nachgebucht wird bewusst nicht: Das Ende des Laufs lässt sich nicht
+  mehr ermitteln, und ein geschätztes Ende ginge zu Lasten des Bewohners.
 - **Das Benutzer-Portal hing nach dem Login als Nicht-Admin minutenlang.** Die Buchungshistorie
   löste eine eigene Datenbankabfrage je Zeile aus; für ein Konto mit 506 Buchungen dauerte der
   Aufbau rund 20 Minuten, und jede Guthabenänderung stieß ihn erneut an. Betroffen war etwa ein
