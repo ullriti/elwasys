@@ -11,6 +11,17 @@ spring:
     url: ${ELWASYS_DB_URL:jdbc:postgresql://localhost:5432/elwasys}
     username: ${ELWASYS_DB_USER:elwaportal}
     password: ${ELWASYS_DB_PASSWORD:elwaportal}
+    hikari:
+      # Explizit statt HikariCPs Default von 10 (Befund aus dem Cutover 2026-09-20): Portal und
+      # Terminal-API teilen sich EINEN Pool. Blieben mehrere Portal-Anfragen gleichzeitig lange
+      # in der Datenbank haengen, bekaemen auch die Terminals keine Verbindung mehr - aus einem
+      # langsamen Portal wuerde ein Ausfall der Waschkueche. Der Wert ist bewusst konservativ:
+      # PostgreSQL vertraegt weit mehr, aber ein groesserer Pool verdeckt nur Abfrageprobleme,
+      # statt sie zu loesen (der eigentliche Ausloeser, eine N+1-Abfrage, ist behoben).
+      maximum-pool-size: ${ELWASYS_DB_POOL_SIZE:20}
+      # Eine Anfrage soll scheitern, statt unbegrenzt auf eine Verbindung zu warten - ein
+      # schneller Fehler ist im Betrieb besser diagnostizierbar als ein haengender Aufruf.
+      connection-timeout: 10000
 
   # JPA/Hibernate (AP2): das Schema kommt AUSSCHLIESSLICH von Flyway (siehe unten) - Hibernate
   # darf es weder generieren noch verändern. ddl-auto=none ist zwar bereits Spring Boots

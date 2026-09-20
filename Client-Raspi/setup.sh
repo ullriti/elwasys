@@ -132,7 +132,9 @@ function install_java() {
     wget -q -O - https://download.bell-sw.com/pki/GPG-KEY-bellsoft | sudo apt-key add -
     echo "deb [arch=armhf] https://apt.bell-sw.com/ stable main" | sudo tee /etc/apt/sources.list.d/bellsoft.list
     sudo apt-get update
-    sudo apt-get install -y bellsoft-java21-runtime-full
+    # 17, nicht 21 (ADR 0026): fuer 32-bit-ARM gibt es kein JavaFX 21 mit GTK-Oberflaeche -
+    # ein damit gestartetes Terminal bleibt dunkel. Siehe deploy/terminal/upgrade-jre.sh.
+    sudo apt-get install -y bellsoft-java17-runtime-full
 }
 
 

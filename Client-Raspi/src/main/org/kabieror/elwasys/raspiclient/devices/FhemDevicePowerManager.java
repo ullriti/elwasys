@@ -387,7 +387,15 @@ public class FhemDevicePowerManager implements IDevicePowerManager, ICloseListen
                 }
             }
         } else {
-            this.logger.info("Could not parse power measurement event: " + event);
+            // TRACE, nicht INFO (Befund aus dem Cutover 2026-09-20): der fhem-Ereignisstrom
+            // liefert ALLE Geraeteereignisse des Servers - Spannung, Strom, Energie, eState,
+            // CMDs_done und so weiter. Genau eines davon ist eine Leistungsmessung, alle
+            // uebrigen landeten hier. Gemessen: 382 Zeilen in zehn Minuten, und von den 1000
+            // Zeilen, die die Fernwartung im Portal anzeigt, waren 858 (86 %) diese Meldung.
+            // Damit verdraengte sie binnen Minuten alles, wonach man im Stoerungsfall sucht.
+            // Die Formulierung ist ausserdem irrefuehrend: nichts ist "kaputt", das Ereignis
+            // war nur keine Leistungsmessung.
+            this.logger.trace("fhem event without a power measurement (ignored): " + event);
         }
     }
 

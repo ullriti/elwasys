@@ -17,8 +17,21 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class ClockConfig {
 
+    /**
+     * <b>Systemzone, NICHT UTC.</b> Die Anwendung schreibt ihre Zeitstempel als
+     * {@link java.time.LocalDateTime} in {@code timestamp without time zone}-Spalten und
+     * erzeugt sie überall sonst mit {@code LocalDateTime.now()}, also in der Systemzone
+     * (im Betrieb {@code TZ=Europe/Berlin}). Ein auf UTC festgelegter Clock ließe genau die
+     * Felder, die über diesen Bean laufen, um den UTC-Versatz abweichen — beobachtet an
+     * {@code terminal_tokens}, wo {@code created_at} (17:20, Systemzone) und
+     * {@code last_used_at} (16:25, UTC) in derselben Zeile zwei Stunden auseinanderlagen.
+     *
+     * <p>Für {@link org.kabieror.elwasys.backend.service.RateLimiter} ist die Zone
+     * gleichgültig — er rechnet mit {@code clock.instant()}. Tests injizieren ohnehin eine
+     * eigene, vorrückbare Uhr und bleiben unberührt.
+     */
     @Bean
     public Clock systemClock() {
-        return Clock.systemUTC();
+        return Clock.systemDefaultZone();
     }
 }

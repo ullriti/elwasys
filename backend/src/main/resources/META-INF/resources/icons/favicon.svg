@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Portal-Favicon. Bewusst SVG und bewusst schlicht: eine Waschtrommel in der Akzentfarbe
+  des Portals (#4488dd, dieselbe wie die Terminal-Toolbar). Als Platzhalter gedacht - wer
+  ein richtiges Logo hat, ersetzt einfach diese Datei, der Pfad bleibt.
+
+  Liegt unter META-INF/resources und wird damit von Spring Boot als statische Ressource
+  ausgeliefert. Wichtig: NICHT ueber @CssImport/@JsModule oder ein Vaadin-Theme einbinden -
+  das wuerde einen Frontend-Bundle-Build erzwingen und damit den Online-Lizenzcheck von
+  Vaadin 24.10 ausloesen (siehe ElwasysAppShell-Javadoc und die Begruendung in der pom.xml).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="elwasys">
+  <rect width="64" height="64" rx="12" fill="#4488dd"/>
+  <circle cx="32" cy="34" r="17" fill="none" stroke="#ffffff" stroke-width="4"/>
+  <circle cx="32" cy="34" r="8" fill="#ffffff" opacity="0.55"/>
+  <circle cx="46" cy="15" r="3.5" fill="#ffffff"/>
+  <rect x="12" y="10" width="20" height="4" rx="2" fill="#ffffff" opacity="0.8"/>
+</svg>

@@ -2,17 +2,20 @@
 # JRE-Upgrade fuer BESTEHENDE Raspi-Terminals (Phase 6 AP3, siehe
 # docs/kb/05-migration-plan.md "Phase 6 - Produktivumschaltung" + Risikotabelle).
 #
-# Warum: Bereits im Feld provisionierte Terminals tragen aus einem frueheren
-# setup.sh-Lauf nur ein Java-17-JRE. Das Client-fat-jar baut seit Phase 1 mit
-# Sprachlevel 21 (Bytecode-Major 65); ein Java-17-JRE bricht es beim Start mit
-# UnsupportedClassVersionError ab. Dieses Skript hebt ein Bestandsgeraet auf
-# Java 21 an - ZWINGENDER erster Schritt VOR dem Rollout eines mit Sprachlevel 21
-# gebauten Release-Jars. (Neu-Provisionierung ueber setup.sh installiert Java 21
-# ohnehin schon - dieses Skript ist der Nachruest-Pfad fuer Altgeraete.)
+# Warum: Aeltere Geraete tragen aus einem frueheren setup.sh-Lauf noch ein Java 8
+# oder 11. Das Client-fat-jar baut mit Sprachlevel 17 (Bytecode-Major 61); eine
+# aeltere JRE bricht es beim Start mit UnsupportedClassVersionError ab. Dieses
+# Skript hebt ein Bestandsgeraet auf die Zielversion an - ZWINGENDER erster
+# Schritt VOR dem Rollout eines Release-Jars.
 #
-# Idempotent: Ist bereits Java >= 21 aktiv, wird nur bestaetigt (apt-Aufrufe sind
-# ohnehin idempotent). Robuste Verifikation am Ende (Major-Version aus
-# "java -version" geparst; klarer Fehlschlag bei < 21).
+# ACHTUNG, Aenderung nach ADR 0026 (Cutover 2026-09-20): Die Zielversion ist
+# jetzt 17, NICHT mehr 21. Fuer 32-bit-ARM gibt es kein JavaFX 21 mit
+# GTK-Oberflaeche; ein mit Java 21 gestartetes Terminal bleibt dunkel. Siehe die
+# ausfuehrliche Begruendung bei ELWA_JAVA_MAJOR weiter unten.
+#
+# Idempotent: Ist bereits eine ausreichende Java-Version aktiv, wird nur
+# bestaetigt (apt-Aufrufe sind ohnehin idempotent). Robuste Verifikation am Ende
+# (Major-Version aus "java -version" geparst; klarer Fehlschlag darunter).
 #
 # HINWEIS: Die eigentlichen apt-Schritte laufen NUR auf dem Geraet (armhf,
 # Raspberry Pi OS). In der Projekt-Sandbox wurden nur die Version-Parsing-/
@@ -82,30 +85,48 @@ if [[ ${EUID} -eq 0 ]]; then
     exit 1
 fi
 
+# Ziel-Java-Version des Terminals.
+#
+# 17, NICHT 21 (ADR 0026, Befund vom Cutover 2026-09-20): Fuer 32-bit-ARM veroeffentlicht
+# OpenJFX kein JavaFX 21 mit GTK-Oberflaeche - nur "linux-arm32-monocle". Die
+# BellSoft-arm32-Runtime bringt dementsprechend kein libglassgtk3.so mit; ihr libglass.so
+# referenziert GTK 2, erzwingt zur Laufzeit aber GTK >= 3.8. Ein mit Java 21 gestartetes
+# Terminal blieb deshalb dunkel:
+#   UnsupportedOperationException: Minimum GTK version required is 3.8.0. System has 2.24.31
+# (und zwar bei installiertem GTK 3.22 - die Meldung ist irrefuehrend). Der Client wird
+# seither mit Sprachlevel 17 gebaut; Java 17 hat auf allen hier genutzten Architekturen ein
+# funktionierendes JavaFX.
+#
+# Ueberschreibbar, falls ein Geraet spaeter auf einem 64-bit-OS laeuft - dort gibt es
+# JavaFX 21 mit GTK3 regulaer:
+#   ELWA_JAVA_MAJOR=21 ELWA_JAVA_PACKAGE=bellsoft-java21-runtime-full ./upgrade-jre.sh
+ELWA_JAVA_MAJOR="${ELWA_JAVA_MAJOR:-17}"
+ELWA_JAVA_PACKAGE="${ELWA_JAVA_PACKAGE:-bellsoft-java17-runtime-full}"
+
 main() {
     log_state "Aktuelle Java-Version pruefen ..."
     # T2 (QA-Review): nur EIN Aufruf von require_java_at_least (statt zweimal
     # "java -version" auszufuehren) - die OK-Zeile wird aus dem ersten Aufruf
     # aufgehoben und danach ausgegeben.
     local ok_msg
-    if ok_msg="$(require_java_at_least 21 2>/dev/null)"; then
-        echo "Java 21+ ist bereits aktiv - nichts zu tun (idempotent)."
+    if ok_msg="$(require_java_at_least "${ELWA_JAVA_MAJOR}" 2>/dev/null)"; then
+        echo "Java ${ELWA_JAVA_MAJOR}+ ist bereits aktiv - nichts zu tun (idempotent)."
         echo "${ok_msg}"
         exit 0
     fi
-    echo "Java < 21 (oder nicht ermittelbar) - installiere bellsoft-java21-runtime-full ..."
+    echo "Java < ${ELWA_JAVA_MAJOR} (oder nicht ermittelbar) - installiere ${ELWA_JAVA_PACKAGE} ..."
 
     # Gleiche apt-Quelle/Schluessel wie Client-Raspi/setup.sh (install_java).
     log_state "BellSoft-Paketquelle einrichten ..."
     wget -q -O - https://download.bell-sw.com/pki/GPG-KEY-bellsoft | sudo apt-key add -
     echo "deb [arch=armhf] https://apt.bell-sw.com/ stable main" | sudo tee /etc/apt/sources.list.d/bellsoft.list
     sudo apt-get update
-    sudo apt-get install -y bellsoft-java21-runtime-full
+    sudo apt-get install -y "${ELWA_JAVA_PACKAGE}"
 
-    log_state "Verifiziere, dass jetzt Java 21+ aktiv ist ..."
-    if ! require_java_at_least 21; then
-        echo "FEHLER: Nach der Installation ist immer noch kein Java 21+ aktiv." >&2
-        echo "        Ggf. Alt-JRE per update-alternatives auf Java 21 umstellen und erneut pruefen." >&2
+    log_state "Verifiziere, dass jetzt Java ${ELWA_JAVA_MAJOR}+ aktiv ist ..."
+    if ! require_java_at_least "${ELWA_JAVA_MAJOR}"; then
+        echo "FEHLER: Nach der Installation ist immer noch kein Java ${ELWA_JAVA_MAJOR}+ aktiv." >&2
+        echo "        Ggf. Alt-JRE per update-alternatives umstellen und erneut pruefen." >&2
         exit 1
     fi
 

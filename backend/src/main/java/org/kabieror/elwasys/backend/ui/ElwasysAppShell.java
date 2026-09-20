@@ -70,6 +70,13 @@ public class ElwasysAppShell implements AppShellConfigurator {
     @Override
     public void configurePage(AppShellSettings settings) {
         settings.addInlineWithContents(Inline.Position.APPEND, loadPortalCss(), Inline.Wrapping.STYLESHEET);
+        // Favicon (Befund aus dem Abnahmetest 2026-09-20): Ohne <link rel="icon"> fragt jeder
+        // Browser automatisch /favicon.ico an, bekam bisher 404 und zeigte sein Standardsymbol -
+        // fuer ein oeffentlich erreichbares Portal unschoen. Die Datei liegt unter
+        // META-INF/resources und wird von Spring Boot als statische Ressource ausgeliefert;
+        // bewusst NICHT ueber ein Vaadin-Theme oder @CssImport eingebunden, das wuerde einen
+        // Frontend-Bundle-Build und damit den Online-Lizenzcheck ausloesen (siehe Klassen-Javadoc).
+        settings.addFavIcon("icon", "icons/favicon.svg", "any");
     }
 
     private static String loadPortalCss() {

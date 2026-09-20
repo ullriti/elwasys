@@ -48,7 +48,23 @@ public class CreditAccountingEntryEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    /**
+     * <b>LAZY, nicht EAGER</b> (Befund aus dem Cutover 2026-09-20). Mit EAGER lud Hibernate
+     * beim Abruf der Buchungshistorie fuer JEDE Ergebniszeile eine eigene Einzelabfrage nach
+     * ({@code EntitySelectFetchInitializer -> SingleIdLoadPlan.load}) - die abgeleitete
+     * Methode {@code findByUser_IdOrderByDateDescIdDesc} erzeugt ja nur ein einfaches
+     * SELECT ohne JOIN. Auf echten Bestandsdaten (ein Konto mit 506 Buchungen) brauchte das
+     * Benutzer-Dashboard dadurch rund 20 Minuten; in {@code pg_stat_activity} war nichts zu
+     * sehen, weil jede Einzelabfrage millisekundenschnell ist - es sind nur Hunderte.
+     *
+     * <p>LAZY statt {@code @EntityGraph} bewusst gewaehlt: die Verknuepfung wird nirgends
+     * gelesen (kein einziger Aufruf von {@link #getExecution()} im Haupt- oder Testcode),
+     * beide Ansichten der Buchungshistorie zeigen nur Datum, Betrag und Buchungstext. Ein
+     * JOIN wuerde die Daten also weiterhin laden, nur schneller - hier werden sie gar nicht
+     * gebraucht. Wer den Bezug kuenftig doch anzeigt, holt ihn gezielt per
+     * {@code @EntityGraph(attributePaths = "execution")} auf der jeweiligen Abfrage.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "execution_id")
     private ExecutionEntity execution;
 
