@@ -28,6 +28,8 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Schlanke REST-Client-Schicht für die Backend-API v1 (Phase 4 AP4, siehe
@@ -49,6 +51,49 @@ import java.util.UUID;
 public class ApiClient {
 
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
+
+    /**
+     * Verkürztes Zeitlimit, solange das Backend als nicht erreichbar gilt ("Schnellfehler").
+     * <p>
+     * Hintergrund (Offline-Test am Terminal Hilarenhaus, 2026-09-20): Bei getrenntem Backend
+     * lief JEDER Bedienschritt erneut in die vollen {@link #REQUEST_TIMEOUT} von 10 s, obwohl
+     * der Client längst wusste, dass niemand antwortet - die Hintergrundabfrage war bis zur
+     * ersten Buchung schon rund zehnmal gescheitert. Der Bewohner wartete dadurch zweimal
+     * rund 10 s (Karte auflegen -> Geräteliste, Bestätigen -> Maschine an), ohne jede
+     * Rückmeldung. Gemessen auf die Millisekunde: 10,008 s und 10,002 s.
+     * <p>
+     * 2 s sind für den Normalfall reichlich bemessen: Die Terminals sprechen das Backend über
+     * den internen Traefik-Eingang im LAN an (gemessene Antwortzeit 0,12 s), nicht über das
+     * Internet.
+     */
+    private static final Duration OFFLINE_FAST_FAIL_TIMEOUT = Duration.ofSeconds(2);
+
+    /**
+     * Abstand, in dem auch im Schnellfehler-Zustand wieder ein Versuch mit dem VOLLEN
+     * Zeitlimit unternommen wird (halboffener Zustand eines Schutzschalters).
+     * <p>
+     * Ohne diesen Rückweg gäbe es einen Zustand, aus dem der Client nicht mehr herausfände:
+     * ein erreichbares, aber dauerhaft langsames Backend (länger als
+     * {@link #OFFLINE_FAST_FAIL_TIMEOUT}) würde jeden Schnellversuch reißen lassen und damit
+     * den Schnellfehler-Zustand immer wieder selbst bestätigen. Genau dieser Fall ist real
+     * aufgetreten - die N+1-Abfrage im Portal (Release 1.0.2) hielt das Backend am Leben,
+     * aber so langsam, dass die Terminal-Aufrufe in Zeitüberschreitungen liefen.
+     * <p>
+     * Der Abstand ist mit Bedacht größer als das Abfrageintervall des Offline-Abgleichs
+     * (20 s): So fällt der teure Vollversuch fast immer der Hintergrundabfrage zu, die
+     * niemanden warten lässt, und nur selten einem wartenden Bewohner.
+     */
+    private static final Duration FULL_TIMEOUT_RETRY_INTERVAL = Duration.ofSeconds(60);
+
+    /**
+     * Gilt das Backend derzeit als nicht erreichbar? Wird ausschließlich in {@link #send}
+     * gepflegt: gesetzt bei einem Kommunikationsfehler, gelöscht bei JEDER erfolgreichen
+     * Antwort (auch bei einer fachlichen 4xx - die beweist ebenfalls, dass jemand antwortet).
+     */
+    private final AtomicBoolean backendUnreachable = new AtomicBoolean(false);
+
+    /** Zeitpunkt des letzten Versuchs mit vollem Zeitlimit (Millisekunden seit Epoche). */
+    private final AtomicLong lastFullTimeoutAttemptAt = new AtomicLong(0L);
 
     private final Logger logger = LoggerFactory.getLogger(getClass());
     private final HttpClient httpClient;
@@ -226,9 +271,45 @@ public class ApiClient {
     }
 
     private HttpRequest.Builder requestBuilder(String path) {
-        return HttpRequest.newBuilder(this.baseUrl.resolve(path)).timeout(REQUEST_TIMEOUT)
+        return HttpRequest.newBuilder(this.baseUrl.resolve(path)).timeout(currentTimeout())
                 .header("Authorization", "Bearer " + this.token)
                 .header("Accept", "application/json");
+    }
+
+    /**
+     * Liefert das Zeitlimit für den nächsten Aufruf: im Normalfall {@link #REQUEST_TIMEOUT},
+     * im Schnellfehler-Zustand {@link #OFFLINE_FAST_FAIL_TIMEOUT} - dort aber höchstens
+     * {@link #FULL_TIMEOUT_RETRY_INTERVAL} lang am Stück, danach ist wieder ein Vollversuch
+     * fällig (siehe Konstanten-Kommentare).
+     */
+    private Duration currentTimeout() {
+        if (!this.backendUnreachable.get()) {
+            markFullTimeoutAttempt();
+            return REQUEST_TIMEOUT;
+        }
+        long now = System.currentTimeMillis();
+        long last = this.lastFullTimeoutAttemptAt.get();
+        if (now - last >= FULL_TIMEOUT_RETRY_INTERVAL.toMillis()
+                && this.lastFullTimeoutAttemptAt.compareAndSet(last, now)) {
+            this.logger.debug("Backend gilt als nicht erreichbar - dieser Aufruf laeuft dennoch mit dem "
+                    + "vollen Zeitlimit ({}), um ein langsames statt totes Backend zu erkennen.",
+                    REQUEST_TIMEOUT);
+            return REQUEST_TIMEOUT;
+        }
+        return OFFLINE_FAST_FAIL_TIMEOUT;
+    }
+
+    private void markFullTimeoutAttempt() {
+        this.lastFullTimeoutAttemptAt.set(System.currentTimeMillis());
+    }
+
+    /**
+     * Gilt das Backend nach dem letzten Aufruf als nicht erreichbar? Rein informativ - die
+     * Oberfläche nutzt es für den sichtbaren Offline-Hinweis (siehe
+     * {@code ui.medium.controller.ToolbarPaneController}).
+     */
+    public boolean isBackendUnreachable() {
+        return this.backendUnreachable.get();
     }
 
     /**
@@ -244,7 +325,12 @@ public class ApiClient {
         IOException lastError = null;
         for (int attempt = 0; attempt <= TRANSIENT_RETRY_COUNT; attempt++) {
             try {
-                return this.httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                HttpResponse<String> response = this.httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                // Erreichbar: auch eine fachliche 4xx beweist, dass jemand antwortet.
+                if (this.backendUnreachable.compareAndSet(true, false)) {
+                    this.logger.info("Backend ist wieder erreichbar.");
+                }
+                return response;
             } catch (IOException e) {
                 lastError = e;
                 if (attempt < TRANSIENT_RETRY_COUNT && isTransientCommunicationFailure(e)) {
@@ -262,6 +348,7 @@ public class ApiClient {
                     continue;
                 }
                 this.logger.warn("Communication with the backend failed: {} {}", request.method(), request.uri(), e);
+                this.backendUnreachable.set(true);
                 throw new ApiException("Das Backend ist nicht erreichbar: " + e.getLocalizedMessage(), e);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();

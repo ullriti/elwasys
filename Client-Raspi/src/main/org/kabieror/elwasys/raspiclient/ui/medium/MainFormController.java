@@ -536,6 +536,18 @@ public class MainFormController extends AbstractMainFormController implements IM
         return registeredUser.get();
     }
 
+    /**
+     * Reicht den Erreichbarkeitszustand des Backends an die Werkzeugleiste durch (siehe
+     * {@code ToolbarPaneController#setBackendOffline}). Wird vom periodischen Offline-Abgleich
+     * in {@code application.ElwaManager} aufgerufen.
+     */
+    @Override
+    public void setBackendOffline(boolean offline) {
+        if (this.toolbarPaneController != null) {
+            this.toolbarPaneController.setBackendOffline(offline);
+        }
+    }
+
     public void setRegisteredUser(ClientUser registeredUser) {
         this.registeredUser.set(registeredUser);
     }

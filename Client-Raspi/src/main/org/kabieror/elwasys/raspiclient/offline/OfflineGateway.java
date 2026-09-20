@@ -337,6 +337,81 @@ public class OfflineGateway {
      *
      * @return {@code true}, wenn nach diesem Lauf kein nachmeldbarer Eintrag mehr aussteht
      */
+    /**
+     * Löst beim Start Journal-Einträge auf, deren Ausführung es nicht mehr gibt ("verwaiste
+     * STARTs") - gefunden im Neustart-Test am Terminal Hilarenhaus am 2026-09-20.
+     * <p>
+     * <b>Der Befund:</b> Eine rein lokale Offline-Ausführung (Buchung bei getrenntem Backend)
+     * überlebt einen Client-Neustart nicht. {@code application.ElwaManager} stellt laufende
+     * Ausführungen ausschließlich aus der Geräteübersicht des BACKENDS wieder her - eine noch
+     * nicht nachgemeldete Buchung hat dort aber gar keine Nummer. Ihr START blieb dadurch für
+     * immer im Journal liegen: {@link #replay()} überspringt einen START ohne zugehörige
+     * Terminierung bewusst (Paar-Atomizität, Issue #80), er wird also nie <em>versucht</em> -
+     * damit greift auch der Fehlversuchszähler nicht, und eine Alterung gibt es nicht. Gemessen:
+     * alle 20 s ein folgenloser Replay-Durchlauf mit "0 Eintraege nachgemeldet", unbegrenzt.
+     * Die Wäsche selbst war nirgends verzeichnet - keine Ausführung, keine Abrechnung, kein
+     * Eintrag in der Historie, und kein Hinweis darauf, dass etwas fehlt.
+     * <p>
+     * <b>Bewusste Entscheidung, die Ausführung NICHT zu rekonstruieren:</b> Wann der Lauf
+     * endete, weiß niemand - der Client war ja weg. Ein erfundenes Ende (etwa "jetzt") würde
+     * bei zeitbasierten Programmen zu Lasten des Bewohners falsch abrechnen. Der Eintrag wird
+     * deshalb in die Dead-Letter-Datei überführt und als Vorfall gemeldet, damit die
+     * Verwaltung den Fall SIEHT und entscheiden kann - statt ihn still zu verlieren oder
+     * ungefragt Geld zu buchen.
+     *
+     * @param deviceIdsWithRunningExecution Geräte, für die gerade eine Ausführung läuft (aus
+     *                                      dem Backend wiederhergestellt). Deren STARTs sind
+     *                                      NICHT verwaist: sie wurden bereits nachgemeldet und
+     *                                      warten nur darauf, gemeinsam mit ihrer Terminierung
+     *                                      aus dem Journal zu verschwinden.
+     * @return Anzahl der aufgelösten Einträge.
+     */
+    public int resolveOrphanedStarts(java.util.Set<Integer> deviceIdsWithRunningExecution) {
+        List<OfflineJournalEntry> entries = this.journal.readAll();
+        if (entries.isEmpty()) {
+            return 0;
+        }
+        Set<String> terminatedStartKeys = new HashSet<>();
+        for (OfflineJournalEntry entry : entries) {
+            boolean isFinishOrAbort = OfflineJournalEntry.TYPE_FINISH.equals(entry.type())
+                    || OfflineJournalEntry.TYPE_ABORT.equals(entry.type());
+            if (isFinishOrAbort && entry.startIdempotencyKey() != null) {
+                terminatedStartKeys.add(entry.startIdempotencyKey());
+            }
+        }
+
+        int resolved = 0;
+        for (OfflineJournalEntry entry : entries) {
+            if (!OfflineJournalEntry.TYPE_START.equals(entry.type())) {
+                continue;
+            }
+            if (terminatedStartKeys.contains(entry.idempotencyKey())) {
+                // Vollständiges Paar - der nächste Replay meldet es regulär nach.
+                continue;
+            }
+            if (entry.deviceId() != null && deviceIdsWithRunningExecution.contains(entry.deviceId())) {
+                // Die Ausführung läuft weiter (aus dem Backend wiederhergestellt).
+                continue;
+            }
+            String reason = "Verwaister START: beim Client-Start laeuft auf Geraet " + entry.deviceId()
+                    + " keine Ausfuehrung mehr, und es liegt keine Terminierung im Journal. Die rein "
+                    + "lokale Offline-Ausfuehrung ging damit beim Neustart verloren; ein Ende laesst "
+                    + "sich nicht mehr ermitteln, deshalb wird NICHT nachgebucht.";
+            this.logger.error("Journal-Eintrag '{}' (START, Geraet {}, vom {}) ist verwaist - wird in die "
+                            + "Dead-Letter-Datei verschoben und als Vorfall gemeldet. Ohne diese Aufloesung "
+                            + "bliebe er dauerhaft im Journal liegen und wuerde bei jedem Replay folgenlos "
+                            + "uebersprungen.",
+                    entry.idempotencyKey(), entry.deviceId(), entry.clientTimestamp());
+            reportIncident(OfflineIncident.KIND_DEAD_LETTER, entry, reason);
+            this.journal.moveToDeadLetter(entry, reason);
+            resolved++;
+        }
+        if (resolved > 0) {
+            this.logger.warn("{} verwaiste Journal-Eintraege beim Start aufgeloest.", resolved);
+        }
+        return resolved;
+    }
+
     public boolean replay() {
         List<OfflineJournalEntry> entries = this.journal.readAll();
         if (entries.isEmpty()) {

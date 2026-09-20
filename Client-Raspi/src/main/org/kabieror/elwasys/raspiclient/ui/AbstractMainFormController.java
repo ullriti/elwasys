@@ -52,6 +52,19 @@ public abstract class AbstractMainFormController implements Initializable, IExec
      * @param retryAction       Die Aktion, die der Benutzer wiederholen kann
      * @param backOptionEnabled Gibt an, ob der Benutzer zur vorherigen Anzeige zurückkehren können soll
      */
+    /**
+     * Teilt der Oberfläche mit, ob das Backend gerade als nicht erreichbar gilt. Standardmäßig
+     * ein Nichtstun, damit Layouts ohne Hinweisfläche unverändert bleiben.
+     * <p>
+     * Hintergrund: Beim bewussten Offline-Test am 2026-09-20 arbeitete das Terminal ohne
+     * Backend fachlich einwandfrei weiter - zeigte das aber nirgends an. Umgesetzt ist der
+     * Hinweis derzeit nur im {@code medium}-Layout, das auf beiden Terminals läuft; das
+     * {@code small}-Layout hat keine Werkzeugleiste, in die er ohne Umbau passen würde.
+     */
+    public void setBackendOffline(boolean offline) {
+        // bewusst leer - siehe Kommentar
+    }
+
     public abstract void displayError(String title, String detail, ActionContainer retryAction,
                                       boolean backOptionEnabled);
 
