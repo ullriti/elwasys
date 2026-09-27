@@ -1,7 +1,6 @@
 package org.kabieror.elwasys.raspiclient.ui.medium;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import javafx.fxml.FXMLLoader;
@@ -16,19 +15,17 @@ import org.testfx.framework.junit5.ApplicationTest;
 /**
  * Regressionstest zum Vorfall am Terminal Hilarenhaus vom 2026-09-24.
  *
- * <p>Damals setzte {@code onDeactivate()} den Text der E-Mail-Checkbox auf den Leerstring.
- * JavaFX rechnet beim Layout einer Beschriftung die Kürzung mit Auslassungszeichen aus und
- * fällt bei leerem Text in ein {@code substring(0, -1)} - die Ausnahme fliegt mitten im
- * Layout-Durchlauf, {@code Parent.performingLayout} bleibt stehen und der Teilbaum wird nie
- * wieder gelayoutet. Die Bestätigungsseite zeigte danach drei Tage lang Benutzername und
- * Guthaben desjenigen Benutzers, der zuletzt gebucht hatte, während Kartenlogin und Buchung
- * korrekt weiterliefen. Zweitens blieben die benutzerbezogenen Werte beim Abmelden ohnehin
- * stehen - auch ohne eingefrorenes Layout waren sie in dem Fenster sichtbar, in dem
- * {@code onActivate()} die Seite schon anzeigt, die Programme des neuen Benutzers aber noch
- * lädt (Netzwerkaufruf).
+ * <p>Den Layout-Absturz selbst deckt {@link ConfirmationPaneLayoutTest} ab. Hier geht es um
+ * die zweite Hälfte desselben Befunds: beim Abmelden blieben alle benutzerbezogenen Werte in
+ * den Properties stehen - Benutzername, Guthaben, Preis, Restguthaben und die E-Mail-Adresse
+ * des vorigen Benutzers. Sichtbar ist dieses Fenster heute nicht (der Detailbereich hängt an
+ * der Style-Klasse {@code program-selected}), aber Werte eines anderen Benutzers haben in
+ * einem Zustand, der sie nicht zeigen soll, nichts verloren - erst recht nicht auf einer
+ * Seite, die genau damit aufgefallen ist.
  *
  * <p>Der Test prüft beides am echten FXML: nach dem Abmelden steht kein Wert des vorigen
- * Benutzers mehr da, und keine Beschriftung ist leer.
+ * Benutzers mehr da, und keine Beschriftung ist leer (die zweite Sicherung gegen den
+ * Absturzpfad, siehe {@code UiUtilities#setLabelText}).
  *
  * <p>Liegt bewusst im Package von {@link MainFormController}: {@code onDeactivate()} meldet
  * sich vom {@code registeredUser}-Property ab und braucht deshalb einen Controller. Der
@@ -54,14 +51,9 @@ public class ConfirmationPaneResetTest extends ApplicationTest {
     }
 
     @Test
-    void fxmlLoadsAndWiresController() {
-        assertNotNull(this.controller, "FXML should instantiate the ConfirmationViewController");
-    }
-
-    @Test
     void aFreshPaneHasNoEmptyLabelText() {
         // Der Push-Text wird seit dem Entfernen der elwaApp-Kopplung nirgends mehr gesetzt -
-        // ohne Startwert wäre er null und die Checkbox damit vom ersten Layout an gefährdet.
+        // ohne Startwert wäre er null, und null zählt für den Absturzpfad wie leer.
         assertLabelTextIsNeverEmpty();
     }
 

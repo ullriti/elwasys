@@ -19,21 +19,36 @@ public class UiUtilities {
     /**
      * Setzt den Text einer Beschriftung und ersetzt dabei {@code null} und den Leerstring
      * durch {@link #BLANK_LABEL_TEXT}.
-     * <p>
-     * Hintergrund (Vorfall am Terminal Hilarenhaus, 2026-09-24): JavaFX rechnet beim Layout
-     * einer {@code Labeled}-Beschriftung die Kürzung mit Auslassungszeichen aus. Ist der Text
-     * dabei leer, entsteht in {@code LabeledSkinBase.layoutLabelInArea} ein
-     * {@code substring(0, -1)} und damit eine {@link StringIndexOutOfBoundsException} -
-     * mitten im Layout-Durchlauf des JavaFX-Threads. Dessen Folge ist der eigentliche Schaden:
-     * {@code Parent.layout()} setzt vor {@code layoutChildren()} das Flag
-     * {@code performingLayout} und nimmt es erst danach zurück; fliegt dazwischen eine
-     * Ausnahme, bleibt das Flag stehen und jedes spätere {@code requestLayout()} dieses
-     * Teilbaums wird stillschweigend verworfen. Der Bereich friert ein: die Text-Properties
-     * werden weiter aktualisiert, auf dem Bildschirm ändert sich aber nichts mehr. Genau so
-     * zeigte die Bestätigungsseite drei Tage lang Namen und Guthaben eines längst
-     * abgemeldeten Benutzers, während Anmeldung und Buchung korrekt liefen.
-     * <p>
-     * Deshalb: an einer Beschriftung, die im Layout bleibt, nie einen leeren Text setzen.
+     *
+     * <p><b>Hintergrund</b> (Vorfall am Terminal Hilarenhaus, 2026-09-24): Ein
+     * {@code Labeled} mit eingeschaltetem <b>Mnemonic-Parsing</b> merkt sich, dass sein Text
+     * ein Tastenkürzel enthielt (einen Unterstrich). Bekommt es danach einen <b>leeren</b>
+     * Text, rechnet JavaFX beim Layout die Breite des Kürzel-Zeichens trotzdem noch aus und
+     * greift mit dem inzwischen ungültigen Index {@code -1} in die leere Zeichenkette:
+     * {@code StringIndexOutOfBoundsException} mitten im Layout-Durchlauf. Nachgemessen an
+     * JavaFX 17.0.20, siehe den Regressionstest {@code ConfirmationPaneLayoutTest}:
+     *
+     * <pre>
+     * Mnemonic an,  Text mit '_' danach ""    -&gt; Absturz
+     * Mnemonic an,  Text mit '_' danach " "   -&gt; kein Absturz
+     * Mnemonic an,  Text ohne '_' danach ""   -&gt; kein Absturz
+     * Mnemonic aus, Text mit '_' danach ""    -&gt; kein Absturz
+     * </pre>
+     *
+     * <p>Der Schaden ist die Folge: {@code Parent.layout()} setzt vor {@code layoutChildren()}
+     * das Flag {@code performingLayout} und nimmt es erst danach zurück; fliegt dazwischen eine
+     * Ausnahme, bleibt es stehen und jedes spätere {@code requestLayout()} dieses Knotens wird
+     * stillschweigend verworfen. Wie weit das reicht, hängt davon ab, welche Vorfahren im
+     * selben Durchlauf selbst ein Layout brauchten - vom einzelnen Bedienelement bis zu einem
+     * ganzen Zweig. Weil erst das Layout den Text in den gezeichneten Knoten schreibt, bleibt
+     * der betroffene Bereich danach auf dem Bildschirm stehen, während seine Properties
+     * unbemerkt weiterlaufen.
+     *
+     * <p>Diese Methode ist die <b>zweite</b> Sicherung: sie nimmt dem Absturz die Bedingung
+     * "danach leer". Die erste ist {@code mnemonicParsing="false"} an den betroffenen
+     * Bedienelementen (siehe {@code ConfirmationPane.fxml}) - ein Touch-Terminal ohne Tastatur
+     * braucht keine Tastenkürzel. {@code Label} hat Mnemonic-Parsing ohnehin aus; deshalb ist
+     * ein leerer Text an einer reinen Beschriftung ungefährlich und im Bestand auch üblich.
      *
      * @param property Die Property, an der die Beschriftung hängt.
      * @param text     Der anzuzeigende Text, auch {@code null} oder leer.

@@ -76,10 +76,10 @@ public class ConfirmationViewController implements Initializable, IViewControlle
             new ToolbarState("Zurück", "Start", () -> this.mfc.gotoState(MainFormState.SELECT_DEVICE), null, false,
                     true);
     /**
-     * Alle Beschriftungen dieser Seite starten mit dem Platzhalter statt mit {@code null}:
-     * eine leere Beschriftung bringt den JavaFX-Layout-Durchlauf zum Absturz und friert die
-     * Seite dauerhaft ein (ausführlich in {@link UiUtilities#setLabelText}). Die Seite wird
-     * bereits vor ihrer ersten Benutzung gelayoutet - unsichtbar, aber im Layout.
+     * Alle Beschriftungen dieser Seite starten mit dem Platzhalter statt mit {@code null} und
+     * werden nur über {@link UiUtilities#setLabelText} geschrieben - die zweite Sicherung gegen
+     * den Layout-Absturz vom 2026-09-24 (die erste ist {@code mnemonicParsing="false"} im FXML,
+     * Ursache und Messung in {@link UiUtilities#setLabelText}).
      */
     private StringProperty titleText = new SimpleStringProperty(UiUtilities.BLANK_LABEL_TEXT);
     private StringProperty maxPrice = new SimpleStringProperty(UiUtilities.BLANK_LABEL_TEXT);
@@ -87,10 +87,9 @@ public class ConfirmationViewController implements Initializable, IViewControlle
     private StringProperty remainingCredit = new SimpleStringProperty(UiUtilities.BLANK_LABEL_TEXT);
     private StringProperty latestEnd = new SimpleStringProperty(UiUtilities.BLANK_LABEL_TEXT);
     /**
-     * Die Texte der beiden Benachrichtigungs-Checkboxen starten bewusst NICHT leer, sondern
-     * mit dem Platzhalter: eine leere Beschriftung an einem gelayouteten Bedienelement bringt
-     * den JavaFX-Layout-Durchlauf zum Absturz und friert damit diese Seite dauerhaft ein
-     * (ausführlich in {@link UiUtilities#setLabelText}). Der Push-Text wird seit dem Entfernen
+     * Die Texte der beiden Benachrichtigungs-Checkboxen sind die einzigen dieser Seite, die an
+     * einem Bedienelement statt an einer reinen Beschriftung hängen - und damit die einzigen,
+     * die den Absturzpfad überhaupt erreichen konnten. Der Push-Text wird seit dem Entfernen
      * der elwaApp-Kopplung überhaupt nicht mehr gesetzt, war also bis zum ersten
      * {@link #selectProgram} sogar {@code null}.
      */
@@ -169,13 +168,15 @@ public class ConfirmationViewController implements Initializable, IViewControlle
         this.confirmationPane.setVisible(true);
         this.mfc.registeredUserProperty().addListener(this.registeredUserChangedListener);
 
-        // Vor dem Laden der Programme: die Seite ist ab hier sichtbar, das Laden unten ist ein
-        // Netzwerkaufruf. Alles, was ohne ihn schon feststeht, gehört deshalb JETZT auf den
-        // Bildschirm - sonst steht in diesem Fenster gar nichts (nach dem Zurücksetzen in
-        // resetUserBoundFields) oder, wie vor dem Fix, der vorige Benutzer.
+        // Alles, was ohne den Netzwerkaufruf unten schon feststeht, JETZT setzen statt erst
+        // danach: dann trägt die Seite in keinem Moment Werte, die nicht zum angemeldeten
+        // Benutzer gehören. Sichtbar ist dieses Fenster heute nicht (siehe
+        // resetUserBoundFields), es kostet aber auch nichts.
+        // Das Guthaben ist ausdrücklich null-fähig (siehe ClientUser#getCredit) - deshalb NICHT
+        // ungeprüft formatieren, NumberFormat#format(null) wirft eine IllegalArgumentException,
+        // und zwar auf dem FX-Thread.
         UiUtilities.setLabelText(this.registeredUserUserName, this.mfc.getRegisteredUser().getUsername());
-        UiUtilities.setLabelText(this.userCredit,
-                FormatUtilities.formatCurrency(this.mfc.getRegisteredUser().getCredit()));
+        UiUtilities.setLabelText(this.userCredit, formatCreditOrNull(this.mfc.getRegisteredUser()));
 
         this.setPortalUrl(ElwaManager.instance.getConfigurationManager().getPortalUrl());
         UiUtilities.setLabelText(this.moreInfoText,
@@ -242,19 +243,28 @@ public class ConfirmationViewController implements Initializable, IViewControlle
     /**
      * Leert alle Anzeigewerte, die zum gerade abgemeldeten Benutzer gehören.
      * <p>
-     * Zwei Gründe, beide aus dem Vorfall vom 2026-09-24 (Terminal Hilarenhaus):
-     * <ol>
-     * <li>Diese Seite wird in {@link #onActivate} sichtbar geschaltet, BEVOR die Programme des
-     * Benutzers geladen sind - dazwischen liegt ein Netzwerkaufruf. Bis {@link #selectProgram}
-     * die neuen Werte schreibt, stand hier bisher noch Name, Guthaben und Preis des VORIGEN
-     * Benutzers auf dem Bildschirm. Ein leeres Feld ist in diesem Moment die einzig ehrliche
-     * Anzeige; eine fremde Identität mit fremdem Guthaben darf dort nie stehen.</li>
-     * <li>Bleibt die Anzeige aus einem anderen Grund stehen (der eingefrorene Layout-Teilbaum
-     * aus {@link UiUtilities#setLabelText}), zeigt sie danach leere Felder statt der Daten
-     * eines fremden Benutzers.</li>
-     * </ol>
+     * <b>Ohne sichtbare Wirkung im Normalbetrieb, bewusst defensiv:</b> zwischen
+     * {@link #onActivate} (schaltet die Seite sichtbar) und dem ersten {@link #selectProgram}
+     * liegt ein Netzwerkaufruf, in dem die Werte des vorigen Benutzers noch in den Properties
+     * stehen. Sichtbar ist das heute nicht - der Detailbereich {@code confirm-details} wird
+     * per CSS erst mit der Style-Klasse {@code program-selected} eingeblendet, die
+     * {@link #onDeactivate} vorher entfernt; auf dem Schirm steht in diesem Fenster "Bitte
+     * Programm auswählen". Die Werte eines anderen Benutzers haben in einem Zustand, der sie
+     * nicht zeigen soll, trotzdem nichts zu suchen: eine Änderung an der Sichtbarkeitsregel
+     * würde sie sonst unbemerkt sichtbar machen. Nach dem Vorfall vom 2026-09-24 (fremder
+     * Name und fremdes Guthaben auf dieser Seite) ist das die Zusage, die den Preis wert ist.
+     * <p>
      * Über {@link UiUtilities#setLabelText}, damit dabei keine leere Beschriftung entsteht.
      */
+    /**
+     * Formatiert das Guthaben eines Benutzers, oder {@code null}, wenn keines bekannt ist -
+     * {@link ClientUser#getCredit()} ist ausdrücklich null-fähig (rein anzeigende Benutzer).
+     * {@link UiUtilities#setLabelText} macht daraus dann den Platzhalter.
+     */
+    private static String formatCreditOrNull(ClientUser user) {
+        return user.getCredit() == null ? null : FormatUtilities.formatCurrency(user.getCredit());
+    }
+
     private void resetUserBoundFields() {
         UiUtilities.setLabelText(this.titleText, null);
         UiUtilities.setLabelText(this.latestEnd, null);
@@ -355,8 +365,7 @@ public class ConfirmationViewController implements Initializable, IViewControlle
 
         // Guthabenberechnung aktualisieren (Preis kommt bereits fertig berechnet vom
         // Backend, siehe ClientProgram#getPriceAtMaxDuration()).
-        UiUtilities.setLabelText(this.userCredit,
-                FormatUtilities.formatCurrency(this.mfc.getRegisteredUser().getCredit()));
+        UiUtilities.setLabelText(this.userCredit, formatCreditOrNull(this.mfc.getRegisteredUser()));
 
         BigDecimal maxPrice = this.selectedProgram.getPriceAtMaxDuration();
         UiUtilities.setLabelText(this.maxPrice, FormatUtilities.formatCurrency(maxPrice));
