@@ -247,6 +247,25 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   ~10 Minuten. Ergänzt [08-test-plan.md](08-test-plan.md) (automatisierte Suiten) und
   [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md) (die Umstellung selbst).
   Details: [Worklog](../worklog/2026-07-28-golive-testplan.md).
+- **Eingefrorene Bestätigungsseite am Terminal (behoben, 2026-09-27):** Im Feld zeigte die
+  Buchungsseite Benutzername und Guthaben eines **fremden** Benutzers, während Kartenlogin,
+  Berechtigung und Abrechnung nachweislich korrekt liefen. Ursache war kein Datenfehler,
+  sondern ein eingefrorener Layout-Teilbaum: `onDeactivate()` setzte den Text der
+  E-Mail-Checkbox auf den Leerstring, woran JavaFX beim Berechnen der Kürzung mit
+  Auslassungszeichen mit einer `StringIndexOutOfBoundsException` **im Layout-Durchlauf**
+  scheitert. Danach bleibt `Parent.performingLayout` stehen, jedes weitere
+  `requestLayout()` des Teilbaums verpufft, und weil `LabeledSkinBase.layoutLabelInArea`
+  den Text erst beim Layout in den gezeichneten Knoten schreibt, ändert sich auf dem
+  Bildschirm nichts mehr — die Text-Properties laufen unbemerkt weiter. Behoben durch
+  `UiUtilities.setLabelText` (an einer Beschriftung landet nie ein leerer Text),
+  vollständiges Leeren aller benutzerbezogenen Anzeigewerte beim Abmelden (`onActivate()`
+  schaltet die Seite sichtbar, bevor der Netzwerkaufruf für die Programme zurück ist — in
+  diesem Fenster stand bisher ebenfalls der vorige Benutzer) und einen
+  `UncaughtExceptionHandler`, der Fehler des JavaFX-Threads ins **Anwendungs-Log** schreibt.
+  Letzteres war der Grund, warum der Ausfall drei Tage unentdeckt blieb: die Ausnahme lag nur
+  in `log/errout`, das die Fernwartung nicht ausliefert. Regressionstests:
+  `ConfirmationPaneResetTest`, `UiUtilitiesLabelTextTest`. Details:
+  [Worklog](../worklog/2026-09-27-bestaetigungsseite-eingefroren.md).
 - **Nächster Schritt:** **Generalprobe nach [Spec 0001](../specs/0001-finale-review.md)**
   (Cutover-Probelauf, Migrations-Dry-Run mit Produktivdaten-Kopie, Backup-Restore-Probe,
   Ausfall-Drills, Alarm-Probe beider Stufen, Soak-Test, Vor-Ort-Kalibrierung), dann Pilotphase
