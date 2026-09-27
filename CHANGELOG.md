@@ -13,13 +13,11 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Fixed
-- **Die Buchungsseite des Terminals zeigte Namen und Guthaben eines fremden Benutzers.** Ein
-  leerer Beschriftungstext brachte den JavaFX-Layout-Durchlauf zum Absturz; danach wurde
-  dieser Teil der Oberfläche nie wieder neu gezeichnet und zeigte drei Tage lang die Daten
-  des Benutzers, der zuletzt gebucht hatte. Anmeldung und Abrechnung waren davon nicht
-  betroffen und blieben korrekt. Beschriftungen bleiben jetzt nie leer, die Seite wird beim
-  Abmelden geleert, und unbehandelte Fehler landen im Anwendungs-Log statt nur auf der
-  Konsole des Geräts.
+- **Ein Unterstrich in einer E-Mail-Adresse konnte die Buchungsseite des Terminals zum
+  Stehen bringen** — JavaFX deutete ihn als Tastenkürzel und brach den Layout-Durchlauf ab;
+  danach blieb die Anzeige stehen, während Anmeldung und Abrechnung korrekt weiterliefen.
+  Die Adresse wurde dabei auch verstümmelt angezeigt. Unbehandelte Fehler landen jetzt im
+  Anwendungs-Log statt nur auf der Konsole des Geräts.
 - **Das Terminal zeigte nicht an, dass es offline arbeitet.** Bei getrenntem Backend lief es
   fachlich einwandfrei weiter (lokales Journal, späterer Nachtrag ohne Datenverlust) — der
   Bewohner konnte davon aber nichts sehen: Es gab überhaupt keine Offline-Anzeige. Die
