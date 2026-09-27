@@ -35,6 +35,15 @@ public class UiUtilities {
      * Mnemonic aus, Text mit '_' danach ""    -&gt; kein Absturz
      * </pre>
      *
+     * <p>Warum ausgerechnet der leere Text: {@code layoutLabelInArea} ruft
+     * {@code updateDisplayedText} nur auf, wenn überhaupt ein Text da ist
+     * ({@code isIgnoreText}). Genau dieser Aufruf ist es aber, der das veraltete Merkmal
+     * "hier war ein Tastenkürzel" zurücksetzt. Bei leerem Text überspringt JavaFX ihn - und
+     * rechnet weiter unten trotzdem mit dem Kürzel-Index, der inzwischen {@code -1} ist. Ein
+     * nicht-leerer Platzhalter lässt den Aufräumzweig laufen. Das ist zugleich der Grund,
+     * warum {@code mnemonicParsing="false"} die robustere der beiden Sicherungen ist: sie
+     * hängt an keiner JavaFX-Interna.
+     *
      * <p>Der Schaden ist die Folge: {@code Parent.layout()} setzt vor {@code layoutChildren()}
      * das Flag {@code performingLayout} und nimmt es erst danach zurück; fliegt dazwischen eine
      * Ausnahme, bleibt es stehen und jedes spätere {@code requestLayout()} dieses Knotens wird

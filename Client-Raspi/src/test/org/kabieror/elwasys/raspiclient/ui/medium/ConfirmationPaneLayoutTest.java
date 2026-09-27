@@ -11,9 +11,11 @@ import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.CheckBox;
+import javafx.scene.layout.VBox;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;
+import org.kabieror.elwasys.raspiclient.ui.UiUtilities;
 import org.kabieror.elwasys.raspiclient.ui.medium.controller.ConfirmationViewController;
 import org.testfx.framework.junit5.ApplicationTest;
 
@@ -88,7 +90,10 @@ public class ConfirmationPaneLayoutTest extends ApplicationTest {
         });
 
         assertNull(failure.get(), "the layout pass must survive a mail address with an underscore");
-        assertFalse(this.root.isNeedsLayout(), "the layout pass must not be stuck afterwards");
+        // Bewusst KEIN isNeedsLayout()-Check: Parent.layout() setzt das Flag als Allererstes auf
+        // CLEAN, noch bevor es performingLayout setzt - nach einem abgebrochenen Durchlauf steht
+        // dort also ohnehin false. Tragend ist die Zeile darunter: ein NEUER Text muss den
+        // gezeichneten Knoten erreichen, sonst steht die Anzeige.
         assertEquals("Titel nach dem Abmelden", renderedTextOf("#confirmationPane .title"),
                 "a text set after the crashing sequence must still reach the rendered node");
         assertEquals(ADDRESS_WITH_UNDERSCORE, renderedBefore(box),
@@ -107,7 +112,7 @@ public class ConfirmationPaneLayoutTest extends ApplicationTest {
     void anEmptyTextAfterAnUnderscoreBreaksTheLayoutPassButThePlaceholderDoesNot() {
         assertNotNull(layoutFailureAfter(""),
                 "measured on JavaFX 17.0.20: an empty text after an underscore breaks the layout pass");
-        assertNull(layoutFailureAfter(org.kabieror.elwasys.raspiclient.ui.UiUtilities.BLANK_LABEL_TEXT),
+        assertNull(layoutFailureAfter(UiUtilities.BLANK_LABEL_TEXT),
                 "the placeholder must take that condition away - that is what it is for");
     }
 
@@ -121,7 +126,7 @@ public class ConfirmationPaneLayoutTest extends ApplicationTest {
         interact(() -> {
             final CheckBox probe = new CheckBox();
             probe.setMnemonicParsing(true);
-            final javafx.scene.layout.VBox host = new javafx.scene.layout.VBox(probe);
+            final VBox host = new VBox(probe);
             new Scene(host, 300, 100);
             try {
                 probe.setText(ADDRESS_WITH_UNDERSCORE);

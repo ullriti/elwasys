@@ -256,15 +256,6 @@ public class ConfirmationViewController implements Initializable, IViewControlle
      * <p>
      * Über {@link UiUtilities#setLabelText}, damit dabei keine leere Beschriftung entsteht.
      */
-    /**
-     * Formatiert das Guthaben eines Benutzers, oder {@code null}, wenn keines bekannt ist -
-     * {@link ClientUser#getCredit()} ist ausdrücklich null-fähig (rein anzeigende Benutzer).
-     * {@link UiUtilities#setLabelText} macht daraus dann den Platzhalter.
-     */
-    private static String formatCreditOrNull(ClientUser user) {
-        return user.getCredit() == null ? null : FormatUtilities.formatCurrency(user.getCredit());
-    }
-
     private void resetUserBoundFields() {
         UiUtilities.setLabelText(this.titleText, null);
         UiUtilities.setLabelText(this.latestEnd, null);
@@ -274,6 +265,16 @@ public class ConfirmationViewController implements Initializable, IViewControlle
         UiUtilities.setLabelText(this.emailNotificationText, null);
         UiUtilities.setLabelText(this.registeredUserUserName, null);
     }
+
+    /**
+     * Formatiert das Guthaben eines Benutzers, oder {@code null}, wenn keines bekannt ist -
+     * {@link ClientUser#getCredit()} ist ausdrücklich null-fähig (rein anzeigende Benutzer).
+     * {@link UiUtilities#setLabelText} macht daraus dann den Platzhalter.
+     */
+    private static String formatCreditOrNull(ClientUser user) {
+        return user.getCredit() == null ? null : FormatUtilities.formatCurrency(user.getCredit());
+    }
+
 
     @Override
     public void onReturnFromError() {
@@ -370,8 +371,11 @@ public class ConfirmationViewController implements Initializable, IViewControlle
         BigDecimal maxPrice = this.selectedProgram.getPriceAtMaxDuration();
         UiUtilities.setLabelText(this.maxPrice, FormatUtilities.formatCurrency(maxPrice));
 
+        // Guthaben durchgehend null-sicher behandeln (siehe formatCreditOrNull): halb geschützt
+        // hieße nur, den Absturz um zwei Anweisungen zu verschieben.
+        BigDecimal credit = this.mfc.getRegisteredUser().getCredit();
         UiUtilities.setLabelText(this.remainingCredit,
-                FormatUtilities.formatCurrency(this.mfc.getRegisteredUser().getCredit().subtract(maxPrice)));
+                credit == null ? null : FormatUtilities.formatCurrency(credit.subtract(maxPrice)));
 
         UiUtilities.setStyleClass(this.confirmationPane, "credit-insufficient",
                 !this.mfc.getRegisteredUser().canAfford(maxPrice));

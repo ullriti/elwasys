@@ -53,7 +53,9 @@ public class ConfirmationPaneResetTest extends ApplicationTest {
     @Test
     void aFreshPaneHasNoEmptyLabelText() {
         // Der Push-Text wird seit dem Entfernen der elwaApp-Kopplung nirgends mehr gesetzt -
-        // ohne Startwert wäre er null, und null zählt für den Absturzpfad wie leer.
+        // ohne Startwert wäre er null. Ob null denselben Absturzpfad erreicht wie der
+        // Leerstring, ist nicht gemessen; der Platzhalter deckt beides ab, und eine
+        // Beschriftung ohne Startwert ist ohnehin keine saubere Ausgangslage.
         assertLabelTextIsNeverEmpty();
     }
 
