@@ -75,15 +75,28 @@ public class ConfirmationViewController implements Initializable, IViewControlle
     private ToolbarState toolbarStateWait =
             new ToolbarState("Zurück", "Start", () -> this.mfc.gotoState(MainFormState.SELECT_DEVICE), null, false,
                     true);
-    private StringProperty titleText = new SimpleStringProperty();
-    private StringProperty maxPrice = new SimpleStringProperty();
-    private StringProperty userCredit = new SimpleStringProperty();
-    private StringProperty remainingCredit = new SimpleStringProperty();
-    private StringProperty latestEnd = new SimpleStringProperty();
-    private StringProperty emailNotificationText = new SimpleStringProperty();
-    private StringProperty ionicNotificationText = new SimpleStringProperty();
-    private StringProperty registeredUserUserName = new SimpleStringProperty();
-    private StringProperty moreInfoText = new SimpleStringProperty();
+    /**
+     * Alle Beschriftungen dieser Seite starten mit dem Platzhalter statt mit {@code null} und
+     * werden nur über {@link UiUtilities#setLabelText} geschrieben - die zweite Sicherung gegen
+     * den Layout-Absturz vom 2026-09-24 (die erste ist {@code mnemonicParsing="false"} im FXML,
+     * Ursache und Messung in {@link UiUtilities#setLabelText}).
+     */
+    private StringProperty titleText = new SimpleStringProperty(UiUtilities.BLANK_LABEL_TEXT);
+    private StringProperty maxPrice = new SimpleStringProperty(UiUtilities.BLANK_LABEL_TEXT);
+    private StringProperty userCredit = new SimpleStringProperty(UiUtilities.BLANK_LABEL_TEXT);
+    private StringProperty remainingCredit = new SimpleStringProperty(UiUtilities.BLANK_LABEL_TEXT);
+    private StringProperty latestEnd = new SimpleStringProperty(UiUtilities.BLANK_LABEL_TEXT);
+    /**
+     * Die Texte der beiden Benachrichtigungs-Checkboxen sind die einzigen dieser Seite, die an
+     * einem Bedienelement statt an einer reinen Beschriftung hängen - und damit die einzigen,
+     * die den Absturzpfad überhaupt erreichen konnten. Der Push-Text wird seit dem Entfernen
+     * der elwaApp-Kopplung überhaupt nicht mehr gesetzt, war also bis zum ersten
+     * {@link #selectProgram} sogar {@code null}.
+     */
+    private StringProperty emailNotificationText = new SimpleStringProperty(UiUtilities.BLANK_LABEL_TEXT);
+    private StringProperty ionicNotificationText = new SimpleStringProperty(UiUtilities.BLANK_LABEL_TEXT);
+    private StringProperty registeredUserUserName = new SimpleStringProperty(UiUtilities.BLANK_LABEL_TEXT);
+    private StringProperty moreInfoText = new SimpleStringProperty(UiUtilities.BLANK_LABEL_TEXT);
     private StringProperty portalUrl = new SimpleStringProperty();
 
     /**
@@ -155,8 +168,19 @@ public class ConfirmationViewController implements Initializable, IViewControlle
         this.confirmationPane.setVisible(true);
         this.mfc.registeredUserProperty().addListener(this.registeredUserChangedListener);
 
+        // Alles, was ohne den Netzwerkaufruf unten schon feststeht, JETZT setzen statt erst
+        // danach: dann trägt die Seite in keinem Moment Werte, die nicht zum angemeldeten
+        // Benutzer gehören. Sichtbar ist dieses Fenster heute nicht (siehe
+        // resetUserBoundFields), es kostet aber auch nichts.
+        // Das Guthaben ist ausdrücklich null-fähig (siehe ClientUser#getCredit) - deshalb NICHT
+        // ungeprüft formatieren, NumberFormat#format(null) wirft eine IllegalArgumentException,
+        // und zwar auf dem FX-Thread.
+        UiUtilities.setLabelText(this.registeredUserUserName, this.mfc.getRegisteredUser().getUsername());
+        UiUtilities.setLabelText(this.userCredit, formatCreditOrNull(this.mfc.getRegisteredUser()));
+
         this.setPortalUrl(ElwaManager.instance.getConfigurationManager().getPortalUrl());
-        this.setMoreInfoText("Mehr Informationen in der elwaApp und unter " + this.getPortalUrl());
+        UiUtilities.setLabelText(this.moreInfoText,
+                "Mehr Informationen in der elwaApp und unter " + this.getPortalUrl());
 
         // Lade Programme (bereits gruppengefiltert und mit dem Preis für diesen
         // Benutzer bepreist, siehe DeviceDto#programs()).
@@ -181,10 +205,6 @@ public class ConfirmationViewController implements Initializable, IViewControlle
         // Wähle automatisch erstes Programm vor.
         if (progs.size() > 0) {
             this.selectProgram(progs.get(0));
-        }
-
-        if (this.mfc.getRegisteredUser() != null) {
-            this.registeredUserUserName.set(this.mfc.getRegisteredUser().getUsername());
         }
     }
 
@@ -217,8 +237,44 @@ public class ConfirmationViewController implements Initializable, IViewControlle
         this.selectedProgram = null;
         this.programs.clear();
         this.programsContainer.getChildren().clear();
-        this.emailNotificationText.set("");
+        this.resetUserBoundFields();
     }
+
+    /**
+     * Leert alle Anzeigewerte, die zum gerade abgemeldeten Benutzer gehören.
+     * <p>
+     * <b>Ohne sichtbare Wirkung im Normalbetrieb, bewusst defensiv:</b> zwischen
+     * {@link #onActivate} (schaltet die Seite sichtbar) und dem ersten {@link #selectProgram}
+     * liegt ein Netzwerkaufruf, in dem die Werte des vorigen Benutzers noch in den Properties
+     * stehen. Sichtbar ist das heute nicht - der Detailbereich {@code confirm-details} wird
+     * per CSS erst mit der Style-Klasse {@code program-selected} eingeblendet, die
+     * {@link #onDeactivate} vorher entfernt; auf dem Schirm steht in diesem Fenster "Bitte
+     * Programm auswählen". Die Werte eines anderen Benutzers haben in einem Zustand, der sie
+     * nicht zeigen soll, trotzdem nichts zu suchen: eine Änderung an der Sichtbarkeitsregel
+     * würde sie sonst unbemerkt sichtbar machen. Nach dem Vorfall vom 2026-09-24 (fremder
+     * Name und fremdes Guthaben auf dieser Seite) ist das die Zusage, die den Preis wert ist.
+     * <p>
+     * Über {@link UiUtilities#setLabelText}, damit dabei keine leere Beschriftung entsteht.
+     */
+    private void resetUserBoundFields() {
+        UiUtilities.setLabelText(this.titleText, null);
+        UiUtilities.setLabelText(this.latestEnd, null);
+        UiUtilities.setLabelText(this.userCredit, null);
+        UiUtilities.setLabelText(this.maxPrice, null);
+        UiUtilities.setLabelText(this.remainingCredit, null);
+        UiUtilities.setLabelText(this.emailNotificationText, null);
+        UiUtilities.setLabelText(this.registeredUserUserName, null);
+    }
+
+    /**
+     * Formatiert das Guthaben eines Benutzers, oder {@code null}, wenn keines bekannt ist -
+     * {@link ClientUser#getCredit()} ist ausdrücklich null-fähig (rein anzeigende Benutzer).
+     * {@link UiUtilities#setLabelText} macht daraus dann den Platzhalter.
+     */
+    private static String formatCreditOrNull(ClientUser user) {
+        return user.getCredit() == null ? null : FormatUtilities.formatCurrency(user.getCredit());
+    }
+
 
     @Override
     public void onReturnFromError() {
@@ -305,29 +361,38 @@ public class ConfirmationViewController implements Initializable, IViewControlle
         UiUtilities.setStyleClass(this.confirmationPane, "auto-end", this.selectedProgram.isAutoEnd());
 
         // Titeltext aktualisieren
-        this.titleText.set(this.selectedProgram.getName() + " auf " + this.mfc.getSelectedDevice().getName());
+        UiUtilities.setLabelText(this.titleText,
+                this.selectedProgram.getName() + " auf " + this.mfc.getSelectedDevice().getName());
 
         // Guthabenberechnung aktualisieren (Preis kommt bereits fertig berechnet vom
         // Backend, siehe ClientProgram#getPriceAtMaxDuration()).
-        this.userCredit.set(FormatUtilities.formatCurrency(this.mfc.getRegisteredUser().getCredit()));
+        UiUtilities.setLabelText(this.userCredit, formatCreditOrNull(this.mfc.getRegisteredUser()));
 
         BigDecimal maxPrice = this.selectedProgram.getPriceAtMaxDuration();
-        this.maxPrice.set(FormatUtilities.formatCurrency(maxPrice));
+        UiUtilities.setLabelText(this.maxPrice, FormatUtilities.formatCurrency(maxPrice));
 
-        this.remainingCredit
-                .set(FormatUtilities.formatCurrency(this.mfc.getRegisteredUser().getCredit().subtract(maxPrice)));
+        // Guthaben durchgehend null-sicher behandeln (siehe formatCreditOrNull): halb geschützt
+        // hieße nur, den Absturz um zwei Anweisungen zu verschieben.
+        BigDecimal credit = this.mfc.getRegisteredUser().getCredit();
+        UiUtilities.setLabelText(this.remainingCredit,
+                credit == null ? null : FormatUtilities.formatCurrency(credit.subtract(maxPrice)));
 
         UiUtilities.setStyleClass(this.confirmationPane, "credit-insufficient",
                 !this.mfc.getRegisteredUser().canAfford(maxPrice));
 
-        this.latestEnd.set(LATEST_END_FORMATTER
+        UiUtilities.setLabelText(this.latestEnd, LATEST_END_FORMATTER
                 .format(LocalDateTime.now().plus(this.selectedProgram.getMaxDuration())));
 
         if (this.mfc.getRegisteredUser().getEmail() == null || this.mfc.getRegisteredUser().getEmail().isEmpty()) {
             UiUtilities.setStyleClass(this.confirmationPane, "email-not-set", true);
+            // Auch die ausgeblendete Checkbox bekommt einen eigenen Text: sonst bliebe die
+            // Adresse des vorigen Benutzers hier stehen (unsichtbar, aber sie wäre wieder da,
+            // sobald der nächste Benutzer mit Adresse die Checkbox einblendet).
+            UiUtilities.setLabelText(this.emailNotificationText, null);
         } else {
             UiUtilities.setStyleClass(this.confirmationPane, "email-not-set", false);
-            this.emailNotificationText.set("Bei Fertigstellung Email an " + this.mfc.getRegisteredUser().getEmail());
+            UiUtilities.setLabelText(this.emailNotificationText,
+                    "Bei Fertigstellung Email an " + this.mfc.getRegisteredUser().getEmail());
         }
 
         // elwaApp-Push ist entfernt (siehe Klassenkommentar) - immer "nicht verbunden".

@@ -68,13 +68,23 @@
 
         <bottom>
             <VBox alignment="CENTER">
+                <!-- mnemonicParsing="false": Der Text dieser Checkbox enthaelt eine
+                     E-Mail-Adresse. Mit Mnemonic-Parsing (Voreinstellung von CheckBox, anders
+                     als bei Label) deutet JavaFX einen Unterstrich darin als Tastenkuerzel -
+                     es schluckt ihn in der Anzeige UND bringt den Layout-Durchlauf zum
+                     Absturz, sobald danach ein leerer Text gesetzt wird (nachgemessen, siehe
+                     ConfirmationPaneLayoutTest). Ein Touch-Terminal ohne Tastatur hat fuer
+                     Tastenkuerzel ohnehin keine Verwendung; ui/small setzt das an seinen
+                     Schaltflaechen seit jeher so. -->
                 <CheckBox fx:id="emailNotificationCheckBox" text="${controller.emailNotificationText}"
+                          mnemonicParsing="false"
                           styleClass="email-notification-checkbox" managed="${emailNotificationCheckBox.visible}"/>
                 <Label fx:id="emailNotificationErrorNote"
                        text="Für Email-Benachrichtigungen bitte Email-Adresse im Waschportal eintragen."
                        styleClass="email-notification-note" managed="${emailNotificationErrorNote.visible}"/>
 
                 <CheckBox fx:id="ionicNotificationCheckBox" text="${controller.ionicNotificationText}"
+                          mnemonicParsing="false"
                           styleClass="ionic-notification-checkbox" managed="${ionicNotificationCheckBox.visible}"/>
                 <VBox fx:id="ionicNotificationErrorNote" managed="${ionicNotificationErrorNote.visible}">
                     <Label text="Für Push-Benachrichtigungen bitte elwaApp herunterladen."

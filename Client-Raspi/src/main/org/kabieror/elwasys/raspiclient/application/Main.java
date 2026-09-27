@@ -59,8 +59,32 @@ public class Main extends Application {
             }
         }
 
+        // Vor dem Start der Oberfläche: unbehandelte Fehler aus JEDEM Thread gehören ins
+        // Anwendungs-Log (siehe logUncaughtException).
+        Thread.setDefaultUncaughtExceptionHandler(Main::logUncaughtException);
+
         launch(args);
 
+    }
+
+    /**
+     * Schreibt einen unbehandelten Fehler ins Anwendungs-Log.
+     * <p>
+     * Vorher liefen solche Fehler nur über den Standard-Handler der JVM nach
+     * {@code System.err} - und damit in die Datei {@code log/errout}, die die Fernwartung
+     * (LOG_REQUEST) NICHT ausliefert. Genau deshalb blieb der Absturz des Layout-Durchlaufs
+     * am 2026-09-24 drei Tage unentdeckt, obwohl die Bestätigungsseite des Terminals
+     * seitdem eingefroren war (Ursache und Wirkung in {@code UiUtilities#setLabelText}).
+     * Ein Fehler im JavaFX-Thread beendet die Anwendung nicht, kann die Oberfläche aber
+     * teilweise unbrauchbar machen - er muss deshalb auffindbar sein, ohne sich auf die
+     * Konsole des Geräts zu verlassen.
+     *
+     * @param thread Der Thread, in dem der Fehler auftrat.
+     * @param error  Der unbehandelte Fehler.
+     */
+    private static void logUncaughtException(Thread thread, Throwable error) {
+        logger.error("Unbehandelter Fehler im Thread '{}'. Die Oberfläche kann dadurch teilweise "
+                + "stehen bleiben - Terminal im Zweifel neu starten.", thread.getName(), error);
     }
 
     /**
@@ -69,6 +93,13 @@ public class Main extends Application {
      */
     @Override
     public void start(Stage primaryStage) {
+        // Der JavaFX-Thread wird nicht von uns erzeugt; hier laufen wir zum ersten Mal auf ihm
+        // und können ihm den Handler mitgeben. Der Default-Handler aus main() würde zwar auch
+        // greifen, aber nur solange ihn niemand (JavaFX, eine Bibliothek) thread-eigen
+        // überschreibt - für den einen Thread, an dem die gesamte Oberfläche hängt, ist die
+        // ausdrückliche Zuweisung die Mühe wert.
+        Thread.currentThread().setUncaughtExceptionHandler(Main::logUncaughtException);
+
         // Erkenne notwenige Größe der Anwendung anhand der Größe der Anzeige
         if (applicationInterfaceType == null) {
             if (Screen.getPrimary().getBounds().getWidth() < 500) {

@@ -59,6 +59,11 @@ werden können. Beispiele:
 - `HeadlessFxSmokeTest` – reines FX (keine elwasys-Klassen); beweist die headless-Pipeline.
 - `ProgramListEntryFxmlTest` – lädt echtes App-FXML (`ProgramListEntry`) und prüft
   Controller-Wiring, `#detailBox`, Default-Preisformat.
+- `ConfirmationPaneResetTest` – lädt echtes App-FXML (`ConfirmationPane`) und hält zwei
+  Zusagen fest, die im Feld gebrochen waren: nach dem Abmelden bleibt kein Anzeigewert des
+  vorigen Benutzers stehen, und **keine Beschriftung ist je leer** (ein leerer Text lässt den
+  JavaFX-Layout-Durchlauf abstürzen und friert den Teilbaum dauerhaft ein, siehe
+  `UiUtilities#setLabelText`).
 - `MainFormStateManager`-Tests – isolierte Charakterisierung der Zustandsübergänge.
 - `InactivitySchedulerTest` – Auto-Logout/Backlight (timer-basiert).
 

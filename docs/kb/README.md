@@ -247,6 +247,34 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
   ~10 Minuten. Ergänzt [08-test-plan.md](08-test-plan.md) (automatisierte Suiten) und
   [`deploy/CUTOVER-RUNBOOK.md`](../../deploy/CUTOVER-RUNBOOK.md) (die Umstellung selbst).
   Details: [Worklog](../worklog/2026-07-28-golive-testplan.md).
+- **Stehengebliebene Buchungsseite am Terminal (behoben, 2026-09-27):** Im Feld zeigte die
+  Buchungsseite Benutzername und Guthaben eines **fremden** Benutzers, während Kartenlogin,
+  Berechtigung und Abrechnung nachweislich korrekt liefen (Karte eindeutig in der DB,
+  Terminal-Log mit richtigem Namen, richtige Benutzer-Id an Ausführung und Guthabenbuchung).
+  Ursache ist kein Datenfehler, sondern ein abgebrochener Layout-Durchlauf: Eine `CheckBox`
+  hat **Mnemonic-Parsing** an (anders als ein `Label`), deutet also einen Unterstrich im Text
+  als Tastenkürzel. Der Text der E-Mail-Checkbox ist `"Bei Fertigstellung Email an " +
+  Adresse` — genau ein Bewohner hat einen Unterstrich in seiner Adresse, und dessen Sitzung
+  ist die, in der `log/errout` den Absturz trägt (18:29:53,70, 0,75 s nach seinem
+  `Starting execution`). Wird der Text danach **leer** gesetzt (das tat `onDeactivate()`),
+  greift JavaFX mit dem ungültig gewordenen Kürzel-Index `-1` in die leere Zeichenkette.
+  Die Ausnahme fliegt mitten im Layout; `Parent.performingLayout` bleibt danach stehen, jedes
+  weitere `requestLayout()` des Knotens verpufft, und weil erst das Layout den Text in den
+  gezeichneten Knoten schreibt, bleibt die Anzeige stehen, während die Properties weiterlaufen.
+  **Nachgemessen an JavaFX 17.0.20** (Testmatrix im Javadoc von `UiUtilities#setLabelText`):
+  Unterstrich allein stürzt nicht ab, leerer Text allein auch nicht — nur die Folge aus beidem,
+  und nur bei eingeschaltetem Mnemonic-Parsing. Wie weit das Einfrieren reicht, hängt davon ab,
+  welche Vorfahren im selben Durchlauf selbst ein Layout brauchten (gemessen: vom einzelnen
+  Bedienelement bis zu einem ganzen Zweig) — die Gerätekacheln liefen im Feld nachweislich
+  weiter. Behoben mit zwei einzeln wirksamen Sicherungen: `mnemonicParsing="false"` an beiden
+  Checkboxen (nimmt dem Absturz den Pfad und zeigt die Adresse wieder vollständig an — der
+  Unterstrich wurde bis dahin verschluckt) und `UiUtilities.setLabelText` (nimmt ihm die
+  Bedingung "danach leer"). Dazu leert die Seite beim Abmelden alle benutzerbezogenen Werte,
+  und ein `UncaughtExceptionHandler` schreibt Fehler des JavaFX-Threads ins **Anwendungs-Log** —
+  Letzteres war der Grund, warum der Ausfall drei Tage unentdeckt blieb: die Ausnahme lag nur in
+  `log/errout`, das die Fernwartung nicht ausliefert. Regressionstests:
+  `ConfirmationPaneLayoutTest`, `ConfirmationPaneResetTest`, `UiUtilitiesLabelTextTest`.
+  Details: [Worklog](../worklog/2026-09-27-bestaetigungsseite-eingefroren.md).
 - **Nächster Schritt:** **Generalprobe nach [Spec 0001](../specs/0001-finale-review.md)**
   (Cutover-Probelauf, Migrations-Dry-Run mit Produktivdaten-Kopie, Backup-Restore-Probe,
   Ausfall-Drills, Alarm-Probe beider Stufen, Soak-Test, Vor-Ort-Kalibrierung), dann Pilotphase
