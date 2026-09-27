@@ -111,6 +111,22 @@ public class ClientUsageDeconzE2ETest {
         if (deconz != null) {
             deconz.stop();
         }
+
+        // Gegenstück zum Aufräumen in seedFixtures(): eine unfertige Ausführung dieses Tests
+        // darf keine spätere Testklasse erreichen. Der Start-Wiederaufnahme-Scan
+        // (ElwaManager#initiate) ist standortweit - eine fhem-basierte Testklasse würde für ein
+        // deCONZ-Gerät die fhem-Steckdose suchen ("unknown device"), im Startfehler landen und
+        // nie SELECT_DEVICE erreichen. Die Klassenreihenfolge von Surefire ist in CI
+        // dateisystemabhängig, der Fall trat deshalb erst auf, als neue Testklassen dazukamen.
+        // Abschließen statt löschen: an einer Ausführung können Abrechnungszeilen hängen.
+        try (Connection c = DriverManager.getConnection(DB_URL, "postgres", "postgres");
+             Statement s = c.createStatement()) {
+            s.executeUpdate("UPDATE executions SET finished=TRUE, stop=COALESCE(stop, NOW()) "
+                    + "WHERE finished=FALSE AND device_id IN "
+                    + "(SELECT id FROM devices WHERE name LIKE 'E2E-Deconz-%')");
+        } catch (Exception ignored) {
+            // best effort - die Aufräumhilfe darf keinen Testlauf scheitern lassen
+        }
     }
 
     @Test
