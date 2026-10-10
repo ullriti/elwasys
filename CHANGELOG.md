@@ -13,6 +13,10 @@ im [Worklog](docs/worklog/README.md).
 ## [Unreleased]
 
 ### Fixed
+- **Das Terminal baute die Fernwartungs-Verbindung zum Backend nicht wieder auf, wenn deren
+  Abbruch es nie erreichte.** Auf beiden Standorten blieb der Kanal elf Tage stumm
+  (Backend `operational` = 503), während Buchungen über REST normal liefen. Der Client
+  erkennt eine tote Verbindung jetzt selbst (120 s ohne Nachricht) und verbindet neu.
 - **Ein Unterstrich in einer E-Mail-Adresse konnte die Buchungsseite des Terminals zum
   Stehen bringen** — JavaFX deutete ihn als Tastenkürzel und brach den Layout-Durchlauf ab;
   danach blieb die Anzeige stehen, während Anmeldung und Abrechnung korrekt weiterliefen.
