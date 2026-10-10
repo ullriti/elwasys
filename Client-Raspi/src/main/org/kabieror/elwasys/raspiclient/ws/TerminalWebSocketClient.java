@@ -22,6 +22,7 @@ import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.net.URI;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -54,7 +55,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * es lange kein {@code PONG} sieht ({@code backend.ws.TerminalHeartbeatScheduler}) - dieser
  * Client muss dafür nur auf {@code PING} mit {@code PONG} antworten, siehe
  * {@link #handleTextMessage}. Ein eigener, vom Terminal ausgehender Heartbeat ist nicht
- * nötig (das Backend erkennt eine tote Verbindung ohnehin über sein eigenes Timeout).
+ * nötig - wohl aber ein <b>Leerlauf-Wächter</b> ({@link #checkLiveness}): das Backend erkennt
+ * eine tote Verbindung über sein Timeout und schließt sie, aber dieses Schließen muss das
+ * Terminal nicht erreichen. Am 2026-09-29 blieb auf beiden Standorten die TCP-Verbindung
+ * {@code ESTABLISHED}, ohne dass je wieder ein Byte floss - {@code afterConnectionClosed} kam
+ * nie, der Reconnect wurde nie geplant, und der Kanal blieb 11 Tage stumm (Backend:
+ * {@code operational} = 503). Kommt länger als {@link #IDLE_TIMEOUT} keine Nachricht des
+ * Backends (es pingt alle 30 s), gilt die Verbindung als tot und wird neu aufgebaut.
  * <p>
  * <b>Reconnect</b>: bei Verbindungsfehler/-abbruch (Netzwerkausfall, Backend-Neustart, vom
  * Heartbeat erzwungener Verbindungsabbruch) wird automatisch mit exponentiell wachsender
@@ -93,6 +100,23 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
 
     private static final int INITIAL_RECONNECT_DELAY_SECONDS = 5;
     private static final int MAX_RECONNECT_DELAY_SECONDS = 300;
+
+    /**
+     * Ab dieser Stille gilt die Verbindung als tot. Das Backend pingt alle 30 s und schließt
+     * selbst nach 90 s ohne PONG ({@code TerminalHeartbeatScheduler}); 120 s lassen also drei
+     * verpasste PINGs plus Puffer zu, bevor das Terminal eingreift - ein einzelner
+     * Netz-Schluckauf löst keinen Neuaufbau aus.
+     */
+    static final Duration IDLE_TIMEOUT = Duration.ofSeconds(120);
+    private static final long WATCHDOG_INTERVAL_SECONDS = 30;
+
+    /**
+     * Obergrenze für den Verbindungsaufbau. Ohne sie bliebe ein nie abschließender Handshake
+     * (halboffenes TCP beim Connect) für immer "Reconnect läuft": {@link #scheduleReconnect}
+     * täte nichts mehr, und es gäbe weder Session noch neuen Versuch - derselbe stumme
+     * Stillstand wie beim Leerlauf, nur vor dem ersten Byte.
+     */
+    private static final long CONNECT_TIMEOUT_SECONDS = 60;
 
     /**
      * Obergrenzen der {@code LOG_RESPONSE}-Nutzlast (ADR 0024). Die Antwort geht als EIN
@@ -135,7 +159,21 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
     private final AtomicBoolean isReconnectRunning = new AtomicBoolean(false);
     private final AtomicBoolean stopped = new AtomicBoolean(false);
     private volatile WebSocketSession session;
-    private int reconnectDelaySeconds = INITIAL_RECONNECT_DELAY_SECONDS;
+    /**
+     * Serialisiert die Wechsel von {@link #session} (Aufbau, Schließen, Wächter). Ohne ihn
+     * könnte der Wächter eine zwischenzeitlich frisch aufgebaute Session mit {@code null}
+     * überschreiben und damit verwaisen.
+     */
+    private final Object sessionLock = new Object();
+    private final AtomicBoolean watchdogScheduled = new AtomicBoolean(false);
+    /**
+     * Monotone Zeit ({@link System#nanoTime()}) der letzten Nachricht des Backends bzw. des
+     * Verbindungsaufbaus. Bewusst NICHT die Wanduhr: ein Pi ohne Hardware-Uhr springt nach dem
+     * Boot per NTP - vorwärts würde eine gesunde Verbindung abgeschossen, rückwärts wäre der
+     * Wächter blind, bis die Uhr aufgeholt hat.
+     */
+    private volatile long lastInboundNanos;
+    private volatile int reconnectDelaySeconds = INITIAL_RECONNECT_DELAY_SECONDS;
 
     public TerminalWebSocketClient(ElwaManager manager, String backendUrl, String token, String clientUid,
             OfflineIncidentOutbox incidentOutbox) {
@@ -174,6 +212,15 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
         // kennt weder WebSocket noch Protokoll. Erst hier (nicht im Konstruktor) verdrahtet, damit
         // kein halb konstruiertes "this" veroeffentlicht wird.
         this.incidentOutbox.setSender(this::sendIncident);
+        // Auf demselben Ein-Thread-Scheduler wie der Reconnect: beide arbeiten nur kurz und
+        // blockieren nie. Der Aufruf faengt jede Ausnahme selbst ab - ein periodischer Task, der
+        // eine Ausnahme wirft, wird von ScheduledExecutorService STILLSCHWEIGEND nie wieder
+        // ausgefuehrt, und genau das waere hier der gleiche stumme Stillstand wie der, den der
+        // Waechter beheben soll.
+        if (this.watchdogScheduled.compareAndSet(false, true)) {
+            this.reconnectScheduler.scheduleWithFixedDelay(this::runLivenessCheck, WATCHDOG_INTERVAL_SECONDS,
+                    WATCHDOG_INTERVAL_SECONDS, TimeUnit.SECONDS);
+        }
         openConnection();
     }
 
@@ -209,7 +256,8 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
         this.logger.info("Connecting to the backend WebSocket at {}.", this.wsUri);
         WebSocketHttpHeaders headers = new WebSocketHttpHeaders();
         headers.add("Authorization", "Bearer " + this.token);
-        this.client.execute(this, headers, this.wsUri).whenComplete((result, ex) -> {
+        this.client.execute(this, headers, this.wsUri).orTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .whenComplete((result, ex) -> {
             this.isReconnectRunning.set(false);
             if (ex != null) {
                 this.logger.warn("Could not connect to the backend WebSocket: {}", ex.toString());
@@ -230,10 +278,67 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
         }
     }
 
+    private void runLivenessCheck() {
+        try {
+            checkLiveness(System.nanoTime());
+        } catch (final Throwable e) {
+            // Throwable, nicht Exception: auch ein Error (z.B. NoClassDefFoundError nach einem
+            // Jar-Update) wuerde den periodischen Task sonst still beenden.
+            this.logger.warn("Liveness check of the backend WebSocket connection failed.", e);
+        }
+    }
+
+    /**
+     * Leerlauf-Wächter: erklärt eine Verbindung für tot, von der länger als
+     * {@link #IDLE_TIMEOUT} nichts mehr kam, und baut sie neu auf. Verlässt sich bewusst NICHT
+     * auf {@link #afterConnectionClosed}, weil genau dieser Rückruf im beobachteten Ausfall nie
+     * kam. Die alte Session wird nur best effort geschlossen (das Schließen einer halboffenen
+     * Verbindung kann hängen) und gilt sofort als abgelöst.
+     * <p>
+     * Paketsichtbar und mit übergebener Uhrzeit, damit der Test ohne Warten auskommt.
+     */
+    void checkLiveness(long nowNanos) {
+        if (this.stopped.get()) {
+            return;
+        }
+        final WebSocketSession dead;
+        final long idleSeconds;
+        synchronized (this.sessionLock) {
+            dead = this.session;
+            idleSeconds = TimeUnit.NANOSECONDS.toSeconds(nowNanos - this.lastInboundNanos);
+            if (dead == null || nowNanos - this.lastInboundNanos <= IDLE_TIMEOUT.toNanos()) {
+                return;
+            }
+            this.session = null;
+        }
+        this.logger.warn("No message from the backend for {}s - treating the WebSocket connection as dead and "
+                + "reconnecting.", idleSeconds);
+        // Eigener Wegwerf-Thread: ein Close auf halboffener Verbindung darf weder den Wächter
+        // noch den Reconnect aufhalten.
+        final Thread closer = new Thread(() -> {
+            try {
+                dead.close(CloseStatus.GOING_AWAY.withReason("No message from the backend"));
+            } catch (final Exception e) {
+                this.logger.debug("Failed to close the dead backend WebSocket connection.", e);
+            }
+        }, "TerminalWebSocketClient-close");
+        closer.setDaemon(true);
+        closer.start();
+        scheduleReconnect();
+    }
+
+    /** Für Tests: ob ein Reconnect geplant oder gerade im Aufbau ist. */
+    boolean isReconnectPending() {
+        return this.isReconnectRunning.get();
+    }
+
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         this.logger.info("Connected to the backend WebSocket.");
-        this.session = session;
+        synchronized (this.sessionLock) {
+            this.session = session;
+            this.lastInboundNanos = System.nanoTime();
+        }
         this.reconnectDelaySeconds = INITIAL_RECONNECT_DELAY_SECONDS;
         sendHello(session);
         // Ein Offline-Vorfall entsteht typischerweise waehrend einer Stoerung, also genau dann,
@@ -245,8 +350,17 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         this.logger.warn("Backend WebSocket connection closed: {}", status);
-        if (session.equals(this.session)) {
-            this.session = null;
+        synchronized (this.sessionLock) {
+            final WebSocketSession current = this.session;
+            if (current != null && !session.equals(current)) {
+                // Eine vom Leerlauf-Waechter abgeloeste Session meldet sich verspaetet: die
+                // laufende neue Verbindung darf dadurch nicht noch einmal neu aufgebaut werden.
+                this.logger.debug("Ignoring the close of a superseded backend WebSocket session.");
+                return;
+            }
+            if (session.equals(current)) {
+                this.session = null;
+            }
         }
         if (!this.stopped.get()) {
             scheduleReconnect();
@@ -260,6 +374,11 @@ public class TerminalWebSocketClient extends TextWebSocketHandler implements ICl
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
+        // Nur die AKTUELLE Session zaehlt: Nachzuegler einer abgeloesten Session duerfen die
+        // Stille der laufenden nicht verdecken.
+        if (session.equals(this.session)) {
+            this.lastInboundNanos = System.nanoTime();
+        }
         TerminalWsMessage incoming;
         try {
             incoming = this.gson.fromJson(message.getPayload(), TerminalWsMessage.class);

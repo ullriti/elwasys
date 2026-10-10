@@ -94,8 +94,11 @@ dieselbe Richtung wie die REST-API v1, NAT-/Firewall-freundlich (siehe
   UND WebSocket.
 - **Verbindungsaufbau**: `HELLO` (Payload `clientVersion`, `clientUid`) direkt nach
   `afterConnectionEstablished`, Backend antwortet `HELLO_ACK`.
-- **Heartbeat**: rein reaktiv – das Backend sendet periodisch `PING`, der Client antwortet nur
-  mit `PONG`; das Backend erkennt eine tote Verbindung über sein eigenes 90s-Timeout.
+- **Heartbeat**: das Backend sendet periodisch `PING`, der Client antwortet mit `PONG`; das
+  Backend erkennt eine tote Verbindung über sein eigenes 90s-Timeout. Zusätzlich hat der
+  Client einen **Leerlauf-Wächter**: kommt 120 s lang keine Nachricht des Backends, gilt die
+  Verbindung als tot und wird neu aufgebaut – das Schließen durch das Backend erreicht das
+  Terminal nicht zwingend (siehe Worklog 2026-10-11).
 - **Reconnect**: bei Verbindungsfehler/-abbruch automatischer Reconnect mit exponentiell
   wachsender Wartezeit (5s bis max. 5min) – identisches Muster zu
   `DeconzEventListener#scheduleReconnect`. Die Verbindung überlebt einen vom Portal ausgelösten
