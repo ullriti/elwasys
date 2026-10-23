@@ -4,15 +4,14 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import jakarta.persistence.criteria.Predicate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import jakarta.persistence.criteria.Predicate;
 import org.kabieror.elwasys.backend.domain.BookingType;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.kabieror.elwasys.backend.domain.CreditAccountingEntryEntity;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
@@ -23,6 +22,8 @@ import org.kabieror.elwasys.backend.repository.CreditAccountingEntryRepository;
 import org.kabieror.elwasys.backend.repository.ExecutionRepository;
 import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -292,16 +293,17 @@ public class CreditService {
      *
      * @param type Nur diese Art; {@code null} = alle Buchungen (auch solche über 0,00).
      * @param from Erster Tag (einschließlich); {@code null} = unbegrenzt.
-     * @param to   Letzter Tag (einschließlich, bis 23:59:59.999); {@code null} = unbegrenzt.
+     * @param to   Letzter Tag (einschließlich, bis 23:59:59.999); {@code null} = unbegrenzt. Liegt
+     *             {@code to} vor {@code from}, ist das Ergebnis leer.
      */
     @Transactional(readOnly = true)
     public List<CreditAccountingEntryEntity> findBookings(BookingType type, LocalDate from, LocalDate to) {
         Specification<CreditAccountingEntryEntity> spec = (root, query, cb) -> {
-            // Die Benutzer werden pro Zeile angezeigt: gleich mitladen statt N+1 Einzelabfragen
-            // (die Verknüpfung ist zwar EAGER, bei Criteria-Abfragen lädt Hibernate sie aber
-            // trotzdem einzeln nach).
-            root.fetch("user");
-            List<Predicate> predicates = new java.util.ArrayList<>();
+            // Die Benutzer werden pro Zeile angezeigt: samt Gruppe (ebenfalls EAGER) gleich
+            // mitladen statt je Zeile bzw. Gruppe eine Einzelabfrage (die Verknüpfungen sind zwar
+            // EAGER, bei Criteria-Abfragen lädt Hibernate sie aber trotzdem einzeln nach).
+            root.fetch("user").fetch("group");
+            List<Predicate> predicates = new ArrayList<>();
             if (type == BookingType.EXECUTION) {
                 predicates.add(cb.isNotNull(root.get("execution")));
             } else if (type != null) {

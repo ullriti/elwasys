@@ -135,4 +135,38 @@ class CreditServiceBookingsFilterTest extends AbstractBackendIT {
         assertThat(ids(BookingType.INPAYMENT, LocalDate.of(2019, 6, 1), LocalDate.of(2019, 6, 1), user))
                 .containsExactly(wanted.getId());
     }
+
+    @Test
+    void executionBookingsKeepTheirTypeWithoutInitializingTheLazyExecution() {
+        UserEntity user = newUser();
+        book(user, newExecution(user), "-1.50", "lauf", LocalDateTime.of(2019, 1, 3, 10, 0));
+
+        // Außerhalb jeder Transaktion geladen (AbstractBackendIT ist bewusst nicht
+        // transaktional): ein Zugriff auf die LAZY-Ausführung ginge hier in eine
+        // LazyInitializationException - getExecutionId() darf den Proxy nicht anfassen.
+        CreditAccountingEntryEntity loaded = this.creditService.findBookings(BookingType.EXECUTION, null, null)
+                .stream().filter(e -> e.getUser().getId().equals(user.getId())).findFirst().orElseThrow();
+
+        assertThat(BookingType.of(loaded)).isEqualTo(BookingType.EXECUTION);
+        assertThat(org.hibernate.Hibernate.isInitialized(loaded.getExecution())).isFalse();
+    }
+
+    @Test
+    void bookingsWithTheSameTimestampKeepTheOrderOfTheirIds() {
+        UserEntity user = newUser();
+        LocalDateTime sameInstant = LocalDateTime.of(2019, 7, 7, 12, 0);
+        CreditAccountingEntryEntity first = book(user, null, "1.00", "erste", sameInstant);
+        CreditAccountingEntryEntity second = book(user, null, "2.00", "zweite", sameInstant);
+
+        assertThat(ids(null, null, null, user)).as("zuletzt gebucht zuerst (#88)")
+                .containsExactly(second.getId(), first.getId());
+    }
+
+    @Test
+    void rangeWithToBeforeFromIsEmpty() {
+        UserEntity user = newUser();
+        book(user, null, "1.00", "x", LocalDateTime.of(2019, 5, 11, 10, 0));
+
+        assertThat(ids(null, LocalDate.of(2019, 5, 12), LocalDate.of(2019, 5, 10), user)).isEmpty();
+    }
 }

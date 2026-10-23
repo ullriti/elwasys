@@ -47,12 +47,12 @@ test('P34: Buchungsübersicht filtert nach Ein-/Auszahlung', async ({ page }) =>
   await expect(page.getByText(IN_TEXT)).toBeVisible();
   await expect(page.getByText(OUT_TEXT)).toBeVisible();
 
-  await page.locator('vaadin-select').click();
+  await page.getByLabel('Art').click();
   await page.locator('vaadin-select-item', { hasText: 'Einzahlungen' }).click();
   await expect(page.getByText(IN_TEXT)).toBeVisible();
   await expect(page.getByText(OUT_TEXT)).toBeHidden();
 
-  await page.locator('vaadin-select').click();
+  await page.getByLabel('Art').click();
   await page.locator('vaadin-select-item', { hasText: 'Auszahlungen' }).click();
   await expect(page.getByText(OUT_TEXT)).toBeVisible();
   await expect(page.getByText(IN_TEXT)).toBeHidden();

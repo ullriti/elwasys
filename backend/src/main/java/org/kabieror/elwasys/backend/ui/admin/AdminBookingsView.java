@@ -13,6 +13,8 @@ import com.vaadin.flow.router.Route;
 import jakarta.annotation.security.RolesAllowed;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 import org.kabieror.elwasys.backend.domain.BookingType;
 import org.kabieror.elwasys.backend.domain.CreditAccountingEntryEntity;
 import org.kabieror.elwasys.backend.service.CreditService;
@@ -34,13 +36,10 @@ import org.kabieror.elwasys.backend.ui.component.PortalFormats;
 @RolesAllowed("ADMIN")
 public class AdminBookingsView extends VerticalLayout {
 
-    /** Auswahlwert für "keine Einschränkung" - Vaadins Select kennt kein null als Eintrag. */
-    private static final String ALL = "Alle Buchungen";
-
     private final CreditService creditService;
 
     private final Grid<CreditAccountingEntryEntity> grid = new Grid<>();
-    private final Select<String> typeSelect = new Select<>();
+    private final Select<Optional<BookingType>> typeSelect = new Select<>();
     private final DatePicker fromPicker = new DatePicker("Von");
     private final DatePicker toPicker = new DatePicker("Bis");
     private final Span summary = new Span();
@@ -56,15 +55,17 @@ public class AdminBookingsView extends VerticalLayout {
         H2 title = new H2("Buchungen");
 
         this.typeSelect.setLabel("Art");
-        this.typeSelect.setItems(ALL, BookingType.INPAYMENT.getLabel(), BookingType.PAYOUT.getLabel(),
-                BookingType.EXECUTION.getLabel());
-        this.typeSelect.setValue(ALL);
+        // Optional.empty() = "Alle Buchungen": Vaadins Select kennt kein null als Eintrag.
+        this.typeSelect.setItems(Optional.empty(), Optional.of(BookingType.INPAYMENT),
+                Optional.of(BookingType.PAYOUT), Optional.of(BookingType.EXECUTION));
+        this.typeSelect.setItemLabelGenerator(t -> t.map(BookingType::getLabel).orElse("Alle Buchungen"));
+        this.typeSelect.setValue(Optional.empty());
         this.typeSelect.addValueChangeListener(e -> loadData());
         this.fromPicker.addValueChangeListener(e -> loadData());
         this.toPicker.addValueChangeListener(e -> loadData());
         for (DatePicker picker : List.of(this.fromPicker, this.toPicker)) {
             picker.setClearButtonVisible(true);
-            picker.setLocale(java.util.Locale.GERMANY);
+            picker.setLocale(Locale.GERMANY);
         }
 
         HorizontalLayout toolbar = new HorizontalLayout(title, this.typeSelect, this.fromPicker, this.toPicker,
@@ -114,7 +115,7 @@ public class AdminBookingsView extends VerticalLayout {
     }
 
     private void loadData() {
-        BookingType type = selectedType();
+        BookingType type = this.typeSelect.getValue().orElse(null);
         List<CreditAccountingEntryEntity> entries = this.creditService.findBookings(type,
                 this.fromPicker.getValue(), this.toPicker.getValue());
         this.grid.setItems(entries);
@@ -122,16 +123,6 @@ public class AdminBookingsView extends VerticalLayout {
         this.grid.recalculateColumnWidths();
         this.filterField.reapply();
         this.summary.setText(summaryText(entries));
-    }
-
-    private BookingType selectedType() {
-        String selected = this.typeSelect.getValue();
-        for (BookingType type : BookingType.values()) {
-            if (type.getLabel().equals(selected)) {
-                return type;
-            }
-        }
-        return null;
     }
 
     /** Anzahl und Summen der geladenen (nicht des per Freitext weiter eingeschränkten) Buchungen. */
