@@ -617,6 +617,24 @@ vaadin-grid::part(body-row):hover {
   box-sizing: border-box;
 }
 
+.admin-bookings-view .bookings-summary {
+  color: var(--lumo-secondary-text-color);
+  font-size: var(--lumo-font-size-s);
+}
+
+.admin-bookings-view .booking-amount {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.admin-bookings-view .booking-amount-credit {
+  color: var(--lumo-success-text-color);
+}
+
+.admin-bookings-view .booking-amount-debit {
+  color: var(--lumo-error-text-color);
+}
+
 .admin-offline-incidents-view .incident-amount {
   color: var(--lumo-error-text-color);
   font-weight: 600;

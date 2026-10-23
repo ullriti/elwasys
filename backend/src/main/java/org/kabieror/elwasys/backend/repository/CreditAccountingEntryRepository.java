@@ -5,10 +5,12 @@ import java.util.List;
 import java.util.Optional;
 import org.kabieror.elwasys.backend.domain.CreditAccountingEntryEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface CreditAccountingEntryRepository extends JpaRepository<CreditAccountingEntryEntity, Integer> {
+public interface CreditAccountingEntryRepository extends JpaRepository<CreditAccountingEntryEntity, Integer>,
+        JpaSpecificationExecutor<CreditAccountingEntryEntity> {
 
     /**
      * Entspricht {@code DataManager#getAccountingEntries}.

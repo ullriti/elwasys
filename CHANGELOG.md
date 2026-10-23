@@ -12,6 +12,11 @@ im [Worklog](docs/worklog/README.md).
 
 ## [Unreleased]
 
+### Added
+- **Admin-Portal: neue Seite „Buchungen“** mit allen Guthaben-Buchungen aller Benutzer, filterbar
+  nach Einzahlungen, Auszahlungen und Programmabrechnungen sowie nach Zeitraum (plus Freitextsuche,
+  Summenzeile).
+
 ### Fixed
 - **Das Terminal baute die Fernwartungs-Verbindung zum Backend nicht wieder auf, wenn deren
   Abbruch es nie erreichte.** Auf beiden Standorten blieb der Kanal elf Tage stumm

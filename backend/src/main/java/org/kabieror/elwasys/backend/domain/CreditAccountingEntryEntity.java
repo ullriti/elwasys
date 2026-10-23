@@ -102,6 +102,14 @@ public class CreditAccountingEntryEntity {
         return this.execution;
     }
 
+    /**
+     * Id der Ausführung, ohne die LAZY-Verknüpfung aufzulösen (siehe {@link #execution}): die
+     * Hibernate-Proxy-Id ist ohne Datenbankzugriff lesbar. {@code null} bei Ein-/Auszahlungen.
+     */
+    public Integer getExecutionId() {
+        return this.execution == null ? null : this.execution.getId();
+    }
+
     public BigDecimal getAmount() {
         return this.amount;
     }
