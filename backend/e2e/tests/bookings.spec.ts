@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import { loginAsAdmin, openAdminSection, runSql } from './helpers';
 
 /**
@@ -18,6 +18,14 @@ const CLEANUP_SQL = `
     DELETE FROM credit_accounting WHERE user_id IN (SELECT id FROM users WHERE username = '${USER}');
     DELETE FROM users WHERE username = '${USER}';
   `;
+
+/**
+ * Sichtbare Grid-Zelle mit diesem Text. Vaadins Grid hält ausgeblendete Zellen einer früheren
+ * Filterung im DOM (recycelte Slots) - ein reines getByText träfe dann zwei Elemente (strict mode).
+ */
+function cell(page: Page, text: string) {
+  return page.locator('vaadin-grid-cell-content', { hasText: text }).and(page.locator(':visible'));
+}
 
 function seed() {
   runSql(
@@ -44,24 +52,24 @@ test.beforeEach(async ({ page }) => {
 
 test('P34: Buchungsübersicht filtert nach Ein-/Auszahlung', async ({ page }) => {
   await page.getByRole('textbox', { name: 'Buchungen filtern' }).fill(String(STAMP));
-  await expect(page.getByText(IN_TEXT)).toBeVisible();
-  await expect(page.getByText(OUT_TEXT)).toBeVisible();
+  await expect(cell(page, IN_TEXT)).toBeVisible();
+  await expect(cell(page, OUT_TEXT)).toBeVisible();
 
   await page.getByRole('button', { name: /^Art / }).click();
   await page.locator('vaadin-select-item', { hasText: 'Einzahlungen' }).click();
-  await expect(page.getByText(IN_TEXT)).toBeVisible();
-  await expect(page.getByText(OUT_TEXT)).toBeHidden();
+  await expect(cell(page, IN_TEXT)).toBeVisible();
+  await expect(cell(page, OUT_TEXT)).toBeHidden();
 
   await page.getByRole('button', { name: /^Art / }).click();
   await page.locator('vaadin-select-item', { hasText: 'Auszahlungen' }).click();
-  await expect(page.getByText(OUT_TEXT)).toBeVisible();
-  await expect(page.getByText(IN_TEXT)).toBeHidden();
+  await expect(cell(page, OUT_TEXT)).toBeVisible();
+  await expect(cell(page, IN_TEXT)).toBeHidden();
 });
 
 test('P34: Buchungsübersicht grenzt nach Zeitraum ein', async ({ page }) => {
   await page.getByRole('textbox', { name: 'Buchungen filtern' }).fill(String(STAMP));
   await page.getByLabel('Von').fill('01.04.2019');
   await page.keyboard.press('Enter');
-  await expect(page.getByText(OUT_TEXT)).toBeVisible();
-  await expect(page.getByText(IN_TEXT)).toBeHidden();
+  await expect(cell(page, OUT_TEXT)).toBeVisible();
+  await expect(cell(page, IN_TEXT)).toBeHidden();
 });
