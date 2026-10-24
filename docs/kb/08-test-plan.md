@@ -112,6 +112,7 @@ Offline-Modus statt in `ERROR`, siehe docs/kb/03-modules.md „Offline-Robusthei
 | P31 | P3 | Filter überlebt Live-Update | Eine gefilterte Liste bleibt gefiltert, wenn eine andere Session die Daten ändert · `list-filter-sort.spec.ts` |
 | P32 | P2 | Standort-Token im Portal erzeugen (ADR 0025) | Klartext-Token wird genau einmal angezeigt, erscheint nach dem Schließen nirgends mehr; Token steht in der Liste · `terminal-tokens.spec.ts` |
 | P33 | P2 | Standort-Token widerrufen (ADR 0025) | Status wechselt auf widerrufen, die Zeile bleibt als Beleg, ein zweites Token bleibt aktiv · `terminal-tokens.spec.ts` |
+| P34 | P2 | Buchungsübersicht filtern | Alle Buchungen aller Benutzer; Filter nach Art (Einzahlungen/Auszahlungen) und Zeitraum schränkt die Liste ein · `bookings.spec.ts` |
 
 P1–P20 und P23–P33 laufen in der Playwright-Suite `backend/e2e/tests/` (P15/P18 teilen sich ein
 `test()`). P14 nutzt einen eigenen „Standorte"-Menüpunkt statt des früheren Dashboard-Dialogs,

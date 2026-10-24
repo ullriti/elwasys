@@ -2,12 +2,16 @@ package org.kabieror.elwasys.backend.service;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import jakarta.persistence.criteria.Predicate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import org.kabieror.elwasys.backend.domain.BookingType;
 import org.kabieror.elwasys.backend.domain.CreditAccountingEntryEntity;
 import org.kabieror.elwasys.backend.domain.ExecutionEntity;
 import org.kabieror.elwasys.backend.domain.ProgramEntity;
@@ -18,6 +22,8 @@ import org.kabieror.elwasys.backend.repository.CreditAccountingEntryRepository;
 import org.kabieror.elwasys.backend.repository.ExecutionRepository;
 import org.kabieror.elwasys.backend.repository.UserRepository;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -278,5 +284,45 @@ public class CreditService {
     public Optional<CreditAccountingEntryEntity> getLastInpayment(UserEntity user) {
         return this.creditAccountingEntryRepository.findFirstByUser_IdAndAmountGreaterThanOrderByDateDescIdDesc(
                 user.getId(), BigDecimal.ZERO);
+    }
+
+    /**
+     * Alle Buchungen ALLER Benutzer für die Buchungsübersicht des Portals, neueste zuerst
+     * (Tiebreak {@code id DESC}, siehe Issue #88). Neu gegenüber dem Alt-Portal, das Buchungen nur
+     * je Benutzer zeigte. Gefiltert wird in der Datenbank, nicht in der Oberfläche.
+     *
+     * @param type Nur diese Art; {@code null} = alle Buchungen (auch solche über 0,00).
+     * @param from Erster Tag (einschließlich); {@code null} = unbegrenzt.
+     * @param to   Letzter Tag (einschließlich, bis 23:59:59.999); {@code null} = unbegrenzt. Liegt
+     *             {@code to} vor {@code from}, ist das Ergebnis leer.
+     */
+    @Transactional(readOnly = true)
+    public List<CreditAccountingEntryEntity> findBookings(BookingType type, LocalDate from, LocalDate to) {
+        Specification<CreditAccountingEntryEntity> spec = (root, query, cb) -> {
+            // Die Benutzer werden pro Zeile angezeigt: samt Gruppe (ebenfalls EAGER) gleich
+            // mitladen statt je Zeile bzw. Gruppe eine Einzelabfrage (die Verknüpfungen sind zwar
+            // EAGER, bei Criteria-Abfragen lädt Hibernate sie aber trotzdem einzeln nach).
+            root.fetch("user").fetch("group");
+            List<Predicate> predicates = new ArrayList<>();
+            if (type == BookingType.EXECUTION) {
+                predicates.add(cb.isNotNull(root.get("execution")));
+            } else if (type != null) {
+                predicates.add(cb.isNull(root.get("execution")));
+                predicates.add(type == BookingType.INPAYMENT
+                        ? cb.greaterThan(root.<BigDecimal>get("amount"), BigDecimal.ZERO)
+                        : cb.lessThan(root.<BigDecimal>get("amount"), BigDecimal.ZERO));
+            }
+            if (from != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.<LocalDateTime>get("date"), from.atStartOfDay()));
+            }
+            if (to != null) {
+                // Exklusive obere Schranke am Folgetag: erfasst den ganzen letzten Tag unabhängig
+                // von der Zeitauflösung der Spalte.
+                predicates.add(cb.lessThan(root.<LocalDateTime>get("date"), to.plusDays(1).atStartOfDay()));
+            }
+            return cb.and(predicates.toArray(Predicate[]::new));
+        };
+        return this.creditAccountingEntryRepository.findAll(spec,
+                Sort.by(Sort.Order.desc("date"), Sort.Order.desc("id")));
     }
 }

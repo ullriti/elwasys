@@ -59,7 +59,9 @@ public class CreditAccountingEntryEntity {
      *
      * <p>LAZY statt {@code @EntityGraph} bewusst gewaehlt: die Verknuepfung wird nirgends
      * gelesen (kein einziger Aufruf von {@link #getExecution()} im Haupt- oder Testcode),
-     * beide Ansichten der Buchungshistorie zeigen nur Datum, Betrag und Buchungstext. Ein
+     * beide Ansichten der Buchungshistorie zeigen nur Datum, Betrag und Buchungstext (die
+     * Buchungsübersicht des Portals braucht nur die Id, siehe {@link #getExecutionId()} - der Proxy
+     * wird dafür nie initialisiert, daher darf dort kein {@code getExecution().getX()} stehen). Ein
      * JOIN wuerde die Daten also weiterhin laden, nur schneller - hier werden sie gar nicht
      * gebraucht. Wer den Bezug kuenftig doch anzeigt, holt ihn gezielt per
      * {@code @EntityGraph(attributePaths = "execution")} auf der jeweiligen Abfrage.
@@ -100,6 +102,14 @@ public class CreditAccountingEntryEntity {
 
     public ExecutionEntity getExecution() {
         return this.execution;
+    }
+
+    /**
+     * Id der Ausführung, ohne die LAZY-Verknüpfung aufzulösen (siehe {@link #execution}): die
+     * Hibernate-Proxy-Id ist ohne Datenbankzugriff lesbar. {@code null} bei Ein-/Auszahlungen.
+     */
+    public Integer getExecutionId() {
+        return this.execution == null ? null : this.execution.getId();
     }
 
     public BigDecimal getAmount() {

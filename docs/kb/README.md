@@ -34,6 +34,9 @@ Verwandte Wissensablagen (außerhalb der KB): tragende Entscheidungen als ADRs i
 > nicht anhängen – die Historie liegt im [Worklog](../worklog/README.md). Erste
 > Anlaufstelle für jede neue Session.
 
+- **Zuletzt (2026-10-23):** Admin-Portal um die Seite „Buchungen“ erweitert (alle Buchungen,
+  Filter nach Ein-/Auszahlung/Programmabrechnung und Zeitraum), siehe
+  [Worklog](../worklog/2026-10-23-buchungsuebersicht.md).
 - **Stand:** Die Modernisierung ist durch alle Phasen der Roadmap gelaufen: Phase 0
   (Sicherheitsnetz) bis Phase 6 (Produktivumschaltung/Cutover) sind umgesetzt. Zielbild
   erreicht – zentrales Spring-Boot-Backend mit eingebautem Vaadin-Flow-Portal, Terminals

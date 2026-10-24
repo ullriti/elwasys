@@ -64,6 +64,7 @@ public class AdminLayout extends AppLayout {
         nav.addItem(new SideNavItem("Programme", AdminProgramsView.class, VaadinIcon.COG.create()));
         nav.addItem(new SideNavItem("Geräte", AdminDevicesView.class, VaadinIcon.CUBES.create()));
         nav.addItem(new SideNavItem("Standorte", AdminLocationsView.class, VaadinIcon.MAP_MARKER.create()));
+        nav.addItem(new SideNavItem("Buchungen", AdminBookingsView.class, VaadinIcon.WALLET.create()));
         // Issue #89: eigener Menüpunkt für die vom Terminal gemeldeten Offline-Vorfälle - die
         // Quittierung dort ist der einzige Weg, den Betriebsalarm zu beenden (siehe
         // AdminOfflineIncidentsView), also muss sie ohne Umweg auffindbar sein.
